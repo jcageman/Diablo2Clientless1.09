@@ -7,10 +7,10 @@
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/dkuwahara/D2NG.svg)
 
 ## Building the project
-This project builds with .NET Core 2.2 and can be built by running `dotnet build` on the command line from the root of the Solution.
+This project builds with .NET Core 3.1 and can be built by running `dotnet build` on the command line from the root of the Solution.
 
 ### Building Docker
-You can build the `ConsoleBot` in to a docker image by executing `docker build -t "dkuwahara/d2ng:$TAG ."` from the root of the project.
+You can build the `ConsoleBot` in to a docker image by executing `docker build -t "jcageman/d2ng:$TAG ."` from the root of the project.
 
 ## Configuring
 ConsoleBot expects a `config.yml` file that can be passed in via the "--config" flag. The `config.yml` should look as follows:
@@ -27,6 +27,6 @@ You'll need to mount the directory that has your `config.yml`so that the program
 ```
 docker run \
   --mount src="${pwd}/config",target=/config,type=bind \
-  dkuwahara/d2ng:$TAG \
+  jcageman/d2ng:$TAG \
   --config /config/config.yml
 ```
