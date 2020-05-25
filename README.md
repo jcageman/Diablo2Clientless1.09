@@ -7,7 +7,7 @@
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/jcageman/D2NG.svg)
 
 ## Building the project
-This project builds with .NET Core 3.1 and can be built by running `dotnet build` on the command line from the root of the Solution.
+This project builds with .NET Core 3.0 and can be built by running `dotnet build` on the command line from the root of the Solution.
 
 ### Building Docker
 You can build the `ConsoleBot` in to a docker image by executing `docker build -t "jcageman/d2ng:$TAG ."` from the root of the project.
@@ -15,11 +15,16 @@ You can build the `ConsoleBot` in to a docker image by executing `docker build -
 ## Configuring
 ConsoleBot expects a `config.yml` file that can be passed in via the "--config" flag. The `config.yml` should look as follows:
 ```
-classicKey: string
-expansionKey: string
 realm: string
 username: string
 password: string
+character: string
+keyOwner: string (name used for the diablo registration, which you normally fill in when installing diablo)
+gamefolder: string (location of your diablo 2 installation, although currently unused)
+telegramApiKey: string (required for communicating status of the bot via telegram. Mainly to detect whispers/crashes)
+telegramChatId: string (chat id to post to)
+
+See https://core.telegram.org/bots for configurating the telegram bot
 ```
 
 ## Running ConsoleBot Docker Image
