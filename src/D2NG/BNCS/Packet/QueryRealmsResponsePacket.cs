@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using D2NG.Extensions;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -30,8 +31,8 @@ namespace D2NG.BNCS.Packet
             for (int i = 0; i < count; i++)
             {
                 reader.ReadUInt32();
-                Realms.Add(ReadString(reader));
-                ReadString(reader);
+                Realms.Add(reader.ReadNullTerminatedString());
+                reader.ReadNullTerminatedString(); ;
             }
 
             reader.Close();

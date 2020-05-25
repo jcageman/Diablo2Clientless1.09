@@ -1,9 +1,9 @@
 ﻿namespace D2NG
 {
-    public enum Difficulty : uint
+    public enum Difficulty : byte
     {
-        Normal = 0x0000,
-        Nightmare = 0x1000,
-        Hell = 0x2000
+        Normal = 0x00,
+        Nightmare = 0x10,
+        Hell = 0x20
     }
 }

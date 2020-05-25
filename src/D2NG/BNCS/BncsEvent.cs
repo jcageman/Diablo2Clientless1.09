@@ -15,6 +15,17 @@ namespace D2NG.BNCS
             _event.Reset();
         }
 
+        public BncsPacket WaitForPacket(int millisecondsTimeout)
+        {
+            bool result = _event.WaitOne(millisecondsTimeout);
+            if(!result)
+            {
+                return null;
+            }
+
+            return _packet;
+        }
+
         public BncsPacket WaitForPacket()
         {
             _event.WaitOne();

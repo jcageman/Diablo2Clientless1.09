@@ -11,16 +11,5 @@ namespace D2NG
         {
             Raw = packet;
         }
-
-        public static string ReadString(BinaryReader reader)
-        {
-            var text = new StringBuilder();
-            while (reader.PeekChar() != 0)
-            {
-                text.Append(reader.ReadChar());
-            }
-            reader.ReadChar();
-            return text.ToString();
-        }
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using D2NG.Extensions;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -47,7 +48,7 @@ namespace D2NG.BNCS.Packet
                 McpChunk.AddRange(reader.ReadBytes(4));
             }
 
-            McpUniqueName = ReadString(reader);
+            McpUniqueName = reader.ReadNullTerminatedString();
         }
     }
 }

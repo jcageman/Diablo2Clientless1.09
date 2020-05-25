@@ -1,0 +1,29 @@
+﻿using D2NG.D2GS.Items;
+using System;
+
+namespace D2NG.D2GS.Packet
+{
+    internal class BuyItemPacket : D2gsPacket
+    {
+        public BuyItemPacket(Entity entity, Item item, bool buyStack, bool gamble) :
+            base(
+                BuildPacket(
+                    (byte)OutGoingPacket.BuyItem,
+                    BitConverter.GetBytes((uint)entity.Id),
+                    BitConverter.GetBytes((uint)item.Id),
+                    new byte[] { (byte)(gamble ? 0x02 : 0x00), 0x00, 0x00, (byte)(buyStack ? 0x80 : 0x00)},
+                    BitConverter.GetBytes((uint)0x00)
+                )
+            )
+        {
+        }
+        public BuyItemPacket(byte[] packet) : base(packet)
+        {
+        }
+
+        public uint GetItemId()
+        {
+            return BitConverter.ToUInt32(Raw, 5);
+        }
+    }
+}

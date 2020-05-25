@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using D2NG.Extensions;
+using System.IO;
 using System.Text;
 
 namespace D2NG.BNCS.Packet
@@ -33,8 +34,8 @@ namespace D2NG.BNCS.Packet
             _ = reader.ReadUInt32();
             _ = reader.ReadUInt32();
 
-            Username = ReadString(reader);
-            Text = ReadString(reader);
+            Username = reader.ReadNullTerminatedString();
+            Text = reader.ReadNullTerminatedString();
 
             reader.Close();
         }

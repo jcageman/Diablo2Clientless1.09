@@ -2,9 +2,9 @@
 {
     public enum ClassType
     {
-        not_applicable,
-        normal,
-        exceptional,
-        elite
+        NotApplicable,
+        Normal,
+        Exceptional,
+        Elite
     }
 }

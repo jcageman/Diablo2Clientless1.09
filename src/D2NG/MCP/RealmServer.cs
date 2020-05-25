@@ -31,7 +31,7 @@ namespace D2NG.MCP
             Connection.PacketSent += (obj, eventArgs) => PacketSentEventHandlers.GetValueOrDefault((Mcp)eventArgs.Type, null)?.Invoke(eventArgs);
 
             OnReceivedPacketEvent(Mcp.STARTUP, StartupEvent.Set);
-            OnReceivedPacketEvent(Mcp.CHARLIST2, ListCharactersEvent.Set);
+            OnReceivedPacketEvent(Mcp.CHARLIST, ListCharactersEvent.Set);
             OnReceivedPacketEvent(Mcp.CHARLOGON, CharLogonEvent.Set);
             OnReceivedPacketEvent(Mcp.CREATEGAME, CreateGameEvent.Set);
             OnReceivedPacketEvent(Mcp.JOINGAME, JoinGameEvent.Set);
@@ -52,23 +52,31 @@ namespace D2NG.MCP
                 {
                     _ = Connection.ReadPacket();
                 }
-                catch(IOException)
+                catch (Exception)
                 {
-                    Log.Debug("MCP connection terminated");
+                    Log.Debug("RealmServer Connection was terminated");
+                    Thread.Sleep(300);
                 }
             }
         }
 
-        internal void CharLogon(Character character)
+        internal bool CharLogon(Character character)
         {
             CharLogonEvent.Reset();
             var packet = new CharLogonRequestPacket(character.Name);
             Connection.WritePacket(packet);
-            var response = new CharLogonResponsePacket(CharLogonEvent.WaitForPacket());
+            var loginResponsePacket = CharLogonEvent.WaitForPacket(2000);
+            if (loginResponsePacket == null)
+            {
+                return false;
+            }
+            var response = new CharLogonResponsePacket(loginResponsePacket);
             if (response.Result != 0x00)
             {
-                throw new CharLogonException($"Failed to log on as {character.Name} - {response.Result}");
+                return false;
             }
+
+            return true;
         }
 
         internal void Disconnect()
@@ -97,10 +105,10 @@ namespace D2NG.MCP
             return response.Characters;
         }
 
-        internal void CreateGame(Difficulty difficulty, string gameName, string password)
+        internal void CreateGame(Difficulty difficulty, string gameName, string password, string description)
         {
             CreateGameEvent.Reset();
-            Connection.WritePacket(new CreateGameRequestPacket(RequestId++, difficulty, gameName, password));
+            Connection.WritePacket(new CreateGameRequestPacket(RequestId++, difficulty, gameName, password, description));
             _ = new CreateGameResponsePacket(CreateGameEvent.WaitForPacket().Raw);
         }
 

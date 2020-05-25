@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using D2NG.Extensions;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -13,22 +14,21 @@ namespace D2NG.MCP.Packet
             {
                 throw new McpPacketException("Packet length does not match");
             }
-            if (Mcp.CHARLIST2 != (Mcp) reader.ReadByte())
+            if (Mcp.CHARLIST != (Mcp) reader.ReadByte())
             {
                 throw new McpPacketException("Expected Packet Type Not Found");
             }
 
-            _ = reader.ReadUInt16();
-            _ = reader.ReadUInt32();
+            var test1 = reader.ReadUInt16();
+            var test2 = reader.ReadUInt32();
             var totalReturned = reader.ReadUInt16();
 
             Characters = new List<Character>();
             for(int x = 0; x < totalReturned; x++)
             {
-                reader.ReadUInt32();
                 Characters.Add(new Character(
-                    ReadString(reader),
-                    ReadString(reader)
+                    reader.ReadNullTerminatedString(),
+                    reader.ReadNullTerminatedString()
                     ));
             }
         }

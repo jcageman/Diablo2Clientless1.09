@@ -12,7 +12,7 @@ namespace D2NG.BNCS.Packet
 
         protected const string ProductCode = "D2XP";
 
-        protected const int Version = 0x0E;
+        protected const int Version = 0x9;
 
         public Sid Type { get => (Sid)Raw[1]; }
 

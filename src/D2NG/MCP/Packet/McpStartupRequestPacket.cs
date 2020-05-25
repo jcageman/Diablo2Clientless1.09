@@ -12,7 +12,8 @@ namespace D2NG.MCP.Packet
                 BitConverter.GetBytes(mcpCookie),
                 BitConverter.GetBytes(mcpStatus),
                 mcpChunk,
-                Encoding.ASCII.GetBytes(mcpUniqueName)
+                Encoding.ASCII.GetBytes(mcpUniqueName),
+                new byte[] {0}
                 )
             )
         {

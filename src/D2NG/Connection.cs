@@ -1,4 +1,6 @@
-﻿using Serilog;
+﻿using D2NG.D2GS.Helpers;
+using D2NG.D2GS.NetworkStream;
+using Serilog;
 using Stateless;
 using System.Net;
 using System.Net.Sockets;
@@ -31,7 +33,7 @@ namespace D2NG
         /**
         * The actual TCP Connection
         */
-        protected NetworkStream _stream;
+        internal INetworkStream _stream;
 
         protected TcpClient _tcpClient;
 
@@ -59,10 +61,13 @@ namespace D2NG
 
         protected void OnConnect(IPAddress ip, int port)
         {
-            Log.Verbose("[{0}] Connecting to {1}:{2}", GetType(), ip, port);
-            _tcpClient = new TcpClient();
+            Log.Information("[{0}] Connecting to {1}:{2}", GetType(), ip, port);
+            _tcpClient = new TcpClient()
+            {
+                SendTimeout = 5000,
+            };
             _tcpClient.Connect(ip, port);
-            _stream = _tcpClient.GetStream();
+            _stream = new D2GSNetworkStream(_tcpClient.GetStream());
             if (!_stream.CanWrite)
             {
                 Log.Error("[{0}] Unable to write to {1}:{2}, closing connection", GetType(), ip, port);
@@ -70,7 +75,7 @@ namespace D2NG
                 throw new UnableToConnectException($"Unable to establish {GetType()}");
             }
             Initialize();
-            Log.Verbose("[{0}] Successfully connected to {1}:{2}", GetType(), ip, port);
+            Log.Information("[{0}] Successfully connected to {1}:{2}", GetType(), ip, port);
         }
 
         internal abstract void Initialize();

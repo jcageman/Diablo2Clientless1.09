@@ -27,8 +27,6 @@ namespace D2NG
         {
             Chat = new Chat(Bncs);
             Game = new Game(D2gs);
-
-            OnReceivedPacketEvent(0xB0, _ => LeaveGame());
         }
 
         public void OnReceivedPacketEvent(Sid sid, Action<BncsPacket> action)
@@ -41,9 +39,9 @@ namespace D2NG
         public void OnSentPacketEvent(Mcp mcp, Action<McpPacket> action)
             => Mcp.OnSentPacketEvent(mcp, action);
 
-        public void OnReceivedPacketEvent(byte type, Action<D2gsPacket> action)
+        public void OnReceivedPacketEvent(InComingPacket type, Action<D2gsPacket> action)
             => D2gs.OnReceivedPacketEvent(type, action);
-        public void OnSentPacketEvent(byte type, Action<D2gsPacket> action)
+        public void OnSentPacketEvent(OutGoingPacket type, Action<D2gsPacket> action)
             => D2gs.OnSentPacketEvent(type, action);
 
         /// <summary>
@@ -52,7 +50,8 @@ namespace D2NG
         /// <param name="realm">Realm to connect to. e.g. useast.battle.net </param>
         /// <param name="classicKey">26-character Diablo II Classic CD Key</param>
         /// <param name="expansionKey">26-character Diablo II: Lord of Destruction CD Key</param>
-        public void Connect(string realm, string classicKey, string expansionKey) => Bncs.ConnectTo(realm, classicKey, expansionKey);
+        public bool Connect(string realm, string keyOwner, string gamefolder) 
+            => Bncs.ConnectTo(realm, keyOwner, gamefolder);
 
         /// <summary>
         /// Login to Battle.Net with credentials and receive the list of available characters to select.
@@ -77,6 +76,7 @@ namespace D2NG
             Log.Information($"Selecting {character.Name}");
             Mcp.CharLogon(character);
             _character = character;
+            Game.SelectCharacter(character);
         }
 
         /// <summary>
@@ -85,12 +85,12 @@ namespace D2NG
         /// <param name="difficulty">One of Normal, Nightmare or Hell</param>
         /// <param name="name">Name of the game to be created</param>
         /// <param name="password">Password used to protect the game</param>
-        public void CreateGame(Difficulty difficulty, string name, string password)
+        public bool CreateGame(Difficulty difficulty, string name, string password, string description)
         {
             Log.Information($"Creating {difficulty} game: {name}");
-            Mcp.CreateGame(difficulty, name, password);
-            Log.Debug($"Game {name} created");
-            JoinGame(name, password);
+            Mcp.CreateGame(difficulty, name, password, description);
+            Log.Debug($"Game {name} with {password} created");
+            return JoinGame(name, password);
         }
 
         /// <summary>
@@ -98,35 +98,52 @@ namespace D2NG
         /// </summary>
         /// <param name="name">Name of the game being joined</param>
         /// <param name="password">Password used to protect the game</param>
-        public void JoinGame(string name, string password)
+        public bool JoinGame(string name, string password)
         {
             Log.Information($"Joining game: {name}");
             var packet = Mcp.JoinGame(name, password);
             Mcp.Disconnect();
             Log.Debug($"Connecting to D2GS Server {packet.D2gsIp}");
             D2gs.Connect(packet.D2gsIp);
-            D2gs.GameLogon(packet.GameHash, packet.GameToken, _character);
+            if(!D2gs.GameLogon(packet.GameHash, packet.GameToken, _character))
+            {
+                return false;
+            }
             Bncs.NotifyJoin(name, password);
+            return true;
         }
 
-        private void LeaveGame()
+        public bool RejoinMCP()
         {
-            Bncs.LeaveGame();
-            RealmLogon();
-            Mcp.CharLogon(_character);
+            Log.Information("Joining MCP again");
+            if(!RealmLogon())
+            {
+                return false;
+            }
+
+            return Mcp.CharLogon(_character);
         }
 
-        private void RealmLogon()
+        private bool RealmLogon()
         {
             if (_mcpRealm is null)
             {
                 _mcpRealm = Bncs.ListMcpRealms().First();
             }
             var packet = Bncs.RealmLogon(_mcpRealm);
+            if(packet == null)
+            {
+                Log.Warning("RealmLogin failed");
+                return false;
+            }
+
             Log.Information($"Connecting to {packet.McpIp}:{packet.McpPort}");
             Mcp.Connect(packet.McpIp, packet.McpPort);
             Mcp.Logon(packet.McpCookie, packet.McpStatus, packet.McpChunk, packet.McpUniqueName);
             Log.Information($"Connected to {packet.McpIp}:{packet.McpPort}");
+            return true;
         }
+
+        public void Disconnect() => Bncs.Disconnect();
     }
 }

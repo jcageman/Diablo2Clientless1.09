@@ -22,6 +22,12 @@ namespace D2NG.MCP
             return _packet!;
         }
 
+        public McpPacket WaitForPacket(int millisecondsTimeout)
+        {
+            _event.WaitOne(millisecondsTimeout);
+            return _packet!;
+        }
+
         public void Set(McpPacket packet)
         {
             _packet = packet;

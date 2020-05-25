@@ -5,10 +5,6 @@ namespace D2NG.D2GS.Packet
 {
     public class D2gsPacket : D2NG.Packet
     {
-        public D2gsPacket(List<byte> packet) : this(packet.ToArray())
-        {
-        }
-
         public D2gsPacket(byte[] packet) : base(packet)
         {
         }

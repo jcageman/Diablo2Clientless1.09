@@ -1,4 +1,4 @@
-﻿using D2NG.D2GS.Packet.Server;
+﻿using D2NG.D2GS.Packet;
 
 namespace D2NG.D2GS
 {
@@ -15,6 +15,13 @@ namespace D2NG.D2GS
             Name = assignPlayer.Name;
             Id = assignPlayer.Id;
             Class= assignPlayer.Class;
+        }
+
+        internal Player(PlayerInGamePacket playerInGame)
+        {
+            Name = playerInGame.Name;
+            Id = playerInGame.Id;
+            Class = playerInGame.Class;
         }
     }
 }

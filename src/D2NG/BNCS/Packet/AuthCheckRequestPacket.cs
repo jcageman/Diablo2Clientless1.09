@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Text;
 using D2NG.BNCS.Hashing;
 using Serilog;
@@ -15,39 +16,31 @@ namespace D2NG.BNCS.Packet
             uint clientToken,
             uint serverToken,
             int version,
-            byte[] checksum,
-            byte[] info,
-            CdKey classic,
-            CdKey expansion
+            uint checksum,
+            string info,
+            string keyOwner
             ) : base(BuildPacket(
                     Sid.AUTH_CHECK,
                     BitConverter.GetBytes(clientToken),
                     BitConverter.GetBytes(version),
-                    checksum,
+                    BitConverter.GetBytes(checksum),
                     KeyCount,
-                    IsSpawn,
-                    BitConverter.GetBytes(classic.KeyLength),
-                    BitConverter.GetBytes(classic.Product),
-                    classic.Public,
-                    BitConverter.GetBytes(0x00),
-                    classic.ComputeHash(clientToken, serverToken),
-                    BitConverter.GetBytes(expansion.KeyLength),
-                    BitConverter.GetBytes(expansion.Product),
-                    expansion.Public,
-                    BitConverter.GetBytes(0x00),
-                    expansion.ComputeHash(clientToken, serverToken),
-                    info,
-                    Encoding.ASCII.GetBytes("D2NG\0")
+                    Enumerable.Repeat(new byte[] { 0 }, 76).SelectMany(a => a),
+                    Encoding.ASCII.GetBytes(info),
+                    new byte[] { 0 },
+                    Encoding.ASCII.GetBytes(keyOwner),
+                    new byte[] { 0 }
                 )
             )
         {
+            Log.Verbose(BitConverter.ToString(Raw).Replace("-", ""));
             Log.Verbose($"Writing AuthCheck\n" +
                 $"\tType: {Type}\n" +
                 $"\tClient Token: {clientToken}\n" +
                 $"\tServer Token: {serverToken}\n" +
                 $"\tVersion: {version}\n" +
-                $"\tChecksum: {BitConverter.ToString(checksum)}\n" +
-                $"\tInfo: {BitConverter.ToString(info)}\n");
+                $"\tChecksum: {checksum}\n" +
+                $"\tInfo: {info}\n");
         }
     }
 }

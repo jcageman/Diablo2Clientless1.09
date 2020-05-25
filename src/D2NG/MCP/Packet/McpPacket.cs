@@ -10,7 +10,7 @@ namespace D2NG.MCP.Packet
         {
         }
 
-        public byte Type { get => Raw[2]; }
+        public byte Type { get => Raw.Length > 2 ? Raw[2] : Raw[1]; }
 
         protected static byte[] BuildPacket(Mcp command, params IEnumerable<byte>[] args)
         {

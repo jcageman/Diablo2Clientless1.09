@@ -15,12 +15,6 @@ namespace ConsoleBot
             return new Deserializer().Deserialize<Config>(file);
         }
 
-        [YamlMember(Alias = "classicKey")]
-        public string ClassicKey { get; set; }
-
-        [YamlMember(Alias = "expansionKey")]
-        public string ExpansionKey { get; set; }
-
         [YamlMember(Alias = "realm")]
         public string Realm { get; set; }
 
@@ -29,5 +23,20 @@ namespace ConsoleBot
 
         [YamlMember(Alias = "password")]
         public string Password { get; set; }
+
+        [YamlMember(Alias = "character")]
+        public string Character { get; set; }
+
+        [YamlMember(Alias = "keyOwner")]
+        public string KeyOwner { get; set; }
+
+        [YamlMember(Alias = "gamefolder")]
+        public string GameFolder { get; set; }
+
+        [YamlMember(Alias = "telegramApiKey")]
+        public string TelegramApiKey { get; set; }
+
+        [YamlMember(Alias = "telegramChatId")]
+        public string TelegramChatId { get; set; }
     }
 }

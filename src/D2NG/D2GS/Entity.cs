@@ -1,9 +1,11 @@
-﻿namespace D2NG.D2GS
+﻿using D2NG.D2GS.Objects;
+
+namespace D2NG.D2GS
 {
     public abstract class Entity
     {
-        public byte Type { get; protected set; }
+        public EntityType Type { get; internal set; }
         public uint Id { get; protected set; }
-        public Point Location { get; protected set; }
+        public Point Location { get; internal set; }
     }
 }

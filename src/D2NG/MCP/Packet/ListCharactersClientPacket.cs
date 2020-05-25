@@ -9,7 +9,7 @@ namespace D2NG.MCP.Packet
         public ListCharactersClientPacket() :
             base(
                 BuildPacket(
-                    Mcp.CHARLIST2,
+                    Mcp.CHARLIST,
                     BitConverter.GetBytes(NumCharacters)
                 )
             )

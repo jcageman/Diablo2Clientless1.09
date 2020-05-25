@@ -10,12 +10,11 @@ namespace D2NG.D2GS.Items.Containers
 
         public uint Height { get; }
 
-        /// <summary>
-        /// Y is first dimension X is second
-        /// </summary>
         private bool[,] Buffer { get; set; } 
 
-        protected ConcurrentDictionary<uint, Item> Items { get; set; } = new ConcurrentDictionary<uint, Item>();
+        protected ConcurrentDictionary<uint, Item> _items { get; set; } = new ConcurrentDictionary<uint, Item>();
+
+        public List<Item> Items { get => _items.Values.ToList(); }
 
         public Container(uint width, uint height)
         {
@@ -24,29 +23,50 @@ namespace D2NG.D2GS.Items.Containers
 
             Buffer = new bool[height, width];
         }
+
+        virtual protected Point GetItemLocation(Item item)
+        {
+            return item.Location;
+        }
         
         private void SetBuffer(Item item, bool value)
         {
-            for(int y = 0; y < item.Height; y++)
+            var itemLocation = GetItemLocation(item);
+            for (int y = 0; y < item.Height; y++)
             {
                 for (int x = 0; x < item.Width; x++)
                 {
-                    Buffer[item.Y + y, item.X + x] = value;
+                    Buffer[itemLocation.Y + y, itemLocation.X + x] = value;
                 }
             }
         }
 
         public void Add(Item item)
         {
-            Items[item.Id] = item;
+            _items[item.Id] = item;
             SetBuffer(item, true);
+        }
+
+        public Item FindItemByName(string name)
+        {
+            return _items.FirstOrDefault(i => i.Value.Name == name).Value;
+        }
+
+        public Item FindItemById(uint itemId)
+        {
+            return _items.GetValueOrDefault(itemId);
+        }
+
+        public bool UpdateItem(Item oldItem, Item newItem)
+        {
+            return _items.TryUpdate(oldItem.Id, newItem, oldItem);
         }
 
         public void Remove(Item item) => Remove(item.Id);
 
         public void Remove(uint id)
         {
-            if (Items.Remove(id, out Item it))
+            if (_items.Remove(id, out Item it))
             {
                 SetBuffer(it, false);
             }
