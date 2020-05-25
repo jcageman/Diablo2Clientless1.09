@@ -202,7 +202,7 @@ namespace D2NGTests.D2GS
         public void GameServerConnection19()
         {
             string hexString = "223D10FA4BF81D360FD12C2770566C2AA25A27927B8AC73D2DFB2074D842441D0820";
-            var expected = new List<byte> { 0x6C, 0x6D, 0x3E };
+            var expected = new List<byte> { 0x6C, 0x6D, 0x3E, 0x0D };
             GameServerConnectionBaseTest(hexString, expected);
         }
 
@@ -210,7 +210,7 @@ namespace D2NGTests.D2GS
         public void GameServerConnection20()
         {
             string hexString = "7D13C38EE2B0DBC0ACD8D048E6876405C118462C05520128D08500159C1A08FE76B6E7A118B0154EC118242320239200AC396046F3B5B7018118B015463230B44640470E9102521D80264E3922874AB15FA3F324ECDF94FFB37E79FD9BF2A723F66FC5BFE6B7E5FC657E865D0B2622D90837070118520AA438C5240720";
-            var expected = new List<byte> { 0x6C, 0x6D, 0x3E };
+            var expected = new List<byte> { 0x3E, 0x9C, 0x9C, 0x9C, 0x69, 0x13, 0x13, 0x13, 0x13, 0x11, 0x65, 0x95, 0x1A };
             GameServerConnectionBaseTest(hexString, expected);
         }
 
@@ -218,7 +218,7 @@ namespace D2NGTests.D2GS
         public void GameServerConnection21()
         {
             string hexString = "1F13CC3B8AC9B89E1E7715871E1FBAF0680E81EB6DB6D8CC0CB50461981900";
-            var expected = new List<byte> { 0x6C, 0x6D, 0x3E };
+            var expected = new List<byte> { 0x3E, 0x3E, 0x2A, 0x1E };
             GameServerConnectionBaseTest(hexString, expected);
         }
 
@@ -226,7 +226,7 @@ namespace D2NGTests.D2GS
         public void GameServerConnection22()
         {
             string hexString = "2913D2771588DD60A9C109A92910EC96FD90406A1EA23E29337E53FECDF9E7F66FCA9C8FD9BF16FF80";
-            var expected = new List<byte> { 0x6C, 0x6D, 0x3E };
+            var expected = new List<byte> { 0x3E, 0x6D, 0x0D, 0x13, 0x13, 0x13, 0x13 };
             GameServerConnectionBaseTest(hexString, expected);
         }
 

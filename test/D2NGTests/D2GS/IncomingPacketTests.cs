@@ -69,9 +69,9 @@ namespace D2NGTests.D2GS
             var bytes = new byte[] { 0x95, 0x50, 0x06, 0x24, 0x00, 0xCA, 0x20, 0x78, 0xC2, 0xED, 0x00, 0x00, 0x00 };
             var packet = new LifeManaUpdatePacket(new D2gsPacket(bytes));
             Assert.Equal(1616, packet.Life);
-            Assert.Equal(83, packet.Mana);
-            Assert.Equal(866, packet.Stamina);
-            Assert.Equal(new Point(4738, 2223), packet.Location);
+            Assert.Equal(72, packet.Mana);
+            Assert.Equal(808, packet.Stamina);
+            Assert.Equal(new Point(5057, 1902), packet.Location);
         }
 
         
