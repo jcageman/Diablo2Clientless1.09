@@ -23,9 +23,8 @@ keyOwner: string (name used for the diablo registration, which you normally fill
 gamefolder: string (location of your diablo 2 installation, although currently unused)
 telegramApiKey: string (required for communicating status of the bot via telegram. Mainly to detect whispers/crashes)
 telegramChatId: string (chat id to post to)
-
-See https://core.telegram.org/bots for configurating the telegram bot
 ```
+See https://core.telegram.org/bots for configuration of the telegram bot
 
 ## Running ConsoleBot Docker Image
 You'll need to mount the directory that has your `config.yml`so that the program can find it. Example: 
