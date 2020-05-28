@@ -20,8 +20,9 @@ username: string
 password: string
 character: string
 keyOwner: string (name used for the diablo registration, which you normally fill in when installing diablo)
+channelToJoin: string (name of the channel to join after login)
 gamefolder: string (location of your diablo 2 installation, although currently unused)
-telegramApiKey: string (required for communicating status of the bot via telegram. Mainly to detect whispers/crashes)
+telegramApiKey: string (required for communicating status of the bot via telegram. Mainly to detect whispers/crashes, currently its required)
 telegramChatId: string (chat id to post to)
 ```
 See https://core.telegram.org/bots for configuration of the telegram bot
@@ -34,3 +35,6 @@ docker run \
   jcageman/d2ng:$TAG \
   --config /config/config.yml
 ```
+
+## Analyzing Packets
+Besides the ConsoleBot there is another CLI project called PacketSniffer, which you can use to analyse packets send by the bot, but also by any started diablo client connected to a realm. The PacketSniffer currently only monitors packets send by the game server (i.e. the packets send when you are in a game). This is 100% safe to use in all cases and undetectable. You could use this is you are not sure if your server is using the same version of 1.09d or if you simply want to analyze the game server yourself.
