@@ -75,9 +75,6 @@ namespace ConsoleBot
                     throw new Exception("Could not connect to realm");
                 }
 
-                Client.Chat.EnterChat();
-
-                Client.Chat.JoinChannel("taggert");
                 Thread.Sleep(2_000);
 
                 int count = 1;
@@ -154,6 +151,9 @@ namespace ConsoleBot
             var characters = Client.Login(Config.Username, Config.Password);
 
             Client.SelectCharacter(characters.Where(c => c.Name == Config.Character).First());
+
+            Client.Chat.EnterChat();
+            Client.Chat.JoinChannel(Config.ChannelToJoin);
             return true;
         }
 

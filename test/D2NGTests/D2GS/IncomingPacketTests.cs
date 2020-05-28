@@ -73,7 +73,5 @@ namespace D2NGTests.D2GS
             Assert.Equal(808, packet.Stamina);
             Assert.Equal(new Point(5057, 1902), packet.Location);
         }
-
-        
     }
 }

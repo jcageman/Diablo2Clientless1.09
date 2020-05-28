@@ -12,7 +12,7 @@ namespace D2NG.MCP.Packet
                 BuildPacket(
                     Mcp.CREATEGAME,
                     BitConverter.GetBytes(id),
-                    new byte[] { 0x00, (byte)difficulty, 0x00, 0x00 },
+                    new byte[] { 0x00, (byte)((byte)difficulty << 4), 0x00, 0x00 },
                     new byte[] { 0x01, 0xFF, 0x08 },
                     Encoding.ASCII.GetBytes($"{name}\0"),
                     Encoding.ASCII.GetBytes($"{password.FirstCharToUpper()}\0"),

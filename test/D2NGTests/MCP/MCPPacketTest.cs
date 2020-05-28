@@ -44,6 +44,15 @@ namespace D2NGTests.MCP
 
         }
 
+        [Fact]
+        public void CreateGameRequestPacket()
+        {
+            byte[] expected = new byte[] { 0x19, 0x00, 0x03, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x01, 0xFF, 0x08, 0x74, 0x65, 0x73, 0x74, 0x00, 0x42, 0x6C, 0x61, 0x00, 0x47, 0x53, 0x32, 0x00 };
+            var packet = new CreateGameRequestPacket(0, D2NG.Difficulty.Hell, "test", "bla", "GS2");
+
+            Assert.Equal(25, packet.Raw.Length);
+            Assert.Equal(expected, packet.Raw);
+        }
 
     }
 }
