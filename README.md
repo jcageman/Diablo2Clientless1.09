@@ -36,5 +36,13 @@ docker run \
   --config /config/config.yml
 ```
 
+## Future ideas
+1. Generate game maps from game seed (see start at https://github.com/MephisTools/MapGenerator)
+   - Implement pathing (to walk/teleport to pick location or gateway)
+   - Implement a map visualizer (see https://github.com/MephisTools/diablo2-live-viewer)
+2. Implement pickit using .nip files (used in many other bots)
+3. Improve chicken/pot behavior (currently runs in a separate thread, probably better to use task scheduling)
+4. Automuling
+
 ## Analyzing Packets
 Besides the ConsoleBot there is another CLI project called PacketSniffer, which you can use to analyse packets send by the bot, but also by any started diablo client connected to a realm. The PacketSniffer currently only monitors packets send by the game server (i.e. the packets send when you are in a game). This is 100% safe to use in all cases and undetectable. You could use this is you are not sure if your server is using the same version of 1.09d or if you simply want to analyze the game server yourself.
