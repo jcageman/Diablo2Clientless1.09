@@ -6,7 +6,7 @@ namespace D2NG.BNCS.Packet
 {
     internal class NotifyJoinPacket : BncsPacket
     {
-        public NotifyJoinPacket(string name, string password) : 
+        public NotifyJoinPacket(string name, string password) :
             base(
                 BuildPacket(
                     Sid.NOTIFYJOIN,

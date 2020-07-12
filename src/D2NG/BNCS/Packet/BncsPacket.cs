@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace D2NG.BNCS.Packet
 {
-    public class BncsPacket : D2NG.Packet
+    public class BncsPacket : D2NG.Packet.Packet
     {
         protected const byte PrefixByte = 0xFF;
 

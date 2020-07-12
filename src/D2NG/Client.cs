@@ -50,7 +50,7 @@ namespace D2NG
         /// <param name="realm">Realm to connect to. e.g. useast.battle.net </param>
         /// <param name="classicKey">26-character Diablo II Classic CD Key</param>
         /// <param name="expansionKey">26-character Diablo II: Lord of Destruction CD Key</param>
-        public bool Connect(string realm, string keyOwner, string gamefolder) 
+        public bool Connect(string realm, string keyOwner, string gamefolder)
             => Bncs.ConnectTo(realm, keyOwner, gamefolder);
 
         /// <summary>
@@ -105,7 +105,7 @@ namespace D2NG
             Mcp.Disconnect();
             Log.Debug($"Connecting to D2GS Server {packet.D2gsIp}");
             D2gs.Connect(packet.D2gsIp);
-            if(!D2gs.GameLogon(packet.GameHash, packet.GameToken, _character))
+            if (!D2gs.GameLogon(packet.GameHash, packet.GameToken, _character))
             {
                 return false;
             }
@@ -116,7 +116,7 @@ namespace D2NG
         public bool RejoinMCP()
         {
             Log.Information("Joining MCP again");
-            if(!RealmLogon())
+            if (!RealmLogon())
             {
                 return false;
             }
@@ -131,7 +131,7 @@ namespace D2NG
                 _mcpRealm = Bncs.ListMcpRealms().First();
             }
             var packet = Bncs.RealmLogon(_mcpRealm);
-            if(packet == null)
+            if (packet == null)
             {
                 Log.Warning("RealmLogin failed");
                 return false;

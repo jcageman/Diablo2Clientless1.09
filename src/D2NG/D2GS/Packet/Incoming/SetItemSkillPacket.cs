@@ -1,8 +1,10 @@
-﻿using Serilog;
+﻿using D2NG.D2GS.Players;
+using Serilog;
 using System.IO;
 using System.Text;
+using D2NG.D2GS.Exceptions;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Incoming
 {
     internal class SetItemSkillPacket : D2gsPacket
     {
@@ -13,7 +15,7 @@ namespace D2NG.D2GS.Packet
             _ = reader.ReadUInt16();
             UnitId = reader.ReadUInt32();
             Skill = (Skill)reader.ReadUInt16();
-            switch((InComingPacket)id)
+            switch ((InComingPacket)id)
             {
                 case InComingPacket.UpdateItemOSkill:
                     BaseLevel = reader.ReadByte();

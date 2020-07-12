@@ -17,7 +17,7 @@ namespace D2NGTests.D2GS
             Mock<INetworkStream> mockedStream = new Mock<INetworkStream>();
             mockedStream.Setup(x => x.ReadByte()).Returns(() =>
             {
-                if(byteArray.Length == 0)
+                if (byteArray.Length == 0)
                 {
                     return -1;
                 }
@@ -114,7 +114,7 @@ namespace D2NGTests.D2GS
         public void GameServerConnection8()
         {
             string hexString = "14528fb84a4c646cf45614a0ee14130a66cf4560";
-            var expected = new List<byte> { 0x67, 0x67};
+            var expected = new List<byte> { 0x67, 0x67 };
             GameServerConnectionBaseTest(hexString, expected);
         }
 
@@ -173,7 +173,7 @@ namespace D2NGTests.D2GS
             var expected = new List<byte> { 0x6D };
             GameServerConnectionBaseTest(hexString, expected);
         }
-        
+
         [Fact]
         public void GameServerConnection16()
         {

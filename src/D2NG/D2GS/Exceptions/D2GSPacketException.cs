@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.Serialization;
 
-namespace D2NG.D2GS
+namespace D2NG.D2GS.Exceptions
 {
     [Serializable]
     public class D2GSPacketException : Exception

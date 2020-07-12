@@ -1,7 +1,4 @@
-﻿using System.IO;
-using System.Text;
-
-namespace D2NG
+﻿namespace D2NG.Packet
 {
     public class Packet
     {

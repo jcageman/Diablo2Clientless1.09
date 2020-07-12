@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Outgoing
 {
     internal class RightSkillOnUnitPacket : D2gsPacket
     {

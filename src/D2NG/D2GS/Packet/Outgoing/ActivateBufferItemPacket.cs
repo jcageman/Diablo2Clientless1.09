@@ -1,7 +1,8 @@
 ﻿using D2NG.D2GS.Items;
+using D2NG.D2GS.Players;
 using System;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Outgoing
 {
     internal class ActivateBufferItemPacket : D2gsPacket
     {

@@ -1,5 +1,4 @@
 ﻿using D2NG.D2GS.Act;
-using System.Collections.Generic;
 
 namespace D2NG.D2GS.Objects
 {

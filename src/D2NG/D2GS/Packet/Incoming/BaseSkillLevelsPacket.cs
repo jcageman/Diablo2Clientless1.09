@@ -1,10 +1,12 @@
-﻿using Serilog;
+﻿using D2NG.D2GS.Players;
+using Serilog;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Text;
+using D2NG.D2GS.Exceptions;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Incoming
 {
     internal class BaseSkillLevelsPacket : D2gsPacket
     {
@@ -18,8 +20,8 @@ namespace D2NG.D2GS.Packet
             }
             var count = reader.ReadByte();
             PlayerId = reader.ReadUInt32();
-            
-            for (int i = 0; i < count; i ++)
+
+            for (int i = 0; i < count; i++)
             {
                 Skills[(Skill)reader.ReadUInt16()] = reader.ReadByte();
             }

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.Serialization;
 
-namespace D2NG.MCP
+namespace D2NG.MCP.Exceptions
 {
     [Serializable]
     public class CharLogonException : Exception

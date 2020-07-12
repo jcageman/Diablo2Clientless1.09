@@ -1,16 +1,16 @@
-﻿using D2NG.D2GS;
-using D2NG.D2GS.Act;
+﻿using D2NG.D2GS.Act;
 using D2NG.D2GS.Items;
 using D2NG.D2GS.Items.Containers;
 using D2NG.D2GS.Objects;
-using D2NG.D2GS.Packet;
+using D2NG.D2GS.Packet.Incoming;
+using D2NG.D2GS.Players;
 using D2NG.MCP;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Action = D2NG.D2GS.Items.Action;
 
-namespace D2NG
+namespace D2NG.D2GS
 {
     internal class GameData
     {
@@ -74,7 +74,7 @@ namespace D2NG
             }
 
             var existingIndex = Players.FindIndex(p => p.Name == packet.Name);
-            if(existingIndex < 0)
+            if (existingIndex < 0)
             {
                 Players.Add(new Player(packet));
             }
@@ -91,7 +91,7 @@ namespace D2NG
             {
                 Me.Location = packet.MoveToLocation;
             }
-            
+
             foreach (var player in Players)
             {
                 if (packet.UnitId == player.Id)
@@ -109,9 +109,9 @@ namespace D2NG
                 Me.Location = packet.Location;
             }
 
-            foreach( var player in Players)
+            foreach (var player in Players)
             {
-                if(packet.UnitId == player.Id)
+                if (packet.UnitId == player.Id)
                 {
                     player.Location = packet.Location;
                     break;
@@ -132,7 +132,7 @@ namespace D2NG
 
         internal void SetSkills(BaseSkillLevelsPacket packet)
         {
-            if(packet.PlayerId == Me.Id)
+            if (packet.PlayerId == Me.Id)
             {
                 foreach (var skill in packet.Skills)
                 {
@@ -143,7 +143,7 @@ namespace D2NG
 
         internal void SetActiveSkill(SetActiveSkillPacket packet)
         {
-            if(packet.UnitGid == Me.Id)
+            if (packet.UnitGid == Me.Id)
             {
                 Me.ActiveSkills[packet.Hand] = packet.Skill;
             }
@@ -164,14 +164,14 @@ namespace D2NG
             Me.Location = packet.Location;
             Me.Life = packet.Life;
             //Workaround: seems the game server remembers battle orders during initialization
-            if(Act.MapId > 0)
+            if (Act.MapId > 0)
             {
                 Me.MaxLife = Math.Max(Me.MaxLife, Me.Life);
                 Me.MaxMana = Math.Max(Me.MaxMana, Me.Mana);
             }
 
             Me.Mana = packet.Mana;
-            
+
             Me.Stamina = packet.Stamina;
         }
 

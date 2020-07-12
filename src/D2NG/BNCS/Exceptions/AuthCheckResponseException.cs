@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.Serialization;
 
-namespace D2NG.BNCS.Packet
+namespace D2NG.BNCS.Exceptions
 {
     [Serializable]
     public class AuthCheckResponseException : Exception

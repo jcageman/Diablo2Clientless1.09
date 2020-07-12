@@ -1,8 +1,9 @@
+using D2NG.BNCS.Hashing;
 using System;
 using System.Text;
 using Xunit;
 
-namespace D2NG.BNCS.Hashing
+namespace D2NGTests.BNCS.Login
 {
     public static class CheckRevisionTests
     {
@@ -31,7 +32,7 @@ namespace D2NG.BNCS.Hashing
         [Fact]
         public static void TestCheckRevision3()
         {
-            byte[] checksum = { 0x56, 0x4c, 0x67, 0x67};
+            byte[] checksum = { 0x56, 0x4c, 0x67, 0x67 };
 
             var result = CheckRevisionV4.CheckRevision("ZYDAHQAA");
             Assert.Equal(0, result.Version);

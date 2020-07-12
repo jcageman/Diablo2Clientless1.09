@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Runtime.Serialization;
-using System.Text;
 
-namespace ConsoleBot
+namespace ConsoleBot.Exceptions
 {
     [Serializable]
     public class InvalidDiabloFolderException : RankException

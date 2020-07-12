@@ -1,10 +1,9 @@
-﻿using D2NG.D2GS.Packet;
-using D2NG.MCP;
+﻿using D2NG.MCP;
 using System;
 using System.Linq;
 using System.Text;
 
-namespace D2NG.D2GS
+namespace D2NG.D2GS.Packet.Outgoing
 {
     internal class GameLogonPacket : D2gsPacket
     {
@@ -22,7 +21,7 @@ namespace D2NG.D2GS
                     (byte)OutGoingPacket.GameLogon,
                     BitConverter.GetBytes(gameHash),
                     BitConverter.GetBytes(gameToken),
-                    new [] { (byte)character.Class },
+                    new[] { (byte)character.Class },
                     BitConverter.GetBytes(Version),
                     Constant,
                     Locale,

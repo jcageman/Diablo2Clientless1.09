@@ -1,7 +1,4 @@
 ﻿using D2NG.D2GS.Items;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace D2NG.DataManager
 {

@@ -1,5 +1,4 @@
-﻿using D2NG.BNCS.Hashing;
-using D2NG.BNCS.Packet;
+﻿using D2NG.BNCS.Packet;
 using Serilog;
 using Stateless;
 using System;
@@ -8,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using D2NG.BNCS.Exceptions;
 
 namespace D2NG.BNCS
 {
@@ -105,7 +105,7 @@ namespace D2NG.BNCS
                 .Permit(Trigger.LeaveChat, State.UserAuthenticated)
                 .Permit(Trigger.Disconnect, State.NotConnected);
 
-            Connection.PacketReceived += (obj, packet) 
+            Connection.PacketReceived += (obj, packet)
                 => PacketReceivedEventHandlers.GetValueOrDefault(packet.Type, p => Log.Verbose($"Received unhandled BNCS packet of type: {p.Type}"))?.Invoke(packet);
             Connection.PacketSent += (obj, packet) => PacketSentEventHandlers.GetValueOrDefault(packet.Type, null)?.Invoke(packet);
 
@@ -116,7 +116,7 @@ namespace D2NG.BNCS
             OnReceivedPacketEvent(Sid.AUTH_INFO, AuthInfoEvent.Set);
             OnReceivedPacketEvent(Sid.ENTERCHAT, EnterChatEvent.Set);
             OnReceivedPacketEvent(Sid.LOGONRESPONSE2, LogonEvent.Set);
-            OnReceivedPacketEvent(Sid.REQUIREDWORK, _ => { } );
+            OnReceivedPacketEvent(Sid.REQUIREDWORK, _ => { });
         }
 
         internal void LeaveGame() => Connection.WritePacket(new LeaveGamePacket());
@@ -152,7 +152,7 @@ namespace D2NG.BNCS
 
             _machine.Fire(_connectTrigger, realm);
             _machine.Fire(Trigger.AuthorizeKeys);
-            if(!_machine.IsInState(State.Connected))
+            if (!_machine.IsInState(State.Connected))
             {
                 Log.Warning($"Failed connecting to {realm}");
                 return false;
@@ -193,9 +193,9 @@ namespace D2NG.BNCS
 
             LogonEvent.Reset();
             Connection.WritePacket(new LogonRequestPacket(
-                Context.ClientToken, 
-                Context.ServerToken, 
-                Context.Username, 
+                Context.ClientToken,
+                Context.ServerToken,
+                Context.Username,
                 password));
             var response = LogonEvent.WaitForPacket();
             _ = new LogonResponsePacket(response);
@@ -206,7 +206,7 @@ namespace D2NG.BNCS
             AuthInfoEvent.Reset();
             Connection.WritePacket(new AuthInfoRequestPacket());
             var response = AuthInfoEvent.WaitForPacket(5000);
-            if(response == null)
+            if (response == null)
             {
                 Log.Warning("Did not receive response on auth info event, disconnecting chat server");
                 Disconnect();
@@ -274,12 +274,12 @@ namespace D2NG.BNCS
         {
             RealmLogonEvent.Reset();
             Connection.WritePacket(new RealmLogonRequestPacket(
-                Context.ClientToken, 
-                Context.ServerToken, 
+                Context.ClientToken,
+                Context.ServerToken,
                 realmName,
                 RealmLogonPassword));
             var packet = RealmLogonEvent.WaitForPacket(5000);
-            if(packet == null)
+            if (packet == null)
             {
                 return null;
             }

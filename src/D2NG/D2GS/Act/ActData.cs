@@ -1,7 +1,5 @@
-﻿using D2NG.D2GS.Act.Packet;
-using D2NG.D2GS.Objects;
-using D2NG.D2GS.Packet;
-using Serilog;
+﻿using D2NG.D2GS.Objects;
+using D2NG.D2GS.Packet.Incoming;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,7 +19,7 @@ namespace D2NG.D2GS.Act
         public List<Tile> Tiles { get => _tiles.GetOrAdd(Act, new List<Tile>()); }
 
         public ConcurrentDictionary<(uint, EntityType), WorldObject> WorldObjects { get => _worldObjects.GetOrAdd(Act, new ConcurrentDictionary<(uint, EntityType), WorldObject>()); }
-        
+
         internal void LoadActData(ActDataPacket packet)
         {
             Act = packet.Act;
@@ -31,8 +29,8 @@ namespace D2NG.D2GS.Act
 
         internal void UpdateNPCLocation(uint entityId, Point location)
         {
-            var npc = WorldObjects[(entityId,EntityType.NPC)];
-            if(npc != null)
+            var npc = WorldObjects[(entityId, EntityType.NPC)];
+            if (npc != null)
             {
                 npc.Location = location;
             }
@@ -40,7 +38,7 @@ namespace D2NG.D2GS.Act
 
         internal void UpdateNPCState(NpcStatePacket packet)
         {
-            var npc = WorldObjects[(packet.EntityId,EntityType.NPC)];
+            var npc = WorldObjects[(packet.EntityId, EntityType.NPC)];
             npc.State = packet.EntityState;
             if (packet.EntityState == EntityState.BeingHit || packet.EntityState == EntityState.Dead)
             {
@@ -56,7 +54,7 @@ namespace D2NG.D2GS.Act
 
         internal void RemoveWorldObject(uint entityId, EntityType entityType)
         {
-            WorldObjects.Remove((entityId,entityType), out var value);
+            WorldObjects.Remove((entityId, entityType), out var value);
         }
 
         internal void AddWorldObject(WorldObject obj)
@@ -68,19 +66,19 @@ namespace D2NG.D2GS.Act
         {
             Area = p.Area;
             var tile = new Tile(p.X, p.Y, p.Area);
-            if(!Tiles.Any(item => item.Equals(tile)))
+            if (!Tiles.Any(item => item.Equals(tile)))
             {
-                lock(Tiles)
+                lock (Tiles)
                 {
                     Tiles.Add(tile);
-                    foreach(var t in Tiles)
+                    foreach (var t in Tiles)
                     {
-                        if(t.IsNorthOf(tile))
+                        if (t.IsNorthOf(tile))
                         {
                             tile.North = t;
                             t.South = tile;
                         }
-                        if(t.IsEastOf(tile))
+                        if (t.IsEastOf(tile))
                         {
                             tile.East = t;
                             t.West = tile;

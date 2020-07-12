@@ -18,7 +18,7 @@ namespace D2NG.BNCS
         public BncsPacket WaitForPacket(int millisecondsTimeout)
         {
             bool result = _event.WaitOne(millisecondsTimeout);
-            if(!result)
+            if (!result)
             {
                 return null;
             }

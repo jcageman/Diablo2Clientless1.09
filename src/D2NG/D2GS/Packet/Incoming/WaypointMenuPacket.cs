@@ -1,8 +1,9 @@
 ﻿using D2NG.D2GS.Objects;
 using System;
 using System.Collections.Generic;
+using D2NG.D2GS.Exceptions;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Incoming
 {
     internal class WaypointMenuPacket : D2gsPacket
     {
@@ -18,11 +19,11 @@ namespace D2NG.D2GS.Packet
             _ = reader.ReadUInt16();
             foreach (Waypoint waypoint in Enum.GetValues(typeof(Waypoint)))
             {
-                if(reader.ReadBit())
+                if (reader.ReadBit())
                 {
-                AllowedWaypoints.Add(waypoint);
-            }
-                
+                    AllowedWaypoints.Add(waypoint);
+                }
+
             }
         }
 

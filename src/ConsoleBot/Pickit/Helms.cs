@@ -5,12 +5,12 @@ namespace ConsoleBot.Pickit
 {
     public static class Helms
     {
-        private static readonly HashSet<string> desirableHelms = new HashSet<string> { 
+        private static readonly HashSet<string> desirableHelms = new HashSet<string> {
             "Cap", "Skull Cap", "Great Helm", "Crown", "Mask", "Bone Helm",
             "War Hat", "Death Mask", "Grim Helm" };
         public static bool ShouldPickupItem(Item item)
         {
-            if(item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
+            if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
             {
                 return true;
             }
@@ -34,7 +34,7 @@ namespace ConsoleBot.Pickit
 
             if (desirableHelms.Contains(item.Name))
             {
-                if(item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() >= 40)
+                if (item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() >= 40)
                 {
                     return true;
                 }

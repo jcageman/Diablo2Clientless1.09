@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using D2NG.MCP.Exceptions;
 
 namespace D2NG.MCP.Packet
 {
@@ -14,7 +15,7 @@ namespace D2NG.MCP.Packet
             {
                 throw new McpPacketException("Packet length does not match");
             }
-            if (Mcp.CHARLIST != (Mcp) reader.ReadByte())
+            if (Mcp.CHARLIST != (Mcp)reader.ReadByte())
             {
                 throw new McpPacketException("Expected Packet Type Not Found");
             }
@@ -24,7 +25,7 @@ namespace D2NG.MCP.Packet
             var totalReturned = reader.ReadUInt16();
 
             Characters = new List<Character>();
-            for(int x = 0; x < totalReturned; x++)
+            for (int x = 0; x < totalReturned; x++)
             {
                 Characters.Add(new Character(
                     reader.ReadNullTerminatedString(),

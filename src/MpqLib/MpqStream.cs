@@ -29,17 +29,17 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
+using ICSharpCode.SharpZipLib.BZip2;
+using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
 using System;
 using System.IO;
 #if WITH_ZLIB
-using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
-using MpqLib.MpqReader;
 #endif
 #if WITH_BZIP
-using ICSharpCode.SharpZipLib.BZip2;
+
 #endif
 
-namespace MpqLib.sMpqReader
+namespace MpqLib
 {
     /// <summary>
     /// A Stream based class for reading a file from an MPQ file
@@ -67,7 +67,7 @@ namespace MpqLib.sMpqReader
             mStream = File.BaseStream;
             mBlockSize = File.BlockSize;
 
-            if(mBlock.IsCompressed)
+            if (mBlock.IsCompressed)
                 LoadBlockPositions();
         }
 
@@ -88,19 +88,19 @@ namespace MpqLib.sMpqReader
         // Compressed files start with an array of offsets to make seeking possible
         private void LoadBlockPositions()
         {
-            int blockposcount = (int) ((mBlock.FileSize + mBlockSize - 1) / mBlockSize) + 1;
+            int blockposcount = (int)((mBlock.FileSize + mBlockSize - 1) / mBlockSize) + 1;
 
             mBlockPositions = new uint[blockposcount];
 
-            lock(mStream)
+            lock (mStream)
             {
                 mStream.Seek(mBlock.FilePos, SeekOrigin.Begin);
                 BinaryReader br = new BinaryReader(mStream);
-                for(int i = 0; i < blockposcount; i++)
+                for (int i = 0; i < blockposcount; i++)
                     mBlockPositions[i] = br.ReadUInt32();
             }
 
-            uint blockpossize = (uint) blockposcount * 4;
+            uint blockpossize = (uint)blockposcount * 4;
 #if true
             // OW:
 
@@ -110,21 +110,21 @@ namespace MpqLib.sMpqReader
             // there's one additional entry in the block table. If this flag
             // is present, we skip this test to keep the file readable.
 
-            if((mBlock.Flags & MpqFileFlags.FileHasMetadata) == 0)
+            if ((mBlock.Flags & MpqFileFlags.FileHasMetadata) == 0)
             {
-                if(mBlockPositions[0] != blockpossize)
+                if (mBlockPositions[0] != blockpossize)
                     mBlock.Flags |= MpqFileFlags.Encrypted;
             }
 
-            if(mBlock.IsEncrypted)
+            if (mBlock.IsEncrypted)
             {
-                if(mSeed1 == 0)
+                if (mSeed1 == 0)
                 {
                     mSeed1 = MpqArchive.DetectFileSeed(mBlockPositions, blockpossize);
                     if (mSeed1 == 0)
                         throw new MpqParserException("Unable to determine encyption seed");
                 }
-                
+
                 MpqArchive.DecryptBlock(mBlockPositions, mSeed1);
                 mSeed1++; // Add 1 because the first block is the offset list
             }
@@ -134,11 +134,11 @@ namespace MpqLib.sMpqReader
             {
                 if (mSeed1 == 0)
                 {
-                    mSeed1 = MpqArchive.DetectFileSeed(mBlockPositions, blockpossize);
+                    mSeed1 = MpqArchiveReader.DetectFileSeed(mBlockPositions, blockpossize);
                     if (mSeed1 == 0)
                         throw new Exception("Unable to determine encyption seed");
                 }
-                MpqArchive.DecryptBlock(mBlockPositions, mSeed1);
+                MpqArchiveReader.DecryptBlock(mBlockPositions, mSeed1);
                 mSeed1++; // Add 1 because the first block is the offset list
             }
 #endif
@@ -174,15 +174,15 @@ namespace MpqLib.sMpqReader
                 {
                     uint value0 = BitConverter.ToUInt32(data, 0);
                     uint value1 = BitConverter.ToUInt32(data, 4);
-					mSeed1 = MpqArchive.DetectFileSeed(value0, value1, 0x2fbfbbef, 0x3d3d3d2f); // .J unicode magic
+                    mSeed1 = MpqArchive.DetectFileSeed(value0, value1, 0x2fbfbbef, 0x3d3d3d2f); // .J unicode magic
                     if (mSeed1 == 0)
                     {
                         mSeed1 = MpqArchive.DetectFileSeed(value0, value1, 0x3d3d2f2f, 0x3d3d3d3d); // .J ascii
-	                    if (mSeed1 == 0)
-	                    {
+                        if (mSeed1 == 0)
+                        {
                             mSeed1 = MpqArchive.DetectFileSeed(value0, value1, 0x46464952, mBlock.FileSize - 8); // RIFF
                             if (mSeed1 == 0) throw new MpqParserException("Unable to determine encryption key");
-                    	}
+                        }
                     }
                 }
                 MpqArchive.DecryptBlock(data, (uint)(mSeed1 + BlockIndex));
@@ -284,7 +284,7 @@ namespace MpqLib.sMpqReader
             // OW: avoid reading past the contents of the file
             if (mPosition >= Length)
                 return 0;
-            
+
             BufferData();
 
             int localposition = (int)(mPosition % mBlockSize);

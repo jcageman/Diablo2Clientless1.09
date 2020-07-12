@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using D2NG.D2GS.Players;
 
 namespace D2NG.D2GS.Items
 {

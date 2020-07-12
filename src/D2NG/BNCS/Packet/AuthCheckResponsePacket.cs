@@ -1,6 +1,7 @@
-﻿using System.IO;
+﻿using Serilog;
+using System.IO;
 using System.Text;
-using Serilog;
+using D2NG.BNCS.Exceptions;
 
 namespace D2NG.BNCS.Packet
 {
@@ -29,7 +30,7 @@ namespace D2NG.BNCS.Packet
             {
                 throw new BncsPacketException("Packet length does not match");
             }
-            
+
             _result = reader.ReadUInt32();
             _info = Encoding.ASCII.GetString(reader.ReadBytes(packetSize - 8));
 
@@ -37,7 +38,7 @@ namespace D2NG.BNCS.Packet
         }
 
         private void ValidateResult()
-        { 
+        {
             switch (_result)
             {
                 case 0x000:

@@ -1,6 +1,7 @@
 ﻿using Serilog;
 using System.IO;
 using System.Text;
+using D2NG.BNCS.Exceptions;
 
 namespace D2NG.BNCS.Packet
 {
@@ -37,7 +38,7 @@ namespace D2NG.BNCS.Packet
             MpqFileName = ReadNullTerminatedString(Encoding.ASCII.GetString(Raw), ref offset);
             FormulaString = ReadNullTerminatedString(Encoding.GetEncoding("ISO-8859-1").GetString(Raw), ref offset);
 
-            Log.Verbose($"{this.ToString()}");
+            Log.Verbose($"{ToString()}");
         }
 
         public uint LogonType { get; }

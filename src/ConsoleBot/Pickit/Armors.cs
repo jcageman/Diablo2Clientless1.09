@@ -10,7 +10,7 @@ namespace ConsoleBot.Pickit
             "Ghost Armor", "Serpentskin Armor", "Demonhide Armor", "Trellised Armor", "Linked Mail", "Mage Plate" };
         public static bool ShouldPickupItem(Item item)
         {
-            if(item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
+            if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
             {
                 return true;
             }
@@ -59,7 +59,7 @@ namespace ConsoleBot.Pickit
 
             if (casterArmors.Contains(item.Name))
             {
-                if(item.GetTotalResist() >= 60 && item.GetTotalLifeFromStats() >= 40)
+                if (item.GetTotalResist() >= 60 && item.GetTotalLifeFromStats() >= 40)
                 {
                     return true;
                 }
@@ -93,7 +93,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Quality == QualityType.Unique && item.Name == "Full Plate Mail" )
+            if (item.Quality == QualityType.Unique && item.Name == "Full Plate Mail")
             {
                 return true;
             }

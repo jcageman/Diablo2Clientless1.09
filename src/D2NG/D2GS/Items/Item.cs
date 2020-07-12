@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using YamlDotNet.Serialization;
+﻿using D2NG.D2GS.Players;
+using System.Collections.Generic;
 
 namespace D2NG.D2GS.Items
 {
@@ -97,15 +97,15 @@ namespace D2NG.D2GS.Items
         public int GetTotalResist()
         {
             var totalResist = 0;
-            totalResist  += GetValueOfStatType(StatType.ColdResistance);
+            totalResist += GetValueOfStatType(StatType.ColdResistance);
             totalResist += GetValueOfStatType(StatType.FireResistance);
             totalResist += GetValueOfStatType(StatType.LightningResistance);
-            totalResist += GetValueOfStatType(StatType.PoisonResistance)/ 2;
+            totalResist += GetValueOfStatType(StatType.PoisonResistance) / 2;
             return totalResist;
         }
         public int GetTotalLifeFromStats()
         {
-            var totalLife= 0;
+            var totalLife = 0;
             totalLife += GetValueOfStatType(StatType.Life);
             totalLife += GetValueOfStatType(StatType.Dexterity) * 4;
             totalLife += GetValueOfStatType(StatType.Strength) * 4;
@@ -114,7 +114,7 @@ namespace D2NG.D2GS.Items
 
         public int GetToClassSkills()
         {
-            if(GetValueOfStatType(StatType.AllSkills) > 0)
+            if (GetValueOfStatType(StatType.AllSkills) > 0)
             {
                 return GetValueOfStatType(StatType.AllSkills);
             }
@@ -134,7 +134,7 @@ namespace D2NG.D2GS.Items
         {
             var result = 0;
             var singleSkill1 = Properties.GetValueOrDefault(StatType.SingleSkill1);
-            if(singleSkill1 != null && singleSkill1.Skill == skill)
+            if (singleSkill1 != null && singleSkill1.Skill == skill)
             {
                 result += singleSkill1.Value;
             }

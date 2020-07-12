@@ -1,6 +1,7 @@
 ﻿using Serilog;
 using System.IO;
 using System.Text;
+using D2NG.BNCS.Exceptions;
 
 namespace D2NG.BNCS.Packet
 {
@@ -29,7 +30,7 @@ namespace D2NG.BNCS.Packet
             }
 
             Status = reader.ReadUInt32();
-            
+
             switch (Status)
             {
                 case 0x00:

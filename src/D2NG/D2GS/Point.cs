@@ -55,13 +55,13 @@ namespace D2NG.D2GS
 
         public Point Lerp(Point other, float alpha)
         {
-            return new Point(Lerp(this.X, other.X, alpha), Lerp(this.Y, other.Y, alpha));
+            return new Point(Lerp(X, other.X, alpha), Lerp(Y, other.Y, alpha));
         }
 
-        public static (double,double) Normalize((double, double) point)
+        public static (double, double) Normalize((double, double) point)
         {
             var length = Math.Sqrt(Math.Pow(point.Item1, 2.0) + Math.Pow(point.Item2, 2.0));
-            return (Convert.ToDouble(point.Item1) /length, Convert.ToDouble(point.Item2) /length);
+            return (Convert.ToDouble(point.Item1) / length, Convert.ToDouble(point.Item2) / length);
         }
 
         public (double, double) Multiply(float multiplier)
@@ -81,7 +81,7 @@ namespace D2NG.D2GS
         public Point GetPointPastPointInSameDirection(Point other, double distance)
         {
             var (decX, decY) = other;
-            var difference = this.Substract((Convert.ToDouble(decX), Convert.ToDouble(decY)));
+            var difference = Substract((Convert.ToDouble(decX), Convert.ToDouble(decY)));
             var (nX, nY) = Normalize(difference);
             return new Point((ushort)(other.X - nX * distance), (ushort)(other.Y - nY * distance));
         }

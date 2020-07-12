@@ -1,7 +1,7 @@
 ﻿using D2NG.D2GS.Items;
 using System;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Outgoing
 {
     internal class BuyItemPacket : D2gsPacket
     {
@@ -11,7 +11,7 @@ namespace D2NG.D2GS.Packet
                     (byte)OutGoingPacket.BuyItem,
                     BitConverter.GetBytes((uint)entity.Id),
                     BitConverter.GetBytes((uint)item.Id),
-                    new byte[] { (byte)(gamble ? 0x02 : 0x00), 0x00, 0x00, (byte)(buyStack ? 0x80 : 0x00)},
+                    new byte[] { (byte)(gamble ? 0x02 : 0x00), 0x00, 0x00, (byte)(buyStack ? 0x80 : 0x00) },
                     BitConverter.GetBytes((uint)0x00)
                 )
             )

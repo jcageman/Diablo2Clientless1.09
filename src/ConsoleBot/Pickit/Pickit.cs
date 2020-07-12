@@ -7,7 +7,7 @@ namespace ConsoleBot.Pickit
     {
         public static bool ShouldPickupItem(Item item)
         {
-            if(GoldItems.ShouldPickupItem(item))
+            if (GoldItems.ShouldPickupItem(item))
             {
                 return true;
             }
@@ -184,7 +184,7 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldGamble(Item item)
         {
-            if(item.IsIdentified)
+            if (item.IsIdentified)
             {
                 return false;
             }
@@ -193,13 +193,13 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-            
-            if(item.Name == "Boots" || item.Name == "Heavy Boots")
+
+            if (item.Name == "Boots" || item.Name == "Heavy Boots")
             {
                 return true;
             }
 
-            if(item.Classification == ClassificationType.Ring)
+            if (item.Classification == ClassificationType.Ring)
             {
                 return true;
             }

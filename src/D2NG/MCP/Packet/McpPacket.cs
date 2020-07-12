@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace D2NG.MCP.Packet
 {
-    public class McpPacket : D2NG.Packet
+    public class McpPacket : D2NG.Packet.Packet
     {
         public McpPacket(byte[] packet) : base(packet)
         {

@@ -11,7 +11,7 @@ namespace D2NG.DataManager
     {
         public List<ItemPropertyEntry> ItemProperties { get; }
 
-        public Dictionary<StatType,ItemPropertyEntry> ItemPropertiesByStatType { get; }
+        public Dictionary<StatType, ItemPropertyEntry> ItemPropertiesByStatType { get; }
 
         public ItemPropertyDataType(string file)
         {

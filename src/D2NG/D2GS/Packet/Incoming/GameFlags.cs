@@ -2,8 +2,9 @@
 using System;
 using System.IO;
 using System.Text;
+using D2NG.D2GS.Exceptions;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Incoming
 {
     internal class GameFlags : D2gsPacket
     {
@@ -28,7 +29,7 @@ namespace D2NG.D2GS.Packet
             Ladder = reader.ReadByte() != 0;
             reader.Close();
             Log.Verbose(BitConverter.ToString(packet.Raw));
-            Log.Verbose($"(0x{packet.Raw[0], 2:X2}) Game flags:\n" +
+            Log.Verbose($"(0x{packet.Raw[0],2:X2}) Game flags:\n" +
                         $"\tDifficulty: {Difficulty}\n" +
                         $"\tType: {(Hardcore ? "Hardcore" : "Softcore")}" +
                         $" {(Expansion ? "Expansion" : "")}" +

@@ -1,9 +1,9 @@
-﻿using D2NG.D2GS.Helpers;
-using D2NG.D2GS.NetworkStream;
+﻿using D2NG.D2GS.NetworkStream;
 using Serilog;
 using Stateless;
 using System.Net;
 using System.Net.Sockets;
+using D2NG.Exceptions;
 
 namespace D2NG
 {
@@ -53,7 +53,7 @@ namespace D2NG
 
         internal abstract byte[] ReadPacket();
 
-        public void WritePacket(Packet packet) => this.WritePacket(packet.Raw);
+        public void WritePacket(Packet.Packet packet) => WritePacket(packet.Raw);
 
         internal abstract void WritePacket(byte[] packet);
 

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.Serialization;
 
-namespace D2NG.BNCS.Hashing
+namespace D2NG.BNCS.Exceptions
 {
     [Serializable]
     public class CdKeyException : Exception

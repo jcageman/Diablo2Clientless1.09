@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using D2NG.BNCS.Exceptions;
 
 namespace D2NG.BNCS.Packet
 {

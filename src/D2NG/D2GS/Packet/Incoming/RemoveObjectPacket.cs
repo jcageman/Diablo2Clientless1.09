@@ -1,10 +1,9 @@
 ﻿using D2NG.D2GS.Objects;
-using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using D2NG.D2GS.Exceptions;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Incoming
 {
     internal class RemoveObjectPacket : D2gsPacket
     {

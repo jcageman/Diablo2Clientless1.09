@@ -1,8 +1,7 @@
-﻿using System;
+﻿using Serilog;
+using System;
 using System.Linq;
 using System.Text;
-using D2NG.BNCS.Hashing;
-using Serilog;
 
 namespace D2NG.BNCS.Packet
 {

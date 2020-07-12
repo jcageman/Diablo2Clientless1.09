@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Linq;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Outgoing
 {
     internal class RepairPacket : D2gsPacket
     {

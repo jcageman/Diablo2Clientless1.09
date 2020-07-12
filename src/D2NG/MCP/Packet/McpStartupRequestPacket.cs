@@ -13,7 +13,7 @@ namespace D2NG.MCP.Packet
                 BitConverter.GetBytes(mcpStatus),
                 mcpChunk,
                 Encoding.ASCII.GetBytes(mcpUniqueName),
-                new byte[] {0}
+                new byte[] { 0 }
                 )
             )
         {

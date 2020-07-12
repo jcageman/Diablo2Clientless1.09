@@ -11,8 +11,8 @@ namespace D2NG.BNCS.Hashing
             var index = offset / 4;
             var position = offset % 4;
             var bitOffset = 8 * position;
-            buffer[index] &= (uint) (0xFF << bitOffset) ^ 0xFFFFFFFF;
-            buffer[index] |= (uint) val << bitOffset;
+            buffer[index] &= (uint)(0xFF << bitOffset) ^ 0xFFFFFFFF;
+            buffer[index] |= (uint)val << bitOffset;
         }
 
         private static byte GetBufferByte(uint[] buffer, int offset)
@@ -20,7 +20,7 @@ namespace D2NG.BNCS.Hashing
             var index = offset / 4;
             var position = offset % 4;
             var bitOffset = 8 * position;
-            return (byte) ((buffer[index] >> bitOffset) & 0xff);
+            return (byte)((buffer[index] >> bitOffset) & 0xff);
         }
 
         private static void CalculateHash(ref uint[] buffer)
@@ -30,13 +30,13 @@ namespace D2NG.BNCS.Hashing
 
             for (uint i = 0; i < 0x10; i++)
             {
-                hashBuffer[i] = buffer[(int) i + 5];
+                hashBuffer[i] = buffer[(int)i + 5];
             }
 
             for (uint i = 0x10; i < hashBuffer.Length; i++)
             {
                 hash = hashBuffer[i - 0x10] ^ hashBuffer[i - 0x8] ^ hashBuffer[i - 0xE] ^ hashBuffer[i - 0x3];
-                hashBuffer[i] = (uint) ((1 >> (int) (0x20 - (hash & 0xff))) | (1 << (int) (hash & 0xff)));
+                hashBuffer[i] = (uint)((1 >> (int)(0x20 - (hash & 0xff))) | (1 << (int)(hash & 0xff)));
             }
 
             a = buffer[0];
@@ -110,7 +110,7 @@ namespace D2NG.BNCS.Hashing
 
             for (uint i = 0; i < input.Count; i += maxSubsectionLength)
             {
-                var subsectionLength = Math.Min(maxSubsectionLength, (uint) input.Count - i);
+                var subsectionLength = Math.Min(maxSubsectionLength, (uint)input.Count - i);
 
                 if (subsectionLength > maxSubsectionLength)
                 {
@@ -121,14 +121,14 @@ namespace D2NG.BNCS.Hashing
                 {
                     var temp = new byte[input.Count];
                     input.CopyTo(temp);
-                    SetBufferByte(buffer, (int) (initializedLength + j), temp[(int) (j + i)]);
+                    SetBufferByte(buffer, (int)(initializedLength + j), temp[(int)(j + i)]);
                 }
 
                 if (subsectionLength < maxSubsectionLength)
                 {
                     for (var j = subsectionLength; j < maxSubsectionLength; j++)
                     {
-                        SetBufferByte(buffer, (int) (initializedLength + j), 0);
+                        SetBufferByte(buffer, (int)(initializedLength + j), 0);
                     }
                 }
 
@@ -140,7 +140,7 @@ namespace D2NG.BNCS.Hashing
             {
                 for (uint j = 0; j < 4; j++)
                 {
-                    op.Add(GetBufferByte(buffer, (int) (i * 4 + j)));
+                    op.Add(GetBufferByte(buffer, (int)(i * 4 + j)));
                 }
             }
 

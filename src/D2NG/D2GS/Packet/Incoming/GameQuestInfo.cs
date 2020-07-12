@@ -1,10 +1,10 @@
-﻿using D2NG.D2GS.Packet;
-using Serilog;
+﻿using Serilog;
 using System.IO;
 using System.Linq;
 using System.Text;
+using D2NG.D2GS.Exceptions;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Incoming
 {
     internal class GameQuestInfoPacket : D2gsPacket
     {

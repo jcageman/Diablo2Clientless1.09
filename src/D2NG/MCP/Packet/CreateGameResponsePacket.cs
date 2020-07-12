@@ -1,6 +1,7 @@
 ﻿using Serilog;
 using System.IO;
 using System.Text;
+using D2NG.MCP.Exceptions;
 
 namespace D2NG.MCP.Packet
 {
@@ -22,7 +23,7 @@ namespace D2NG.MCP.Packet
             _ = reader.ReadUInt16();
             var result = reader.ReadUInt32();
 
-            switch(result)
+            switch (result)
             {
                 case 0x00:
                     Log.Debug("Game created successfully");

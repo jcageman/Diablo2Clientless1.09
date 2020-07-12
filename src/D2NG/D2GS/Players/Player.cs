@@ -1,6 +1,6 @@
-﻿using D2NG.D2GS.Packet;
+﻿using D2NG.D2GS.Packet.Incoming;
 
-namespace D2NG.D2GS
+namespace D2NG.D2GS.Players
 {
     public class Player
     {
@@ -14,7 +14,7 @@ namespace D2NG.D2GS
             Location = assignPlayer.Location;
             Name = assignPlayer.Name;
             Id = assignPlayer.Id;
-            Class= assignPlayer.Class;
+            Class = assignPlayer.Class;
         }
 
         internal Player(PlayerInGamePacket playerInGame)

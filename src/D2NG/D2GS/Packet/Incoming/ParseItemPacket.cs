@@ -1,14 +1,12 @@
-﻿using D2NG.D2GS;
-using D2NG.D2GS.Items;
-using D2NG.D2GS.Packet;
+﻿using D2NG.D2GS.Items;
+using D2NG.D2GS.Players;
 using Serilog;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Action = D2NG.D2GS.Items.Action;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Incoming
 {
     internal class ParseItemPacket : D2gsPacket
     {
@@ -101,7 +99,7 @@ namespace D2NG.D2GS.Packet
             else if (item.Action == Action.PutInBelt || item.Action == Action.RemoveFromBelt)
             {
                 item.Container = ContainerType.Belt;
-                item.Location = new Point((ushort)(item.Location.X % 4), (ushort)(item.Location.X / 4 ));
+                item.Location = new Point((ushort)(item.Location.X % 4), (ushort)(item.Location.X / 4));
             }
             else if (item.Container == ContainerType.Unspecified)
             {
@@ -330,9 +328,9 @@ namespace D2NG.D2GS.Packet
 
                 item.Properties.Add(itemProperty.Type, itemProperty);
             }
-            
+
             //Seems the packet never contains all skills property, simply all skills listed, for ease of use we store allskills
-            if (   item.Properties.ContainsKey(StatType.PaladinSkills)
+            if (item.Properties.ContainsKey(StatType.PaladinSkills)
                 && item.Properties.ContainsKey(StatType.NecromancerSkills)
                 && item.Properties.ContainsKey(StatType.SorceressSkills)
                 && item.Properties.ContainsKey(StatType.BarbarianSkills)
@@ -410,11 +408,11 @@ namespace D2NG.D2GS.Packet
                     case StatType.SingleSkill2:
                     case StatType.SingleSkill3:
                     case StatType.SingleSkill4:
-                    {
+                        {
                             itemProperty.Skill = (Skill)reader.Read(propertyData.SaveParamBits);
                             itemProperty.Value = reader.Read(propertyData.SaveBits);
                             return true;
-                    }
+                        }
                 }
             }
 
@@ -516,7 +514,7 @@ namespace D2NG.D2GS.Packet
                 ReadGraphicInfo(reader, ref item);
                 ReadIdentifiedInfo(reader, ref item);
             }
-            catch (Exception e)
+            catch (System.Exception e)
             {
                 Log.Error(e, "Failed to parse item");
             }

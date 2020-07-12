@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using D2NG.BNCS.Exceptions;
 
 namespace D2NG.BNCS
 {
@@ -22,7 +23,7 @@ namespace D2NG.BNCS
 
         public void Connect(string realm)
         {
-             var server = Dns.GetHostAddresses(realm).First();
+            var server = Dns.GetHostAddresses(realm).First();
             Connect(server, DefaultPort);
         }
 
@@ -50,7 +51,7 @@ namespace D2NG.BNCS
             while (bncsBuffer.Count < count)
             {
                 var temp = _stream.ReadByte();
-                if(temp == -1)
+                if (temp == -1)
                 {
                     throw new BncsPacketException("End of Stream");
                 }

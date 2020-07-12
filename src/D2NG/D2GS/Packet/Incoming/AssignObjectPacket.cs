@@ -1,9 +1,9 @@
 ﻿using D2NG.D2GS.Objects;
-using Serilog;
 using System.IO;
 using System.Text;
+using D2NG.D2GS.Exceptions;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Incoming
 {
     internal class AssignObjectPacket : D2gsPacket
     {
@@ -24,7 +24,7 @@ namespace D2NG.D2GS.Packet
             reader.Close();
         }
 
-        public WorldObject AsWorldObject() 
+        public WorldObject AsWorldObject()
             => new WorldObject(EntityType, EntityId, ObjectCode, Location, State, InteractionType);
 
         public EntityType EntityType { get; }

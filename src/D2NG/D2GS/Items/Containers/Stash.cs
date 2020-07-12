@@ -8,7 +8,7 @@
 
         protected override Point GetItemLocation(Item item)
         {
-            if(item.Container == ContainerType.Stash)
+            if (item.Container == ContainerType.Stash)
             {
                 return item.Location;
             }

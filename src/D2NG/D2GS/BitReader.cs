@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace D2NG
+namespace D2NG.D2GS
 {
     internal class BitReader
     {

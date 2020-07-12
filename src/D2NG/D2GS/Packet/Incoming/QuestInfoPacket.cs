@@ -1,10 +1,10 @@
-﻿using D2NG.D2GS.Packet;
-using Serilog;
+﻿using Serilog;
 using System.IO;
 using System.Linq;
 using System.Text;
+using D2NG.D2GS.Exceptions;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Incoming
 {
     internal class QuestInfoPacket : D2gsPacket
     {
@@ -24,7 +24,7 @@ namespace D2NG.D2GS.Packet
                 Quests[i] = reader.ReadByte();
             }
 
-            Log.Verbose($"(0x{id, 2:X2}) Player Quest Info:\n" +
+            Log.Verbose($"(0x{id,2:X2}) Player Quest Info:\n" +
                 $"\tUpdate Type: {UpdateType}\n" +
                 $"\tUnit Gid: {UnitGid}\n" +
                 $"\tTimer: {Timer}\n" +

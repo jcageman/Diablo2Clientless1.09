@@ -35,7 +35,7 @@ namespace ConsoleBot.Pickit
             additionalDamage += (int)(item.GetValueOfStatType(StatType.SecondaryMinimumDamage) * 1.5);
             additionalDamage += (int)(item.GetValueOfStatType(StatType.SecondaryMaximumDamage) * 1.5);
 
-            if(item.Classification == ClassificationType.Bow)
+            if (item.Classification == ClassificationType.Bow)
             {
                 additionalDamage += item.GetValueOfStatType(StatType.Dexterity);
             }
@@ -78,7 +78,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            
+
 
             return false;
         }

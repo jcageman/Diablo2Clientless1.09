@@ -1,8 +1,9 @@
 ﻿using Serilog;
 using System.IO;
 using System.Text;
+using D2NG.D2GS.Exceptions;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Incoming
 {
     internal class EntityMovePacket : D2gsPacket
     {
@@ -26,7 +27,7 @@ namespace D2NG.D2GS.Packet
                 $"\tUnitType: {UnitType}\n" +
                 $"\tUnitId: {UnitId}\n" +
                 $"\tCurrent Location: {CurrentLocation}" +
-                $"\tMoving to Location: {MoveToLocation}") ;
+                $"\tMoving to Location: {MoveToLocation}");
         }
 
         public byte UnitType { get; }

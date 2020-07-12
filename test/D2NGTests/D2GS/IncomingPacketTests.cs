@@ -1,7 +1,7 @@
 ﻿using D2NG;
 using D2NG.D2GS;
-using D2NG.D2GS.Act.Packet;
 using D2NG.D2GS.Packet;
+using D2NG.D2GS.Packet.Incoming;
 using Xunit;
 
 namespace D2NGTests.D2GS

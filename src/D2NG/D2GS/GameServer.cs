@@ -1,14 +1,13 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Net;
-using System.Threading;
-using D2NG.D2GS.Helpers;
-using D2NG.D2GS.Objects;
+﻿using D2NG.D2GS.Helpers;
 using D2NG.D2GS.Packet;
+using D2NG.D2GS.Packet.Outgoing;
 using D2NG.MCP;
 using Serilog;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Net;
+using System.Threading;
 
 namespace D2NG.D2GS
 {
@@ -35,7 +34,7 @@ namespace D2NG.D2GS
                 if (Enum.IsDefined(typeof(InComingPacket), eventArgs.Type))
                 {
                     var incomingPacketType = (InComingPacket)eventArgs.Type;
-                    if(incomingPacketType == InComingPacket.GameFlags)
+                    if (incomingPacketType == InComingPacket.GameFlags)
                     {
                         InGame = true;
                     }
@@ -112,7 +111,7 @@ namespace D2NG.D2GS
         {
             var successLoadEvent = GetResetEventOfType(InComingPacket.LoadSuccessful);
             Connection.WritePacket(new GameLogonPacket(gameHash, gameToken, character));
-            if(!successLoadEvent.WaitOne(5000))
+            if (!successLoadEvent.WaitOne(5000))
             {
                 return false;
             }
@@ -144,7 +143,7 @@ namespace D2NG.D2GS
         }
         internal void SendPacket(D2gsPacket packet)
         {
-            if(IsInGame())
+            if (IsInGame())
             {
                 Connection.WritePacket(packet);
             }

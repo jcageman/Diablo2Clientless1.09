@@ -168,10 +168,10 @@ namespace D2NG.BNCS.Hashing
         protected static int Idx(int j) => 0x03 - (j >> 3);
 
         protected static long Ebp(long value, int ecx) => (value & (0x0FL << ecx)) >> ecx;
-        
+
         private void Decode()
         {
-            var table = BuildTableFromKey(this.Key);
+            var table = BuildTableFromKey(Key);
             var values = GenerateValues(table);
 
             var valuesAsBytes = values
@@ -198,15 +198,15 @@ namespace D2NG.BNCS.Hashing
                 }
             }
 
-            this.Product = values[0] >> 0X0A;
-            this.Public = BitConverter.GetBytes(((values[0] & 0x03FF) << 0x10) | (int)((uint)values[1] >> 0x10));
+            Product = values[0] >> 0X0A;
+            Public = BitConverter.GetBytes(((values[0] & 0x03FF) << 0x10) | (int)((uint)values[1] >> 0x10));
 
             var priv = new List<byte>();
-            priv.Add((byte) ((values[1] & 0x00FF) >> 0));
-            priv.Add((byte) ((values[1] & 0xFF00) >> 8));
+            priv.Add((byte)((values[1] & 0x00FF) >> 0));
+            priv.Add((byte)((values[1] & 0xFF00) >> 8));
             priv.AddRange(BitConverter.GetBytes(values[2]));
             priv.AddRange(BitConverter.GetBytes(values[3]));
-            this.Private = priv.ToArray();
+            Private = priv.ToArray();
         }
 
         public override byte[] ComputeHash(uint clientToken, uint serverToken)

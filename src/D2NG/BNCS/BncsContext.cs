@@ -1,6 +1,4 @@
-﻿using D2NG.BNCS.Hashing;
-
-namespace D2NG
+﻿namespace D2NG.BNCS
 {
     public class BncsContext
     {

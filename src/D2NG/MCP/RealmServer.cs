@@ -1,11 +1,10 @@
-﻿using System;
+﻿using D2NG.MCP.Packet;
+using Serilog;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Net;
 using System.Threading;
-using D2NG.MCP.Packet;
-using Serilog;
 
 namespace D2NG.MCP
 {
@@ -119,10 +118,10 @@ namespace D2NG.MCP
             return new JoinGameResponsePacket(JoinGameEvent.WaitForPacket().Raw);
         }
 
-        internal void OnReceivedPacketEvent(Mcp type, Action<McpPacket> handler) 
+        internal void OnReceivedPacketEvent(Mcp type, Action<McpPacket> handler)
             => PacketReceivedEventHandlers.AddOrUpdate(type, handler, (t, h) => h += handler);
 
-        internal void OnSentPacketEvent(Mcp type, Action<McpPacket> handler) 
+        internal void OnSentPacketEvent(Mcp type, Action<McpPacket> handler)
             => PacketSentEventHandlers.AddOrUpdate(type, handler, (t, h) => h += handler);
     }
 }

@@ -1,6 +1,7 @@
-﻿using D2NG.D2GS;
-using D2NG.D2GS.Items;
+﻿using D2NG.D2GS.Items;
 using D2NG.D2GS.Packet;
+using D2NG.D2GS.Packet.Incoming;
+using D2NG.D2GS.Players;
 using Xunit;
 
 namespace D2NGTests.D2GS

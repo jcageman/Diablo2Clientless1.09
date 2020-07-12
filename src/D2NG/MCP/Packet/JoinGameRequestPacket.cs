@@ -7,7 +7,7 @@ namespace D2NG.MCP.Packet
 {
     internal class JoinGameRequestPacket : McpPacket
     {
-        public JoinGameRequestPacket(ushort id, string name, string password) : 
+        public JoinGameRequestPacket(ushort id, string name, string password) :
             base(
                 BuildPacket(
                     Mcp.JOINGAME,

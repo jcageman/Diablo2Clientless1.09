@@ -2,8 +2,9 @@
 using Serilog;
 using System.IO;
 using System.Text;
+using D2NG.D2GS.Exceptions;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Incoming
 {
     internal class AssignPlayerPacket : D2gsPacket
     {
@@ -18,7 +19,7 @@ namespace D2NG.D2GS.Packet
             Class = (CharacterClass)reader.ReadByte();
             Name = reader.ReadNullTerminatedString();
             Location = new Point(reader.ReadUInt16(), reader.ReadUInt16());
-            Log.Verbose($"(0x{packet.Raw[0], 2:X2}) Assigning Player:\n" +
+            Log.Verbose($"(0x{packet.Raw[0],2:X2}) Assigning Player:\n" +
                         $"\tName: {Name}\n" +
                         $"\tClass: {Class}\n" +
                         $"\tId: {Id}\n" +

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.Serialization;
 
-namespace D2NG.MCP.Packet
+namespace D2NG.MCP.Exceptions
 {
     [Serializable]
     public class JoinGameException : Exception

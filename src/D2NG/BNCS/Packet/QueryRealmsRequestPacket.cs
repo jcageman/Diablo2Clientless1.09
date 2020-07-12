@@ -2,7 +2,7 @@
 {
     public class QueryRealmsRequestPacket : BncsPacket
     {
-        public QueryRealmsRequestPacket() : 
+        public QueryRealmsRequestPacket() :
             base(BuildPacket(Sid.QUERYREALMS2))
         {
         }

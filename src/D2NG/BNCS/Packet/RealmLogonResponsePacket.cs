@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
+using D2NG.BNCS.Exceptions;
 
 namespace D2NG.BNCS.Packet
 {
@@ -22,7 +23,7 @@ namespace D2NG.BNCS.Packet
             {
                 throw new BncsPacketException("Not a valid BNCS Packet");
             }
-            if (Sid.LOGONREALMEX != (Sid) reader.ReadByte())
+            if (Sid.LOGONREALMEX != (Sid)reader.ReadByte())
             {
                 throw new BncsPacketException("Expected type was not found");
             }
@@ -35,13 +36,13 @@ namespace D2NG.BNCS.Packet
 
             McpChunk = new List<byte>();
 
-            for(int i = 0; i < 2; i++)
+            for (int i = 0; i < 2; i++)
             {
                 McpChunk.AddRange(reader.ReadBytes(4));
             }
 
             McpIp = new IPAddress(reader.ReadUInt32());
-            McpPort = IPAddress.NetworkToHostOrder((short) reader.ReadInt32());
+            McpPort = IPAddress.NetworkToHostOrder((short)reader.ReadInt32());
 
             for (int i = 0; i < 12; i++)
             {

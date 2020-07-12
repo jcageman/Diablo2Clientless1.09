@@ -8,7 +8,7 @@ namespace ConsoleBot
     {
         public static Config FromFile(string file)
         {
-            if(file == null)
+            if (file == null)
             {
                 throw new ArgumentNullException(nameof(file), "a valid filename should be specified in the command line parameters via -c filename");
             }

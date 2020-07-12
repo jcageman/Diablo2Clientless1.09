@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace D2NG.D2GS.Packet
 {
-    public class D2gsPacket : D2NG.Packet
+    public class D2gsPacket : D2NG.Packet.Packet
     {
         public D2gsPacket(byte[] packet) : base(packet)
         {

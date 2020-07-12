@@ -1,7 +1,7 @@
 ﻿using D2NG.D2GS;
 using D2NG.D2GS.Helpers;
 using D2NG.D2GS.Objects;
-using D2NG.D2GS.Packet;
+using D2NG.D2GS.Packet.Outgoing;
 using OfficeOpenXml.FormulaParsing.Excel.Functions.Math;
 using System;
 using System.Buffers.Binary;
@@ -11,7 +11,7 @@ namespace D2NGTests.D2GS
 {
     public class OutGoingPacketTests
     {
-        
+
         [Fact]
         public void GameLogonPacket()
         {
@@ -58,12 +58,12 @@ namespace D2NGTests.D2GS
         public void RepairPacket()
         {
             byte[] expected = new byte[] { 0x35, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80 };
-            var packet = new RepairPacket(new WorldObject(EntityType.NPC, 16, 0, new Point(0,0), EntityState.Alive, 0));
+            var packet = new RepairPacket(new WorldObject(EntityType.NPC, 16, 0, new Point(0, 0), EntityState.Alive, 0));
 
             Assert.Equal(17, packet.Raw.Length);
             Assert.Equal(expected, packet.Raw);
         }
 
-        
+
     }
 }

@@ -1,6 +1,7 @@
 ﻿using Serilog;
 using System.IO;
 using System.Text;
+using D2NG.MCP.Exceptions;
 
 namespace D2NG.MCP.Packet
 {

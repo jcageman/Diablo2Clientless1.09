@@ -10,7 +10,7 @@ namespace D2NG.D2GS.Items.Containers
 
         public uint Height { get; }
 
-        private bool[,] Buffer { get; set; } 
+        private bool[,] Buffer { get; set; }
 
         protected ConcurrentDictionary<uint, Item> _items { get; set; } = new ConcurrentDictionary<uint, Item>();
 
@@ -28,7 +28,7 @@ namespace D2NG.D2GS.Items.Containers
         {
             return item.Location;
         }
-        
+
         private void SetBuffer(Item item, bool value)
         {
             var itemLocation = GetItemLocation(item);
@@ -98,7 +98,7 @@ namespace D2NG.D2GS.Items.Containers
             {
                 for (int x = point.X; x < point.X + itemWidth; x++)
                 {
-                    if (Buffer[y,x])
+                    if (Buffer[y, x])
                     {
                         return false;
                     }

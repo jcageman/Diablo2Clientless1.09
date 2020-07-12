@@ -1,8 +1,8 @@
 ﻿using D2NG.D2GS.Helpers;
 using D2NG.D2GS.Packet;
-using Serilog;
 using System;
-using System.Collections.Generic;
+using D2NG.D2GS.Exceptions;
+using D2NG.Exceptions;
 
 namespace D2NG.D2GS
 {
@@ -76,15 +76,15 @@ namespace D2NG.D2GS
                 var packet = new ArraySegment<byte>(output, index, packetSize).ToArray();
                 string printableString = packet.ToPrintString();
                 PacketReceived?.Invoke(this, new D2gsPacket(packet));
-                    
+
                 index += packetSize;
             } while (index < output.Length);
-            
-            if(index != output.Length)
+
+            if (index != output.Length)
             {
                 throw new D2GSPacketException("Parsing the entire packet didn't match sum of packets size");
             }
-            
+
             return output;
         }
 
@@ -105,7 +105,7 @@ namespace D2NG.D2GS
 
             int name_offset = Array.IndexOf(input.Array, (byte)0, input.Offset + initial_offset);
 
-            string name = System.Text.Encoding.UTF8.GetString(input.Array, input.Offset + initial_offset, name_offset- input.Offset - initial_offset);
+            string name = System.Text.Encoding.UTF8.GetString(input.Array, input.Offset + initial_offset, name_offset - input.Offset - initial_offset);
 
             if (name_offset == -1)
                 throw new D2GSPacketException("Unable to determine packet size");

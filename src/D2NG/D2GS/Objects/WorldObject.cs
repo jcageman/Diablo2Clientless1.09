@@ -10,12 +10,12 @@
 
         public WorldObject(EntityType objectType, uint objectId, EntityCode objectCode, Point location, EntityState state, byte interactionType)
         {
-            this.Type = objectType;
-            this.Id = objectId;
-            this.Code = objectCode;
-            this.Location = location;
-            this.State = state;
-            this.InteractionType = interactionType;
+            Type = objectType;
+            Id = objectId;
+            Code = objectCode;
+            Location = location;
+            State = state;
+            InteractionType = interactionType;
         }
     }
 }

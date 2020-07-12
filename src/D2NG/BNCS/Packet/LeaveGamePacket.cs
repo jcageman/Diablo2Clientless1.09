@@ -2,7 +2,7 @@
 {
     internal class LeaveGamePacket : BncsPacket
     {
-        public LeaveGamePacket() : 
+        public LeaveGamePacket() :
             base(
                 BuildPacket(
                     Sid.LEAVEGAME

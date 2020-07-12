@@ -1,11 +1,12 @@
 ﻿using D2NG.Extensions;
 using System.IO;
 using System.Text;
+using D2NG.BNCS.Exceptions;
 
 namespace D2NG.BNCS.Packet
 {
     public class ChatEventPacket : BncsPacket
-    { 
+    {
         public Eid Eid { get; }
         public uint UserFlags { get; }
         public uint Ping { get; }
@@ -27,7 +28,7 @@ namespace D2NG.BNCS.Packet
                 throw new BncsPacketException("Packet length does not match");
             }
 
-            Eid = (Eid) reader.ReadUInt32();
+            Eid = (Eid)reader.ReadUInt32();
             UserFlags = reader.ReadUInt32();
             Ping = reader.ReadUInt32();
             _ = reader.ReadUInt32();
@@ -42,26 +43,26 @@ namespace D2NG.BNCS.Packet
 
         public string RenderText()
         {
-            switch (this.Eid)
+            switch (Eid)
             {
                 case Eid.JOIN:
-                    return $"{this.Username} has joined the channel";
+                    return $"{Username} has joined the channel";
                 case Eid.LEAVE:
-                    return $"{this.Username} has left the channel";
+                    return $"{Username} has left the channel";
                 case Eid.WHISPER:
-                    return $"From <{this.Username}>: {this.Text}";
+                    return $"From <{Username}>: {Text}";
                 case Eid.TALK:
-                    return $"<{this.Username}>: {this.Text}";
+                    return $"<{Username}>: {Text}";
                 case Eid.CHANNEL:
-                    return $"Joined channel: {this.Text}";
+                    return $"Joined channel: {Text}";
                 case Eid.INFO:
-                    return $"INFO: {this.Text}";
+                    return $"INFO: {Text}";
                 case Eid.ERROR:
-                    return $"ERROR: {this.Text}";
+                    return $"ERROR: {Text}";
                 case Eid.EMOTE:
-                    return $"<{this.Username} {this.Text}>";
+                    return $"<{Username} {Text}>";
                 default:
-                    return $"Unhandled EID: {this.Eid.ToString()} {this.Text}";
+                    return $"Unhandled EID: {Eid.ToString()} {Text}";
             }
         }
     }

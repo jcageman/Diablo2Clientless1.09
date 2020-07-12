@@ -1,8 +1,10 @@
-﻿using Serilog;
+﻿using D2NG.D2GS.Players;
+using Serilog;
 using System.IO;
 using System.Text;
+using D2NG.D2GS.Exceptions;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Incoming
 {
     internal class SetActiveSkillPacket : D2gsPacket
     {
@@ -22,11 +24,11 @@ namespace D2NG.D2GS.Packet
             }
             UnitType = reader.ReadByte();
             UnitGid = reader.ReadUInt32();
-            Hand = (Hand) reader.ReadByte();
+            Hand = (Hand)reader.ReadByte();
             Skill = (Skill)reader.ReadUInt16();
             ItemGid = reader.ReadUInt32();
 
-            Log.Verbose($"(0x{packet.Raw[0], 2:X2}) Set Skill:\n" +
+            Log.Verbose($"(0x{packet.Raw[0],2:X2}) Set Skill:\n" +
                 $"\tUnit Type: {UnitType}\n" +
                 $"\tUnit GID: {UnitGid}\n" +
                 $"\tHand: {Hand}\n" +

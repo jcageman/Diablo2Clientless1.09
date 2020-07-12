@@ -1,4 +1,5 @@
 ﻿using D2NG.D2GS.Items;
+using D2NG.D2GS.Players;
 
 namespace ConsoleBot.Pickit
 {
@@ -17,29 +18,29 @@ namespace ConsoleBot.Pickit
         public static bool ShouldKeepItem(Item item)
         {
             if (item.GetValueOfStatType(StatType.SorceressSkills) == 2
-            && item.GetValueToSkill(D2NG.D2GS.Skill.EnergyShield) == 3
-            && item.GetValueToSkill(D2NG.D2GS.Skill.ThunderStorm) == 3)
+            && item.GetValueToSkill(Skill.EnergyShield) == 3
+            && item.GetValueToSkill(Skill.ThunderStorm) == 3)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.SorceressSkills) == 2
-            && item.GetValueToSkill(D2NG.D2GS.Skill.EnergyShield) == 3
-            && item.GetValueToSkill(D2NG.D2GS.Skill.ShiverArmor) == 3)
+            && item.GetValueToSkill(Skill.EnergyShield) == 3
+            && item.GetValueToSkill(Skill.ShiverArmor) == 3)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.PaladinSkills) == 2
-            && item.GetValueToSkill(D2NG.D2GS.Skill.BlessedHammer) >= 2
-            && item.GetValueToSkill(D2NG.D2GS.Skill.Concentration) >= 2)
+            && item.GetValueToSkill(Skill.BlessedHammer) >= 2
+            && item.GetValueToSkill(Skill.Concentration) >= 2)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.PaladinSkills) == 2
              && item.GetValueOfStatType(StatType.FasterCastRate) >= 10
-             && (item.GetValueToSkill(D2NG.D2GS.Skill.BlessedHammer) >= 1 || item.GetValueToSkill(D2NG.D2GS.Skill.Concentration) >= 1))
+             && (item.GetValueToSkill(Skill.BlessedHammer) >= 1 || item.GetValueToSkill(Skill.Concentration) >= 1))
             {
                 return true;
             }

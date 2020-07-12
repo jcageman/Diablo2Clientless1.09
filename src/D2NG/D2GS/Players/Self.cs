@@ -1,8 +1,8 @@
 ﻿using D2NG.D2GS.Objects;
-using D2NG.D2GS.Packet;
+using D2NG.D2GS.Packet.Incoming;
 using System.Collections.Concurrent;
 
-namespace D2NG.D2GS
+namespace D2NG.D2GS.Players
 {
     public class Self : Player
     {

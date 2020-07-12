@@ -1,10 +1,12 @@
 ﻿using D2NG.D2GS;
 using D2NG.D2GS.Act;
-using D2NG.D2GS.Act.Packet;
 using D2NG.D2GS.Items;
 using D2NG.D2GS.Items.Containers;
 using D2NG.D2GS.Objects;
 using D2NG.D2GS.Packet;
+using D2NG.D2GS.Packet.Incoming;
+using D2NG.D2GS.Packet.Outgoing;
+using D2NG.D2GS.Players;
 using D2NG.MCP;
 using Serilog;
 using System;
@@ -139,7 +141,7 @@ namespace D2NG
             {
                 throw new InvalidOperationException($"cannot take waypoint {waypoint}, since character does not have it yet,list of available waypoints: {Data.Me.AllowedWaypoints}");
             }
-           
+
             _gameServer.SendPacket(new TakeWaypointPacket(Data.Me.LastSelectedWaypointId, waypoint));
             return true;
         }
@@ -197,7 +199,7 @@ namespace D2NG
             if (Me.ActiveSkills[Hand.Right] != skill)
             {
                 _gameServer.SendPacket(new SelectSkillPacket(Hand.Right, skill));
-                while(Me.ActiveSkills[Hand.Right] != skill)
+                while (Me.ActiveSkills[Hand.Right] != skill)
                 {
                     Thread.Sleep(50);
                 }
@@ -251,7 +253,7 @@ namespace D2NG
 
         public void InsertItemIntoContainer(Item item, Point location, ItemContainer container)
         {
-            if(container == ItemContainer.Stash && location.Y > 7)
+            if (container == ItemContainer.Stash && location.Y > 7)
             {
                 _gameServer.SendPacket(new InsertItemIntoContainerPacket(item, new Point(location.X, (ushort)(location.Y - 8)), ItemContainer.Stash2));
             }
@@ -281,7 +283,7 @@ namespace D2NG
             }
             else
             {
-                var lerpedLocation = Me.Location.Lerp(location, Math.Min(1.0f,(float)(20.0/distance)));
+                var lerpedLocation = Me.Location.Lerp(location, Math.Min(1.0f, (float)(20.0 / distance)));
                 var lerpedDistance = lerpedLocation.Distance(Me.Location);
                 Me.Location = lerpedLocation;
                 _gameServer.SendPacket(new RunToLocationPacket(lerpedLocation));
@@ -297,7 +299,7 @@ namespace D2NG
         public bool InteractWithNPC(Entity entity)
         {
             var npcInfoPacket = _gameServer.GetResetEventOfType(InComingPacket.NPCInfo);
-            _gameServer.SendPacket(new MakeEntityMovePacket(Me,entity));
+            _gameServer.SendPacket(new MakeEntityMovePacket(Me, entity));
             Thread.Sleep(50);
             _gameServer.SendPacket(new InteractWithEntityPacket(entity));
             return npcInfoPacket.WaitOne(400);
@@ -331,7 +333,7 @@ namespace D2NG
             _gameServer.SendPacket(new TerminateEntityChatPacket(entity));
             var npcContainerTypes = new HashSet<ContainerType>() { ContainerType.ArmorTab, ContainerType.MiscTab, ContainerType.WeaponTab, ContainerType.WeaponTab2 };
             var npcItems = Data.Items.Where((p) => npcContainerTypes.Contains(p.Value.Container));
-            foreach(var npcItem in npcItems)
+            foreach (var npcItem in npcItems)
             {
                 Data.Items.TryRemove(npcItem.Key, out var value);
             }
@@ -398,7 +400,7 @@ namespace D2NG
 
         internal void CheckAndPreventDesync(WalkVerifyPacket walkVerifyPacket)
         {
-            if(walkVerifyPacket.Location.Distance(Data.Me.Location) > 5)
+            if (walkVerifyPacket.Location.Distance(Data.Me.Location) > 5)
             {
                 _gameServer.SendPacket(new RequestUpdatePacket(Data.Me.Id));
             }
@@ -465,13 +467,13 @@ namespace D2NG
             {
                 while (IsInGame())
                 {
-                    if(Me == null || Area == Area.None)
+                    if (Me == null || Area == Area.None)
                     {
                         Thread.Sleep(50);
                         continue;
                     }
 
-                    if(IsInTown())
+                    if (IsInTown())
                     {
                         Thread.Sleep(50);
                         continue;

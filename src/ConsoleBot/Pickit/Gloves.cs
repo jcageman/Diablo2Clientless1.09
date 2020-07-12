@@ -6,7 +6,7 @@ namespace ConsoleBot.Pickit
     {
         public static bool ShouldPickupItem(Item item)
         {
-            if(item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
+            if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
             {
                 return true;
             }

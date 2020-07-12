@@ -1,6 +1,7 @@
 ﻿using D2NG.BNCS;
 using Serilog;
 using System.Linq;
+using D2NG.Exceptions;
 
 namespace D2NG
 {
@@ -13,7 +14,7 @@ namespace D2NG
 
         internal Chat(BattleNetChatServer bncs)
         {
-            this._bncs = bncs;
+            _bncs = bncs;
         }
 
         /// <summary>

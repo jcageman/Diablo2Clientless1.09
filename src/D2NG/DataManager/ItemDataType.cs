@@ -1,9 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.IO;
-using D2NG.D2GS.Items;
+﻿using D2NG.D2GS.Items;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.IO;
 
 namespace D2NG.DataManager
 {

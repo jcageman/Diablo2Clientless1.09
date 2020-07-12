@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection.Emit;
-using System.Text;
 
 namespace D2NG.BNCS.Hashing
 {
@@ -48,7 +47,7 @@ namespace D2NG.BNCS.Hashing
 
             using (var dll = new MemoryStream(mpq))
             {
-                using (var arch = new MpqLib.MpqReader.MpqArchive(dll))
+                using (var arch = new MpqLib.MpqArchive(dll))
                 {
                     string listfile = Path.GetTempFileName();
                     using (var sw = new StreamWriter(File.OpenWrite(listfile)))

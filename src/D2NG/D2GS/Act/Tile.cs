@@ -10,8 +10,8 @@ namespace D2NG.D2GS.Act
         public ushort X { get; }
         public ushort Y { get; }
 
-        public ushort WorldX { get => (ushort) (X * Scale); }
-        public ushort WorldY { get => (ushort) (Y * Scale); }
+        public ushort WorldX { get => (ushort)(X * Scale); }
+        public ushort WorldY { get => (ushort)(Y * Scale); }
 
         public Area Area { get; }
         public (int X, int Y) Size { get; }
@@ -54,20 +54,20 @@ namespace D2NG.D2GS.Act
             West = null;
         }
 
-        public bool IsNorthOf(Tile t) => (this.X == t.X) && (this.Y == t.Y + t.Size.Y);
+        public bool IsNorthOf(Tile t) => (X == t.X) && (Y == t.Y + t.Size.Y);
 
-        public bool IsEastOf(Tile t) => (this.X == t.X + t.Size.X) && (this.Y == t.Y);
+        public bool IsEastOf(Tile t) => (X == t.X + t.Size.X) && (Y == t.Y);
 
-        public bool IsSouthOf(Tile t) => (this.X == t.X) && (this.Y == t.Y - t.Size.Y);
+        public bool IsSouthOf(Tile t) => (X == t.X) && (Y == t.Y - t.Size.Y);
 
-        public bool IsWestOf(Tile t) => (this.X == t.X - t.Size.X) && (this.Y == t.Y);
+        public bool IsWestOf(Tile t) => (X == t.X - t.Size.X) && (Y == t.Y);
 
         public override bool Equals(object obj)
         {
-            return !(obj is Tile tile) ? false : this.X == tile.X && this.Y == tile.Y && this.Area == tile.Area;
+            return !(obj is Tile tile) ? false : X == tile.X && Y == tile.Y && Area == tile.Area;
         }
 
-        public bool Contains(Point p) => 
+        public bool Contains(Point p) =>
             (p.X >= X * Scale) && (p.X < (X + Size.X) * Scale) &&
             (p.Y >= Y * Scale) && (p.Y < (Y + Size.Y) * Scale);
 
@@ -77,24 +77,24 @@ namespace D2NG.D2GS.Act
             { // maze
                 if (Mazes[area, 0] < MAX_TILE_SIZE && Mazes[area, 1] < MAX_TILE_SIZE)
                 {
-                    return (Mazes[area,0], Mazes[area, 1]); // fuck, area 28 isn't symmetric (10/14)
+                    return (Mazes[area, 0], Mazes[area, 1]); // fuck, area 28 isn't symmetric (10/14)
                 }
                 else
                 {
-                    return (8,8); // we assume every room larger than MAX_TILE_SIZE consists of 8x8 tiles
+                    return (8, 8); // we assume every room larger than MAX_TILE_SIZE consists of 8x8 tiles
                 }
             }
             else
             {
-                return (8,8); // we assume tile size is 8 if the level is preset / wilderness
+                return (8, 8); // we assume tile size is 8 if the level is preset / wilderness
             }
         }
 
-        public override int GetHashCode() => HashCode.Combine(this.X, this.Y, this.Area, this.Size);
+        public override int GetHashCode() => HashCode.Combine(X, Y, Area, Size);
 
         private const int MAX_TILE_SIZE = 14;
 
-        private static readonly Level[] Levels = 
+        private static readonly Level[] Levels =
         {
             new Level(0, 0, 0, 0, "Null", 0),
             new Level(56, 40, -1, -1, "Rogue Encampment", 2),

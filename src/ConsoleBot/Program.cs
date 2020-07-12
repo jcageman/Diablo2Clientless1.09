@@ -5,7 +5,7 @@ using D2NG.D2GS.Act;
 using D2NG.D2GS.Items;
 using D2NG.D2GS.Objects;
 using D2NG.D2GS.Packet;
-using D2NG.MCP.Packet;
+using D2NG.D2GS.Packet.Incoming;
 using McMaster.Extensions.CommandLineUtils;
 using Serilog;
 using Serilog.Events;
@@ -16,9 +16,12 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using D2NG.D2GS.Players;
+using D2NG.MCP.Exceptions;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types.Enums;
+using Attribute = D2NG.D2GS.Players.Attribute;
 
 namespace ConsoleBot
 {
@@ -53,7 +56,7 @@ namespace ConsoleBot
 
             if (ConfigFile != null)
             {
-                Config = Config.FromFile(this.ConfigFile);
+                Config = Config.FromFile(ConfigFile);
             }
 
             TelegramClient = new TelegramBotClient(Config.TelegramApiKey);
@@ -70,7 +73,7 @@ namespace ConsoleBot
 
             try
             {
-                if(!ConnectToRealm())
+                if (!ConnectToRealm())
                 {
                     throw new Exception("Could not connect to realm");
                 }
@@ -83,7 +86,7 @@ namespace ConsoleBot
                 {
                     try
                     {
-                        if(!Client.CreateGame(Difficulty.Hell, $"go{count}", "gtd", "gs2"))
+                        if (!Client.CreateGame(Difficulty.Hell, $"go{count}", "gtd", "gs2"))
                         {
                             count++;
                             Thread.Sleep(5000);
@@ -97,7 +100,7 @@ namespace ConsoleBot
                     {
                         Thread.Sleep(2_000);
                     }
-                    
+
                     if (Client.Game.IsInGame())
                     {
                         Client.Game.LeaveGame();
@@ -114,13 +117,13 @@ namespace ConsoleBot
                             Thread.Sleep(30000);
                         };
 
-                        if(connectCount >= 10)
+                        if (connectCount >= 10)
                         {
-                            throw new Exception("Reconnect tries of 10 reached, aborting");
+                            throw new System.Exception("Reconnect tries of 10 reached, aborting");
                         }
                         Thread.Sleep(3000);
                     }
-                    
+
                     count++;
                 }
 
@@ -144,7 +147,7 @@ namespace ConsoleBot
                 Config.Realm,
                 Config.KeyOwner,
                 Config.GameFolder);
-            if(!connect)
+            if (!connect)
             {
                 return false;
             }
@@ -188,7 +191,7 @@ namespace ConsoleBot
                 return false;
             }
 
-            if(Client.Game.Act == Act.Act3)
+            if (Client.Game.Act == Act.Act3)
             {
                 TransmutePerfectSkulls();
             }
@@ -295,21 +298,21 @@ namespace ConsoleBot
         private bool Act4RepairAndGamble()
         {
             bool shouldRepair = Client.Game.Items.Where(i => i.Action == D2NG.D2GS.Items.Action.Equip && i.MaximumDurability > 0 && ((double)i.Durability / i.MaximumDurability) < 0.2).Any();
-            bool shouldGamble = Client.Game.Me.Attributes[D2NG.D2GS.Attribute.GoldInStash] > 7_000_000;
+            bool shouldGamble = Client.Game.Me.Attributes[Attribute.GoldInStash] > 7_000_000;
             if (!shouldRepair && !shouldGamble)
             {
                 return true;
             }
 
-            if(!MoveToA4Npcs())
+            if (!MoveToA4Npcs())
             {
                 return false;
             }
 
-            if(shouldRepair)
+            if (shouldRepair)
             {
                 var halbu = GetNPC(NPCCode.Halbu);
-                if(halbu == null)
+                if (halbu == null)
                 {
                     return false;
                 }
@@ -323,11 +326,11 @@ namespace ConsoleBot
                 {
                     return false;
                 }
-                
+
                 GambleItemsAtNPC(jamella);
             }
 
-            if(!MoveToA4Waypoint())
+            if (!MoveToA4Waypoint())
             {
                 return false;
             }
@@ -390,7 +393,7 @@ namespace ConsoleBot
                 return false;
             }
 
-            while (Client.Game.Me.Attributes[D2NG.D2GS.Attribute.GoldInStash] > 200000)
+            while (Client.Game.Me.Attributes[Attribute.GoldInStash] > 200000)
             {
                 bool result = TryWithTimeout((retryCount) =>
                 {
@@ -417,7 +420,7 @@ namespace ConsoleBot
                 var oldItems = Client.Game.Items.Where(i => i.Container == ContainerType.ArmorTab).Select(i => i.Id).ToHashSet();
 
                 Client.Game.TownFolkAction(npc, TownFolkActionType.Gamble);
-                
+
                 var itemsResult = TryWithTimeout((retryCount) =>
                 {
                     var newItems = Client.Game.Items.Where(i => i.Container == ContainerType.ArmorTab).Select(i => i.Id).ToHashSet();
@@ -436,11 +439,11 @@ namespace ConsoleBot
                 var inventoryItemsToSell = Client.Game.Inventory.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(i)).ToList();
                 foreach (Item item in inventoryItemsToSell)
                 {
-                    if(item.Quality == QualityType.Rare)
+                    if (item.Quality == QualityType.Rare)
                     {
                         Log.Information($"Selling item {item.GetFullDescription()}");
                     }
-                    
+
                     Client.Game.SellItem(npc, item);
                 }
 
@@ -448,7 +451,7 @@ namespace ConsoleBot
 
                 foreach (var gambleItem in Client.Game.Items.Where(i => i.Container == ContainerType.ArmorTab && Pickit.Pickit.ShouldGamble(i)))
                 {
-                    if(Client.Game.Inventory.FindFreeSpace(gambleItem) == null)
+                    if (Client.Game.Inventory.FindFreeSpace(gambleItem) == null)
                     {
                         Log.Information($"Inventory full, not gambling anymore");
                         inventoryFull = true;
@@ -468,14 +471,14 @@ namespace ConsoleBot
                         if (deltaItems.Count() > 0)
                         {
                             var gambledItem = deltaItems.First();
-                            if(!identifiedItems.Contains(gambledItem.Id))
+                            if (!identifiedItems.Contains(gambledItem.Id))
                             {
                                 identifiedItems.Add(gambledItem.Id);
                                 Client.Game.IdentifyGambleItem(gambledItem);
                             }
                         }
 
-                        if(Client.Game.Inventory.Items.Any(i => i.IsIdentified && identifiedItems.Contains(i.Id)))
+                        if (Client.Game.Inventory.Items.Any(i => i.IsIdentified && identifiedItems.Contains(i.Id)))
                         {
                             return true;
                         }
@@ -494,7 +497,7 @@ namespace ConsoleBot
                 Client.Game.TerminateEntityChat(npc);
                 Thread.Sleep(50);
 
-                if(inventoryFull)
+                if (inventoryFull)
                 {
                     break;
                 }
@@ -512,7 +515,7 @@ namespace ConsoleBot
                         new Point(5061, 5040),
                         new Point(5046, 5037),
                         new Point(5043, 5018),
-                        
+
                     };
 
             return WalkPathOfLocations(points);
@@ -566,7 +569,7 @@ namespace ConsoleBot
             ?? Client.Game.Items.Where(i => i.Container == ContainerType.MiscTab && i.Type.StartsWith("hp")).FirstOrDefault();
             var manaPotion = Client.Game.Items.Where(i => i.Container == ContainerType.MiscTab && i.Type == "mp5").FirstOrDefault()
             ?? Client.Game.Items.Where(i => i.Container == ContainerType.MiscTab && i.Type.StartsWith("mp")).FirstOrDefault();
-            if(healingPotion == null || manaPotion == null)
+            if (healingPotion == null || manaPotion == null)
             {
                 Client.Game.TerminateEntityChat(ormus);
                 return false;
@@ -656,7 +659,7 @@ namespace ConsoleBot
 
         private bool IdentifyItemsAtDeckardCain()
         {
-            if(!Client.Game.Inventory.Items.Where(i => !i.IsIdentified).Any()
+            if (!Client.Game.Inventory.Items.Where(i => !i.IsIdentified).Any()
                 && !Client.Game.Cube.Items.Where(i => !i.IsIdentified).Any())
             {
                 return true;
@@ -667,7 +670,7 @@ namespace ConsoleBot
                 return Client.Game.GetNPCsByCode(NPCCode.DeckardCainAct3).Any();
             }, TimeSpan.FromSeconds(2));
 
-            if(!result1)
+            if (!result1)
             {
                 return false;
             }
@@ -691,12 +694,12 @@ namespace ConsoleBot
                 return false;
             }, TimeSpan.FromSeconds(4));
 
-            if(!result2)
+            if (!result2)
             {
                 Log.Error($"Failed to interact with Cain");
                 return false;
             }
-                
+
             Thread.Sleep(50);
             Client.Game.InitiateEntityChat(deckardCain);
             Thread.Sleep(50);
@@ -716,7 +719,7 @@ namespace ConsoleBot
 
             foreach (var item in pickupItems)
             {
-                if(!Client.Game.IsInGame())
+                if (!Client.Game.IsInGame())
                 {
                     return false;
                 }
@@ -727,7 +730,7 @@ namespace ConsoleBot
                     continue;
                 }
 
-                if(!MoveToCorrectPlaceInTravBuilding(initialLocation, item.Location))
+                if (!MoveToCorrectPlaceInTravBuilding(initialLocation, item.Location))
                 {
                     return false;
                 }
@@ -738,7 +741,7 @@ namespace ConsoleBot
                     {
                         Client.Game.MoveTo(item.Location);
                     }
-                    
+
                     return Client.Game.Me.Location.Distance(item.Location) < 5;
                 }), TimeSpan.FromSeconds(3));
 
@@ -754,12 +757,12 @@ namespace ConsoleBot
 
         public void MoveInventoryItemsToCube()
         {
-            foreach(var item in Client.Game.Inventory.Items)
+            foreach (var item in Client.Game.Inventory.Items)
             {
-                if(Pickit.Pickit.CanTouchInventoryItem(item))
+                if (Pickit.Pickit.CanTouchInventoryItem(item))
                 {
                     var freeSpace = Client.Game.Cube.FindFreeSpace(item);
-                    if(freeSpace != null)
+                    if (freeSpace != null)
                     {
                         PutInventoryItemInCube(Client.Game, item, freeSpace);
                     }
@@ -772,7 +775,7 @@ namespace ConsoleBot
             var cube = game.Inventory.FindItemByName("Horadric Cube");
             if (cube != null)
             {
-                if(!game.ActivateBufferItem(cube))
+                if (!game.ActivateBufferItem(cube))
                 {
                     Log.Error($"Opening cube for {item.Id} - {item.Name} failed");
                     return;
@@ -785,7 +788,7 @@ namespace ConsoleBot
                     return game.CursorItem?.Id == item.Id;
                 }, TimeSpan.FromSeconds(1));
 
-                if(!resultToBuffer)
+                if (!resultToBuffer)
                 {
                     Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
                     return;
@@ -852,7 +855,7 @@ namespace ConsoleBot
             var cube = game.Inventory.FindItemByName("Horadric Cube");
             if (cube != null)
             {
-                if(!game.ActivateBufferItem(cube))
+                if (!game.ActivateBufferItem(cube))
                 {
                     return false;
                 }
@@ -908,7 +911,7 @@ namespace ConsoleBot
                         }
 
                         if (nearestMember.Location.Distance(Client.Game.Me.Location) > 5)
-                        { 
+                        {
                             Client.Game.MoveTo(nearestMember);
                         }
 
@@ -955,13 +958,13 @@ namespace ConsoleBot
                         return false;
                     }
 
-                    if(DateTime.Now.Subtract(startTime) > TimeSpan.FromMinutes(2))
+                    if (DateTime.Now.Subtract(startTime) > TimeSpan.FromMinutes(2))
                     {
                         Log.Debug("Passed maximum elapsed time for killing council members");
                         return false;
                     }
-                    
-                    if(!MoveToCorrectPlaceInTravBuilding(initialLocation, nearest.Location))
+
+                    if (!MoveToCorrectPlaceInTravBuilding(initialLocation, nearest.Location))
                     {
                         Log.Information("Couldn't move to right location in trav building");
                         continue;
@@ -974,11 +977,11 @@ namespace ConsoleBot
                     }
                     else
                     {
-                        
+
                         var wwDirection = Client.Game.Me.Location.GetPointPastPointInSameDirection(nearest.Location, 6);
-                        if(Client.Game.Me.Location.Equals(nearest.Location))
+                        if (Client.Game.Me.Location.Equals(nearest.Location))
                         {
-                            if(Client.Game.Me.Location.X - initialLocation.X > 100)
+                            if (Client.Game.Me.Location.X - initialLocation.X > 100)
                             {
                                 //Log.Information($"same location, wwing to left");
                                 wwDirection = new Point((ushort)(Client.Game.Me.Location.X - 6), Client.Game.Me.Location.Y);
@@ -1061,7 +1064,7 @@ namespace ConsoleBot
             var existingTownPortals = Client.Game.GetEntityByCode(EntityCode.TownPortal).ToHashSet();
             Client.Game.CreateTownPortal();
             var newTownPortals = Client.Game.GetEntityByCode(EntityCode.TownPortal).Where(t => !existingTownPortals.Contains(t)).ToList();
-            if(!newTownPortals.Any())
+            if (!newTownPortals.Any())
             {
                 return false;
             }
@@ -1121,19 +1124,19 @@ namespace ConsoleBot
                     };
 
             var result = WalkPathOfLocations(points);
-            if(!result)
+            if (!result)
             {
                 return false;
             }
-            
+
             var healingPotionsInBelt = Client.Game.Belt.NumOfHealthPotions();
             var manaPotionsInBelt = Client.Game.Belt.NumOfManaPotions();
-            if(healingPotionsInBelt < 6
+            if (healingPotionsInBelt < 6
                 || manaPotionsInBelt < 6
                 || Client.Game.Inventory.Items.FirstOrDefault(i => i.Name == "Tome of Town Portal")?.Amount < 5
                 || Client.Game.Me.Life < 500)
             {
-                if(!SellItemsAndRefreshPotionsAtOrmus())
+                if (!SellItemsAndRefreshPotionsAtOrmus())
                 {
                     return false;
                 }
@@ -1155,14 +1158,15 @@ namespace ConsoleBot
         {
             foreach (var point in points)
             {
-                var result = TryWithTimeout((retryCount) => {
+                var result = TryWithTimeout((retryCount) =>
+                {
                     if (retryCount > 0)
                     {
                         Log.Debug($"Retrying");
                         Client.Game.RequestUpdate(Client.Game.Me.Id);
                     }
-                    
-                    if(retryCount > 1 && !Client.Game.IsInTown() && Client.Game.Me.Class == CharacterClass.Barbarian && Client.Game.Me.Skills.ContainsKey(Skill.Whirlwind))
+
+                    if (retryCount > 1 && !Client.Game.IsInTown() && Client.Game.Me.Class == CharacterClass.Barbarian && Client.Game.Me.Skills.ContainsKey(Skill.Whirlwind))
                     {
                         Log.Debug($"Seems stuck, whirlwinding to point {point}");
                         Client.Game.UseRightHandSkillOnLocation(Skill.Whirlwind, point);
@@ -1173,11 +1177,11 @@ namespace ConsoleBot
                         Log.Debug($"Running to point {point}");
                         Client.Game.MoveTo(point);
                     }
-                    
+
                     return Client.Game.Me.Location.Distance(point) < 10;
                 }, TimeSpan.FromSeconds(4));
 
-                if(!result)
+                if (!result)
                 {
                     return false;
                 }
@@ -1195,7 +1199,7 @@ namespace ConsoleBot
                 return nearestWaypoint != null;
             }, TimeSpan.FromSeconds(2));
 
-            if(nearestWaypoint == null)
+            if (nearestWaypoint == null)
             {
                 Log.Error("No waypoint found");
                 return false;
@@ -1228,7 +1232,7 @@ namespace ConsoleBot
         {
             var inventoryItemsToKeep = Client.Game.Inventory.Items.Where(i => Pickit.Pickit.ShouldKeepItem(i) && Pickit.Pickit.CanTouchInventoryItem(i)).ToList();
             var cubeItemsToKeep = Client.Game.Cube.Items.Where(i => Pickit.Pickit.ShouldKeepItem(i)).ToList();
-            var goldOnPerson = Client.Game.Me.Attributes.GetValueOrDefault(D2NG.D2GS.Attribute.GoldOnPerson, 0);
+            var goldOnPerson = Client.Game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0);
             if (inventoryItemsToKeep.Count == 0 && cubeItemsToKeep.Count == 0 && goldOnPerson < 200000)
             {
                 return true;
@@ -1247,7 +1251,7 @@ namespace ConsoleBot
 
             bool result = TryWithTimeout((retryCount) =>
             {
-                if(Client.Game.Me.Location.Distance(stash.Location) >= 5)
+                if (Client.Game.Me.Location.Distance(stash.Location) >= 5)
                 {
                     Client.Game.MoveTo(stash);
                 }
@@ -1255,11 +1259,11 @@ namespace ConsoleBot
                 {
                     return Client.Game.OpenStash(stash);
                 }
-                
+
                 return false;
             }, TimeSpan.FromSeconds(4));
 
-            if(!result)
+            if (!result)
             {
                 Log.Error($"Failed to open stash");
                 return false;
@@ -1274,9 +1278,9 @@ namespace ConsoleBot
             foreach (Item item in inventoryItemsToKeep)
             {
                 Log.Information($"Want to keep {item.GetFullDescription()}");
-                if(!FullInventoryReported && Client.Game.Stash.FindFreeSpace(item) == null)
+                if (!FullInventoryReported && Client.Game.Stash.FindFreeSpace(item) == null)
                 {
-                    
+
                     await SendTelegramMessage($"bot inventory is full");
                     FullInventoryReported = true;
                     break;
@@ -1320,7 +1324,7 @@ namespace ConsoleBot
                 return;
             }
 
-            if(Client.Game.Cube.Items.Any())
+            if (Client.Game.Cube.Items.Any())
             {
                 return;
             }
@@ -1356,7 +1360,7 @@ namespace ConsoleBot
 
             foreach (var skull in flawlessSkulls)
             {
-                if(!MoveItemFromStashToInventory(skull))
+                if (!MoveItemFromStashToInventory(skull))
                 {
                     break;
                 }
@@ -1371,7 +1375,7 @@ namespace ConsoleBot
             Log.Information($"Moved skulls to inventory for transmuting");
 
             var remainingSkulls = flawlessSkulls.AsEnumerable();
-            while(remainingSkulls.Count() > 2)
+            while (remainingSkulls.Count() > 2)
             {
                 Log.Information($"Transmuting 3 flawless skulls to perfect skull");
                 var skullsToTransmute = remainingSkulls.Take(3);
@@ -1379,7 +1383,7 @@ namespace ConsoleBot
                 foreach (var skull in skullsToTransmute)
                 {
                     var inventoryItem = Client.Game.Inventory.FindItemById(skull.Id);
-                    if(inventoryItem == null)
+                    if (inventoryItem == null)
                     {
                         Log.Error($"Skull to be transmuted not found in inventory");
                         return;
@@ -1391,7 +1395,7 @@ namespace ConsoleBot
                     }
                 }
 
-                if(!TransmuteItemsInCube(Client.Game))
+                if (!TransmuteItemsInCube(Client.Game))
                 {
                     Log.Error($"Transmuting items failed");
                     return;
@@ -1408,7 +1412,7 @@ namespace ConsoleBot
                 }
             }
 
-            if(!Client.Game.OpenStash(stash))
+            if (!Client.Game.OpenStash(stash))
             {
                 Log.Error($"Opening stash failed");
                 return;
@@ -1492,7 +1496,7 @@ namespace ConsoleBot
             if (packet.Eid != Eid.SHOWUSER)
             {
                 Log.Information(packet.RenderText());
-                if(packet.Eid == Eid.WHISPER)
+                if (packet.Eid == Eid.WHISPER)
                 {
                     SendTelegramMessage(packet.RenderText()).Wait();
                 }
@@ -1502,10 +1506,10 @@ namespace ConsoleBot
         private static void HandleChatMessageEvent(D2gsPacket obj)
         {
             var packet = new ChatPacket(obj);
-            if(packet.ChatType != 0x04)
+            if (packet.ChatType != 0x04)
             {
                 Log.Information(packet.RenderText());
-                if(packet.CharacterName != Config.Character)
+                if (packet.CharacterName != Config.Character)
                 {
                     SendTelegramMessage(packet.RenderText()).Wait();
                 }
@@ -1519,11 +1523,11 @@ namespace ConsoleBot
             if (message == null || message.Type != MessageType.Text) return;
 
             Log.Information($"Text received: {message.Text}");
-            if(message.Text.StartsWith("/w") || message.Text.StartsWith("/msg"))
+            if (message.Text.StartsWith("/w") || message.Text.StartsWith("/msg"))
             {
                 Client.Chat.Send(message.Text);
             }
-            else if(Client.Game.IsInGame())
+            else if (Client.Game.IsInGame())
             {
                 Client.Game.SendInGameMessage(message.Text);
             }

@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace D2NG.D2GS.Packet
+namespace D2NG.D2GS.Packet.Outgoing
 {
     internal class SendChatMessagePacket : D2gsPacket
     {

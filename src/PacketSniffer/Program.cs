@@ -36,7 +36,7 @@ namespace PacketSniffer
             }
 
             var selectedDevice = allDevices.Count == 1 ? allDevices[0] : null;
-            if(selectedDevice == null)
+            if (selectedDevice == null)
             {
                 // Print the list
                 for (int i = 0; i != allDevices.Count; ++i)
@@ -84,7 +84,7 @@ namespace PacketSniffer
             selectedDevice.Close();
         }
 
-       // Callback function invoked by Pcap.Net for every incoming packet
+        // Callback function invoked by Pcap.Net for every incoming packet
         private static void PacketHandler(object sender, CaptureEventArgs e)
         {
             var packet = PacketDotNet.Packet.ParsePacket(e.Packet.LinkLayerType, e.Packet.Data);

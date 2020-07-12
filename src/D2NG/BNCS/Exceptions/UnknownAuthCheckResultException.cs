@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.Serialization;
 
-namespace D2NG
+namespace D2NG.BNCS.Exceptions
 {
     [Serializable]
     public class UnknownAuthCheckResultException : Exception
