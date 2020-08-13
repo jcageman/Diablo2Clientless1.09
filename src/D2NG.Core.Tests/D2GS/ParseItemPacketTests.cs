@@ -253,16 +253,9 @@ namespace D2NG.Core.Tests.D2GS
         {
             var bytes = new byte[] { 0x9C, 0x00, 0x1B, 0x10, 0x87, 0x00, 0x00, 0x00, 0x10, 0x20, 0x80, 0x00, 0x01, 0x6C, 0x94, 0xA8, 0xF0, 0xA3, 0xEC, 0x0D, 0x0D, 0x04, 0xCC, 0xE3, 0xFF, 0xFF, 0x03 };
             var packet = new ParseItemPacket(new D2gsPacket(bytes));
-            Assert.Equal("Yew Wand", packet.Item.Name);
+            Assert.Equal("Essence Of Hatred", packet.Item.Name);
             Assert.Equal(QualityType.Unique, packet.Item.Quality);
-            Assert.Equal(ClassificationType.Wand, packet.Item.Classification);
-            Assert.Equal(8, packet.Item.Properties.Count);
-            Assert.Equal(1, packet.Item.Properties[StatType.MinimumLightningDamage].Value);
-            Assert.Equal(40, packet.Item.Properties[StatType.LightningResistance].Value);
-            Assert.Equal(3, packet.Item.GetValueToSkill(Skill.AmplifyDamage));
-            Assert.Equal(1, packet.Item.GetValueToSkill(Skill.Terror));
-            Assert.Equal(2, packet.Item.GetValueToSkill(Skill.CorpseExplosion));
-            Assert.Equal(3, packet.Item.GetValueToSkill(Skill.IronMaiden));
+            Assert.Equal(ClassificationType.Essence, packet.Item.Classification);
         }
     }
 }
