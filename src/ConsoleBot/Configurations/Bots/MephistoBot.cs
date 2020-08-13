@@ -143,22 +143,18 @@ namespace ConsoleBot.Configurations.Bots
             }
 
             var waypoint = client.Game.GetEntityByCode(EntityCode.WaypointAct3).Single();
-
+            Log.Information("Taking waypoint to DuranceOfHateLevel2");
             GeneralHelpers.TryWithTimeout((_) =>
             {
-                Log.Debug("Taking waypoint");
+
                 client.Game.TakeWaypoint(waypoint, Waypoint.DuranceOfHateLevel2);
                 return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == Waypoint.DuranceOfHateLevel2.ToArea(), TimeSpan.FromSeconds(2));
             }, TimeSpan.FromSeconds(5));
 
             var path2 = await _pathingService.GetPathFromWaypointToArea(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel2, Waypoint.DuranceOfHateLevel2, Area.DuranceOfHateLevel3, MovementMode.Teleport);
-            foreach (var point in path2)
+            if (!TeleportViaPath(client, path2))
             {
-                if (!GeneralHelpers.TryWithTimeout((_) => client.Game.TeleportToLocation(point),
-                    TimeSpan.FromSeconds(2)))
-                {
-                    Log.Warning($"Teleporting failed at location {client.Game.Me.Location} to location {point}");
-                }
+                Log.Warning($"Teleporting to DuranceOfHateLevel3 warp failed at location {client.Game.Me.Location}");
             }
 
             var warp = client.Game.GetNearestWarp();
@@ -177,13 +173,9 @@ namespace ConsoleBot.Configurations.Bots
 
             var path3 = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel3, client.Game.Me.Location, new Point(17566, 8070), MovementMode.Teleport);
             Log.Information($"Teleporting to Mephisto");
-            foreach (var point in path3)
+            if (!TeleportViaPath(client, path3))
             {
-                if (!GeneralHelpers.TryWithTimeout((_) => client.Game.TeleportToLocation(point),
-                    TimeSpan.FromSeconds(2)))
-                {
-                    Log.Warning($"Teleporting failed at location {client.Game.Me.Location} to location {point}");
-                }
+                Log.Warning($"Teleporting to Mephisto failed at location {client.Game.Me.Location}");
             }
 
             if (!GeneralHelpers.TryWithTimeout((_) => client.Game.GetNPCsByCode(NPCCode.Mephisto).Count > 0, TimeSpan.FromSeconds(2)))
