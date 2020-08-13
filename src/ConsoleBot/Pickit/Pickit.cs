@@ -189,7 +189,7 @@ namespace ConsoleBot.Pickit
                 return false;
             }
 
-            if (item.Name == "Bone Helm" || item.Name == "Bone Shield" || item.Name == "Belt")
+            if (item.Name == "Bone Shield")
             {
                 return true;
             }

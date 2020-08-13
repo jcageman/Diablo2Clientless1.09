@@ -245,7 +245,7 @@ namespace D2NG.Core
             _gameServer.SendPacket(new RightSkillRepeatOnLocationPacket(location));
         }
 
-        public void UseRightHandSkillOnEntity(Skill skill, Entity entity)
+        public bool UseRightHandSkillOnEntity(Skill skill, Entity entity)
         {
             if (!Me.Skills.TryGetValue(skill, out var value) || value == 0)
             {
@@ -255,13 +255,21 @@ namespace D2NG.Core
             if (Me.ActiveSkills[Hand.Right] != skill)
             {
                 _gameServer.SendPacket(new SelectSkillPacket(Hand.Right, skill));
-                while (Me.ActiveSkills[Hand.Right] != skill)
+                var count = 0;
+                while (Me.ActiveSkills[Hand.Right] != skill && count < 10)
                 {
-                    Thread.Sleep(50);
+                    Thread.Sleep(10);
+                    count++;
+                }
+
+                if (Me.ActiveSkills[Hand.Right] != skill)
+                {
+                    return false;
                 }
             }
 
             _gameServer.SendPacket(new RightSkillOnUnitPacket(entity));
+            return true;
         }
 
         public void CreateTownPortal()

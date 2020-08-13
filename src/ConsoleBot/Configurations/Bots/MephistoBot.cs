@@ -66,6 +66,31 @@ namespace ConsoleBot.Configurations.Bots
             */
 
             client.Game.CleanupCursorItem();
+            CleanupPotionsInBelt(client.Game);
+
+            var unidentifiedItemCount = client.Game.Inventory.Items.Count(i => !i.IsIdentified) +
+                                        client.Game.Cube.Items.Count(i => !i.IsIdentified);
+            if (unidentifiedItemCount > 10)
+            {
+                Log.Information($"Visiting Deckard Cain with {unidentifiedItemCount} unidentified items");
+
+                var pathDecardCain = await _pathingService.GetPathToNPC(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, NPCCode.DeckardCainAct3, MovementMode.Teleport);
+                if (!TeleportViaPath(client, pathDecardCain))
+                {
+                    Log.Warning($"Teleporting to Deckard Cain failed at {client.Game.Me.Location}");
+                    return false;
+                }
+
+                NPCHelpers.IdentifyItemsAtDeckardCain(client.Game);
+
+                var pathStash = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, EntityCode.Stash, MovementMode.Teleport);
+                if (!TeleportViaPath(client, pathStash))
+                {
+                    Log.Warning($"Teleporting failed at location {client.Game.Me.Location}");
+                }
+
+                InventoryHelpers.StashItemsToKeep(client.Game);
+            }
 
             var healingPotionsInBelt = client.Game.Belt.NumOfHealthPotions();
             var manaPotionsInBelt = client.Game.Belt.NumOfManaPotions();
@@ -91,46 +116,24 @@ namespace ConsoleBot.Configurations.Bots
                 }
             }
 
-            if (client.Game.Inventory.Items.Count(i => !i.IsIdentified) + client.Game.Cube.Items.Count(i => !i.IsIdentified) > 10)
+            bool shouldGamble = client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 7_000_000;
+            if (shouldGamble)
             {
-                Log.Information($"Visiting Deckard Cain");
-
-                var pathDecardCain = await _pathingService.GetPathToNPC(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, NPCCode.DeckardCainAct3, MovementMode.Teleport);
-                if (!TeleportViaPath(client, pathDecardCain))
+                Log.Information($"Gambling items at Alkor");
+                var pathAlkor = await _pathingService.GetPathToNPC(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, NPCCode.Alkor, MovementMode.Teleport);
+                if (!TeleportViaPath(client, pathAlkor))
                 {
-                    Log.Warning($"Teleporting to Deckard Cain failed at {client.Game.Me.Location}");
+                    Log.Warning($"Teleporting to alkor failed at {client.Game.Me.Location}");
                     return false;
                 }
 
-                NPCHelpers.IdentifyItemsAtDeckardCain(client.Game);
-
-                var pathStash = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, EntityCode.Stash, MovementMode.Teleport);
-                if (!TeleportViaPath(client, pathStash))
+                var alkor = NPCHelpers.GetUniqueNPC(client.Game, NPCCode.Alkor);
+                if (alkor == null)
                 {
-                    Log.Warning($"Teleporting failed at location {client.Game.Me.Location}");
+                    return false;
                 }
 
-                InventoryHelpers.StashItemsToKeep(client.Game);
-
-                bool shouldGamble = client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 7_000_000;
-                if (shouldGamble)
-                {
-                    Log.Information($"Gambling items at Alkor");
-                    var pathAlkor = await _pathingService.GetPathToNPC(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, NPCCode.Alkor, MovementMode.Teleport);
-                    if (!TeleportViaPath(client, pathAlkor))
-                    {
-                        Log.Warning($"Teleporting to alkor failed at {client.Game.Me.Location}");
-                        return false;
-                    }
-
-                    var alkor = NPCHelpers.GetUniqueNPC(client.Game, NPCCode.Alkor);
-                    if (alkor == null)
-                    {
-                        return false;
-                    }
-
-                    NPCHelpers.GambleItems(client.Game, alkor);
-                }
+                NPCHelpers.GambleItems(client.Game, alkor);
             }
 
             var path1 = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, EntityCode.WaypointAct3, MovementMode.Teleport);
@@ -193,6 +196,11 @@ namespace ConsoleBot.Configurations.Bots
             Log.Information($"Killing Mephisto");
             if (!GeneralHelpers.TryWithTimeout((retryCount) =>
                 {
+                    if (!client.Game.IsInGame())
+                    {
+                        return true;
+                    }
+
                     if (mephisto.Location.Distance(client.Game.Me.Location) < 30)
                     {
                         client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
@@ -215,6 +223,11 @@ namespace ConsoleBot.Configurations.Bots
             if (!GeneralHelpers.TryWithTimeout((_) =>
             {
                 client.Game.UseRightHandSkillOnEntity(Skill.FrozenOrb, mephisto);
+
+                if (!client.Game.IsInGame())
+                {
+                    return true;
+                }
 
                 return GeneralHelpers.TryWithTimeout((_) => mephisto.State == EntityState.Dead,
                     TimeSpan.FromSeconds(1));
@@ -242,10 +255,31 @@ namespace ConsoleBot.Configurations.Bots
                 {
                     return false;
                 }
+
+                if (!client.Game.IsInGame())
+                {
+                    return false;
+                }
             }
 
             return true;
         }
+
+        private void CleanupPotionsInBelt(Game game)
+        {
+            var manaPotionsInWrongSlot = game.Belt.GetManaPotionsInSlots(new List<int>() { 0, 1 });
+            foreach (var manaPotion in manaPotionsInWrongSlot)
+            {
+                game.UseBeltItem(manaPotion);
+            }
+
+            var healthPotionsInWrongSlot = game.Belt.GetHealthPotionsInSlots(new List<int>() { 2, 3 });
+            foreach (var healthPotion in healthPotionsInWrongSlot)
+            {
+                game.UseBeltItem(healthPotion);
+            }
+        }
+
 
         private bool PickupNearbyItems(Client client)
         {
@@ -277,7 +311,7 @@ namespace ConsoleBot.Configurations.Bots
                     {
                         if (!client.Game.TeleportToLocation(item.Location))
                         {
-                            Log.Warning($"Teleporting to item {item.GetFullDescription()} failed");
+                            Log.Warning($"Teleporting to item {item.GetFullDescription()} at location {item.Location} from location {client.Game.Me.Location} failed");
                             return false;
                         }
                     }
@@ -294,7 +328,7 @@ namespace ConsoleBot.Configurations.Bots
                     return true;
                 }), TimeSpan.FromSeconds(3)))
                 {
-                    Log.Warning($"Picking up item {item.GetFullDescription()} failed");
+                    Log.Warning($"Picking up item {item.GetFullDescription()} at location {item.Location} from location {client.Game.Me.Location} failed");
                 }
             }
 
