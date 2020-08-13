@@ -161,6 +161,7 @@ namespace ConsoleBot.Configurations.Bots
             if (warp == null || warp.Location.Distance(client.Game.Me.Location) > 20)
             {
                 Log.Warning($"Warp not close enough at location {warp?.Location} while at location {client.Game.Me.Location}");
+                return false;
             }
 
             Log.Information($"Taking warp to Durance 3");
@@ -243,7 +244,7 @@ namespace ConsoleBot.Configurations.Bots
             foreach (var point in path)
             {
                 if (!GeneralHelpers.TryWithTimeout((retryCount) => client.Game.TeleportToLocation(point),
-                    TimeSpan.FromSeconds(2)))
+                    TimeSpan.FromSeconds(4)))
                 {
                     return false;
                 }
