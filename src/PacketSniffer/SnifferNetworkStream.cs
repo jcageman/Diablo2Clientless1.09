@@ -1,4 +1,4 @@
-﻿using D2NG.D2GS.NetworkStream;
+﻿using D2NG.Core.D2GS.NetworkStream;
 using System;
 using System.Linq;
 

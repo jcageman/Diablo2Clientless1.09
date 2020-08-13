@@ -1,6 +1,6 @@
-﻿using D2NG.D2GS.Helpers;
-using D2NG.D2GS.Packet;
-using D2NG.D2GS.Packet.Incoming;
+﻿using D2NG.Core.D2GS.Helpers;
+using D2NG.Core.D2GS.Packet;
+using D2NG.Core.D2GS.Packet.Incoming;
 using Serilog;
 using System;
 
@@ -22,15 +22,12 @@ namespace PacketSniffer
                 case InComingPacket.GameLoading:
                 case InComingPacket.GameFlags:
                 case InComingPacket.LoadSuccessful:
-                case InComingPacket.LoadAct:
                 case InComingPacket.LoadActComplete:
                 case InComingPacket.UnloadActComplete:
                 case InComingPacket.GameExitSuccess:
                 case InComingPacket.MapReveal:
                 case InComingPacket.MapHide:
-                case InComingPacket.AssignLevelWarp:
                 case InComingPacket.GameHandshake:
-                case InComingPacket.NPCHit:
                 case InComingPacket.PlayerStop:
                 case InComingPacket.PlayerToTarget:
                 case InComingPacket.ReportKill:
@@ -134,6 +131,18 @@ namespace PacketSniffer
                 case InComingPacket.QuestInfo:
                 case InComingPacket.GameQuestInfo:
                     Log.Debug($"Received D2GS packet of type: {incomingPacketType} with data {eventArgs.Raw.ToPrintString()}");
+                    break;
+                case InComingPacket.NPCHit:
+                    var npcHitPacket = new NpcHitPacket(eventArgs);
+                    Log.Information($"NPC Hit -> EntityId: {npcHitPacket.EntityId} Type: {npcHitPacket.EntityType} LifePercentage: {npcHitPacket.LifePercentage} data {eventArgs.Raw.ToPrintString()}");
+                    break;
+                case InComingPacket.AssignLevelWarp:
+                    var assignLevelWarpPacket = new AssignLevelWarpPacket(eventArgs);
+                    Log.Information($"AssignLevelWarp -> EntityId: {assignLevelWarpPacket.EntityId} Loc: {assignLevelWarpPacket.Location} WarpId: {assignLevelWarpPacket.WarpId} data {eventArgs.Raw.ToPrintString()}");
+                    break;
+                case InComingPacket.LoadAct:
+                    var loadActPacket = new ActDataPacket(eventArgs);
+                    Log.Information($"LoadAct -> Act: {loadActPacket.Act} Area: {loadActPacket.Area} MapId: {loadActPacket.MapId}");
                     break;
                 case InComingPacket.AddAttributeByte:
                 case InComingPacket.AddAttributeWord:

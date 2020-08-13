@@ -1,5 +1,5 @@
-﻿using D2NG.D2GS;
-using D2NG.D2GS.Helpers;
+﻿using D2NG.Core.D2GS;
+using D2NG.Core.D2GS.Helpers;
 using Serilog;
 using Serilog.Events;
 using SharpPcap;
