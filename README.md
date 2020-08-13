@@ -7,7 +7,7 @@
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/jcageman/D2NG.svg)
 
 ## Building the project
-This project builds with .NET Core 3.0 and can be built by running `dotnet build` on the command line from the root of the Solution.
+This project builds with .NET Core 3.1 and can be built by running `dotnet build` on the command line from the root of the Solution.
 
 ### Building Docker
 You can build the `ConsoleBot` in to a docker image by executing `docker build -t "jcageman/d2ng:$TAG ."` from the root of the project.
