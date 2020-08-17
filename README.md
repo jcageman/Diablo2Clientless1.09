@@ -9,9 +9,6 @@
 ## Building the project
 This project builds with .NET Core 3.1 and can be built by running `dotnet build` on the command line from the root of the Solution.
 
-### Building Docker
-You can build the `ConsoleBot` in to a docker image by executing `docker build -t "jcageman/d2ng:$TAG ."` from the root of the project.
-
 ## Configuring
 ConsoleBot expects a `config.json` file that can be passed in via the "--config" flag. The `config.json` should look as follows:
 ```
@@ -41,17 +38,8 @@ ConsoleBot expects a `config.json` file that can be passed in via the "--config"
 ```
 See https://core.telegram.org/bots for configuration of the telegram bot
 
-To be able to runt he bot you also need to configure the MapClient from https://github.com/jcageman/d2mapapi
+To be able to run the bot you also need to configure the MapClient from https://github.com/jcageman/d2mapapi
 If you run this locally this runs on localhost port 8080 (which is also the default in the above config)
-
-## Running ConsoleBot Docker Image
-You'll need to mount the directory that has your `config.json`so that the program can find it. Example: 
-```
-docker run \
-  --mount src="${pwd}/config",target=/config,type=bind \
-  jcageman/d2ng:$TAG \
-  --config /config/config.json
-```
 
 ## Future ideas
 1. Implement pickit using .nip files (used in many other bots)
