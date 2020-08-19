@@ -22,7 +22,6 @@ namespace ConsoleBot
 
         public string GamePassword { get; set; }
 
-        [Required]
         public string GameDescription { get; set; }
 
         [Required]
@@ -39,5 +38,8 @@ namespace ConsoleBot
 
         [Required]
         public string BotType { get; set; }
+
+        [Required]
+        public string LogFile { get; set; }
     }
 }

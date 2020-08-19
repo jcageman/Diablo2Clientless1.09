@@ -65,6 +65,7 @@ namespace D2NG.Core
             _tcpClient = new TcpClient()
             {
                 SendTimeout = 5000,
+                ReceiveTimeout = 5000
             };
             _tcpClient.Connect(ip, port);
             _stream = new D2GSNetworkStream(_tcpClient.GetStream());

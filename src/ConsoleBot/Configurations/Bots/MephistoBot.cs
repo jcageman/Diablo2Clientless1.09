@@ -5,7 +5,6 @@ using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection.Metadata.Ecma335;
 using System.Threading;
 using System.Threading.Tasks;
 using D2NG.Core.D2GS;
@@ -13,6 +12,8 @@ using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
 using D2NG.Navigation.Services.Pathing;
+
+using Action = D2NG.Core.D2GS.Items.Action;
 
 namespace ConsoleBot.Configurations.Bots
 {
@@ -68,9 +69,15 @@ namespace ConsoleBot.Configurations.Bots
             client.Game.CleanupCursorItem();
             CleanupPotionsInBelt(client.Game);
 
+            if (client.Game.Act != Act.Act3)
+            {
+                Log.Information("Starting location is not Act 3, not supported for now");
+                return false;
+            }
+
             var unidentifiedItemCount = client.Game.Inventory.Items.Count(i => !i.IsIdentified) +
                                         client.Game.Cube.Items.Count(i => !i.IsIdentified);
-            if (unidentifiedItemCount > 10)
+            if (unidentifiedItemCount > 6)
             {
                 Log.Information($"Visiting Deckard Cain with {unidentifiedItemCount} unidentified items");
 
@@ -89,7 +96,11 @@ namespace ConsoleBot.Configurations.Bots
                     Log.Warning($"Teleporting failed at location {client.Game.Me.Location}");
                 }
 
-                InventoryHelpers.StashItemsToKeep(client.Game);
+                var stashItemsResult = InventoryHelpers.StashItemsToKeep(client.Game);
+                if (stashItemsResult != Enums.MoveItemResult.Succes)
+                {
+                    Log.Warning($"Stashing items failed with result {stashItemsResult}");
+                }
             }
 
             var healingPotionsInBelt = client.Game.Belt.NumOfHealthPotions();
@@ -116,6 +127,26 @@ namespace ConsoleBot.Configurations.Bots
                 }
             }
 
+            bool shouldRepair = client.Game.Items.Any(i => i.Action == Action.Equip && i.MaximumDurability > 0 && ((double)i.Durability / i.MaximumDurability) < 0.2);
+            if(shouldRepair)
+            {
+                Log.Information($"Repairing items at Halbu");
+                var PathHalbu = await _pathingService.GetPathToNPC(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, NPCCode.Halbu, MovementMode.Teleport);
+                if (!TeleportViaPath(client, PathHalbu))
+                {
+                    Log.Warning($"Teleporting to Halbu failed at {client.Game.Me.Location}");
+                    return false;
+                }
+
+                var halbu = NPCHelpers.GetUniqueNPC(client.Game, NPCCode.Halbu);
+                if (halbu == null)
+                {
+                    return false;
+                }
+
+                NPCHelpers.RepairItems(client.Game, halbu);
+            }
+
             bool shouldGamble = client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 7_000_000;
             if (shouldGamble)
             {
@@ -123,7 +154,7 @@ namespace ConsoleBot.Configurations.Bots
                 var pathAlkor = await _pathingService.GetPathToNPC(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, NPCCode.Alkor, MovementMode.Teleport);
                 if (!TeleportViaPath(client, pathAlkor))
                 {
-                    Log.Warning($"Teleporting to alkor failed at {client.Game.Me.Location}");
+                    Log.Warning($"Teleporting to Alkor failed at {client.Game.Me.Location}");
                     return false;
                 }
 
@@ -136,6 +167,7 @@ namespace ConsoleBot.Configurations.Bots
                 NPCHelpers.GambleItems(client.Game, alkor);
             }
 
+            Log.Information("Teleporting to WayPoint");
             var path1 = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, EntityCode.WaypointAct3, MovementMode.Teleport);
             if (!TeleportViaPath(client, path1))
             {
@@ -165,7 +197,7 @@ namespace ConsoleBot.Configurations.Bots
             }
 
             Log.Information($"Taking warp to Durance 3");
-            if (!GeneralHelpers.TryWithTimeout((_) => client.Game.TakeWarp(warp),
+            if (!GeneralHelpers.TryWithTimeout((_) => client.Game.TakeWarp(warp) && client.Game.Area == Area.DuranceOfHateLevel3,
                 TimeSpan.FromSeconds(2)))
             {
                 Log.Warning($"Taking warp failed at location {client.Game.Me.Location} to warp at location {warp.Location}");
@@ -241,6 +273,12 @@ namespace ConsoleBot.Configurations.Bots
 
         private static bool TeleportViaPath(Client client, List<Point> path)
         {
+            if(path.Count == 0)
+            {
+                Log.Warning($"Teleport of length 0 found, something went wrong while client at location: {client.Game.Me.Location}");
+                return false;
+            }
+
             foreach (var point in path)
             {
                 if (!GeneralHelpers.TryWithTimeout((retryCount) => client.Game.TeleportToLocation(point),
@@ -302,11 +340,8 @@ namespace ConsoleBot.Configurations.Bots
                 {
                     if (client.Game.Me.Location.Distance(item.Location) >= 5)
                     {
-                        if (!client.Game.TeleportToLocation(item.Location))
-                        {
-                            Log.Warning($"Teleporting to item {item.GetFullDescription()} at location {item.Location} from location {client.Game.Me.Location} failed");
-                            return false;
-                        }
+                        client.Game.TeleportToLocation(item.Location);
+                        return false;
                     }
                     else
                     {

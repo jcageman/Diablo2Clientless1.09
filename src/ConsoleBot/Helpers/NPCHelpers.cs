@@ -21,7 +21,15 @@ namespace ConsoleBot.Helpers
             Log.Information($"Repairing items");
             GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                game.MoveTo(npc);
+                if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
+                {
+                    game.TeleportToLocation(npc.Location);
+                }
+                else
+                {
+                    game.MoveTo(npc);
+                }
+
                 if (game.Me.Location.Distance(npc.Location) < 5)
                 {
                     return game.InteractWithNPC(npc);
@@ -46,9 +54,16 @@ namespace ConsoleBot.Helpers
             Log.Information($"Gambling items");
             bool moveResult = GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                if (game.Me.Location.Distance(npc.Location) > 5)
+                if (game.Me.Location.Distance(npc.Location) >= 2)
                 {
-                    game.MoveTo(npc);
+                    if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
+                    {
+                        game.TeleportToLocation(npc.Location);
+                    }
+                    else
+                    {
+                        game.MoveTo(npc);
+                    }
                     return false;
                 }
                 return true;
@@ -70,7 +85,14 @@ namespace ConsoleBot.Helpers
                     }
                     else
                     {
-                        game.MoveTo(npc);
+                        if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
+                        {
+                            game.TeleportToLocation(npc.Location);
+                        }
+                        else
+                        {
+                            game.MoveTo(npc);
+                        }
                     }
                     return false;
                 }, TimeSpan.FromSeconds(3));
@@ -195,9 +217,16 @@ namespace ConsoleBot.Helpers
             Log.Information($"Identifying items at Cain");
             var result2 = GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                if (game.Me.Location.Distance(deckardCain.Location) > 5)
+                if (game.Me.Location.Distance(deckardCain.Location) > 2)
                 {
-                    game.MoveTo(deckardCain);
+                    if(game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
+                    {
+                        game.TeleportToLocation(deckardCain.Location);
+                    }
+                    else
+                    {
+                        game.MoveTo(deckardCain);
+                    }
                 }
 
                 if (game.Me.Location.Distance(deckardCain.Location) < 5)
@@ -210,7 +239,7 @@ namespace ConsoleBot.Helpers
 
             if (!result2)
             {
-                Log.Error($"Failed to interact with Cain");
+                Log.Error($"Failed to interact with Cain at location {deckardCain.Location} while at location {game.Me.Location}");
                 return false;
             }
 
@@ -229,14 +258,22 @@ namespace ConsoleBot.Helpers
             var ormus = NPCHelpers.GetUniqueNPC(game, NPCCode.Ormus);
             if (ormus == null)
             {
+                Log.Warning($"Did not find Ormus at {game.Me.Location}");
                 return false;
             }
 
             GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                if (game.Me.Location.Distance(ormus.Location) >= 5)
+                if (game.Me.Location.Distance(ormus.Location) >= 2)
                 {
-                    game.MoveTo(ormus);
+                    if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
+                    {
+                        game.TeleportToLocation(ormus.Location);
+                    }
+                    else
+                    {
+                        game.MoveTo(ormus);
+                    }
                 }
 
                 if (game.Me.Location.Distance(ormus.Location) < 5)
@@ -250,15 +287,19 @@ namespace ConsoleBot.Helpers
             game.InitiateEntityChat(ormus);
 
             game.TownFolkAction(ormus, TownFolkActionType.Trade);
+            Item healingPotion = null;
+            Item manaPotion = null;
 
-            Thread.Sleep(300);
-
-            var healingPotion = game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type == "hp5")
-                                ?? game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type.StartsWith("hp"));
-            var manaPotion = game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type == "mp5")
-                             ?? game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type.StartsWith("mp"));
-            if (healingPotion == null || manaPotion == null)
+            if (!GeneralHelpers.TryWithTimeout((retryCount) =>
             {
+                healingPotion = game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type == "hp5")
+                                ?? game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type.StartsWith("hp"));
+                manaPotion = game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type == "mp5")
+                 ?? game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type.StartsWith("mp"));
+                return healingPotion != null && manaPotion != null;
+            }, TimeSpan.FromSeconds(3)))
+            {
+                Log.Warning($"Did not find healing or mana potions at Ormus {game.Me.Location}");
                 game.TerminateEntityChat(ormus);
                 return false;
             }

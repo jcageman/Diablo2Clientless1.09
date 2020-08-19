@@ -117,7 +117,12 @@ namespace D2NG.Navigation.Services.Pathing
 
             var teleportPath = new TeleportPather(map);
             var path = teleportPath.GetTeleportPath(fromLocation - map.LevelOrigin, toLocation - map.LevelOrigin);
-            return path.Points.Select(p => map.LevelOrigin + p).Skip(1).ToList();
+            if(path.Found)
+            {
+                return path.Points.Select(p => map.LevelOrigin + p).Skip(1).ToList();
+            }
+
+            return new List<Point>();
         }
     }
 }

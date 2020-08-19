@@ -48,7 +48,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Quality == QualityType.Unique && item.Name == "Heavy Belt" && item.GetValueOfStatType(StatType.ExtraGold) >= 75)
+            if (item.Quality == QualityType.Unique && item.Name == "Heavy Belt" && item.GetValueOfStatType(StatType.ExtraGold) >= 80)
             {
                 return true;
             }

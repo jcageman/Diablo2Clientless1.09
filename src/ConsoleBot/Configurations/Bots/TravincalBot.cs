@@ -604,7 +604,7 @@ namespace ConsoleBot.Configurations.Bots
                         game.RequestUpdate(game.Me.Id);
                     }
 
-                    if (retryCount > 1 && !game.IsInTown() && game.Me.Class == CharacterClass.Barbarian && game.Me.Skills.ContainsKey(Skill.Whirlwind))
+                    if (retryCount > 1 && !game.IsInTown() && game.Me.Class == CharacterClass.Barbarian && game.Me.HasSkill(Skill.Whirlwind))
                     {
                         Log.Debug($"Seems stuck, whirlwinding to point {point}");
                         game.UseRightHandSkillOnLocation(Skill.Whirlwind, point);

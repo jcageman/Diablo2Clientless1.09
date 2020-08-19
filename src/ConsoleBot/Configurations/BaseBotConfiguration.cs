@@ -38,24 +38,20 @@ namespace ConsoleBot.Configurations
                 int failureCount = 0;
                 while ((((double)failureCount / count) < 0.98 || count < 5))
                 {
-                    try
+                    if(count >= 100)
                     {
-                        if (!client.CreateGame(_config.Difficulty, $"{_config.GameNamePrefix}{count}", _config.GamePassword, _config.GameDescription))
-                        {
-                            count++;
-                            Thread.Sleep(5000);
-                            continue;
-                        }
-
-
-
-                        failureCount += (await RunSingleGame(client)) ? 0 : 1;
-                        Thread.Sleep(1000);
+                        count = 1;
                     }
-                    catch (CreateGameException)
+
+                    if (!client.CreateGame(_config.Difficulty, $"{_config.GameNamePrefix}{count}", _config.GamePassword, _config.GameDescription))
                     {
-                        Thread.Sleep(2_000);
+                        count++;
+                        Thread.Sleep(5000);
+                        continue;
                     }
+
+                    failureCount += (await RunSingleGame(client)) ? 0 : 1;
+                    Thread.Sleep(1000);
 
                     if (client.Game.IsInGame())
                     {
@@ -104,7 +100,6 @@ namespace ConsoleBot.Configurations
                 return false;
             }
             var characters = client.Login(_config.Username, _config.Password);
-
             var selectedCharacter = characters.Single(c =>
                 c.Name.Equals(_config.Character, StringComparison.CurrentCultureIgnoreCase));
             if (selectedCharacter == null)

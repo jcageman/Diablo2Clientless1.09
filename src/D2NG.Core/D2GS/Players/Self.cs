@@ -27,5 +27,10 @@ namespace D2NG.Core.D2GS.Players
         internal Self(PlayerInGamePacket playerInGame) : base(playerInGame)
         {
         }
+
+        public bool HasSkill(Skill skill)
+        {
+            return Skills.TryGetValue(skill, out var value) && value > 0;
+        }
     }
 }

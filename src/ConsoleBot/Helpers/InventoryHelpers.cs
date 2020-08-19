@@ -80,7 +80,7 @@ namespace ConsoleBot.Helpers
 
             if (!result)
             {
-                Log.Error($"Failed to open stash");
+                Log.Error($"Failed to open stash while at location {game.Me.Location} with stash at {stash.Location}");
                 return MoveItemResult.Failed;
             }
 
@@ -180,7 +180,7 @@ namespace ConsoleBot.Helpers
             game.InsertItemIntoContainer(item, location, ItemContainer.Inventory);
 
             return GeneralHelpers.TryWithTimeout(
-                (retryCount) => game.CursorItem == null && game.Stash.FindItemById(item.Id) != null,
+                (retryCount) => game.CursorItem == null && game.Inventory.FindItemById(item.Id) != null,
                 TimeSpan.FromSeconds(3)) ? MoveItemResult.Succes : MoveItemResult.Failed;
 
         }
@@ -226,7 +226,7 @@ namespace ConsoleBot.Helpers
 
             if (!game.ActivateBufferItem(cube))
             {
-                Log.Error($"Opening cube for {item.Id} - {item.Name} failed");
+                Log.Error($"Opening cube for {item.Id} - {item.GetFullDescription()} failed");
                 return MoveItemResult.Failed;
             }
 
@@ -259,7 +259,7 @@ namespace ConsoleBot.Helpers
             {
                 if (!game.ActivateBufferItem(cube))
                 {
-                    Log.Error($"Opening cube for {item.Id} - {item.Name} failed");
+                    Log.Error($"Opening cube for {item.Id} - {item.GetFullDescription()} failed");
                     return;
                 }
 

@@ -34,22 +34,28 @@ namespace ConsoleBot.Pickit
             additionalDamage += (int)(item.GetValueOfStatType(StatType.MaximumDamage) * 1.5);
             additionalDamage += (int)(item.GetValueOfStatType(StatType.SecondaryMinimumDamage) * 1.5);
             additionalDamage += (int)(item.GetValueOfStatType(StatType.SecondaryMaximumDamage) * 1.5);
+            
 
             if (item.Classification == ClassificationType.Bow)
             {
                 additionalDamage += item.GetValueOfStatType(StatType.Dexterity);
+                additionalDamage += (item.GetValueOfStatType(StatType.AmazonSkills) * 5);
+            }
+            else
+            {
+                additionalDamage += (item.GetValueOfStatType(StatType.BarbarianSkills) * 5);
             }
 
             if (item.Quality == QualityType.Rare
             && desirableExceptionalWeapons.Contains(item.Name)
-            && additionalDamage > 150)
+            && additionalDamage > 160)
             {
                 return true;
             }
 
             if (item.Quality == QualityType.Rare
             && interestingExceptionalWeapons.Contains(item.Name)
-            && additionalDamage > 170)
+            && additionalDamage > 180)
             {
                 return true;
             }
@@ -57,7 +63,7 @@ namespace ConsoleBot.Pickit
             if (item.Quality == QualityType.Rare
             && desirableBows.Contains(item.Name)
             && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 10
-            && additionalDamage > 130)
+            && additionalDamage > 150)
             {
                 return true;
             }

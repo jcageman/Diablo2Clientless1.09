@@ -8,6 +8,9 @@ namespace ConsoleBot.Pickit
         private static readonly HashSet<string> casterArmors = new HashSet<string> {
             "Quilted Armor", "Leather Armor", "Hard Leather Armor", "Studded Leather", "Ring Mail", "Scale Mail","Chain Mail", "Breast Plate", "Splint Mail", "Light Plate",
             "Ghost Armor", "Serpentskin Armor", "Demonhide Armor", "Trellised Armor", "Linked Mail", "Mage Plate" };
+
+        private static readonly HashSet<string> defArmors = new HashSet<string> {
+            "Ornate Plate", "Chaos Armor", "Embossed Plate", "Sharktooth Armor", "Templar Coat", "Mage Plate", "Russet Armor"};
         public static bool ShouldPickupItem(Item item)
         {
             if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
@@ -57,6 +60,15 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            if (defArmors.Contains(item.Name)
+            && item.GetValueOfStatType(StatType.EnhancedDefense) >= 60
+            && item.GetValueOfStatType(StatType.ReducedRequirements) >= 30
+            && item.GetTotalResist() >= 30
+            && item.GetTotalLifeFromStats() >= 30)
+            {
+                return true;
+            }
+
             if (casterArmors.Contains(item.Name))
             {
                 if (item.GetTotalResist() >= 60 && item.GetTotalLifeFromStats() >= 40)
@@ -89,11 +101,6 @@ namespace ConsoleBot.Pickit
             && item.GetValueOfStatType(StatType.EnhancedDefense) >= 60
             && item.GetTotalResist() >= 50
             && item.GetTotalLifeFromStats() >= 30)
-            {
-                return true;
-            }
-
-            if (item.Quality == QualityType.Unique && item.Name == "Full Plate Mail")
             {
                 return true;
             }

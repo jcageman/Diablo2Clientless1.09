@@ -86,36 +86,57 @@ namespace D2NG.Core.MCP
             Log.Verbose("Disconnected from MCP");
         }
 
-        internal void Logon(uint mcpCookie, uint mcpStatus, List<byte> mcpChunk, string mcpUniqueName)
+        internal bool Logon(uint mcpCookie, uint mcpStatus, List<byte> mcpChunk, string mcpUniqueName)
         {
             StartupEvent.Reset();
             var packet = new McpStartupRequestPacket(mcpCookie, mcpStatus, mcpChunk, mcpUniqueName);
             Connection.WritePacket(packet);
-            var response = StartupEvent.WaitForPacket();
+            var response = StartupEvent.WaitForPacket(5000);
+            if (response == null)
+            {
+                return false;
+            }
             _ = new McpStartupResponsePacket(response.Raw);
+            return true;
         }
 
         internal List<Character> ListCharacters()
         {
             ListCharactersEvent.Reset();
             Connection.WritePacket(new ListCharactersClientPacket());
-            var packet = ListCharactersEvent.WaitForPacket();
+            var packet = ListCharactersEvent.WaitForPacket(5000);
+            if(packet == null)
+            {
+                return new List<Character>();
+            }
             var response = new ListCharactersServerPacket(packet.Raw);
             return response.Characters;
         }
 
-        internal void CreateGame(Difficulty difficulty, string gameName, string password, string description)
+        internal bool CreateGame(Difficulty difficulty, string gameName, string password, string description)
         {
             CreateGameEvent.Reset();
             Connection.WritePacket(new CreateGameRequestPacket(RequestId++, difficulty, gameName, password, description));
-            _ = new CreateGameResponsePacket(CreateGameEvent.WaitForPacket().Raw);
+            var packet = CreateGameEvent.WaitForPacket(5000);
+            if(packet == null)
+            {
+                return false;
+            }
+            var result = new CreateGameResponsePacket(packet.Raw);
+            return result.ResultCode == 0x00;
         }
 
         internal JoinGameResponsePacket JoinGame(string name, string password)
         {
             JoinGameEvent.Reset();
             Connection.WritePacket(new JoinGameRequestPacket(RequestId++, name, password));
-            return new JoinGameResponsePacket(JoinGameEvent.WaitForPacket().Raw);
+            var response = JoinGameEvent.WaitForPacket(5000);
+            if(response == null)
+            {
+                return null;
+            }
+
+            return new JoinGameResponsePacket(response.Raw);
         }
 
         internal void OnReceivedPacketEvent(Mcp type, Action<McpPacket> handler)

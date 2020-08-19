@@ -16,12 +16,6 @@ namespace D2NG.Core.MCP
             _packet = null;
         }
 
-        public McpPacket WaitForPacket()
-        {
-            _event.WaitOne();
-            return _packet!;
-        }
-
         public McpPacket WaitForPacket(int millisecondsTimeout)
         {
             _event.WaitOne(millisecondsTimeout);

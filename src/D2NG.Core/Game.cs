@@ -202,9 +202,9 @@ namespace D2NG.Core
             return buttonAction.WaitOne(2000);
         }
 
-        public void UseRightHandSkillOnLocation(Skill skill, Point location)
+        public bool UseRightHandSkillOnLocation(Skill skill, Point location)
         {
-            if (!Me.Skills.TryGetValue(skill, out var value) || value == 0)
+            if (!Me.HasSkill(skill))
             {
                 throw new InvalidOperationException($"cannot use {skill}, this character does not have the skill");
             }
@@ -212,12 +212,20 @@ namespace D2NG.Core
             if (Me.ActiveSkills[Hand.Right] != skill)
             {
                 _gameServer.SendPacket(new SelectSkillPacket(Hand.Right, skill));
-                while (Me.ActiveSkills[Hand.Right] != skill)
+                var count = 0;
+                while (Me.ActiveSkills[Hand.Right] != skill && count < 10)
                 {
-                    Thread.Sleep(50);
+                    Thread.Sleep(10);
+                    count++;
+                }
+
+                if (Me.ActiveSkills[Hand.Right] != skill)
+                {
+                    return false;
                 }
             }
             _gameServer.SendPacket(new RightSkillOnLocationPacket(location));
+            return true;
         }
 
         public bool TeleportToLocation(Point point)
@@ -227,9 +235,9 @@ namespace D2NG.Core
             return reAssignPlayer.WaitOne(300) && Me.Location.Distance(point) < 5;
         }
 
-        public void RepeatRightHandSkillOnLocation(Skill skill, Point location)
+        public bool RepeatRightHandSkillOnLocation(Skill skill, Point location)
         {
-            if (!Me.Skills.TryGetValue(skill, out var value) || value == 0)
+            if (!Me.HasSkill(skill))
             {
                 throw new InvalidOperationException($"cannot use {skill}, this character does not have the skill");
             }
@@ -237,17 +245,25 @@ namespace D2NG.Core
             if (Me.ActiveSkills[Hand.Right] != skill)
             {
                 _gameServer.SendPacket(new SelectSkillPacket(Hand.Right, skill));
-                while (Me.ActiveSkills[Hand.Right] != skill)
+                var count = 0;
+                while (Me.ActiveSkills[Hand.Right] != skill && count < 10)
                 {
-                    Thread.Sleep(50);
+                    Thread.Sleep(10);
+                    count++;
+                }
+
+                if (Me.ActiveSkills[Hand.Right] != skill)
+                {
+                    return false;
                 }
             }
             _gameServer.SendPacket(new RightSkillRepeatOnLocationPacket(location));
+            return true;
         }
 
         public bool UseRightHandSkillOnEntity(Skill skill, Entity entity)
         {
-            if (!Me.Skills.TryGetValue(skill, out var value) || value == 0)
+            if (!Me.HasSkill(skill))
             {
                 throw new InvalidOperationException($"cannot use {skill}, this character does not have the skill");
             }

@@ -32,7 +32,7 @@ namespace D2NG.Navigation.Services.MapApi
         {
             var session = await _cache.GetOrCreateAsync(Tuple.Create(mapId, difficulty), async (cacheEntry) =>
             {
-                cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(5);
+                cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(2);
                 cacheEntry.RegisterPostEvictionCallback(DeleteSession);
                 var (map, diff) = (Tuple<uint, Difficulty>)cacheEntry.Key;
                 return await CreateSession(map, diff);
@@ -45,7 +45,7 @@ namespace D2NG.Navigation.Services.MapApi
         {
             var areaMap = await _cache.GetOrCreateAsync(Tuple.Create(sessionId, area), async (cacheEntry) =>
             {
-                cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(5);
+                cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(2);
                 var (sessionId, area) = (Tuple<string, Area>)cacheEntry.Key;
                 return await GetAreaFromApi(sessionId, area);
             });
@@ -81,7 +81,7 @@ namespace D2NG.Navigation.Services.MapApi
         private void DeleteSession(object key, object value, EvictionReason reason, object state)
         {
             var client = _httpClientFactory.CreateClient();
-            var (sessionId, _) = (Tuple<uint, Difficulty>)key;
+            var sessionId = (string)value;
             client.DeleteAsync($"{_mapConfiguration.ApiUrl}/sessions/{sessionId}").Wait();
         }
     }

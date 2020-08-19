@@ -12,6 +12,11 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            if (Sets.ShouldPickupItem(item))
+            {
+                return true;
+            }
+
             switch (item.Classification)
             {
                 case ClassificationType.Amulet:
@@ -99,6 +104,11 @@ namespace ConsoleBot.Pickit
             }
 
             if (!CanTouchInventoryItem(item))
+            {
+                return true;
+            }
+
+            if (Sets.ShouldKeepItem(item))
             {
                 return true;
             }

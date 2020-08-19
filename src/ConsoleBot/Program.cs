@@ -57,12 +57,16 @@ namespace ConsoleBot
             services.AddMemoryCache();
             services.RegisterNavigationServices(config);
 
-            File.Delete("log.txt");
+            var configFileName = config.GetSection("bot")["logFile"];
+            File.Delete(configFileName);
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Verbose()
                 .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
                 .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
-                .WriteTo.File("log.txt")
+                .WriteTo.File(configFileName,
+                  restrictedToMinimumLevel: LogEventLevel.Information,
+                  rollOnFileSizeLimit: true,
+                  fileSizeLimitBytes: 20_000_000)
                 .CreateLogger();
             services.AddLogging(configure => configure.AddSerilog());
             return services;

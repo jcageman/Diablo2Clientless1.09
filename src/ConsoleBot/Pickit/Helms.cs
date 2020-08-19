@@ -27,14 +27,27 @@ namespace ConsoleBot.Pickit
         {
             if (item.Name == "Grim Helm"
                 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70
-                && item.GetTotalLifeFromStats() >= 50)
+                && item.GetTotalLifeFromStats() >= 30)
+            {
+                return true;
+            }
+
+            if (item.Name == "Grim Helm"
+                && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
+                && item.GetTotalLifeFromStats() >= 20
+                && item.GetTotalResist() >= 40)
             {
                 return true;
             }
 
             if (desirableHelms.Contains(item.Name))
             {
-                if (item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() >= 40)
+                if (item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() >= 30)
+                {
+                    return true;
+                }
+
+                if (item.GetTotalResist() >= 45 && item.GetTotalLifeFromStats() >= 30 && item.GetValueOfStatType(StatType.MinimumDamage) == 2)
                 {
                     return true;
                 }
@@ -55,7 +68,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() >= 60)
+            if (item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() >= 40)
             {
                 return true;
             }

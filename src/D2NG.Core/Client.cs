@@ -85,7 +85,11 @@ namespace D2NG.Core
         public bool CreateGame(Difficulty difficulty, string name, string password, string description)
         {
             Log.Information($"Creating {difficulty} game: {name}");
-            Mcp.CreateGame(difficulty, name, password, description);
+            if(!Mcp.CreateGame(difficulty, name, password, description))
+            {
+                Log.Warning($"Creating {difficulty} game: {name} failed");
+                return false;
+            }
             Log.Debug($"Game {name} with {password} created");
             return JoinGame(name, password);
         }
@@ -99,6 +103,11 @@ namespace D2NG.Core
         {
             Log.Information($"Joining game: {name}");
             var packet = Mcp.JoinGame(name, password);
+            if(packet == null)
+            {
+                return false;
+            }
+
             Mcp.Disconnect();
             Log.Debug($"Connecting to D2GS Server {packet.D2gsIp}");
             D2gs.Connect(packet.D2gsIp);
@@ -136,7 +145,11 @@ namespace D2NG.Core
 
             Log.Information($"Connecting to {packet.McpIp}:{packet.McpPort}");
             Mcp.Connect(packet.McpIp, packet.McpPort);
-            Mcp.Logon(packet.McpCookie, packet.McpStatus, packet.McpChunk, packet.McpUniqueName);
+            if(!Mcp.Logon(packet.McpCookie, packet.McpStatus, packet.McpChunk, packet.McpUniqueName))
+            {
+                Log.Warning("RealmLogin Connecting failed");
+                return false;
+            }
             Log.Information($"Connected to {packet.McpIp}:{packet.McpPort}");
             return true;
         }
