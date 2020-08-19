@@ -25,7 +25,8 @@ ConsoleBot expects a `config.json` file that can be passed in via the "--config"
         "difficulty" : "hell",
         "channelToJoin": "d2ng",
         "gamefolder": "C:\\Diablo II1.09d",
-        "botType" : "mephisto" -- current options are mephisto (sorc) or travincal (barb) 
+        "botType" : "mephisto", -- current options are mephisto (sorc) or travincal (barb)
+		"logFile": "bot1log.txt"
     },
     "externalMessaging" : {
         "telegramApiKey": "xxxxxxxxxxxxxxx",
