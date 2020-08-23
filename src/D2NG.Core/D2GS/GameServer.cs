@@ -97,14 +97,19 @@ namespace D2NG.Core.D2GS
             }
         }
 
+        internal void Disconnect()
+        {
+            Connection.Terminate();
+            _listener.Join();
+        }
+
         public void LeaveGame()
         {
             var leaveGameConfirmed = GetResetEventOfType(InComingPacket.LeaveGameConfirmed);
             InGame = false;
             Connection.WritePacket(OutGoingPacket.LeaveGame);
             leaveGameConfirmed.WaitOne(2000);
-            Connection.Terminate();
-            _listener.Join();
+            Disconnect();
         }
 
         internal bool GameLogon(uint gameHash, ushort gameToken, Character character)

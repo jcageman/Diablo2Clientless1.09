@@ -14,6 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ConsoleBot\ConsoleBot.csproj" />
     <ProjectReference Include="..\D2NG.Core\D2NG.Core.csproj" />
   </ItemGroup>
 

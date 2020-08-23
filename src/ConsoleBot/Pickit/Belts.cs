@@ -11,51 +11,37 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.IsIdentified)
-            {
-                return ShouldKeepItem(item);
-            }
-
             return false;
         }
 
         public static bool ShouldKeepItem(Item item)
         {
-            if (item.Name == "War Belt"
-                && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70
-                && item.GetTotalLifeFromStats() >= 50)
+            if (item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() >= 60)
             {
                 return true;
             }
 
-            if (item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() >= 40)
+            if (item.GetTotalResist() >= 40 && item.GetTotalLifeFromStats() >= 80)
             {
                 return true;
             }
 
-            if (item.GetTotalResist() >= 30 && item.GetTotalLifeFromStats() >= 80)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 40 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) >= 40)
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 40 && item.GetTotalLifeFromStats() >= 30)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) >= 20)
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() >= 20)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 10 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) >= 120)
             {
                 return true;
             }
 
             if (item.Quality == QualityType.Unique && item.Name == "Heavy Belt" && item.GetValueOfStatType(StatType.ExtraGold) >= 80)
-            {
-                return true;
-            }
-
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.ExtraGold) > 100
-             && (item.GetValueOfStatType(StatType.FireResistance) + item.GetValueOfStatType(StatType.LightningResistance)) >= 25
-             && item.GetTotalLifeFromStats() >= 40)
             {
                 return true;
             }

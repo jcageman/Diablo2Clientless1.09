@@ -113,6 +113,7 @@ namespace D2NG.Core
             D2gs.Connect(packet.D2gsIp);
             if (!D2gs.GameLogon(packet.GameHash, packet.GameToken, _character))
             {
+                D2gs.Disconnect();
                 return false;
             }
             Bncs.NotifyJoin(name, password);
@@ -121,13 +122,19 @@ namespace D2NG.Core
 
         public bool RejoinMCP()
         {
+            if(Mcp.IsConnected())
+            {
+                return true;
+            }
+
             Log.Information("Joining MCP again");
             if (!RealmLogon())
             {
                 return false;
             }
 
-            return Mcp.CharLogon(_character);
+            var result = Mcp.CharLogon(_character);
+            return result;
         }
 
         private bool RealmLogon()
@@ -150,7 +157,7 @@ namespace D2NG.Core
                 Log.Warning("RealmLogin Connecting failed");
                 return false;
             }
-            Log.Information($"Connected to {packet.McpIp}:{packet.McpPort}");
+            Log.Information($"Connected to MCP {packet.McpIp}:{packet.McpPort}");
             return true;
         }
 

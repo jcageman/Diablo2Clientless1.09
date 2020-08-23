@@ -43,6 +43,11 @@ namespace D2NG.Core.MCP
             _listener.Start();
         }
 
+        public bool IsConnected()
+        {
+            return Connection.Connected;
+        }
+
         private void Listen()
         {
             while (Connection.Connected)
@@ -69,13 +74,9 @@ namespace D2NG.Core.MCP
             {
                 return false;
             }
-            var response = new CharLogonResponsePacket(loginResponsePacket);
-            if (response.Result != 0x00)
-            {
-                return false;
-            }
 
-            return true;
+            var response = new CharLogonResponsePacket(loginResponsePacket);
+            return response.Result == 0x00;
         }
 
         internal void Disconnect()

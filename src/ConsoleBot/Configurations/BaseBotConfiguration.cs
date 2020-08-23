@@ -32,33 +32,45 @@ namespace ConsoleBot.Configurations
                     throw new Exception("Could not connect to realm");
                 }
 
-                Thread.Sleep(2_000);
-
-                int count = 1;
+                int totalCount = 0;
+                int gameCount = 0;
                 int failureCount = 0;
-                while ((((double)failureCount / count) < 0.98 || count < 5))
+                while (true)
                 {
-                    if(count >= 100)
+                    if((((double)failureCount / totalCount) > 0.25 && totalCount > 15))
                     {
-                        count = 1;
+                        Log.Error("Stopping bot due too high failure count");
+                        await _externalMessagingClient.SendMessage($"bot stopping due to high failure count {failureCount} vs {totalCount}");
+                        break;
                     }
 
-                    if (!client.CreateGame(_config.Difficulty, $"{_config.GameNamePrefix}{count}", _config.GamePassword, _config.GameDescription))
+                    if(gameCount >= 100)
                     {
-                        count++;
-                        Thread.Sleep(5000);
-                        continue;
+                        gameCount = 1;
                     }
 
-                    failureCount += (await RunSingleGame(client)) ? 0 : 1;
-                    Thread.Sleep(1000);
+                    try
+                    {
+                        gameCount++;
+                        totalCount++;
+                        if (client.CreateGame(_config.Difficulty, $"{_config.GameNamePrefix}{gameCount}", _config.GamePassword, _config.GameDescription))
+                        {
+                            failureCount += (await RunSingleGame(client)) ? 0 : 1;
+                        }
 
-                    if (client.Game.IsInGame())
-                    {
-                        client.Game.LeaveGame();
+                        if (client.Game.IsInGame())
+                        {
+                            client.Game.LeaveGame();
+                        }
+
+                        if(!client.RejoinMCP())
+                        {
+                            throw new Exception("Rejoining MCP failed");
+                        }
                     }
-                    if (!client.RejoinMCP())
+                    catch
                     {
+                        failureCount += 1;
                         Log.Warning("Disconnecting client, reconnecting to realm");
                         client.Disconnect();
                         var connectCount = 0;
@@ -75,8 +87,6 @@ namespace ConsoleBot.Configurations
                         }
                         Thread.Sleep(3000);
                     }
-
-                    count++;
                 }
 
                 return 0;

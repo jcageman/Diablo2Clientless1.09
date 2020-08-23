@@ -1,4 +1,5 @@
 ﻿using D2NG.Core.D2GS.Items;
+using System;
 using System.Collections.Generic;
 
 namespace ConsoleBot.Pickit
@@ -18,9 +19,9 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.IsIdentified)
+            if(item.Quality == QualityType.Unique && item.Name == "Blade")
             {
-                return ShouldKeepItem(item);
+                return true;
             }
 
             return false;
@@ -28,13 +29,9 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItem(Item item)
         {
-            var additionalDamage = 0;
-            additionalDamage += item.GetValueOfStatType(StatType.EnhancedMaximumDamage);
-            additionalDamage += (int)(item.GetValueOfStatType(StatType.MinimumDamage) * 1.5);
-            additionalDamage += (int)(item.GetValueOfStatType(StatType.MaximumDamage) * 1.5);
-            additionalDamage += (int)(item.GetValueOfStatType(StatType.SecondaryMinimumDamage) * 1.5);
-            additionalDamage += (int)(item.GetValueOfStatType(StatType.SecondaryMaximumDamage) * 1.5);
-            
+            var additionalDamage = item.GetValueOfStatType(StatType.EnhancedMaximumDamage);
+            additionalDamage += (int)1.5 * Math.Max(item.GetValueOfStatType(StatType.MinimumDamage), item.GetValueOfStatType(StatType.SecondaryMinimumDamage));
+            additionalDamage += (int)1.5 * Math.Max(item.GetValueOfStatType(StatType.MaximumDamage), item.GetValueOfStatType(StatType.SecondaryMaximumDamage));
 
             if (item.Classification == ClassificationType.Bow)
             {
@@ -55,7 +52,7 @@ namespace ConsoleBot.Pickit
 
             if (item.Quality == QualityType.Rare
             && interestingExceptionalWeapons.Contains(item.Name)
-            && additionalDamage > 180)
+            && (additionalDamage > 200 || item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 195))
             {
                 return true;
             }
@@ -84,8 +81,19 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            if (item.Quality == QualityType.Rare
+            && item.GetValueOfStatType(StatType.PaladinSkills) >= 2
+            && item.GetTotalResist() >= 30 && item.IsWeapon)
+            {
+                return true;
+            }
 
-
+            /*
+            if (item.Quality == QualityType.Unique && item.Name == "Blade" && item.GetValueOfStatType(StatType.FasterCastRate) == 50)
+            {
+                return true;
+            }
+            */
             return false;
         }
     }

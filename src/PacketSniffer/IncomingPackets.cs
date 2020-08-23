@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Helpers;
+﻿using ConsoleBot.Pickit;
+using D2NG.Core.D2GS.Helpers;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using Serilog;
@@ -189,7 +190,7 @@ namespace PacketSniffer
                 case InComingPacket.WorldItemAction:
                 case InComingPacket.OwnedItemAction:
                     var parseItemPacket = new ParseItemPacket(eventArgs);
-                    Log.Information($"{incomingPacketType} -> Id: {parseItemPacket.Item.Id} Action: {parseItemPacket.Item.Action} Container: {parseItemPacket.Item.Container} Quality: {parseItemPacket.Item.Quality} Name: {parseItemPacket.Item.Name} Type: {parseItemPacket.Item.Type} Location: {parseItemPacket.Item.Location}");
+                    Log.Information($"{incomingPacketType} -> Id: {parseItemPacket.Item.Id} Action: {parseItemPacket.Item.Action} Container: {parseItemPacket.Item.Container} Quality: {parseItemPacket.Item.Quality} Name: {parseItemPacket.Item.Name} Type: {parseItemPacket.Item.Type} Location: {parseItemPacket.Item.Location} ShouldKeep: {Pickit.ShouldKeepItem(parseItemPacket.Item)}");
                     break;
                 case InComingPacket.ReceiveChat:
                     var chatPacket = new ChatPacket(eventArgs);

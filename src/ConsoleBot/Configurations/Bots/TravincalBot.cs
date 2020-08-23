@@ -50,6 +50,7 @@ namespace ConsoleBot.Configurations.Bots
             }
 
             InventoryHelpers.MoveInventoryItemsToCube(client.Game);
+            client.Game.CleanupCursorItem();
             CleanupPotionsInBelt(client.Game);
 
             if (client.Game.Act != Act.Act3 && client.Game.Act != Act.Act4)

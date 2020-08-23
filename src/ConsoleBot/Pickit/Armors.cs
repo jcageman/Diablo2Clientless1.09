@@ -18,11 +18,6 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.IsIdentified)
-            {
-                return ShouldKeepItem(item);
-            }
-
             return false;
         }
 
@@ -105,6 +100,12 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            /*
+            if(item.Name == "Studded Leather" && item.Quality == QualityType.Unique)
+            {
+                return true;
+            }
+            */
             return false;
         }
     }

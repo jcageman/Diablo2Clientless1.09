@@ -7,11 +7,6 @@ namespace ConsoleBot.Pickit
     {
         public static bool ShouldPickupItem(Item item)
         {
-            if (item.IsIdentified)
-            {
-                return ShouldKeepItem(item);
-            }
-
             return true;
         }
 
@@ -34,6 +29,12 @@ namespace ConsoleBot.Pickit
             if (item.GetValueOfStatType(StatType.PaladinSkills) == 2
             && item.GetValueToSkill(Skill.BlessedHammer) >= 2
             && item.GetValueToSkill(Skill.Concentration) >= 2)
+            {
+                return true;
+            }
+
+            if (item.GetValueOfStatType(StatType.PaladinSkills) == 2
+            && (item.GetTotalResist() >= 30 || item.GetTotalLifeFromStats() >= 50))
             {
                 return true;
             }

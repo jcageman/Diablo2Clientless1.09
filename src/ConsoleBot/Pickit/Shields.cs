@@ -6,11 +6,6 @@ namespace ConsoleBot.Pickit
     {
         public static bool ShouldPickupItem(Item item)
         {
-            if (item.IsIdentified)
-            {
-                return ShouldKeepItem(item);
-            }
-
             if(item.Quality == QualityType.Unique && item.Name == "Gothic Shield")
             {
                 return true;
@@ -51,7 +46,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Name == "Pavise" && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70)
+            if (item.Name == "Pavise" && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 90)
             {
                 return true;
             }

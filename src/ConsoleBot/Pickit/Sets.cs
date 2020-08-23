@@ -28,25 +28,26 @@ namespace ConsoleBot.Pickit
             }
 
             // Iratha's set:
-            if (item.Type == "Crown" && item.GetValueOfStatType(StatType.FireResistance) == 30)
+            if (item.Name == "Crown" && item.GetValueOfStatType(StatType.FireResistance) == 30)
+            {
+                return true;
+            }
+            /*
+            if (item.Name == "Light Gauntlets" && item.GetValueOfStatType(StatType.ColdResistance) == 30)
             {
                 return true;
             }
 
-            if (item.Type == "Light Gauntlets" && item.GetValueOfStatType(StatType.ColdResistance) == 30)
+            if (item.Name == "Amulet" && item.GetValueOfStatType(StatType.PoisonResistance) == 30)
             {
                 return true;
             }
 
-            if (item.Type == "Amulet" && item.GetValueOfStatType(StatType.PoisonResistance) == 30)
+            if (item.Name == "Heavy Belt" && item.GetValueOfStatType(StatType.MinimumDamage) == 5)
             {
                 return true;
             }
-
-            if (item.Type == "Heavy Belt")
-            {
-                return true;
-            }
+            */
 
             return false;
         }

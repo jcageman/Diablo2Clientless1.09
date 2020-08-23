@@ -11,11 +11,6 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.IsIdentified)
-            {
-                return ShouldKeepItem(item);
-            }
-
             return false;
         }
 

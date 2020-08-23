@@ -28,16 +28,6 @@ namespace ConsoleBot.Configurations.Bots
 
         public async Task<int> Run()
         {
-
-            /*
-                        var path = await _pathingService.GetPathFromWaypointToArea(1256081602, Difficulty.Normal, Area.DuranceOfHateLevel2, Waypoint.DuranceOfHateLevel2.ToEntityCode(), Area.DuranceOfHateLevel3, MovementMode.Teleport);
-            return 1;
-            var path = await _pathingService.GetPathToObject(1184271221, 0, Area.KurastDocks, new Point(5116, 5168), Waypoint.KurastDocks.ToEntityCode(), MovementMode.Teleport);
-            
-            */
-            /*
-
-            */
             var client = new Client();
             _externalMessagingClient.RegisterClient(client);
             return await CreateGameLoop(client);
@@ -130,21 +120,21 @@ namespace ConsoleBot.Configurations.Bots
             bool shouldRepair = client.Game.Items.Any(i => i.Action == Action.Equip && i.MaximumDurability > 0 && ((double)i.Durability / i.MaximumDurability) < 0.2);
             if(shouldRepair)
             {
-                Log.Information($"Repairing items at Halbu");
-                var PathHalbu = await _pathingService.GetPathToNPC(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, NPCCode.Halbu, MovementMode.Teleport);
-                if (!TeleportViaPath(client, PathHalbu))
+                Log.Information($"Repairing items at Hratli");
+                var PathHratli = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, EntityCode.Hratli, MovementMode.Teleport);
+                if (!TeleportViaPath(client, PathHratli))
                 {
-                    Log.Warning($"Teleporting to Halbu failed at {client.Game.Me.Location}");
+                    Log.Warning($"Teleporting to Hratli failed at {client.Game.Me.Location}");
                     return false;
                 }
 
-                var halbu = NPCHelpers.GetUniqueNPC(client.Game, NPCCode.Halbu);
-                if (halbu == null)
+                var hratli = NPCHelpers.GetUniqueNPC(client.Game, NPCCode.Hratli);
+                if (hratli == null)
                 {
                     return false;
                 }
 
-                NPCHelpers.RepairItems(client.Game, halbu);
+                NPCHelpers.RepairItems(client.Game, hratli);
             }
 
             bool shouldGamble = client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 7_000_000;

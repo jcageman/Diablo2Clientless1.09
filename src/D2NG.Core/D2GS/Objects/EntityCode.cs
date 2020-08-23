@@ -12,6 +12,7 @@
         WaypointAct3 = 237,
         WaypointAct3Durance = 324,
         WaypointAct4Levels = 238,
+        Hratli = 379,
         WaypointAct4 = 398,
         WaypointAct5 = 496,
         WaypointAct5Glacial = 511,
