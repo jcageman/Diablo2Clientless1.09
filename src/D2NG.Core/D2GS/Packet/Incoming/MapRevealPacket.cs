@@ -20,10 +20,6 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             Y = reader.ReadUInt16();
             Area = (Area)reader.ReadByte();
             reader.Close();
-
-            Log.Verbose($"(0x{ id,2:X2}) Map Reveal:\n" +
-                $"\tLocation: ({X}, {Y})\n" +
-                $"\tArea: {Area}");
         }
 
         public ushort X { get; }

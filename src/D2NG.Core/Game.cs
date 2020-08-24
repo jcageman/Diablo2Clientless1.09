@@ -317,22 +317,19 @@ namespace D2NG.Core
         public void MoveTo(ushort x, ushort y) => MoveTo(new Point(x, y));
         public void MoveTo(Point location)
         {
-            var distance = Me.Location.X == 0 && Me.Location.Y == 0 ? 0 : Me.Location.Distance(location);
+            var distance = Me.Location.Distance(location);
             if (distance < 10 && DateTime.Now.Subtract(lastTeleport) > TimeSpan.FromSeconds(5))
             {
                 _gameServer.SendPacket(new UpdatePlayerLocationPacket(location));
-                Me.Location = location;
                 lastTeleport = DateTime.Now;
-                Thread.Sleep(300);
+                Thread.Sleep((int)(120 / Data.WalkingSpeedMultiplier));
             }
             else
             {
-                var lerpedLocation = Me.Location.Lerp(location, Math.Min(1.0f, (float)(20.0 / distance)));
-                var lerpedDistance = lerpedLocation.Distance(Me.Location);
-                Me.Location = lerpedLocation;
-                _gameServer.SendPacket(new RunToLocationPacket(lerpedLocation));
-                Thread.Sleep((int)(lerpedDistance * 50 + 100));
+                _gameServer.SendPacket(new RunToLocationPacket(location));
+                Thread.Sleep((int)(distance * 80 / Data.WalkingSpeedMultiplier));
             }
+            Me.Location = location;
         }
 
         public void MoveTo(Entity entity)

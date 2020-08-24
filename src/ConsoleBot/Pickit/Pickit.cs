@@ -7,14 +7,14 @@ namespace ConsoleBot.Pickit
     {
         public static bool ShouldPickupItem(Item item)
         {
-            if (item.IsIdentified)
-            {
-                return ShouldKeepItem(item);
-            }
-
             if (GoldItems.ShouldPickupItem(item))
             {
                 return true;
+            }
+
+            if (item.IsIdentified)
+            {
+                return ShouldKeepItem(item);
             }
 
             if (Sets.ShouldPickupItem(item))

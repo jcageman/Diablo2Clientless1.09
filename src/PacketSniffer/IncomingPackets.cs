@@ -26,7 +26,6 @@ namespace PacketSniffer
                 case InComingPacket.LoadActComplete:
                 case InComingPacket.UnloadActComplete:
                 case InComingPacket.GameExitSuccess:
-                case InComingPacket.MapReveal:
                 case InComingPacket.MapHide:
                 case InComingPacket.GameHandshake:
                 case InComingPacket.PlayerStop:
@@ -132,6 +131,10 @@ namespace PacketSniffer
                 case InComingPacket.QuestInfo:
                 case InComingPacket.GameQuestInfo:
                     Log.Debug($"Received D2GS packet of type: {incomingPacketType} with data {eventArgs.Raw.ToPrintString()}");
+                    break;
+                case InComingPacket.MapReveal:
+                    var mapRevealPacket = new MapRevealPacket(eventArgs);
+                    Log.Information($"MapReveal -> At {mapRevealPacket.Area} Loc: {mapRevealPacket.X}, {mapRevealPacket.Y}");
                     break;
                 case InComingPacket.NPCHit:
                     var npcHitPacket = new NpcHitPacket(eventArgs);

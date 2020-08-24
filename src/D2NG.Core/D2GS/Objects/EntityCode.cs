@@ -14,6 +14,7 @@
         WaypointAct4Levels = 238,
         Hratli = 379,
         WaypointAct4 = 398,
+        CompellingOrb = 404,
         WaypointAct5 = 496,
         WaypointAct5Glacial = 511,
         WaypointAct5Baal = 494,

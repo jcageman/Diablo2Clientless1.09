@@ -1,13 +1,12 @@
 ﻿using D2NG.Core.D2GS;
-using D2NG.Navigation.Services.MapApi;
-using System.Linq;
 using D2NG.Core.D2GS.Act;
+using D2NG.Navigation.Services.MapApi;
 using Roy_T.AStar.Graphs;
 using Roy_T.AStar.Grids;
 using Roy_T.AStar.Primitives;
 using System;
 using System.Collections.Generic;
-using D2NG.Navigation.Services.Pathing;
+using System.Linq;
 
 namespace D2NG.Navigation.Extensions
 {
@@ -51,7 +50,7 @@ namespace D2NG.Navigation.Extensions
 
         public static bool IsMovable(int value)
         {
-            return value == 0 || value == 7 || value == 16;
+            return value == 0 || value == 16;
         }
 
         public static float GetVelocityWithAdjacency(this AreaMap areaMap, int i, int j, int columns, int rows)
@@ -66,7 +65,7 @@ namespace D2NG.Navigation.Extensions
 
         public static float GetVelocityToPoint(this AreaMap areaMap, int i, int j, int columns, int rows)
         {
-            if (i < 0 || j < 0)
+            if (i < 0 || j < 0 || i >= columns || j >= rows)
             {
                 return DistanceBetweenCells;
             }
@@ -91,7 +90,7 @@ namespace D2NG.Navigation.Extensions
             return value;
         }
 
-        public static Grid MapToGrid(this AreaMap areaMap, MovementMode movementMode)
+        public static Grid MapToGrid(this AreaMap areaMap)
         {
             var rows = areaMap.Map.GetLength(0);
             var columns = areaMap.Map[0].GetLength(0);
@@ -105,8 +104,6 @@ namespace D2NG.Navigation.Extensions
                 }
             }
 
-            var connectedNodes = new Dictionary<GridPosition, HashSet<GridPosition>>();
-
             for (var i = 0; i < columns; i++)
             {
                 for (var j = 0; j < rows; j++)
@@ -117,55 +114,22 @@ namespace D2NG.Navigation.Extensions
                     }
 
                     var fromNode = nodes[i, j];
-                    var gridPosition = new GridPosition(i, j);
-                    var connectedSet = connectedNodes.GetOrAdd(gridPosition, () => new HashSet<GridPosition>());
 
                     var speed = GetVelocityWithAdjacency(areaMap, j, i, rows, columns);
-                    if (movementMode == MovementMode.Walking)
+                    if (i + 1 < columns && IsMovable(areaMap.Map[j][i + 1]))
                     {
-                        if (i + 1 < columns && IsMovable(areaMap.Map[j][i + 1]))
-                        {
-                            var toNode = nodes[i + 1, j];
-                            var velocity = Velocity.FromMetersPerSecond(speed);
-                            fromNode.Connect(toNode, velocity);
-                            toNode.Connect(fromNode, velocity);
-                        }
-
-                        if (j + 1 < rows && IsMovable(areaMap.Map[j + 1][i]))
-                        {
-                            var toNode = nodes[i, j + 1];
-                            var velocity = Velocity.FromMetersPerSecond(speed);
-                            fromNode.Connect(toNode, velocity);
-                            toNode.Connect(fromNode, velocity);
-                        }
+                        var toNode = nodes[i + 1, j];
+                        var velocity = Velocity.FromMetersPerSecond(speed);
+                        fromNode.Connect(toNode, velocity);
+                        toNode.Connect(fromNode, velocity);
                     }
-                    else
+
+                    if (j + 1 < rows && IsMovable(areaMap.Map[j + 1][i]))
                     {
-                        var TeleportRange = 35;
-                        for (var x = 0; x <= TeleportRange; x++)
-                        {
-                            for (var y = 0; y <= TeleportRange; y++)
-                            {
-                                var teleDistance = Math.Sqrt(Math.Pow(x, 2) + Math.Pow(y, 2));
-                                if (teleDistance > TeleportRange || teleDistance < TeleportRange * 0.8)
-                                {
-                                    continue;
-                                }
-
-                                var teleportGridPosition = new GridPosition(i + y, j + x);
-                                if (i + y < columns && i + y >= 0 && j + x < rows && j + x >= 0 && IsMovable(areaMap.Map[j + x][i + y]) && !connectedSet.Contains(teleportGridPosition))
-                                {
-                                    var teleSet = connectedNodes.GetOrAdd(teleportGridPosition, () => new HashSet<GridPosition>());
-                                    teleSet.Add(gridPosition);
-                                    connectedSet.Add(teleportGridPosition);
-                                    var toNode = nodes[i + y, j + x];
-
-                                    var velocity = Velocity.FromMetersPerSecond((float)teleDistance);
-                                    fromNode.Connect(toNode, velocity);
-                                    toNode.Connect(fromNode, velocity);
-                                }
-                            }
-                        }
+                        var toNode = nodes[i, j + 1];
+                        var velocity = Velocity.FromMetersPerSecond(speed);
+                        fromNode.Connect(toNode, velocity);
+                        toNode.Connect(fromNode, velocity);
                     }
                 }
             }

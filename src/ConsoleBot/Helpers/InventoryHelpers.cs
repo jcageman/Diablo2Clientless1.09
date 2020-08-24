@@ -15,6 +15,7 @@ namespace ConsoleBot.Helpers
 {
     public static class InventoryHelpers
     {
+        private static readonly TimeSpan MoveItemTimeout = TimeSpan.FromSeconds(2);
         public static void CleanupCursorItem(this Game game)
         {
             if (game.CursorItem != null)
@@ -25,7 +26,7 @@ namespace ConsoleBot.Helpers
                 if (freeSpaceCube != null)
                 {
                     game.InsertItemIntoContainer(item, freeSpaceCube, ItemContainer.Cube);
-                    bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, TimeSpan.FromSeconds(1));
+                    bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
                     if (!resultMove)
                     {
                         Log.Error($"Moving item {item.Id} - {item.Name} to cube failed");
@@ -34,7 +35,7 @@ namespace ConsoleBot.Helpers
                 else if (freeSpaceInventory != null)
                 {
                     game.InsertItemIntoContainer(game.CursorItem, freeSpaceInventory, ItemContainer.Inventory);
-                    bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Inventory.FindItemById(item.Id) != null, TimeSpan.FromSeconds(1));
+                    bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Inventory.FindItemById(item.Id) != null, MoveItemTimeout);
                     if (!resultMove)
                     {
                         Log.Error($"Moving item {item.Id} - {item.Name} to inventory failed");
@@ -146,7 +147,7 @@ namespace ConsoleBot.Helpers
                 {
                     var newItems = game.Cube.Items.Select(i => i.Id).ToHashSet();
                     return !newItems.Intersect(oldItems).Any() && newItems.Count > 0;
-                }, TimeSpan.FromSeconds(2));
+                }, MoveItemTimeout);
 
                 if (!transmuteResult)
                 {
@@ -170,7 +171,7 @@ namespace ConsoleBot.Helpers
             }
 
             game.RemoveItemFromContainer(item);
-            bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, TimeSpan.FromSeconds(3));
+            bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
 
             if (!resultToBuffer)
             {
@@ -181,7 +182,7 @@ namespace ConsoleBot.Helpers
 
             return GeneralHelpers.TryWithTimeout(
                 (retryCount) => game.CursorItem == null && game.Inventory.FindItemById(item.Id) != null,
-                TimeSpan.FromSeconds(3)) ? MoveItemResult.Succes : MoveItemResult.Failed;
+                MoveItemTimeout) ? MoveItemResult.Succes : MoveItemResult.Failed;
 
         }
 
@@ -195,7 +196,7 @@ namespace ConsoleBot.Helpers
 
             game.RemoveItemFromContainer(item);
             bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id,
-                TimeSpan.FromSeconds(3));
+                MoveItemTimeout);
             if (!resultToBuffer)
             {
                 Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
@@ -206,7 +207,7 @@ namespace ConsoleBot.Helpers
 
             return GeneralHelpers.TryWithTimeout(
                 (retryCount) => game.CursorItem == null && game.Stash.FindItemById(item.Id) != null,
-                TimeSpan.FromSeconds(3)) ? MoveItemResult.Succes : MoveItemResult.Failed;
+               MoveItemTimeout) ? MoveItemResult.Succes : MoveItemResult.Failed;
         }
 
         public static MoveItemResult PutCubeItemInInventory(Game game, Item item)
@@ -232,7 +233,7 @@ namespace ConsoleBot.Helpers
 
             game.RemoveItemFromContainer(item);
 
-            bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, TimeSpan.FromSeconds(1));
+            bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
             if (!resultToBuffer)
             {
                 Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
@@ -241,7 +242,7 @@ namespace ConsoleBot.Helpers
 
             game.InsertItemIntoContainer(item, location, ItemContainer.Inventory);
 
-            bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Inventory.FindItemById(item.Id) != null, TimeSpan.FromSeconds(1));
+            bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Inventory.FindItemById(item.Id) != null, MoveItemTimeout);
             if (!resultMove)
             {
                 Log.Error($"Moving item {item.Id} - {item.Name} to cube failed");
@@ -265,7 +266,7 @@ namespace ConsoleBot.Helpers
 
                 game.RemoveItemFromContainer(item);
 
-                bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, TimeSpan.FromSeconds(1));
+                bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
                 if (!resultToBuffer)
                 {
                     Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
@@ -274,7 +275,7 @@ namespace ConsoleBot.Helpers
 
                 game.InsertItemIntoContainer(item, point, ItemContainer.Cube);
 
-                bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, TimeSpan.FromSeconds(1));
+                bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
                 if (!resultMove)
                 {
                     Log.Error($"Moving item {item.Id} - {item.Name} to cube failed");

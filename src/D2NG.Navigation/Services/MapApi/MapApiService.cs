@@ -30,11 +30,11 @@ namespace D2NG.Navigation.Services.MapApi
 
         private async Task<string> GetSessionCached(uint mapId, Difficulty difficulty)
         {
-            var session = await _cache.GetOrCreateAsync(Tuple.Create(mapId, difficulty), async (cacheEntry) =>
+            var session = await _cache.GetOrCreateAsync(Tuple.Create("mapapi", mapId, difficulty), async (cacheEntry) =>
             {
                 cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(2);
                 cacheEntry.RegisterPostEvictionCallback(DeleteSession);
-                var (map, diff) = (Tuple<uint, Difficulty>)cacheEntry.Key;
+                var (_, map, diff) = (Tuple<string, uint, Difficulty>)cacheEntry.Key;
                 return await CreateSession(map, diff);
             });
 
@@ -43,10 +43,10 @@ namespace D2NG.Navigation.Services.MapApi
 
         private async Task<AreaMap> GetAreaFromApiCached(string sessionId, Area area)
         {
-            var areaMap = await _cache.GetOrCreateAsync(Tuple.Create(sessionId, area), async (cacheEntry) =>
+            var areaMap = await _cache.GetOrCreateAsync(Tuple.Create("mapapi", sessionId, area), async (cacheEntry) =>
             {
                 cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(2);
-                var (sessionId, area) = (Tuple<string, Area>)cacheEntry.Key;
+                var (_, sessionId, area) = (Tuple<string, string, Area>)cacheEntry.Key;
                 return await GetAreaFromApi(sessionId, area);
             });
 
@@ -76,7 +76,7 @@ namespace D2NG.Navigation.Services.MapApi
 
             var createdSession = await response.Content.ReadAsAsync<SessionDto>();
             return createdSession.Id;
-        }
+        }   
 
         private void DeleteSession(object key, object value, EvictionReason reason, object state)
         {

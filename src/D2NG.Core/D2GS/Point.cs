@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography.X509Certificates;
 
 namespace D2NG.Core.D2GS
 {
@@ -70,9 +71,9 @@ namespace D2NG.Core.D2GS
             return ((X * multiplier), (Y * multiplier));
         }
 
-        public (double, double) Add((double, double) other)
+        public Point Add(short x, short y)
         {
-            return ((X + other.Item1), (Y + other.Item2));
+            return new Point((ushort)(X + x), (ushort)(Y + y));
         }
         public (double, double) Substract((double, double) other)
         {
@@ -107,6 +108,14 @@ namespace D2NG.Core.D2GS
             var difference = Substract((Convert.ToDouble(decX), Convert.ToDouble(decY)));
             var (nX, nY) = Normalize(difference);
             return new Point((ushort)(other.X - nX * distance), (ushort)(other.Y - nY * distance));
+        }
+
+        public Point GetPointBeforePointInSameDirection(Point other, double distance)
+        {
+            var (decX, decY) = other;
+            var difference = Substract((Convert.ToDouble(decX), Convert.ToDouble(decY)));
+            var (nX, nY) = Normalize(difference);
+            return new Point((ushort)(other.X + nX * distance), (ushort)(other.Y + nY * distance));
         }
 
         public override string ToString() => $"({X}, {Y})";

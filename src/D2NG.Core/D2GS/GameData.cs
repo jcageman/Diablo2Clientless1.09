@@ -8,6 +8,7 @@ using D2NG.Core.MCP;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using Action = D2NG.Core.D2GS.Items.Action;
 
 namespace D2NG.Core.D2GS
@@ -24,7 +25,21 @@ namespace D2NG.Core.D2GS
             Flags = gameFlags;
             Act = new ActData();
             ClientCharacter = clientCharacter;
+            _walkingSpeedMultiplier = new Lazy<double>(() =>
+            {
+                var walkingSpeedIncreasedMultiplier = 1.0;
+                walkingSpeedIncreasedMultiplier += this.Items.Where(i => i.Value.Action == Action.Equip).Select(i => i.Value.GetValueOfStatType(StatType.FasterRunWalk)).Aggregate((agg, frw) => agg + frw) / (double)100;
+                var increasedSpeedSkill = Me.Skills[Skill.IncreasedSpeed];
+                if (increasedSpeedSkill > 0)
+                {
+                    walkingSpeedIncreasedMultiplier += (13 + 4 * increasedSpeedSkill) / (double)100;
+                }
+
+                return walkingSpeedIncreasedMultiplier;
+            });
         }
+
+        private Lazy<double> _walkingSpeedMultiplier;
 
         public Character ClientCharacter { get; }
         public GameFlags Flags { get; }
@@ -44,6 +59,11 @@ namespace D2NG.Core.D2GS
         public List<Player> Players { get; internal set; } = new List<Player>();
 
         public ConcurrentDictionary<uint, Item> Items { get; private set; } = new ConcurrentDictionary<uint, Item>();
+
+        internal double WalkingSpeedMultiplier  {
+
+            get { return _walkingSpeedMultiplier.Value; }
+        }
 
         internal void AddExperience(AddExpPacket addExpPacket)
             => Me.Experience += addExpPacket.Experience;

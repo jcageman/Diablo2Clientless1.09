@@ -1,5 +1,6 @@
 ﻿using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet.Incoming;
+using System;
 using System.Collections.Concurrent;
 
 namespace D2NG.Core.D2GS.Players
@@ -19,7 +20,6 @@ namespace D2NG.Core.D2GS.Players
         public int Stamina { get; internal set; }
         public uint LastSelectedWaypointId { get; internal set; }
         public ConcurrentBag<Waypoint> AllowedWaypoints { get; internal set; } = new ConcurrentBag<Waypoint>();
-
         internal Self(AssignPlayerPacket assignPlayer) : base(assignPlayer)
         {
         }

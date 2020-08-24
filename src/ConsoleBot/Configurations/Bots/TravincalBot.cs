@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +14,8 @@ using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
+using D2NG.Navigation.Extensions;
+using D2NG.Navigation.Services.Pathing;
 using Serilog;
 using Action = D2NG.Core.D2GS.Items.Action;
 using Attribute = D2NG.Core.D2GS.Players.Attribute;
@@ -22,10 +25,12 @@ namespace ConsoleBot.Configurations.Bots
     public class TravincalBot : BaseBotConfiguration, IBotConfiguration
     {
         private static bool FullInventoryReported = false;
+        private readonly IPathingService _pathingService;
 
-        public TravincalBot(BotConfiguration config, IExternalMessagingClient externalMessagingClient)
+        public TravincalBot(BotConfiguration config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService)
         : base(config, externalMessagingClient)
         {
+            _pathingService = pathingService;
         }
 
         public async Task<int> Run()
@@ -53,25 +58,67 @@ namespace ConsoleBot.Configurations.Bots
             client.Game.CleanupCursorItem();
             CleanupPotionsInBelt(client.Game);
 
-            if (client.Game.Act != Act.Act3 && client.Game.Act != Act.Act4)
+            /*
+             *
+            while (client.Game.Players.Count < 2)
             {
-                Log.Information("Starting location is not Act 3 or 4, not supported for now");
-                return false;
+                Thread.Sleep(TimeSpan.FromMilliseconds(100));
+            }
+             */
+
+            if (client.Game.Act != Act.Act3)
+            {
+                var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, MovementMode.Walking);
+                if (!WalkPathOfLocations(client.Game, pathToTownWayPoint))
+                {
+                    Log.Information($"Walking to {client.Game.Act} waypoint failed");
+                    return false;
+                }
+
+                if (!MoveToWaypointViaNearestWaypoint(client.Game, Waypoint.KurastDocks))
+                {
+                    Log.Debug("Taking kurast docks waypoint failed");
+                    return false;
+                }
+            }
+
+            var healingPotionsInBelt = client.Game.Belt.NumOfHealthPotions();
+            var manaPotionsInBelt = client.Game.Belt.NumOfManaPotions();
+            if (healingPotionsInBelt < 6
+                || manaPotionsInBelt < 6
+                || client.Game.Inventory.Items.FirstOrDefault(i => i.Name == "Tome of Town Portal")?.Amount < 5
+                || client.Game.Me.Life < 500)
+            {
+                var pathOrmus = await _pathingService.GetPathToNPC(client.Game, NPCCode.Ormus, MovementMode.Walking);
+                if (!WalkPathOfLocations(client.Game, pathOrmus))
+                {
+                    Log.Warning($"Walking to Ormus failed at {client.Game.Me.Location}");
+                }
+
+                if (!NPCHelpers.SellItemsAndRefreshPotionsAtOrmus(client.Game))
+                {
+                    return false;
+                }
+            }
+
+            if (client.Game.Act == Act.Act3 && client.Game.Stash.Items.Count(i => i.Name == "Flawless Skull") >= 3)
+            {
+                var pathStash = await _pathingService.GetPathToObject(client.Game, EntityCode.Stash, MovementMode.Walking);
+                if (!WalkPathOfLocations(client.Game, pathStash))
+                {
+                    Log.Warning($"Walking failed at location {client.Game.Me.Location}");
+                }
+                CubeHelpers.TransmutePerfectSkulls(client.Game);
             }
 
             Log.Information("Walking to wp");
-            if (client.Game.Act == Act.Act3 && !WalkToAct3WpFromStart(client.Game))
+            var pathToWayPoint = await _pathingService.ToTownWayPoint(client.Game, MovementMode.Walking);
+            if (!WalkPathOfLocations(client.Game, pathToWayPoint))
             {
-                Log.Information("Walk to waypoint failed");
-                return false;
+                Log.Information($"Walking to {client.Game.Act} waypoint failed");
             }
 
-            if (client.Game.Act == Act.Act3)
-            {
-                TransmutePerfectSkulls(client.Game);
-            }
-
-            Act4RepairAndGamble(client.Game);
+            await Act4RepairAndGamble(client.Game);
 
             Log.Information("Taking travincal wp");
             if (!MoveToWaypointViaNearestWaypoint(client.Game, Waypoint.Travincal))
@@ -85,36 +132,36 @@ namespace ConsoleBot.Configurations.Bots
             Log.Information("Doing bo");
             BarbBo(client.Game);
 
-            var initialLocation = client.Game.Me.Location;
-
             Log.Information("Walking to council members");
-            if (!WalkToCouncilMembers(client.Game, initialLocation))
+            
+            var pathToCouncil = await _pathingService.GetPathToObjectWithOffset(client.Game, EntityCode.CompellingOrb, 23, 25, MovementMode.Walking);
+            if (!WalkPathOfLocations(client.Game, pathToCouncil))
             {
-                Log.Information("Walk to council members failed");
+                Log.Information($"Walking to councile members failed");
                 return false;
             }
 
             Log.Information("Kill council members");
-            if (!KillCouncilMembers(client.Game, initialLocation))
+            if (!await KillCouncilMembers(client.Game))
             {
                 Log.Information("Kill council members failed");
                 return false;
             }
 
             Log.Information("Using find item");
-            if (!UseFindItemOnCouncilMembers(client.Game, initialLocation))
+            if (!await UseFindItemOnCouncilMembers(client.Game))
             {
                 Log.Information("Finditem failed");
                 return false;
             }
 
             Log.Information("Picking up left over items");
-            if (!PickupNearbyItems(client.Game, initialLocation, 200))
+            if (!await PickupNearbyItems(client.Game, 300))
             {
                 Log.Information("Pickup nearby items 1 failed");
             }
 
-            if (!PickupNearbyItems(client.Game, initialLocation, 200))
+            if (!await PickupNearbyItems(client.Game, 300))
             {
                 Log.Information("Pickup nearby items 2 failed");
             }
@@ -123,6 +170,13 @@ namespace ConsoleBot.Configurations.Bots
             if (!MoveToA3Town(client.Game))
             {
                 Log.Information("Move to town failed");
+                return false;
+            }
+
+            var pathDeckardCain = await _pathingService.GetPathToNPC(client.Game, NPCCode.DeckardCainAct3, MovementMode.Walking);
+            if (!WalkPathOfLocations(client.Game, pathDeckardCain))
+            {
+                Log.Warning($"Walking to Deckhard Cain failed at {client.Game.Me.Location}");
                 return false;
             }
 
@@ -148,9 +202,10 @@ namespace ConsoleBot.Configurations.Bots
             }
 
             Log.Information("Walking to ormus");
-            if (!WalkToOrmus(client.Game))
+            var pathOrmus2 = await _pathingService.GetPathToNPC(client.Game, NPCCode.Ormus, MovementMode.Walking);
+            if (!WalkPathOfLocations(client.Game, pathOrmus2))
             {
-                Log.Information("Walking to ormus failed");
+                Log.Warning($"Walking to Ormus failed at {client.Game.Me.Location}");
                 return false;
             }
 
@@ -165,19 +220,7 @@ namespace ConsoleBot.Configurations.Bots
             return true;
         }
 
-        private bool WalkToOrmus(Game game)
-        {
-            var points = new List<Point>()
-                {
-                    new Point(5151, 5068),
-                    new Point(5147, 5085),
-                    new Point(5138, 5096),
-                    new Point(5126, 5094),
-                };
-            return WalkPathOfLocations(game, points);
-        }
-
-        private bool Act4RepairAndGamble(Game game)
+        private async Task<bool> Act4RepairAndGamble(Game game)
         {
             bool shouldRepair = game.Items.Any(i => i.Action == Action.Equip && i.MaximumDurability > 0 && ((double)i.Durability / i.MaximumDurability) < 0.2);
             bool shouldGamble = game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 7_000_000;
@@ -186,13 +229,20 @@ namespace ConsoleBot.Configurations.Bots
                 return true;
             }
 
-            if (!MoveToA4Npcs(game))
+            if (!MoveToWaypointViaNearestWaypoint(game, Waypoint.ThePandemoniumFortress))
             {
+                Log.Information("Taking pandemonium waypoint failed");
                 return false;
             }
 
             if (shouldRepair)
             {
+                var pathHalbu = await _pathingService.GetPathToNPC(game, NPCCode.Halbu, MovementMode.Walking);
+                if (!WalkPathOfLocations(game, pathHalbu))
+                {
+                    Log.Warning($"Walking to Halbu failed at {game.Me.Location}");
+                }
+
                 var halbu = NPCHelpers.GetUniqueNPC(game, NPCCode.Halbu);
                 if (halbu == null)
                 {
@@ -203,6 +253,12 @@ namespace ConsoleBot.Configurations.Bots
 
             if (shouldGamble)
             {
+                var pathJamella = await _pathingService.GetPathToNPC(game, NPCCode.JamellaAct4, MovementMode.Walking);
+                if (!WalkPathOfLocations(game, pathJamella))
+                {
+                    Log.Warning($"Walking to Jamella failed at {game.Me.Location}");
+                }
+
                 var jamella = NPCHelpers.GetUniqueNPC(game, NPCCode.JamellaAct4);
                 if (jamella == null)
                 {
@@ -212,8 +268,10 @@ namespace ConsoleBot.Configurations.Bots
                 NPCHelpers.GambleItems(game, jamella);
             }
 
-            if (!MoveToA4Waypoint(game))
+            var pathToWayPoint = await _pathingService.ToTownWayPoint(game, MovementMode.Walking);
+            if (!WalkPathOfLocations(game, pathToWayPoint))
             {
+                Log.Information($"Walking to {game.Act} waypoint failed");
                 return false;
             }
 
@@ -224,40 +282,6 @@ namespace ConsoleBot.Configurations.Bots
             }
 
             return true;
-        }
-
-        private bool MoveToA4Waypoint(Game game)
-        {
-            var points = new List<Point>()
-                    {
-                        new Point(5087, 5044),
-                        new Point(5078, 5042),
-                        new Point(5061, 5040),
-                        new Point(5046, 5037),
-                        new Point(5043, 5018),
-
-                    };
-
-            return WalkPathOfLocations(game, points);
-        }
-
-        private bool MoveToA4Npcs(Game game)
-        {
-            if (!MoveToWaypointViaNearestWaypoint(game, Waypoint.ThePandemoniumFortress))
-            {
-                Log.Information("Taking pandemonium waypoint failed");
-                return false;
-            }
-
-            var points = new List<Point>()
-                    {
-                        new Point(5046, 5037),
-                        new Point(5061, 5040),
-                        new Point(5078, 5042),
-                        new Point(5087, 5044),
-                    };
-
-            return WalkPathOfLocations(game, points);
         }
 
         private void CleanupPotionsInBelt(Game game)
@@ -275,12 +299,12 @@ namespace ConsoleBot.Configurations.Bots
             }
         }
 
-        private bool PickupNearbyItems(Game game, Point initialLocation, double distance)
+        private async Task<bool> PickupNearbyItems(Game game, double distance)
         {
             var pickupItems = game.Items.Where(i =>
             {
-                return i.Ground && PenalizedWalkingDistance(game, initialLocation, i.Location) < distance && Pickit.Pickit.ShouldPickupItem(i);
-            }).OrderBy(n => PenalizedWalkingDistance(game, initialLocation, n.Location));
+                return i.Ground && game.Me.Location.Distance(i.Location) < distance && Pickit.Pickit.ShouldPickupItem(i);
+            }).OrderBy(n => game.Me.Location.Distance(n.Location));
 
             foreach (var item in pickupItems)
             {
@@ -295,20 +319,17 @@ namespace ConsoleBot.Configurations.Bots
                     continue;
                 }
 
-                if (!MoveToCorrectPlaceInTravBuilding(game, initialLocation, item.Location))
-                {
-                    return false;
-                }
-
-                GeneralHelpers.TryWithTimeout((retryCount =>
+                await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
                     if (game.Me.Location.Distance(item.Location) >= 5)
                     {
-                        game.MoveTo(item.Location);
+                        var pathNearest = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, item.Location, MovementMode.Walking);
+                        WalkPathOfLocations(game, pathNearest);
+                        return false;
                     }
 
-                    return game.Me.Location.Distance(item.Location) < 5;
-                }), TimeSpan.FromSeconds(3));
+                    return true;
+                }, TimeSpan.FromSeconds(3));
 
                 if (game.Me.Location.Distance(item.Location) < 5)
                 {
@@ -320,15 +341,15 @@ namespace ConsoleBot.Configurations.Bots
             return true;
         }
 
-        private bool UseFindItemOnCouncilMembers(Game game, Point initialLocation)
+        private async Task<bool> UseFindItemOnCouncilMembers(Game game)
         {
             List<WorldObject> councilMembers = GetCouncilMembers(game);
-            var nearestMembers = councilMembers.OrderBy(n => PenalizedWalkingDistance(game, initialLocation, n.Location));
+            var nearestMembers = councilMembers.OrderBy(n => game.Me.Location.Distance(n.Location));
 
             foreach (var nearestMember in nearestMembers)
             {
-                PickupNearbyItems(game, initialLocation, 5);
-                bool result = GeneralHelpers.TryWithTimeout((retryCount) =>
+                await PickupNearbyItems(game, 10);
+                bool result = await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
                     if (!game.IsInGame())
                     {
@@ -341,8 +362,7 @@ namespace ConsoleBot.Configurations.Bots
                         game.RequestUpdate(game.Me.Id);
                     }
 
-                    MoveToCorrectPlaceInTravBuilding(game, initialLocation, nearestMember.Location);
-                    return GeneralHelpers.TryWithTimeout((retryCount) =>
+                    return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                     {
                         if (!game.IsInGame())
                         {
@@ -351,7 +371,8 @@ namespace ConsoleBot.Configurations.Bots
 
                         if (nearestMember.Location.Distance(game.Me.Location) > 5)
                         {
-                            game.MoveTo(nearestMember);
+                            var pathNearest = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearestMember.Location, MovementMode.Walking);
+                            WalkPathOfLocations(game, pathNearest);
                         }
 
                         if (nearestMember.Location.Distance(game.Me.Location) <= 5)
@@ -377,7 +398,7 @@ namespace ConsoleBot.Configurations.Bots
 
 
 
-        private bool KillCouncilMembers(Game game, Point initialLocation)
+        private async Task<bool> KillCouncilMembers(Game game)
         {
             var startTime = DateTime.Now;
             List<WorldObject> aliveMembers;
@@ -386,7 +407,7 @@ namespace ConsoleBot.Configurations.Bots
                 List<WorldObject> councilMembers = GetCouncilMembers(game);
                 aliveMembers = councilMembers
                     .Where(n => n.State != EntityState.Dead)
-                    .OrderBy(n => PenalizedWalkingDistance(game, initialLocation, n.Location))
+                    .OrderBy(n => game.Me.Location.Distance(n.Location))
                     .ToList();
 
                 var nearest = aliveMembers.FirstOrDefault();
@@ -403,92 +424,47 @@ namespace ConsoleBot.Configurations.Bots
                         return false;
                     }
 
-                    if (!MoveToCorrectPlaceInTravBuilding(game, initialLocation, nearest.Location))
+                    if(game.Me.Location.Distance(nearest.Location) > 5)
                     {
-                        Log.Information("Couldn't move to right location in trav building");
-                        continue;
-                    }
-
-                    var distanceToNearest = nearest.Location.Distance(game.Me.Location);
-                    if (nearest.Location.Distance(game.Me.Location) > 15)
-                    {
-                        game.MoveTo(nearest);
-                    }
-                    else
-                    {
-
-                        var wwDirection = game.Me.Location.GetPointPastPointInSameDirection(nearest.Location, 6);
-                        if (game.Me.Location.Equals(nearest.Location))
+                        var closeTo = game.Me.Location.GetPointBeforePointInSameDirection(nearest.Location, 6);
+                        if(game.Me.Location.Distance(closeTo) > 3)
                         {
-                            if (game.Me.Location.X - initialLocation.X > 100)
-                            {
-                                //Log.Information($"same location, wwing to left");
-                                wwDirection = new Point((ushort)(game.Me.Location.X - 6), game.Me.Location.Y);
-                            }
-                            else
-                            {
-                                //Log.Information($"same location, wwing to right");
-                                wwDirection = new Point((ushort)(game.Me.Location.X + 6), game.Me.Location.Y);
-                            }
+                            closeTo = nearest.Location;
                         }
-                        //Log.Information($"player loc: {game.Me.Location}, nearest: {nearest.Location} ww destination: {wwDirection}  ");
-                        game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
-                        Thread.Sleep((int)(distanceToNearest * 80 + 400));
+
+                        var pathNearest = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearest.Location, MovementMode.Walking);
+                        if (!WalkPathOfLocations(game, pathNearest))
+                        {
+                            Log.Warning($"Walking to Council Member failed at {game.Me.Location}");
+                        }
                     }
+
+                    var wwDirection = game.Me.Location.GetPointPastPointInSameDirection(nearest.Location, 6);
+                    if (game.Me.Location.Equals(nearest.Location))
+                    {
+                        var pathLeft = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearest.Location.Add(-6, 0), MovementMode.Walking);
+                        var pathRight = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearest.Location.Add(6, 0), MovementMode.Walking);
+                        if (pathLeft.Count < pathRight.Count)
+                        {
+                            Log.Debug($"same location, wwing to left");
+                            wwDirection = new Point((ushort)(game.Me.Location.X - 6), game.Me.Location.Y);
+                        }
+                        else
+                        {
+                            Log.Debug($"same location, wwing to right");
+                            wwDirection = new Point((ushort)(game.Me.Location.X + 6), game.Me.Location.Y);
+                        }
+                    }
+
+                    var wwDistance = game.Me.Location.Distance(wwDirection);
+                    //Log.Information($"player loc: {game.Me.Location}, nearest: {nearest.Location} ww destination: {wwDirection}  ");
+                    game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
+                    Thread.Sleep((int)((wwDistance * 50 + 300)));
+
                 }
             } while (aliveMembers.Any());
 
             return true;
-        }
-
-        private double PenalizedWalkingDistance(Game game, Point initialLocation, Point location)
-        {
-            var distance = location.Distance(game.Me.Location);
-            var MeDeltaY = game.Me.Location.Y - initialLocation.Y;
-            var NearestDeltaY = game.Me.Location.Y - initialLocation.Y;
-            var MeDeltaX = game.Me.Location.X - initialLocation.X;
-            if (MeDeltaY < -78 && NearestDeltaY > -80 && (MeDeltaX < 97 || MeDeltaX > 104))
-            {
-                distance += 40;
-            }
-            else if (MeDeltaY > -80 && NearestDeltaY < -78 && (MeDeltaX < 97 || MeDeltaX > 104))
-            {
-                distance += 40;
-            }
-            return distance;
-        }
-
-        private bool MoveToCorrectPlaceInTravBuilding(Game game, Point initialLocation, Point targetLocation)
-        {
-            return GeneralHelpers.TryWithTimeout((retryCount) =>
-            {
-                if (!game.IsInGame())
-                {
-                    return false;
-                }
-
-                var MeDeltaY = game.Me.Location.Y - initialLocation.Y;
-                var NearestDeltaY = targetLocation.Y - initialLocation.Y;
-                Point insideBuilding = new Point((ushort)(initialLocation.X + 100), (ushort)(initialLocation.Y - 85));
-                Point outsideBuilding = new Point((ushort)(initialLocation.X + 100), (ushort)(initialLocation.Y - 75));
-                if (MeDeltaY < -78 && NearestDeltaY > -80)
-                {
-                    //Log.Information($"Moving outside building");
-                    game.MoveTo(insideBuilding);
-                    game.MoveTo(outsideBuilding);
-                    return game.Me.Location.Distance(outsideBuilding) < 5;
-                }
-                else if (MeDeltaY > -80 && NearestDeltaY < -78)
-                {
-                    //Log.Information($"Moving inside building");
-                    game.MoveTo(outsideBuilding);
-                    game.MoveTo(insideBuilding);
-                    return game.Me.Location.Distance(insideBuilding) < 5;
-                }
-
-                return true;
-
-            }, TimeSpan.FromSeconds(4));
         }
 
         private List<WorldObject> GetCouncilMembers(Game game)
@@ -509,7 +485,7 @@ namespace ConsoleBot.Configurations.Bots
             }
 
             var townportal = newTownPortals.First();
-            return GeneralHelpers.TryWithTimeout((retryCount) =>
+            if(!GeneralHelpers.TryWithTimeout((retryCount) =>
             {
                 game.MoveTo(townportal);
 
@@ -518,7 +494,13 @@ namespace ConsoleBot.Configurations.Bots
                 {
                     return game.Area == Area.KurastDocks;
                 }, TimeSpan.FromSeconds(1));
-            }, TimeSpan.FromSeconds(3.5));
+            }, TimeSpan.FromSeconds(3.5)))
+            {
+                return false;
+            }
+
+            game.RequestUpdate(game.Me.Id);
+            return true;
         }
 
         private void BarbBo(Game game)
@@ -531,99 +513,52 @@ namespace ConsoleBot.Configurations.Bots
             game.UseHealthPotion();
             Thread.Sleep(300);
         }
-
-        private bool WalkToCouncilMembers(Game game, Point initialLocation)
+        private bool WalkPathOfLocations(Game game, List<Point> points)
         {
-            var travpoints = new List<(short, short)>()
-                    {
-                        (10, 5),
-                        (21, 5),
-                        (19, -15),
-                        (29, -24),
-                        (44, -25),
-                        (61, -25),
-                        (76, -25),
-                        (103, -25),
-                        (103, -37),
-                        (100, -52),
-                        (100, -63),
-                    }.Select(p => new Point((ushort)(initialLocation.X + p.Item1), (ushort)(initialLocation.Y + p.Item2))).ToList();
-            return WalkPathOfLocations(game, travpoints);
-        }
-
-        private bool WalkToAct3WpFromStart(Game game)
-        {
-            var points = new List<Point>()
-                    {
-                        new Point(5131, 5163),
-                        new Point(5133, 5145),
-                        new Point(5133, 5125),
-                        new Point(5132, 5106),
-                        new Point(5133, 5092),
-                    };
-
-            var result = WalkPathOfLocations(game, points);
-            if (!result)
+            if (points.Count == 0)
             {
+                Log.Warning($"Walk path of length 0 found, something went wrong while client at location: {game.Me.Location}");
                 return false;
             }
 
-            var healingPotionsInBelt = game.Belt.NumOfHealthPotions();
-            var manaPotionsInBelt = game.Belt.NumOfManaPotions();
-            if (healingPotionsInBelt < 6
-                || manaPotionsInBelt < 6
-                || game.Inventory.Items.FirstOrDefault(i => i.Name == "Tome of Town Portal")?.Amount < 5
-                || game.Me.Life < 500)
+            var previousBackupPoint = -1;
+
+            for (int i = 0; i < points.Count; ++i)
             {
-                if (!NPCHelpers.SellItemsAndRefreshPotionsAtOrmus(game))
+                var point = points[i];
+                if(game.Me.Location.Distance(point) > 30)
                 {
-                    return false;
+                    var bestDistance = game.Me.Location.Distance(point);
+                    var bestIndex = i;
+                    var j = i - 1;
+                    while (j > 0)
+                    {
+                        var newDistance = game.Me.Location.Distance(points[j]);
+                        if (newDistance < bestDistance)
+                        {
+                            bestDistance = newDistance;
+                            bestIndex = j;
+                        }
+
+                        j--;
+                    }
+                    Log.Debug($"Backing up to point {j} from {i}");
+
+                    if (previousBackupPoint == bestIndex)
+                    {
+                        if (!game.IsInTown() && game.Me.Class == CharacterClass.Barbarian && game.Me.HasSkill(Skill.Whirlwind))
+                        {
+                            Log.Debug($"Seems stuck, whirlwinding to point {point}");
+                            game.UseRightHandSkillOnLocation(Skill.Whirlwind, point);
+                            Thread.Sleep((int)(game.Me.Location.Distance(point) * 80 + 400));
+                        }
+                    }
+
+                    previousBackupPoint = bestIndex;
+                    i = bestIndex;
                 }
-
-                WalkPathOfLocations(game, new List<Point> { new Point(5138, 5096) });
-            }
-
-            var points2 = new List<Point>()
-                    {
-                        new Point(5148, 5090),
-                        new Point(5149, 5087),
-                        new Point(5154, 5072),
-                        new Point(5159, 5059)
-                    };
-            return WalkPathOfLocations(game, points2);
-        }
-
-        private bool WalkPathOfLocations(Game game, List<Point> points)
-        {
-            foreach (var point in points)
-            {
-                var result = GeneralHelpers.TryWithTimeout((retryCount) =>
-                {
-                    if (retryCount > 0)
-                    {
-                        Log.Debug($"Retrying");
-                        game.RequestUpdate(game.Me.Id);
-                    }
-
-                    if (retryCount > 1 && !game.IsInTown() && game.Me.Class == CharacterClass.Barbarian && game.Me.HasSkill(Skill.Whirlwind))
-                    {
-                        Log.Debug($"Seems stuck, whirlwinding to point {point}");
-                        game.UseRightHandSkillOnLocation(Skill.Whirlwind, point);
-                        Thread.Sleep((int)(game.Me.Location.Distance(point) * 80 + 400));
-                    }
-                    else
-                    {
-                        Log.Debug($"Running to point {point}");
-                        game.MoveTo(point);
-                    }
-
-                    return game.Me.Location.Distance(point) < 10;
-                }, TimeSpan.FromSeconds(4));
-
-                if (!result)
-                {
-                    return false;
-                }
+                Log.Debug($"Running to point {point}");
+                game.MoveTo(point);
             }
 
             return true;
@@ -631,158 +566,36 @@ namespace ConsoleBot.Configurations.Bots
 
         private bool MoveToWaypointViaNearestWaypoint(Game game, Waypoint waypoint)
         {
-            WorldObject nearestWaypoint = null;
+            WorldObject townWaypoint = null;
             GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                nearestWaypoint = GetNearestWaypoint(game);
-                return nearestWaypoint != null;
+                townWaypoint = game.GetEntityByCode(game.Act.MapTownWayPoint()).Single();
+                return townWaypoint != null;
             }, TimeSpan.FromSeconds(2));
 
-            if (nearestWaypoint == null)
+            if (townWaypoint == null)
             {
                 Log.Error("No waypoint found");
                 return false;
             }
 
             Log.Debug("Walking to waypoint");
-            return GeneralHelpers.TryWithTimeout((retryCount) =>
+            if(!GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                while (game.Me.Location.Distance(nearestWaypoint.Location) > 5)
+                while (game.Me.Location.Distance(townWaypoint.Location) > 5)
                 {
-                    game.MoveTo(nearestWaypoint);
+                    game.MoveTo(townWaypoint);
                 }
                 Log.Debug("Taking waypoint");
-                game.TakeWaypoint(nearestWaypoint, waypoint);
+                game.TakeWaypoint(townWaypoint, waypoint);
                 return GeneralHelpers.TryWithTimeout((retryCount) => game.Area == waypoint.ToArea(), TimeSpan.FromSeconds(2));
-            }, TimeSpan.FromSeconds(5));
-        }
-        private WorldObject GetNearestWaypoint(Game game)
-        {
-            var waypoints = new List<WorldObject>();
-            foreach (var waypointEntityCode in EntityConstants.WayPointEntityCodes)
+            }, TimeSpan.FromSeconds(5)))
             {
-                waypoints.AddRange(game.GetEntityByCode(waypointEntityCode));
-            }
-
-            return waypoints.SingleOrDefault();
-        }
-
-        private void TransmutePerfectSkulls(Game game)
-        {
-            var flawlessSkulls = game.Stash.Items.Where(i => i.Name == "Flawless Skull").ToList();
-            if (flawlessSkulls.Count < 3)
-            {
-                return;
-            }
-
-            if (game.Cube.Items.Any())
-            {
-                return;
-            }
-
-            var stashes = game.GetEntityByCode(EntityCode.Stash);
-            if (!stashes.Any())
-            {
-                return;
-            }
-
-            var stash = stashes.Single();
-
-
-            bool result = GeneralHelpers.TryWithTimeout((retryCount) =>
-            {
-                if (game.Me.Location.Distance(stash.Location) >= 5)
-                {
-                    game.MoveTo(stash);
-                }
-                else
-                {
-                    return game.OpenStash(stash);
-                }
-
                 return false;
-            }, TimeSpan.FromSeconds(4));
-
-            if (!result)
-            {
-                Log.Error($"Failed to open stash");
-                return;
             }
 
-            foreach (var skull in flawlessSkulls)
-            {
-                if (InventoryHelpers.MoveItemFromStashToInventory(game, skull) != MoveItemResult.Succes)
-                {
-                    break;
-                }
-            }
-
-            Thread.Sleep(300);
-            game.ClickButton(ClickType.CloseStash);
-            Thread.Sleep(100);
-            game.ClickButton(ClickType.CloseStash);
-
-            Log.Information($"Moved skulls to inventory for transmuting");
-
-            var remainingSkulls = flawlessSkulls;
-            while (remainingSkulls.Count() > 2)
-            {
-                Log.Information($"Transmuting 3 flawless skulls to perfect skull");
-                var skullsToTransmute = remainingSkulls.Take(3);
-                remainingSkulls = remainingSkulls.Skip(3).ToList();
-                foreach (var skull in skullsToTransmute)
-                {
-                    var inventoryItem = game.Inventory.FindItemById(skull.Id);
-                    if (inventoryItem == null)
-                    {
-                        Log.Error($"Skull to be transmuted not found in inventory");
-                        return;
-                    }
-                    var freeSpace = game.Cube.FindFreeSpace(inventoryItem);
-                    if (freeSpace != null)
-                    {
-                        InventoryHelpers.PutInventoryItemInCube(game, inventoryItem, freeSpace);
-                    }
-                }
-
-                if (!InventoryHelpers.TransmuteItemsInCube(game))
-                {
-                    Log.Error($"Transmuting items failed");
-                    return;
-                }
-
-                var newCubeItems = game.Cube.Items;
-                foreach (var item in newCubeItems)
-                {
-                    if (InventoryHelpers.PutCubeItemInInventory(game, item) != MoveItemResult.Succes)
-                    {
-                        Log.Error($"Couldn't move transmuted items out of cube");
-                        return;
-                    }
-                }
-            }
-
-            if (!game.OpenStash(stash))
-            {
-                Log.Error($"Opening stash failed");
-                return;
-            }
-
-            var inventoryItemsToKeep = game.Inventory.Items.Where(i => Pickit.Pickit.ShouldKeepItem(i) && Pickit.Pickit.CanTouchInventoryItem(i)).ToList();
-            foreach (Item item in inventoryItemsToKeep)
-            {
-                if (InventoryHelpers.MoveItemToStash(game, item) == MoveItemResult.Failed)
-                {
-                    return;
-                }
-            }
-
-            Thread.Sleep(300);
-            game.ClickButton(ClickType.CloseStash);
-            Thread.Sleep(100);
-            game.ClickButton(ClickType.CloseStash);
-
-            Log.Information($"Transmuting items succeeded");
+            game.RequestUpdate(game.Me.Id);
+            return true;
         }
     }
 }

@@ -14,6 +14,7 @@ using D2NG.Core.D2GS.Players;
 using D2NG.Navigation.Services.Pathing;
 
 using Action = D2NG.Core.D2GS.Items.Action;
+using D2NG.Navigation.Extensions;
 
 namespace ConsoleBot.Configurations.Bots
 {
@@ -61,9 +62,27 @@ namespace ConsoleBot.Configurations.Bots
 
             if (client.Game.Act != Act.Act3)
             {
-                Log.Information("Starting location is not Act 3, not supported for now");
-                return false;
+                var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, MovementMode.Teleport);
+                if (!TeleportViaPath(client, pathToTownWayPoint))
+                {
+                    Log.Information($"Teleporting to {client.Game.Act} waypoint failed");
+                    return false;
+                }
+
+                var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPoint()).Single();
+                Log.Information("Taking waypoint to KurastDocks");
+                if(!GeneralHelpers.TryWithTimeout((_) =>
+                {
+
+                    client.Game.TakeWaypoint(townWaypoint, Waypoint.KurastDocks);
+                    return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == Waypoint.KurastDocks.ToArea(), TimeSpan.FromSeconds(2));
+                }, TimeSpan.FromSeconds(5)))
+                {
+
+                }
             }
+
+            CubeHelpers.TransmutePerfectSkulls(client.Game);
 
             var unidentifiedItemCount = client.Game.Inventory.Items.Count(i => !i.IsIdentified) +
                                         client.Game.Cube.Items.Count(i => !i.IsIdentified);
@@ -71,7 +90,7 @@ namespace ConsoleBot.Configurations.Bots
             {
                 Log.Information($"Visiting Deckard Cain with {unidentifiedItemCount} unidentified items");
 
-                var pathDecardCain = await _pathingService.GetPathToNPC(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, NPCCode.DeckardCainAct3, MovementMode.Teleport);
+                var pathDecardCain = await _pathingService.GetPathToNPC(client.Game, NPCCode.DeckardCainAct3, MovementMode.Teleport);
                 if (!TeleportViaPath(client, pathDecardCain))
                 {
                     Log.Warning($"Teleporting to Deckard Cain failed at {client.Game.Me.Location}");
@@ -80,7 +99,7 @@ namespace ConsoleBot.Configurations.Bots
 
                 NPCHelpers.IdentifyItemsAtDeckardCain(client.Game);
 
-                var pathStash = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, EntityCode.Stash, MovementMode.Teleport);
+                var pathStash = await _pathingService.GetPathToObject(client.Game, EntityCode.Stash, MovementMode.Teleport);
                 if (!TeleportViaPath(client, pathStash))
                 {
                     Log.Warning($"Teleporting failed at location {client.Game.Me.Location}");
@@ -103,7 +122,7 @@ namespace ConsoleBot.Configurations.Bots
             {
                 Log.Information($"Visiting Ormus");
 
-                var pathOrmus = await _pathingService.GetPathToNPC(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, NPCCode.Ormus, MovementMode.Teleport);
+                var pathOrmus = await _pathingService.GetPathToNPC(client.Game, NPCCode.Ormus, MovementMode.Teleport);
                 if (!TeleportViaPath(client, pathOrmus))
                 {
                     Log.Warning($"Teleporting to Ormus failed at {client.Game.Me.Location}");
@@ -121,7 +140,7 @@ namespace ConsoleBot.Configurations.Bots
             if(shouldRepair)
             {
                 Log.Information($"Repairing items at Hratli");
-                var PathHratli = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, EntityCode.Hratli, MovementMode.Teleport);
+                var PathHratli = await _pathingService.GetPathToObject(client.Game, EntityCode.Hratli, MovementMode.Teleport);
                 if (!TeleportViaPath(client, PathHratli))
                 {
                     Log.Warning($"Teleporting to Hratli failed at {client.Game.Me.Location}");
@@ -141,7 +160,7 @@ namespace ConsoleBot.Configurations.Bots
             if (shouldGamble)
             {
                 Log.Information($"Gambling items at Alkor");
-                var pathAlkor = await _pathingService.GetPathToNPC(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, NPCCode.Alkor, MovementMode.Teleport);
+                var pathAlkor = await _pathingService.GetPathToNPC(client.Game, NPCCode.Alkor, MovementMode.Teleport);
                 if (!TeleportViaPath(client, pathAlkor))
                 {
                     Log.Warning($"Teleporting to Alkor failed at {client.Game.Me.Location}");
@@ -158,7 +177,7 @@ namespace ConsoleBot.Configurations.Bots
             }
 
             Log.Information("Teleporting to WayPoint");
-            var path1 = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location, EntityCode.WaypointAct3, MovementMode.Teleport);
+            var path1 = await _pathingService.GetPathToObject(client.Game, EntityCode.WaypointAct3, MovementMode.Teleport);
             if (!TeleportViaPath(client, path1))
             {
                 Log.Warning($"Teleporting failed at location {client.Game.Me.Location}");
@@ -194,7 +213,9 @@ namespace ConsoleBot.Configurations.Bots
                 return false;
             }
 
-            var path3 = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel3, client.Game.Me.Location, new Point(17566, 8070), MovementMode.Teleport);
+            client.Game.RequestUpdate(client.Game.Me.Id);
+
+            var path3 = await _pathingService.GetPathToLocation(client.Game, new Point(17566, 8070), MovementMode.Teleport);
             Log.Information($"Teleporting to Mephisto");
             if (!TeleportViaPath(client, path3))
             {

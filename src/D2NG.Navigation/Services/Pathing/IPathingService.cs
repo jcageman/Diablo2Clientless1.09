@@ -18,6 +18,8 @@ namespace D2NG.Navigation.Services.Pathing
         public Task<List<Point>> GetPathToObject(uint mapId, Difficulty difficulty, Area area, Point fromLocation,
             EntityCode entityCode, MovementMode movementMode);
 
+        public Task<List<Point>> GetPathToObjectWithOffset(uint mapId, Difficulty difficulty, Area area, Point fromLocation, EntityCode entityCode, short xOffset, short yOffset, MovementMode movementMode);
+
         public Task<List<Point>> GetPathToNPC(uint mapId, Difficulty difficulty, Area area, Point fromLocation,
             NPCCode npcCode, MovementMode movementMode);
 
