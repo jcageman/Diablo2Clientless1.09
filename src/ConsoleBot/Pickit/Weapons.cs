@@ -52,7 +52,7 @@ namespace ConsoleBot.Pickit
 
             if (item.Quality == QualityType.Rare
             && interestingExceptionalWeapons.Contains(item.Name)
-            && (additionalDamage > 200 || item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 195))
+            && (additionalDamage > 200 || item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 190))
             {
                 return true;
             }
@@ -61,6 +61,15 @@ namespace ConsoleBot.Pickit
             && desirableBows.Contains(item.Name)
             && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 10
             && additionalDamage > 150)
+            {
+                return true;
+            }
+
+            if (item.Quality == QualityType.Rare
+            && desirableBows.Contains(item.Name)
+            && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 10
+            && item.GetValueOfStatType(StatType.ReducedRequirements) >= 30
+            && additionalDamage > 130)
             {
                 return true;
             }
