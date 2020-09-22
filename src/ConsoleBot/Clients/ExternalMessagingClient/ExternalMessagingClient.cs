@@ -31,7 +31,7 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
                 OnTelegramMessageReceived(client, s, e);
             };
 
-            client.OnReceivedPacketEvent(Sid.CHATEVENT, HandleChatEvent);
+            client.OnReceivedPacketEvent(Sid.CHATEVENT, (packet) => HandleChatEvent(client, packet));
             client.OnReceivedPacketEvent(InComingPacket.ReceiveChat, (packet) => HandleChatMessageEvent(client, packet));
         }
 
@@ -40,15 +40,15 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
             await _telegramBotClient.SendTextMessageAsync(new Telegram.Bot.Types.ChatId(_externalConfiguration.TelegramChatId), message);
         }
 
-        private void HandleChatEvent(BncsPacket obj)
+        private void HandleChatEvent(Client client, BncsPacket obj)
         {
             var packet = new ChatEventPacket(obj.Raw);
-            if (packet.Eid != Eid.SHOWUSER)
+            if (packet.Eid != Eid.SHOWUSER && !packet.Username.Contains(client.LoggedInUserName()))
             {
                 Log.Information(packet.RenderText());
-                if (packet.Eid == Eid.WHISPER)
+                if (packet.Eid == Eid.WHISPER || packet.Eid == Eid.TALK)
                 {
-                    SendMessage(packet.RenderText()).Wait();
+                    SendMessage($"To {client.LoggedInUserName()} :" + packet.RenderText()).Wait();
                 }
             }
         }
@@ -61,7 +61,7 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
                 Log.Information(packet.RenderText());
                 if (packet.CharacterName != client.Game.Me?.Name)
                 {
-                    SendMessage(packet.RenderText()).Wait();
+                    SendMessage($"To {client.LoggedInUserName()} :" + packet.RenderText()).Wait();
                 }
             }
         }
@@ -73,13 +73,21 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
             if (message == null || message.Type != MessageType.Text) return;
 
             Log.Information($"Text received: {message.Text}");
-            if (message.Text.StartsWith("/w") || message.Text.StartsWith("/msg"))
+            if (message.Text.StartsWith(client.LoggedInUserName() + " "))
             {
-                client.Chat.Send(message.Text);
-            }
-            else if (client.Game.IsInGame())
-            {
-                client.Game.SendInGameMessage(message.Text);
+                var modifiedText = message.Text.Substring(client.LoggedInUserName().Length + 1);
+                if (modifiedText.StartsWith("/w") || modifiedText.StartsWith("/msg"))
+                {
+                    client.Chat.Send(modifiedText);
+                }
+                else if (modifiedText.StartsWith("/chat"))
+                {
+                    client.Chat.Send(modifiedText.Substring(5));
+                }
+                else if (client.Game.IsInGame())
+                {
+                    client.Game.SendInGameMessage(modifiedText);
+                }
             }
         }
 

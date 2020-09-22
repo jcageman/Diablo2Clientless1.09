@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using D2NG.Core;
 using D2NG.Core.D2GS;
@@ -44,7 +45,7 @@ namespace ConsoleBot.Helpers
             }
         }
 
-        public static MoveItemResult StashItemsToKeep(Game game)
+        public static MoveItemResult StashItemsToKeep(Game game, IExternalMessagingClient externalMessagingClient)
         {
             var inventoryItemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(i) && Pickit.Pickit.CanTouchInventoryItem(i)).ToList();
             var cubeItemsToKeep = game.Cube.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(i)).ToList();
@@ -94,6 +95,11 @@ namespace ConsoleBot.Helpers
             foreach (Item item in inventoryItemsToKeep)
             {
                 Log.Information($"Want to keep {item.GetFullDescription()}");
+                if(item.Quality == QualityType.Rare)
+                {
+                    externalMessagingClient.SendMessage($"Want to keep {item.GetFullDescription()}");
+                }
+
                 if (game.Stash.FindFreeSpace(item) == null)
                 {
                     game.ClickButton(ClickType.CloseStash);
@@ -110,6 +116,12 @@ namespace ConsoleBot.Helpers
 
             foreach (Item item in cubeItemsToKeep)
             {
+                Log.Information($"Want to keep {item.GetFullDescription()}");
+                if (item.Quality == QualityType.Rare)
+                {
+                    externalMessagingClient.SendMessage($"Want to keep {item.GetFullDescription()}");
+                }
+
                 if (game.Stash.FindFreeSpace(item) == null)
                 {
                     game.ClickButton(ClickType.CloseStash);
@@ -117,8 +129,7 @@ namespace ConsoleBot.Helpers
                     game.ClickButton(ClickType.CloseStash);
                     return MoveItemResult.NoSpace;
                 }
-
-                Log.Information($"Want to keep {item.GetFullDescription()}");
+                
                 if (MoveItemToStash(game, item) != MoveItemResult.Succes)
                 {
                     return MoveItemResult.Failed;
@@ -152,6 +163,7 @@ namespace ConsoleBot.Helpers
                 if (!transmuteResult)
                 {
                     Log.Error($"Transmuting items failed");
+                    game.ClickButton(ClickType.CloseHoradricCube);
                     return false;
                 }
 
@@ -227,7 +239,7 @@ namespace ConsoleBot.Helpers
 
             if (!game.ActivateBufferItem(cube))
             {
-                Log.Error($"Opening cube for {item.Id} - {item.GetFullDescription()} failed");
+                Log.Error($"Opening cube for {item.Id} - {item.GetFullDescription()} failed with cursor {game.CursorItem?.Id}");
                 return MoveItemResult.Failed;
             }
 
@@ -237,6 +249,7 @@ namespace ConsoleBot.Helpers
             if (!resultToBuffer)
             {
                 Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
+                game.ClickButton(ClickType.CloseHoradricCube);
                 return MoveItemResult.Failed;
             }
 
@@ -246,6 +259,7 @@ namespace ConsoleBot.Helpers
             if (!resultMove)
             {
                 Log.Error($"Moving item {item.Id} - {item.Name} to cube failed");
+                game.ClickButton(ClickType.CloseHoradricCube);
                 return MoveItemResult.Failed;
             }
 
@@ -253,36 +267,43 @@ namespace ConsoleBot.Helpers
             return MoveItemResult.Succes;
         }
 
-        public static void PutInventoryItemInCube(Game game, Item item, Point point)
+        public static MoveItemResult PutInventoryItemInCube(Game game, Item item, Point point)
         {
             var cube = game.Inventory.FindItemByName("Horadric Cube");
-            if (cube != null)
+            if (cube == null)
             {
-                if (!game.ActivateBufferItem(cube))
-                {
-                    Log.Error($"Opening cube for {item.Id} - {item.GetFullDescription()} failed");
-                    return;
-                }
-
-                game.RemoveItemFromContainer(item);
-
-                bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
-                if (!resultToBuffer)
-                {
-                    Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
-                    return;
-                }
-
-                game.InsertItemIntoContainer(item, point, ItemContainer.Cube);
-
-                bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
-                if (!resultMove)
-                {
-                    Log.Error($"Moving item {item.Id} - {item.Name} to cube failed");
-                }
-
-                game.ClickButton(ClickType.CloseHoradricCube);
+                Log.Error($"Cube not found");
+                return MoveItemResult.Failed;
             }
+
+            if (!game.ActivateBufferItem(cube))
+            {
+                Log.Error($"Opening cube for {item.Id} - {item.GetFullDescription()} failed with cursor {game.CursorItem?.Id}");
+                return MoveItemResult.Failed;
+            }
+
+            game.RemoveItemFromContainer(item);
+
+            bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
+            if (!resultToBuffer)
+            {
+                Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
+                game.ClickButton(ClickType.CloseHoradricCube);
+                return MoveItemResult.Failed;
+            }
+
+            game.InsertItemIntoContainer(item, point, ItemContainer.Cube);
+
+            bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
+            if (!resultMove)
+            {
+                Log.Error($"Moving item {item.Id} - {item.Name} to cube failed");
+                game.ClickButton(ClickType.CloseHoradricCube);
+                return MoveItemResult.Failed;
+            }
+
+            game.ClickButton(ClickType.CloseHoradricCube);
+            return MoveItemResult.Succes;
         }
 
         public static void MoveInventoryItemsToCube(Game game)

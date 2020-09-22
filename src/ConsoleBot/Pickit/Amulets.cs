@@ -27,7 +27,7 @@ namespace ConsoleBot.Pickit
             }
 
             if ((item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit)) >= 4
-                && item.GetValueOfStatType(StatType.ExtraGold) >= 30
+                && item.GetValueOfStatType(StatType.ExtraGold) >= 80
                 && item.GetTotalResist() >= 40)
             {
                 return true;
@@ -41,13 +41,13 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 4
-                && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.MinimumDamage) * 2 >= 60)
+                && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.MinimumDamage) * 2 >= 80)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.MinimumDamage) >= 5
-                && item.GetTotalLifeFromStats() >= 40
+                && item.GetTotalLifeFromStats() >= 80
                 && item.GetTotalResist() >= 70)
             {
                 return true;

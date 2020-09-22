@@ -149,6 +149,7 @@ namespace ConsoleBot.Pickit
                 case ClassificationType.Mace:
                 case ClassificationType.Polearm:
                 case ClassificationType.Axe:
+                case ClassificationType.Hammer:
                     return Weapons.ShouldKeepItem(item);
                 case ClassificationType.Scepter:
                 case ClassificationType.Staff:
@@ -170,7 +171,6 @@ namespace ConsoleBot.Pickit
                 case ClassificationType.Key:
                 case ClassificationType.LargeCharm:
                 case ClassificationType.ManaPotion:
-                case ClassificationType.Hammer:
                 case ClassificationType.Rune:
                 case ClassificationType.HealthPotion:
                 case ClassificationType.GrandCharm:

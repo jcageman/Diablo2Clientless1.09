@@ -37,7 +37,7 @@ namespace ConsoleBot.Pickit
 
             if (desirableHelms.Contains(item.Name))
             {
-                if (item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() >= 30)
+                if (item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) / 2 >= 30)
                 {
                     return true;
                 }
@@ -47,28 +47,33 @@ namespace ConsoleBot.Pickit
                     return true;
                 }
 
-                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 40 && item.GetTotalLifeFromStats() >= 30)
+                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 40 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) / 2 >= 30)
                 {
                     return true;
                 }
 
-                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() >= 20)
+                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) / 2 >= 20)
                 {
                     return true;
                 }
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() >= 30)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) / 2 >= 30)
             {
                 return true;
             }
 
-            if (item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() >= 40)
+            if (item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) / 2 >= 40)
             {
                 return true;
             }
 
-            if (item.Quality == QualityType.Unique && item.Name == "Skull Cap" && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= 48)
+            if (item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) / 2 >= 50)
+            {
+                return true;
+            }
+
+            if (item.Quality == QualityType.Unique && item.Name == "Skull Cap" && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) == 50)
             {
                 return true;
             }

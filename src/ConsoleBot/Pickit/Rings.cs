@@ -11,8 +11,7 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItem(Item item)
         {
-            if (item.Quality == QualityType.Magical
-            && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) > 35)
+            if (item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) > 37)
             {
                 return true;
             }
@@ -69,7 +68,7 @@ namespace ConsoleBot.Pickit
             // BVB ring
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
                 && item.GetValueOfStatType(StatType.AttackRating) >= 40
-                && item.GetTotalLifeFromStats() >= 50)
+                && item.GetTotalLifeFromStats() >= 70)
             {
                 return true;
             }
@@ -80,14 +79,14 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 4 && item.GetTotalResist() >= 70)
+            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4 && item.GetTotalResist() >= 70)
             {
                 return true;
             }
 
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumDamage) >= 5
-                && item.GetTotalLifeFromStats() >= 40
-                && item.GetTotalResist() >= 20)
+                && item.GetTotalLifeFromStats() >= 70
+                && item.GetTotalResist() >= 40)
             {
                 return true;
             }

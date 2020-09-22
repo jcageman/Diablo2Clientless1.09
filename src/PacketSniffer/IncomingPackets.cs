@@ -193,7 +193,7 @@ namespace PacketSniffer
                 case InComingPacket.WorldItemAction:
                 case InComingPacket.OwnedItemAction:
                     var parseItemPacket = new ParseItemPacket(eventArgs);
-                    Log.Information($"{incomingPacketType} -> Id: {parseItemPacket.Item.Id} Action: {parseItemPacket.Item.Action} Container: {parseItemPacket.Item.Container} Quality: {parseItemPacket.Item.Quality} Name: {parseItemPacket.Item.Name} Type: {parseItemPacket.Item.Type} Location: {parseItemPacket.Item.Location} ShouldKeep: {Pickit.ShouldKeepItem(parseItemPacket.Item)}");
+                    Log.Information($"{incomingPacketType} -> Id: {parseItemPacket.Item.Id} ({parseItemPacket.Item.Level}) Action: {parseItemPacket.Item.Action} Container: {parseItemPacket.Item.Container} Quality: {parseItemPacket.Item.Quality} Name: {parseItemPacket.Item.Name} Type: {parseItemPacket.Item.Type} Location: {parseItemPacket.Item.Location} ShouldKeep: {Pickit.ShouldKeepItem(parseItemPacket.Item)}");
                     break;
                 case InComingPacket.ReceiveChat:
                     var chatPacket = new ChatPacket(eventArgs);

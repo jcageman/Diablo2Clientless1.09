@@ -1,5 +1,7 @@
 ﻿using D2NG.Core;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 
 namespace ConsoleBot
 {
@@ -22,12 +24,12 @@ namespace ConsoleBot
 
         public string GamePassword { get; set; }
 
-        public string GameDescription { get; set; }
+        [Required]
+        public List<string> GameDescriptions { get; set; }
 
         [Required]
         public Difficulty Difficulty { get; set; }
 
-        [Required]
         public string ChannelToJoin { get; set; }
 
         [Required]

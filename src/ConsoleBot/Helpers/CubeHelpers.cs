@@ -4,6 +4,7 @@ using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Objects;
 using Serilog;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
@@ -60,11 +61,12 @@ namespace ConsoleBot.Helpers
                 return;
             }
 
+            var skullsInInventory = new List<uint>();
             foreach (var skull in flawlessSkulls)
             {
-                if (InventoryHelpers.MoveItemFromStashToInventory(game, skull) != MoveItemResult.Succes)
+                if (InventoryHelpers.MoveItemFromStashToInventory(game, skull) == MoveItemResult.Succes)
                 {
-                    break;
+                    skullsInInventory.Add(skull.Id);
                 }
             }
 
@@ -75,25 +77,39 @@ namespace ConsoleBot.Helpers
 
             Log.Information($"Moved skulls to inventory for transmuting");
 
-            var remainingSkulls = flawlessSkulls;
+            var remainingSkulls = skullsInInventory;
             while (remainingSkulls.Count() > 2)
             {
                 Log.Information($"Transmuting 3 flawless skulls to perfect skull");
                 var skullsToTransmute = remainingSkulls.Take(3);
                 remainingSkulls = remainingSkulls.Skip(3).ToList();
+                bool moveSucceeded = true;
                 foreach (var skull in skullsToTransmute)
                 {
-                    var inventoryItem = game.Inventory.FindItemById(skull.Id);
+                    var inventoryItem = game.Inventory.FindItemById(skull);
                     if (inventoryItem == null)
                     {
-                        Log.Error($"Skull to be transmuted not found in inventory");
-                        return;
+                        Log.Warning($"Skull to be transmuted not found in inventory");
+                        break;
                     }
                     var freeSpace = game.Cube.FindFreeSpace(inventoryItem);
-                    if (freeSpace != null)
+                    if (freeSpace == null)
                     {
-                        InventoryHelpers.PutInventoryItemInCube(game, inventoryItem, freeSpace);
+                        moveSucceeded = false;
+                        break;
                     }
+
+                    if (InventoryHelpers.PutInventoryItemInCube(game, inventoryItem, freeSpace) != MoveItemResult.Succes)
+                    {
+                        moveSucceeded = false;
+                        break;
+                    }
+                }
+
+                if (!moveSucceeded)
+                {
+                    Log.Error($"Transmuting items failed due not all items being moved to cube");
+                    return;
                 }
 
                 if (!InventoryHelpers.TransmuteItemsInCube(game))

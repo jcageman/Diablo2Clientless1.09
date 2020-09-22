@@ -54,8 +54,8 @@ namespace ConsoleBot.Configurations.Bots
                 throw new NotSupportedException("Only barbarian is supported on travincal");
             }
 
-            InventoryHelpers.MoveInventoryItemsToCube(client.Game);
             client.Game.CleanupCursorItem();
+            InventoryHelpers.MoveInventoryItemsToCube(client.Game);
             CleanupPotionsInBelt(client.Game);
 
             /*
@@ -188,7 +188,7 @@ namespace ConsoleBot.Configurations.Bots
             }
 
             Log.Information("Stashing items to keep");
-            var stashResult = InventoryHelpers.StashItemsToKeep(client.Game);
+            var stashResult = InventoryHelpers.StashItemsToKeep(client.Game, _externalMessagingClient);
             if (stashResult != MoveItemResult.Succes)
             {
                 if (stashResult == MoveItemResult.NoSpace && !FullInventoryReported)
@@ -198,7 +198,7 @@ namespace ConsoleBot.Configurations.Bots
                 }
 
                 Log.Information("Stashing items failed");
-                return false;
+                
             }
 
             Log.Information("Walking to ormus");

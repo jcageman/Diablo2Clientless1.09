@@ -28,7 +28,7 @@ namespace ConsoleBot.Configurations
                 case "mephisto":
                     return new MephistoBot(_config, _externalMessagingClient, _pathingService);
                 case "test":
-                    return new TestBot(_config, _pathingService);
+                    return new TestBot(_config, _externalMessagingClient, _pathingService);
                 default:
                     throw new NotSupportedException($"{nameof(_config.BotType)} contains not supported type {botType}, it should be one of the following: travincal, mephisto or test");
             }

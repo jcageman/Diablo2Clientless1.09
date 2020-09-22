@@ -5,6 +5,7 @@ using D2NG.Core.MCP.Exceptions;
 using Serilog;
 using System;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -34,13 +35,14 @@ namespace ConsoleBot.Configurations
 
                 int totalCount = 0;
                 int gameCount = 0;
-                int failureCount = 0;
+                int successiveFailures = 0;
+                int gameDescriptionIndex = 0;
                 while (true)
                 {
-                    if((((double)failureCount / totalCount) > 0.25 && totalCount > 15))
+                    if(successiveFailures > 10 && totalCount > 15)
                     {
-                        Log.Error("Stopping bot due too high failure count");
-                        await _externalMessagingClient.SendMessage($"bot stopping due to high failure count {failureCount} vs {totalCount}");
+                        Log.Error($"bot stopping due to high successive failures: {successiveFailures} with run total {totalCount}");
+                        await _externalMessagingClient.SendMessage($"bot stopping due to high successive failures: {successiveFailures} with run total {totalCount}");
                         break;
                     }
 
@@ -53,9 +55,16 @@ namespace ConsoleBot.Configurations
                     {
                         gameCount++;
                         totalCount++;
-                        if (client.CreateGame(_config.Difficulty, $"{_config.GameNamePrefix}{gameCount}", _config.GamePassword, _config.GameDescription))
+                        if (client.CreateGame(_config.Difficulty, $"{_config.GameNamePrefix}{gameCount}", _config.GamePassword, _config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)))
                         {
-                            failureCount += (await RunSingleGame(client)) ? 0 : 1;
+                            if(!await RunSingleGame(client))
+                            {
+                                successiveFailures += 1;
+                            }
+                            else
+                            {
+                                successiveFailures = 0;
+                            }
                         }
 
                         if (client.Game.IsInGame())
@@ -68,24 +77,43 @@ namespace ConsoleBot.Configurations
                             throw new Exception("Rejoining MCP failed");
                         }
                     }
-                    catch
+                    catch (Exception e)
                     {
-                        failureCount += 1;
-                        Log.Warning("Disconnecting client, reconnecting to realm");
+                        gameDescriptionIndex++;
+                        if(gameDescriptionIndex == _config.GameDescriptions?.Count)
+                        {
+                            gameDescriptionIndex = 0;
+                        }
+
+                        successiveFailures += 1;
+                        Log.Warning($"Disconnecting client due to exception {e}, reconnecting to realm, game description is now: {_config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)}");
                         client.Disconnect();
                         var connectCount = 0;
-                        while (connectCount < 10 && !ConnectToRealm(client))
+                        while (connectCount < 10)
                         {
+                            try
+                            {
+                                if (ConnectToRealm(client))
+                                {
+                                    break;
+                                }
+                            }
+                            catch
+                            {
+                            }
+                            
                             connectCount++;
-                            Log.Warning($"Connecting to realm failed, doing re-attempt {connectCount} out of 10 in 30 seconds");
+                            Log.Warning($"Connecting to realm failed, doing re-attempt {connectCount} out of 10");
                             Thread.Sleep(10000);
-                        };
+                        }
 
                         if (connectCount == 10)
                         {
                             throw new System.Exception("Reconnect tries of 10 reached, aborting");
                         }
-                        Thread.Sleep(3000);
+
+                        Log.Warning($"Sleeping for {5*successiveFailures} seconds");
+                        Thread.Sleep(5000 * successiveFailures);
                     }
                 }
 
@@ -118,7 +146,11 @@ namespace ConsoleBot.Configurations
             }
             client.SelectCharacter(selectedCharacter);
             client.Chat.EnterChat();
-            client.Chat.JoinChannel(_config.ChannelToJoin);
+            if(!string.IsNullOrEmpty(_config.ChannelToJoin))
+            {
+                client.Chat.JoinChannel(_config.ChannelToJoin);
+            }
+            
             return true;
         }
     }

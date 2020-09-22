@@ -25,6 +25,20 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.Name == "War Gauntlets"
+                && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
+                && item.GetTotalLifeFromStats() >= 80)
+            {
+                return true;
+            }
+
+            if (item.Name == "War Gauntlets"
+                && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) > 0
+                && item.GetTotalLifeFromStats() >= 100)
+            {
+                return true;
+            }
+
+            if (item.Name == "War Gauntlets"
             && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70
             && item.GetTotalLifeFromStats() >= 20
             && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) > 0)
@@ -46,6 +60,14 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
+
+            /*
+            // Magefists
+            if (item.Quality == QualityType.Unique && item.Name == "Light Gauntlets")
+            {
+                return true;
+            }
+            */
 
             return false;
         }

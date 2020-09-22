@@ -21,6 +21,7 @@ namespace D2NG.Core
         public Game Game { get; }
 
         private Character _character;
+        private string _userName;
         private string _mcpRealm;
 
         public Client()
@@ -60,6 +61,7 @@ namespace D2NG.Core
         {
             Bncs.Login(username, password);
             Log.Information($"Logged in as {username}");
+            _userName = username;
             RealmLogon();
             return Mcp.ListCharacters();
         }
@@ -162,5 +164,10 @@ namespace D2NG.Core
         }
 
         public void Disconnect() => Bncs.Disconnect();
+
+        public string LoggedInUserName()
+        {
+            return _userName;
+        }
     }
 }

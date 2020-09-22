@@ -82,8 +82,6 @@ namespace ConsoleBot.Configurations.Bots
                 }
             }
 
-            CubeHelpers.TransmutePerfectSkulls(client.Game);
-
             var unidentifiedItemCount = client.Game.Inventory.Items.Count(i => !i.IsIdentified) +
                                         client.Game.Cube.Items.Count(i => !i.IsIdentified);
             if (unidentifiedItemCount > 6)
@@ -105,7 +103,7 @@ namespace ConsoleBot.Configurations.Bots
                     Log.Warning($"Teleporting failed at location {client.Game.Me.Location}");
                 }
 
-                var stashItemsResult = InventoryHelpers.StashItemsToKeep(client.Game);
+                var stashItemsResult = InventoryHelpers.StashItemsToKeep(client.Game, _externalMessagingClient);
                 if (stashItemsResult != Enums.MoveItemResult.Succes)
                 {
                     Log.Warning($"Stashing items failed with result {stashItemsResult}");
@@ -134,6 +132,17 @@ namespace ConsoleBot.Configurations.Bots
                     Log.Warning($"Refreshing potions at Ormus failed at {client.Game.Me.Location}");
                     return false;
                 }
+            }
+
+            if (client.Game.Act == Act.Act3 && client.Game.Stash.Items.Count(i => i.Name == "Flawless Skull") >= 3)
+            {
+                var pathStash = await _pathingService.GetPathToObject(client.Game, EntityCode.Stash, MovementMode.Teleport);
+                if (!TeleportViaPath(client, pathStash))
+                {
+                    Log.Warning($"Walking failed at location {client.Game.Me.Location}");
+                    return false;
+                }
+                CubeHelpers.TransmutePerfectSkulls(client.Game);
             }
 
             bool shouldRepair = client.Game.Items.Any(i => i.Action == Action.Equip && i.MaximumDurability > 0 && ((double)i.Durability / i.MaximumDurability) < 0.2);
@@ -181,6 +190,7 @@ namespace ConsoleBot.Configurations.Bots
             if (!TeleportViaPath(client, path1))
             {
                 Log.Warning($"Teleporting failed at location {client.Game.Me.Location}");
+                return false;
             }
 
             var waypoint = client.Game.GetEntityByCode(EntityCode.WaypointAct3).Single();
@@ -196,6 +206,7 @@ namespace ConsoleBot.Configurations.Bots
             if (!TeleportViaPath(client, path2))
             {
                 Log.Warning($"Teleporting to DuranceOfHateLevel3 warp failed at location {client.Game.Me.Location}");
+                return false;
             }
 
             var warp = client.Game.GetNearestWarp();
@@ -220,6 +231,7 @@ namespace ConsoleBot.Configurations.Bots
             if (!TeleportViaPath(client, path3))
             {
                 Log.Warning($"Teleporting to Mephisto failed at location {client.Game.Me.Location}");
+                return false;
             }
 
             if (!GeneralHelpers.TryWithTimeout((_) => client.Game.GetNPCsByCode(NPCCode.Mephisto).Count > 0, TimeSpan.FromSeconds(2)))
