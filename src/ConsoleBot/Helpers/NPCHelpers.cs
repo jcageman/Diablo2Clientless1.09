@@ -1,11 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using D2NG.Core;
+﻿using D2NG.Core;
+using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
+using System.Threading;
 
 namespace ConsoleBot.Helpers
 {
@@ -16,7 +18,7 @@ namespace ConsoleBot.Helpers
             return game.GetNPCsByCode(npcCode).Single();
         }
 
-        public static void RepairItems(Game game, WorldObject npc)
+        public static bool RepairItemsAndBuyArrows(Game game, WorldObject npc)
         {
             Log.Information($"Repairing items");
             GeneralHelpers.TryWithTimeout((retryCount) =>
@@ -44,9 +46,32 @@ namespace ConsoleBot.Helpers
 
             game.RepairItems(npc);
 
+            if (game.Me.Class == CharacterClass.Amazon)
+            {
+                if(!GeneralHelpers.TryWithTimeout((retryCount) =>
+                {
+                    return game.Items.Any(i => i.Container == ContainerType.MiscTab && i.Name == ItemName.Arrows);
+                }, TimeSpan.FromSeconds(3)))
+                {
+                    Log.Warning($"Did not find arrows at {npc.NPCCode} {game.Me.Location}");
+                    game.TerminateEntityChat(npc);
+                    return false;
+                }
+
+                Log.Information($"Refreshing arrows at {npc.NPCCode} {game.Me.Location}");
+                var arrows = game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Name == ItemName.Arrows);
+                var numberOfArrows = game.Inventory.Items.Count(i => i.Name == ItemName.Arrows);
+                while (numberOfArrows < 7 && game.Inventory.FindFreeSpace(arrows) != null)
+                {
+                    game.BuyItem(npc, arrows, false);
+                    numberOfArrows += 1;
+                }
+            }
+
             Thread.Sleep(50);
             game.TerminateEntityChat(npc);
             Thread.Sleep(50);
+            return true;
         }
 
         public static bool GambleItems(Game game, WorldObject npc)
@@ -125,7 +150,7 @@ namespace ConsoleBot.Helpers
                 Thread.Sleep(10);
                 Log.Debug("Trying to find gamble items and sell previous onces");
 
-                var inventoryItemsToSell = game.Inventory.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(i)).ToList();
+                var inventoryItemsToSell = game.Inventory.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
                 foreach (Item item in inventoryItemsToSell)
                 {
                     if (item.Quality == QualityType.Rare)
@@ -195,6 +220,25 @@ namespace ConsoleBot.Helpers
             return true;
         }
 
+        public static NPCCode GetDeckardCainForAct(D2NG.Core.D2GS.Act.Act act)
+        {
+            switch (act)
+            {
+                case D2NG.Core.D2GS.Act.Act.Act1:
+                    return NPCCode.DeckardCainAct1;
+                case D2NG.Core.D2GS.Act.Act.Act2:
+                    return NPCCode.DeckardCainAct2;
+                case D2NG.Core.D2GS.Act.Act.Act3:
+                    return NPCCode.DeckardCainAct3;
+                case D2NG.Core.D2GS.Act.Act.Act4:
+                    return NPCCode.DeckardCainAct4;
+                case D2NG.Core.D2GS.Act.Act.Act5:
+                    return NPCCode.DeckardCainAct5;
+            }
+
+            throw new InvalidEnumArgumentException(nameof(act));
+        }
+
         public static bool IdentifyItemsAtDeckardCain(Game game)
         {
             if (game.Inventory.Items.All(i => i.IsIdentified) && game.Cube.Items.All(i => i.IsIdentified))
@@ -202,13 +246,15 @@ namespace ConsoleBot.Helpers
                 return true;
             }
 
-            var result1 = GeneralHelpers.TryWithTimeout((retryCount) => game.GetNPCsByCode(NPCCode.DeckardCainAct3).Any(), TimeSpan.FromSeconds(2));
+            var deckhardCainCode = GetDeckardCainForAct(game.Act);
+
+            var result1 = GeneralHelpers.TryWithTimeout((retryCount) => game.GetNPCsByCode(deckhardCainCode).Any(), TimeSpan.FromSeconds(2));
             if (!result1)
             {
                 return false;
             }
 
-            var deckardCain = NPCHelpers.GetUniqueNPC(game, NPCCode.DeckardCainAct3);
+            var deckardCain = NPCHelpers.GetUniqueNPC(game, deckhardCainCode);
             if (deckardCain == null)
             {
                 return false;
@@ -253,40 +299,51 @@ namespace ConsoleBot.Helpers
             return true;
         }
 
-        public static bool SellItemsAndRefreshPotionsAtOrmus(Game game)
+        public static bool ShouldRefreshCharacterAtNPC(Game game)
         {
-            var ormus = NPCHelpers.GetUniqueNPC(game, NPCCode.Ormus);
-            if (ormus == null)
-            {
-                Log.Warning($"Did not find Ormus at {game.Me.Location}");
-                return false;
-            }
+            var healingPotionsInBelt = game.Belt.NumOfHealthPotions();
+            var manaPotionsInBelt = game.Belt.NumOfManaPotions();
+            return healingPotionsInBelt < game.Belt.Height * 2
+                || manaPotionsInBelt < game.Belt.Height * 2
+                || game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeOfTownPortal)?.Amount < 5
+                || (game.Me.Life / (double)game.Me.MaxLife) < 0.7
+                || game.Me.Life < 300;
+        }
 
+        public static bool ShouldGoToRepairNPC(Game game)
+        {
+            bool shouldRepair = game.Items.Any(i => i.Action == D2NG.Core.D2GS.Items.Action.Equip && i.MaximumDurability > 0 && ((double)i.Durability / i.MaximumDurability) < 0.2);
+            bool shouldBuyArrows = game.Me.Class == CharacterClass.Amazon && game.Inventory.Items.Count(i => i.Name == ItemName.Arrows) <= 4;
+            return shouldRepair || shouldBuyArrows;
+        }
+
+        public static bool SellItemsAndRefreshPotionsAtNPC(Game game, WorldObject npc, Dictionary<ItemName, int> additionalBuys = null)
+        {
             GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                if (game.Me.Location.Distance(ormus.Location) >= 2)
+                if (game.Me.Location.Distance(npc.Location) >= 2)
                 {
                     if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
                     {
-                        game.TeleportToLocation(ormus.Location);
+                        game.TeleportToLocation(npc.Location);
                     }
                     else
                     {
-                        game.MoveTo(ormus);
+                        game.MoveTo(npc);
                     }
                 }
 
-                if (game.Me.Location.Distance(ormus.Location) < 5)
+                if (game.Me.Location.Distance(npc.Location) < 5)
                 {
-                    return game.InteractWithNPC(ormus);
+                    return game.InteractWithNPC(npc);
                 }
                 return false;
             }, TimeSpan.FromSeconds(3));
 
             Thread.Sleep(50);
-            game.InitiateEntityChat(ormus);
+            game.InitiateEntityChat(npc);
 
-            game.TownFolkAction(ormus, TownFolkActionType.Trade);
+            game.TownFolkAction(npc, TownFolkActionType.Trade);
             Item healingPotion = null;
             Item manaPotion = null;
 
@@ -299,52 +356,64 @@ namespace ConsoleBot.Helpers
                 return healingPotion != null && manaPotion != null;
             }, TimeSpan.FromSeconds(3)))
             {
-                Log.Warning($"Did not find healing or mana potions at Ormus {game.Me.Location}");
-                game.TerminateEntityChat(ormus);
+                Log.Warning($"Did not find healing or mana potions at {npc.NPCCode} {game.Me.Location}");
+                game.TerminateEntityChat(npc);
                 return false;
             }
 
-            var inventoryItemsToSell = game.Inventory.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(i) && Pickit.Pickit.CanTouchInventoryItem(i)).ToList();
-            var cubeItemsToSell = game.Cube.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(i)).ToList();
+            var inventoryItemsToSell = game.Inventory.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
+            var cubeItemsToSell = game.Cube.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
             Log.Information($"Selling {inventoryItemsToSell.Count} inventory items and {cubeItemsToSell.Count} cube items");
 
             foreach (Item item in inventoryItemsToSell)
             {
                 Log.Information($"Selling inventory item {item.GetFullDescription()}");
-                game.SellItem(ormus, item);
+                game.SellItem(npc, item);
             }
 
             foreach (Item item in cubeItemsToSell)
             {
                 Log.Information($"Selling cube item {item.GetFullDescription()}");
-                game.SellItem(ormus, item);
+                game.SellItem(npc, item);
             }
 
-            var tomeOfTownPortal = game.Inventory.Items.FirstOrDefault(i => i.Name == "Tome of Town Portal");
-            var scrollOfTownPortal = game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Name == "Scroll of Town Portal");
+            var tomeOfTownPortal = game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeOfTownPortal);
+            var scrollOfTownPortal = game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Name == ItemName.ScrollofTownPortal);
             if (tomeOfTownPortal != null && scrollOfTownPortal != null && tomeOfTownPortal.Amount < 100)
             {
-                game.BuyItem(ormus, scrollOfTownPortal, true);
+                game.BuyItem(npc, scrollOfTownPortal, true);
             }
 
             var numberOfHealthPotions = game.Belt.NumOfHealthPotions();
-            while (numberOfHealthPotions < 6)
+            while (numberOfHealthPotions < game.Belt.Height * 2)
             {
-                game.BuyItem(ormus, healingPotion, false);
+                game.BuyItem(npc, healingPotion, false);
                 numberOfHealthPotions += 1;
             }
 
             var numberOfManaPotions = game.Belt.NumOfManaPotions();
-            while (numberOfManaPotions < 6)
+            while (numberOfManaPotions < game.Belt.Height * 2)
             {
-                game.BuyItem(ormus, manaPotion, false);
+                game.BuyItem(npc, manaPotion, false);
                 numberOfManaPotions += 1;
             }
 
+            if(additionalBuys != null)
+            {
+                foreach(var additionalBuy in additionalBuys)
+                {
+                    var additionalItem = game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Name == additionalBuy.Key);
+                    for (var i = 0; i < additionalBuy.Value; ++i)
+                    {
+                        game.BuyItem(npc, additionalItem, false);
+                    }
+                }
+            }
+
             Thread.Sleep(50);
-            game.TerminateEntityChat(ormus);
+            game.TerminateEntityChat(npc);
             Thread.Sleep(50);
-            game.TerminateEntityChat(ormus);
+            game.TerminateEntityChat(npc);
             return true;
         }
     }

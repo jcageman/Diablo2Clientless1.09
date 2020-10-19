@@ -6,11 +6,11 @@ namespace ConsoleBot.Pickit
 {
     public static class Weapons
     {
-        private static readonly HashSet<string> desirableExceptionalWeapons = new HashSet<string> { "Martel de Fer", "Battle Hammer", "Ancient Axe", "Lance", "Executioner Sword", "Naga" };
+        private static readonly HashSet<ItemName> desirableExceptionalWeapons = new HashSet<ItemName> { ItemName.MarteldeFer, ItemName.BattleHammer, ItemName.AncientAxe, ItemName.Lance, ItemName.ExecutionerSword, ItemName.Naga };
 
-        private static readonly HashSet<string> interestingExceptionalWeapons = new HashSet<string> { "Tabar", "Gothic Sword", "Bec-de-Corbin", "Grim Scythe" };
+        private static readonly HashSet<ItemName> interestingExceptionalWeapons = new HashSet<ItemName> { ItemName.Tabar, ItemName.GothicSword, ItemName.BecDeCorbin, ItemName.GrimScythe, ItemName.Zweihander };
 
-        private static readonly HashSet<string> desirableBows = new HashSet<string> { "Double Bow", "Rune Bow", "Gothic Bow" };
+        private static readonly HashSet<ItemName> desirableBows = new HashSet<ItemName> { ItemName.DoubleBow, ItemName.RuneBow };
 
         public static bool ShouldPickupItem(Item item)
         {
@@ -19,7 +19,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if(item.Quality == QualityType.Unique && item.Name == "Blade")
+            if(item.Quality == QualityType.Unique && item.Name == ItemName.Blade)
             {
                 return true;
             }
@@ -58,7 +58,7 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.Quality == QualityType.Rare
-            && desirableBows.Contains(item.Name)
+            && item.Name == ItemName.GothicBow
             && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 10
             && additionalDamage > 150)
             {
@@ -67,23 +67,22 @@ namespace ConsoleBot.Pickit
 
             if (item.Quality == QualityType.Rare
             && desirableBows.Contains(item.Name)
-            && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 10
-            && item.GetValueOfStatType(StatType.ReducedRequirements) >= 30
-            && additionalDamage > 130)
+            && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
+            && additionalDamage > 150)
             {
                 return true;
             }
 
             if (item.Quality == QualityType.Rare
-            && (item.Name == "Large Siege Bow" || item.Name == "Razor Bow")
-            && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 10
+            && (item.Name == ItemName.LargeSiegeBow || item.Name == ItemName.RazorBow)
+            && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
             && additionalDamage > 180)
             {
                 return true;
             }
 
             if (item.Quality == QualityType.Rare
-            && item.Name == "Flail"
+            && item.Name == ItemName.Flail
             && item.GetValueOfStatType(StatType.PaladinSkills) >= 2
             && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 40)
             {

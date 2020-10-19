@@ -1,4 +1,5 @@
 ﻿using D2NG.Core.D2GS.Items;
+using D2NG.Core.D2GS.Objects;
 using System;
 
 namespace D2NG.Core.D2GS.Packet.Outgoing

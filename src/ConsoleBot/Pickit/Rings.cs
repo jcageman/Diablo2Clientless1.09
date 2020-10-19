@@ -1,4 +1,5 @@
 ﻿using D2NG.Core.D2GS.Items;
+using System;
 
 namespace ConsoleBot.Pickit
 {
@@ -22,50 +23,22 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            // Faster cast rings
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResist() >= 55)
             {
                 return true;
             }
 
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResist() >= 20 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) >= 60)
+            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResist() >= 30 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) >= 60)
             {
                 return true;
             }
 
-            if (item.Quality == QualityType.Rare && item.GetTotalLifeFromStats() >= 60 && item.GetTotalResist() >= 50)
-            {
-                return true;
-            }
+            var totalMinDamage = Math.Max(item.GetValueOfStatType(StatType.MinimumDamage), item.GetValueOfStatType(StatType.SecondaryMinimumDamage));
+            var totalMaxDamage = Math.Max(item.GetValueOfStatType(StatType.MaximumDamage), item.GetValueOfStatType(StatType.SecondaryMaximumDamage));
+            var totalAddedDamage = totalMinDamage + totalMaxDamage;
 
-            if (item.Quality == QualityType.Rare
-                && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 1
-                && item.GetTotalLifeFromStats() >= 80)
-            {
-                return true;
-            }
-
-            if (item.Quality == QualityType.Rare
-                && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 1
-                && item.GetTotalLifeFromStats() >= 60
-                && item.GetTotalResist() >= 50)
-            {
-                return true;
-            }
-
-            if (item.Quality == QualityType.Rare
-                && item.GetTotalLifeFromStats() >= 30
-                && item.GetTotalResist() >= 70)
-            {
-                return true;
-            }
-
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 4 && item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
-                && (item.GetTotalLifeFromStats() >= 30 || item.GetTotalResist() >= 30))
-            {
-                return true;
-            }
-
-            // BVB ring
+            // BVB ring's
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
                 && item.GetValueOfStatType(StatType.AttackRating) >= 40
                 && item.GetTotalLifeFromStats() >= 70)
@@ -73,44 +46,55 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
+                && totalAddedDamage >= 5
+                && item.GetTotalLifeFromStats() >= 70)
+            {
+                return true;
+            }
+
+            // Leech ring's
+            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
+            && totalAddedDamage >= 5
+            && item.GetTotalLifeFromStats() >= 70)
+            {
+                return true;
+            }
+
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 4 && item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
-                && item.GetTotalLifeFromStats() >= 20 && item.GetTotalResist() >= 20)
+                && item.GetTotalLifeFromStats() >= 30 && item.GetTotalResist() >= 45)
             {
                 return true;
             }
 
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4 && item.GetTotalResist() >= 70)
-            {
-                return true;
-            }
-
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumDamage) >= 5
+            if (item.Quality == QualityType.Rare && totalAddedDamage >= 5
                 && item.GetTotalLifeFromStats() >= 70
                 && item.GetTotalResist() >= 40)
             {
                 return true;
             }
 
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumDamage) >= 5
+            if (item.Quality == QualityType.Rare && totalAddedDamage >= 5
                 && (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit)) >= 4
                 && item.GetTotalResist() >= 45)
             {
                 return true;
             }
 
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumDamage) >= 5
+            if (item.Quality == QualityType.Rare && totalAddedDamage >= 5
                 && (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit)) >= 4
-                && item.GetTotalLifeFromStats() >= 45)
+                && item.GetTotalLifeFromStats() >= 70)
             {
                 return true;
             }
 
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumDamage) >= 7
+            if (item.Quality == QualityType.Rare && totalAddedDamage >= 7
                 && item.GetTotalResist() >= 70)
             {
                 return true;
             }
 
+            // Gold ring's
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.ExtraGold) > 30
              && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) > 4
              && item.GetTotalResist() >= 40)

@@ -1,5 +1,6 @@
 ﻿using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Items.Containers;
 using D2NG.Core.D2GS.Objects;
@@ -7,6 +8,7 @@ using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Packet.Outgoing;
 using D2NG.Core.D2GS.Players;
+using D2NG.Core.Extensions;
 using D2NG.Core.MCP;
 using Serilog;
 using System;
@@ -49,7 +51,8 @@ namespace D2NG.Core
             _gameServer.OnReceivedPacketEvent(InComingPacket.NPCHit, p => Data.Act.UpdateNPCOnHit(new NpcHitPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.EntityMove, p => Data.EntityMove(new EntityMovePacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AssignPlayer, p => Data.PlayerAssign(new AssignPlayerPacket(p)));
-            _gameServer.OnReceivedPacketEvent(InComingPacket.ReassignPlayer, p => Data.ReassignPlayer(new ReassignPlayerPacket(p)));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.ReassignPlayer, p => { var packet = new ReassignPlayerPacket(p);  Data.ReassignPlayer(packet.UnitId, packet.Location); });
+            _gameServer.OnReceivedPacketEvent(InComingPacket.PartyAutomapInfo, p => { var packet = new PartyAutomapInfoPacket(p); Data.ReassignPlayer(packet.Id, packet.Location); });
             _gameServer.OnReceivedPacketEvent(InComingPacket.AddExperienceByte, p => Data.AddExperience(new AddExpPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AddExperienceWord, p => Data.AddExperience(new AddExpPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AddExperienceDword, p => Data.AddExperience(new AddExpPacket(p)));
@@ -66,6 +69,7 @@ namespace D2NG.Core
             _gameServer.OnReceivedPacketEvent(InComingPacket.NPCStop, p => { var packet = new NPCStopPacket(p); Data.Act.UpdateNPCLocation(packet.EntityId, packet.Location); });
             _gameServer.OnReceivedPacketEvent(InComingPacket.AssignNPC2, p => Data.Act.AddNPC(new AssignNpcPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AssignNPC1, p => Data.Act.AddNPC(new AssignNpcPacket(p)));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.TownPortalState, p => Data.Act.UpdateTownPortal(new TownPortalStatePacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AssignObject, p => Data.Act.AddWorldObject(new AssignObjectPacket(p).AsWorldObject()));
             _gameServer.OnReceivedPacketEvent(InComingPacket.RemoveObject, p => Data.RemoveObject(new RemoveObjectPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.PlayerInGame, p => Data.PlayerJoin(new PlayerInGamePacket(p)));
@@ -88,6 +92,11 @@ namespace D2NG.Core
                 });
             _gameServer.OnReceivedPacketEvent(InComingPacket.WaypointMenu, p => Data.UpdateWaypointInfo(new WaypointMenuPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.WalkVerify, p => CheckAndPreventDesync(new WalkVerifyPacket(p)));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.AddEntityEffect, p => Data.AddEntityEffect(new AddEntityEffectPacket(p)));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.AddEntityEffect2, p => Data.AddEntityEffect2(new AddEntityEffectPacket2(p)));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.UpdateEntityEffects, p => Data.UpdateEntityEffects(new UpdateEntityEffectsPacket(p)));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.CorpseAssign, p => Data.PlayerCorpseAssign(new CorpseAssignPacket(p)));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.PlayerStop, p => Data.PlayerStop(new PlayerStopPacket(p)));
         }
 
         public void OnWorldItemEvent(Func<Item, Task> handler)
@@ -204,26 +213,11 @@ namespace D2NG.Core
 
         public bool UseRightHandSkillOnLocation(Skill skill, Point location)
         {
-            if (!Me.HasSkill(skill))
+            if (!ChangeSkill(skill, Hand.Right))
             {
-                throw new InvalidOperationException($"cannot use {skill}, this character does not have the skill");
+                return false;
             }
 
-            if (Me.ActiveSkills[Hand.Right] != skill)
-            {
-                _gameServer.SendPacket(new SelectSkillPacket(Hand.Right, skill));
-                var count = 0;
-                while (Me.ActiveSkills[Hand.Right] != skill && count < 10)
-                {
-                    Thread.Sleep(10);
-                    count++;
-                }
-
-                if (Me.ActiveSkills[Hand.Right] != skill)
-                {
-                    return false;
-                }
-            }
             _gameServer.SendPacket(new RightSkillOnLocationPacket(location));
             return true;
         }
@@ -232,67 +226,91 @@ namespace D2NG.Core
         {
             var reAssignPlayer = _gameServer.GetResetEventOfType(InComingPacket.ReassignPlayer);
             UseRightHandSkillOnLocation(Skill.Teleport, point);
-            return reAssignPlayer.WaitOne(300) && Me.Location.Distance(point) < 5;
+            return reAssignPlayer.WaitOne(200) && Me.Location.Distance(point) < 5;
         }
 
-        public bool RepeatRightHandSkillOnLocation(Skill skill, Point location)
+        public async Task<bool> TeleportToLocationAsync(Point point)
+        {
+            var reAssignPlayer = _gameServer.GetResetEventOfType(InComingPacket.ReassignPlayer);
+            UseRightHandSkillOnLocation(Skill.Teleport, point);
+            return await reAssignPlayer.AsTask(TimeSpan.FromMilliseconds(200)) && Me.Location.Distance(point) < 5;
+        }
+
+        public bool ChangeSkill(Skill skill, Hand hand)
         {
             if (!Me.HasSkill(skill))
             {
                 throw new InvalidOperationException($"cannot use {skill}, this character does not have the skill");
             }
 
-            if (Me.ActiveSkills[Hand.Right] != skill)
+            if (!Me.ActiveSkills.TryGetValue(hand, out var value) || value != skill)
             {
-                _gameServer.SendPacket(new SelectSkillPacket(Hand.Right, skill));
+                _gameServer.SendPacket(new SelectSkillPacket(hand, skill));
                 var count = 0;
-                while (Me.ActiveSkills[Hand.Right] != skill && count < 10)
+                while ((!Me.ActiveSkills.TryGetValue(hand, out var newSkill) || newSkill != skill) && count < 10)
                 {
                     Thread.Sleep(10);
                     count++;
                 }
 
-                if (Me.ActiveSkills[Hand.Right] != skill)
+                if (!Me.ActiveSkills.TryGetValue(hand, out var check) || check != skill)
                 {
                     return false;
                 }
             }
+
+            return true;
+        }
+
+        public bool RepeatRightHandSkillOnLocation(Skill skill, Point location)
+        {
+            if(!ChangeSkill(skill, Hand.Right))
+            {
+                return false;
+            }
+
             _gameServer.SendPacket(new RightSkillRepeatOnLocationPacket(location));
+            return true;
+        }
+
+        public bool RepeatRightHandSkillOnEntity(Skill skill, Entity entity)
+        {
+            if (!ChangeSkill(skill, Hand.Right))
+            {
+                return false;
+            }
+
+            _gameServer.SendPacket(new RightSkillRepeatOnUnitPacket(entity));
             return true;
         }
 
         public bool UseRightHandSkillOnEntity(Skill skill, Entity entity)
         {
-            if (!Me.HasSkill(skill))
+            if (!ChangeSkill(skill, Hand.Right))
             {
-                throw new InvalidOperationException($"cannot use {skill}, this character does not have the skill");
-            }
-
-            if (Me.ActiveSkills[Hand.Right] != skill)
-            {
-                _gameServer.SendPacket(new SelectSkillPacket(Hand.Right, skill));
-                var count = 0;
-                while (Me.ActiveSkills[Hand.Right] != skill && count < 10)
-                {
-                    Thread.Sleep(10);
-                    count++;
-                }
-
-                if (Me.ActiveSkills[Hand.Right] != skill)
-                {
-                    return false;
-                }
+                return false;
             }
 
             _gameServer.SendPacket(new RightSkillOnUnitPacket(entity));
             return true;
         }
 
-        public void CreateTownPortal()
+        public bool UseFindItem(Entity entity)
+        {
+            if (!ChangeSkill(Skill.FindItem, Hand.Right))
+            {
+                return false;
+            }
+            var entityEffect = _gameServer.GetResetEventOfType(InComingPacket.AddEntityEffect);
+            _gameServer.SendPacket(new RightSkillOnUnitPacket(entity));
+            return entityEffect.WaitOne(100);
+        }
+
+        public bool CreateTownPortal()
         {
             var portalOwner = _gameServer.GetResetEventOfType(InComingPacket.PortalOwner);
             UseRightHandSkillOnLocation(Skill.BookOfTownportal, Me.Location);
-            portalOwner.WaitOne(1500);
+            return portalOwner.WaitOne(500);
         }
 
         public void InsertItemIntoContainer(Item item, Point location, ItemContainer container)
@@ -332,6 +350,23 @@ namespace D2NG.Core
             Me.Location = location;
         }
 
+        public async Task MoveToAsync(Point location)
+        {
+            var distance = Me.Location.Distance(location);
+            if (distance < 10 && DateTime.Now.Subtract(lastTeleport) > TimeSpan.FromSeconds(5))
+            {
+                _gameServer.SendPacket(new UpdatePlayerLocationPacket(location));
+                lastTeleport = DateTime.Now;
+                await Task.Delay((int)(120 / Data.WalkingSpeedMultiplier));
+            }
+            else
+            {
+                _gameServer.SendPacket(new RunToLocationPacket(location));
+                await Task.Delay((int)(distance * 80 / Data.WalkingSpeedMultiplier));
+            }
+            Me.Location = location;
+        }
+
         public void MoveTo(Entity entity)
         {
             MoveTo(entity.Location);
@@ -346,10 +381,10 @@ namespace D2NG.Core
             return npcInfoPacket.WaitOne(400);
         }
 
-        public bool PickupBody(Entity entity)
+        public bool PickupBody(Player player)
         {
             var corpseAssignPacket = _gameServer.GetResetEventOfType(InComingPacket.CorpseAssign);
-            _gameServer.SendPacket(new InteractWithEntityPacket(entity.Id, EntityType.Player));
+            _gameServer.SendPacket(new InteractWithEntityPacket(player.Id, EntityType.Player));
             return corpseAssignPacket.WaitOne(1000);
         }
 
@@ -458,6 +493,16 @@ namespace D2NG.Core
         {
             _gameServer.SendPacket(new SendChatMessagePacket(message));
         }
+
+        public void InvitePlayer(Player player)
+        {
+            _gameServer.SendPacket(new PartyRequestPacket(PartyRequestType.InviteToParty, player));
+        }
+
+        public void AcceptInvite(Player player)
+        {
+            _gameServer.SendPacket(new PartyRequestPacket(PartyRequestType.AcceptInvite, player));
+        }
         private void PingThread()
         {
             try
@@ -491,6 +536,10 @@ namespace D2NG.Core
                 LastUsedManaPotionTime = DateTime.Now;
                 UseBeltItem(manapotion);
             }
+            else
+            {
+                Log.Information($"Out of mana potions at {Me.Life} out of {Me.MaxLife}");
+            }
         }
 
         public void UseHealthPotion()
@@ -501,6 +550,10 @@ namespace D2NG.Core
                 Log.Information($"Using health potion with health at {Me.Life} out of {Me.MaxLife}");
                 LastUsedHealthPotionTime = DateTime.Now;
                 UseBeltItem(healthpotion);
+            }
+            else
+            {
+                Log.Information($"Out of health potions at {Me.Life} out of {Me.MaxLife}");
             }
         }
 
@@ -527,7 +580,7 @@ namespace D2NG.Core
                         continue;
                     }
 
-                    if ((double)Me.Life / Me.MaxLife < 0.1 || Me.Life < 200)
+                    if ((double)Me.Life / Me.MaxLife < 0.1 || (Me.Life < 200 && Me.MaxLife > 600))
                     {
                         Log.Information($"Leaving game due to life being {Me.Life} of max {Me.MaxLife}");
                         LeaveGame();

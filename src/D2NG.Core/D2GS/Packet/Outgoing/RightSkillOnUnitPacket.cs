@@ -1,4 +1,5 @@
-﻿using System;
+﻿using D2NG.Core.D2GS.Objects;
+using System;
 
 namespace D2NG.Core.D2GS.Packet.Outgoing
 {
@@ -8,7 +9,7 @@ namespace D2NG.Core.D2GS.Packet.Outgoing
             base(
                 BuildPacket(
                     (byte)OutGoingPacket.RightSkillOnUnit,
-                    BitConverter.GetBytes((uint)0x01),
+                    BitConverter.GetBytes((uint)entity.Type),
                     BitConverter.GetBytes(entity.Id)
                 )
             )

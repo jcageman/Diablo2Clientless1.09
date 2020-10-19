@@ -1,4 +1,5 @@
-﻿using D2NG.Core.Extensions;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.Extensions;
 using Serilog;
 using System;
 using System.Text;

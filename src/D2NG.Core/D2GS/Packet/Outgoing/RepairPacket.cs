@@ -1,4 +1,5 @@
-﻿using System;
+﻿using D2NG.Core.D2GS.Objects;
+using System;
 using System.Linq;
 
 namespace D2NG.Core.D2GS.Packet.Outgoing

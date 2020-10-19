@@ -1,6 +1,7 @@
 ﻿using D2NG.Core.BNCS;
 using D2NG.Core.BNCS.Packet;
 using D2NG.Core.D2GS;
+using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.MCP;
 using D2NG.Core.MCP.Packet;
@@ -59,10 +60,18 @@ namespace D2NG.Core
         /// <returns>A list of Characters associated with the account</returns>
         public List<Character> Login(string username, string password)
         {
-            Bncs.Login(username, password);
+            if(!Bncs.Login(username, password))
+            {
+                Log.Warning($"Logged failed as {username}");
+                return null;
+            }
             Log.Information($"Logged in as {username}");
             _userName = username;
-            RealmLogon();
+            if(!RealmLogon())
+            {
+                return null;
+            }
+
             return Mcp.ListCharacters();
         }
 
@@ -103,16 +112,30 @@ namespace D2NG.Core
         /// <param name="password">Password used to protect the game</param>
         public bool JoinGame(string name, string password)
         {
-            Log.Information($"Joining game: {name}");
+            Log.Information($"Joining game: {name} with {LoggedInUserName()}");
             var packet = Mcp.JoinGame(name, password);
             if(packet == null)
             {
                 return false;
             }
 
+            if (packet.Result != 0x00)
+            {
+                return false;
+            }
+
             Mcp.Disconnect();
             Log.Debug($"Connecting to D2GS Server {packet.D2gsIp}");
-            D2gs.Connect(packet.D2gsIp);
+            try
+            {
+                D2gs.Connect(packet.D2gsIp);
+            }
+            catch
+            {
+                D2gs.Disconnect();
+                return false;
+            }
+
             if (!D2gs.GameLogon(packet.GameHash, packet.GameToken, _character))
             {
                 D2gs.Disconnect();
@@ -143,8 +166,15 @@ namespace D2NG.Core
         {
             if (_mcpRealm is null)
             {
-                _mcpRealm = Bncs.ListMcpRealms().First();
+                _mcpRealm = Bncs.ListMcpRealms()?.First();
             }
+
+            if (_mcpRealm == null)
+            {
+                Log.Warning("RealmLogin failed, no mcp realm found");
+                return false;
+            }
+
             var packet = Bncs.RealmLogon(_mcpRealm);
             if (packet == null)
             {
@@ -163,11 +193,31 @@ namespace D2NG.Core
             return true;
         }
 
-        public void Disconnect() => Bncs.Disconnect();
+        public void Disconnect() {
+            if(Bncs.IsConnected())
+            {
+                Bncs.Disconnect();
+            }
+            
+            if (Mcp.IsConnected())
+            {
+                Mcp.Disconnect();
+            }
+
+            if (D2gs.IsConnected())
+            {
+                D2gs.Disconnect();
+            }
+        } 
 
         public string LoggedInUserName()
         {
             return _userName;
+        }
+
+        public Character SelectedCharacter()
+        {
+            return _character;
         }
     }
 }

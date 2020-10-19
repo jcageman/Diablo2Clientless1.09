@@ -2,6 +2,7 @@
 using D2NG.Core.D2GS.Helpers;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.Exceptions;
+using Serilog;
 using System;
 
 namespace D2NG.Core.D2GS
@@ -30,12 +31,9 @@ namespace D2NG.Core.D2GS
 
         internal override void Initialize()
         {
-            if (0xa7 != _stream.ReadByte())
-            {
-                throw new UnableToConnectException("Unexpected packet");
-            }
-
-            if (0x01 != _stream.ReadByte())
+            var packet1 = _stream.ReadByte();
+            var packet2 = _stream.ReadByte();
+            if (0xa7 != packet1 || 0x01 != packet2)
             {
                 throw new UnableToConnectException("Unexpected packet");
             }
@@ -57,14 +55,23 @@ namespace D2NG.Core.D2GS
             var size = _stream.ReadByte();
             if (size == -1) return null;
 
-            if (size >= 0xF0) size = (((size & 0xF) << 8) + _stream.ReadByte() - 2);
-            else size -= 1;
+            if (size >= 0xF0)
+            {
+                size = (((size & 0xF) << 8) + _stream.ReadByte() - 2);
+            }
+            else
+            {
+                size -= 1;
+            }
+
+            if (size == 0) return null;
 
             var buffer = ReadBytes(size);
 
             Huffman.Decompress(buffer, out var output);
 
             var fullPacketString = output.ToPrintString();
+            Log.Verbose($"Full decompressed packet received: {fullPacketString}");
 
             var index = 0;
             do

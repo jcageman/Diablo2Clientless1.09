@@ -4,7 +4,7 @@ using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming
 {
-    internal class NPCStopPacket : D2gsPacket
+    public class NPCStopPacket : D2gsPacket
     {
         public uint EntityId { get; }
         public Point Location { get; }

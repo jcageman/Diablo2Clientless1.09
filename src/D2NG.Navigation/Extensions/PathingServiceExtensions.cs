@@ -1,5 +1,7 @@
 ﻿using D2NG.Core;
 using D2NG.Core.D2GS;
+using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Navigation.Services.Pathing;
 using System;
@@ -34,15 +36,15 @@ namespace D2NG.Navigation.Extensions
         {
             switch (game.Act)
             {
-                case Core.D2GS.Act.Act.Act1:
+                case Act.Act1:
                     return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, EntityCode.WaypointAct1, movementMode);
-                case Core.D2GS.Act.Act.Act2:
+                case Act.Act2:
                     return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, EntityCode.WaypointAct2, movementMode);
-                case Core.D2GS.Act.Act.Act3:
+                case Act.Act3:
                     return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, EntityCode.WaypointAct3, movementMode);
-                case Core.D2GS.Act.Act.Act4:
+                case Act.Act4:
                     return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, EntityCode.WaypointAct4, movementMode);
-                case Core.D2GS.Act.Act.Act5:
+                case Act.Act5:
                     return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, EntityCode.WaypointAct5, movementMode);
             }
 

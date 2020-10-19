@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 
 namespace D2NG.Core.D2GS.Items.Containers
@@ -7,6 +9,20 @@ namespace D2NG.Core.D2GS.Items.Containers
     {
         public Belt() : base(4, 4)
         {
+        }
+
+        public void UpdateBeltRows(uint rows)
+        {
+            Height = rows;
+            var oldBuffer = Buffer;
+            Buffer = new bool[Height, Width];
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    Buffer[y,x] = oldBuffer[y,x];
+                }
+            }
         }
 
         private bool IsHealthPotion(Item item)

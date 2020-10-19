@@ -8,9 +8,9 @@ namespace D2NG.Core.D2GS.Items.Containers
     {
         public uint Width { get; }
 
-        public uint Height { get; }
+        public uint Height { get; protected set; }
 
-        private bool[,] Buffer { get; set; }
+        protected bool[,] Buffer { get; set; }
 
         protected ConcurrentDictionary<uint, Item> _items { get; set; } = new ConcurrentDictionary<uint, Item>();
 
@@ -47,7 +47,7 @@ namespace D2NG.Core.D2GS.Items.Containers
             SetBuffer(item, true);
         }
 
-        public Item FindItemByName(string name)
+        public Item FindItemByName(ItemName name)
         {
             return _items.FirstOrDefault(i => i.Value.Name == name).Value;
         }
@@ -57,9 +57,10 @@ namespace D2NG.Core.D2GS.Items.Containers
             return _items.GetValueOrDefault(itemId);
         }
 
-        public bool UpdateItem(Item oldItem, Item newItem)
+        public void UpdateItem(Item oldItem, Item newItem)
         {
-            return _items.TryUpdate(oldItem.Id, newItem, oldItem);
+            Remove(oldItem);
+            Add(newItem);
         }
 
         public void Remove(Item item) => Remove(item.Id);

@@ -1,4 +1,8 @@
-﻿namespace D2NG.Core.D2GS.Objects
+﻿using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Enums;
+using System.Collections.Generic;
+
+namespace D2NG.Core.D2GS.Objects
 {
     public class WorldObject : Entity
     {
@@ -9,6 +13,12 @@
         public byte InteractionType { get; }
 
         public byte LifePercentage { get; internal set; } = 100;
+
+        public Area TownPortalArea { get; internal set; }
+
+        public HashSet<EntityEffect> Effects { get; internal set; } = new HashSet<EntityEffect>();
+
+        public HashSet<MonsterEnchantment> MonsterEnchantments { get; internal set; } = new HashSet<MonsterEnchantment>();
 
         public WorldObject(EntityType objectType, uint objectId, EntityCode objectCode, Point location, EntityState state, byte interactionType)
         {

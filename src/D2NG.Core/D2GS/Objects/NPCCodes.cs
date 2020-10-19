@@ -140,7 +140,7 @@
         Flayer1 = 143,
         SoulKiller1 = 144,
         StygianDoll1 = 145,
-        DeckardCainAct1 = 146,
+        DeckardCainQuest = 146,
         Gheed = 147,
         Akara = 148,
         Kashya = 150,
@@ -225,7 +225,7 @@
         RiverStalkerHead = 262,
         StygainWatcherHead = 263,
         Meshif2 = 264,
-        DeckardCainQuest = 265,
+        DeckardCainAct1 = 265,
         Navi = 266,
         BloodRaven = 267,
         RogueScout = 270,
@@ -503,6 +503,7 @@
         BaalsMinion1 = 572,
         BaalsMinion2 = 573,
         BaalsMinion3 = 574,
-        WorldstoneEffect = 575
+        WorldstoneEffect = 575,
+        CowKing = 773
     }
 }

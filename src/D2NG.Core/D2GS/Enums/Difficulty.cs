@@ -1,4 +1,4 @@
-﻿namespace D2NG.Core
+﻿namespace D2NG.Core.D2GS.Enums
 {
     public enum Difficulty : byte
     {

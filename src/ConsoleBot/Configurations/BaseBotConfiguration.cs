@@ -43,6 +43,7 @@ namespace ConsoleBot.Configurations
                     {
                         Log.Error($"bot stopping due to high successive failures: {successiveFailures} with run total {totalCount}");
                         await _externalMessagingClient.SendMessage($"bot stopping due to high successive failures: {successiveFailures} with run total {totalCount}");
+                        client.Disconnect();
                         break;
                     }
 
@@ -87,12 +88,12 @@ namespace ConsoleBot.Configurations
 
                         successiveFailures += 1;
                         Log.Warning($"Disconnecting client due to exception {e}, reconnecting to realm, game description is now: {_config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)}");
-                        client.Disconnect();
                         var connectCount = 0;
                         while (connectCount < 10)
                         {
                             try
                             {
+                                client.Disconnect();
                                 if (ConnectToRealm(client))
                                 {
                                     break;
@@ -123,6 +124,7 @@ namespace ConsoleBot.Configurations
             {
                 Log.Error(e, $"Unhandled Exception: {e}");
                 await _externalMessagingClient.SendMessage($"bot crashed with exception: {e}");
+                client.Disconnect();
                 return 1;
             }
         }
@@ -138,6 +140,11 @@ namespace ConsoleBot.Configurations
                 return false;
             }
             var characters = client.Login(_config.Username, _config.Password);
+            if(characters == null)
+            {
+                return false;
+            }
+
             var selectedCharacter = characters.Single(c =>
                 c.Name.Equals(_config.Character, StringComparison.CurrentCultureIgnoreCase));
             if (selectedCharacter == null)

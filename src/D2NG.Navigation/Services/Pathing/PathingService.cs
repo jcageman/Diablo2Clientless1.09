@@ -1,6 +1,7 @@
 ﻿using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.MapApi;

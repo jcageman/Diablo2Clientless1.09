@@ -5,12 +5,12 @@ namespace ConsoleBot.Pickit
 {
     public static class Armors
     {
-        private static readonly HashSet<string> casterArmors = new HashSet<string> {
-            "Quilted Armor", "Leather Armor", "Hard Leather Armor", "Studded Leather", "Ring Mail", "Scale Mail","Chain Mail", "Breast Plate", "Splint Mail", "Light Plate",
-            "Ghost Armor", "Serpentskin Armor", "Demonhide Armor", "Trellised Armor", "Linked Mail", "Mage Plate" };
+        private static readonly HashSet<ItemName> casterArmors = new HashSet<ItemName> {
+            ItemName.QuiltedArmor, ItemName.LeatherArmor, ItemName.HardLeatherArmor, ItemName.StuddedLeather, ItemName.RingMail, ItemName.ScaleMail,ItemName.ChainMail, ItemName.BreastPlate, ItemName.SplintMail, ItemName.LightPlate,
+            ItemName.GhostArmor, ItemName.SerpentskinArmor, ItemName.DemonhideArmor, ItemName.TrellisedArmor, ItemName.LinkedMail, ItemName.MagePlate };
 
-        private static readonly HashSet<string> defArmors = new HashSet<string> {
-            "Ornate Plate", "Chaos Armor", "Embossed Plate", "Sharktooth Armor", "Templar Coat", "Mage Plate", "Russet Armor"};
+        private static readonly HashSet<ItemName> defArmors = new HashSet<ItemName> {
+            ItemName.OrnatePlate, ItemName.ChaosArmor, ItemName.EmbossedPlate, ItemName.SharktoothArmor, ItemName.TemplarCoat, ItemName.MagePlate, ItemName.RussetArmor};
         public static bool ShouldPickupItem(Item item)
         {
             if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
@@ -23,34 +23,19 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItem(Item item)
         {
-            if (item.Name == "Ornate Plate"
+            if (item.Name == ItemName.OrnatePlate
                 && item.Quality == QualityType.Rare
-                && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70
+                && item.GetValueOfStatType(StatType.EnhancedDefense) >= 80
+                && item.GetValueOfStatType(StatType.ReducedRequirements) >= 20
                 && item.GetTotalLifeFromStats() >= 50)
             {
                 return true;
             }
 
-            if (item.Name == "Ornate Plate"
+            if (item.Name == ItemName.OrnatePlate
             && item.Quality == QualityType.Rare
             && item.GetValueOfStatType(StatType.EnhancedDefense) >= 90
-            && item.GetTotalLifeFromStats() >= 30)
-            {
-                return true;
-            }
-
-            if (item.Name == "Ornate Plate"
-            && item.GetValueOfStatType(StatType.EnhancedDefense) >= 60
-            && item.GetValueOfStatType(StatType.ReducedRequirements) >= 20
-            && item.GetTotalLifeFromStats() >= 60)
-            {
-                return true;
-            }
-
-            if (item.Name == "Ornate Plate"
-            && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70
-            && item.GetValueOfStatType(StatType.ReducedRequirements) >= 20
-            && item.GetTotalLifeFromStats() >= 30)
+            && item.GetTotalLifeFromStats() >= 50)
             {
                 return true;
             }
@@ -92,7 +77,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Name == "Mage Plate"
+            if (item.Name == ItemName.MagePlate
             && item.GetValueOfStatType(StatType.EnhancedDefense) >= 60
             && item.GetTotalResist() >= 50
             && item.GetTotalLifeFromStats() >= 30)

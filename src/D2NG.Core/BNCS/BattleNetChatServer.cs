@@ -90,7 +90,6 @@ namespace D2NG.Core.BNCS
             _machine.Configure(State.UserAuthenticated)
                 .SubstateOf(State.Connected)
                 .SubstateOf(State.KeysAuthorized)
-                .OnEntryFrom(_loginTrigger, (username, password) => OnLogin(username, password))
                 .OnEntryFrom(Trigger.LeaveChat, OnLeaveChat)
                 .Permit(Trigger.EnterChat, State.InChat)
                 .Permit(Trigger.Disconnect, State.NotConnected);
@@ -99,7 +98,6 @@ namespace D2NG.Core.BNCS
                 .SubstateOf(State.Connected)
                 .SubstateOf(State.KeysAuthorized)
                 .SubstateOf(State.UserAuthenticated)
-                .OnEntryFrom(Trigger.EnterChat, OnEnterChat)
                 .InternalTransition(_joinChannelTrigger, (flags, channel, t) => OnJoinChannel(flags, channel))
                 .InternalTransition(_chatCommandTrigger, (message, t) => OnChatCommand(message))
                 .Permit(Trigger.LeaveChat, State.UserAuthenticated)
@@ -119,15 +117,26 @@ namespace D2NG.Core.BNCS
             OnReceivedPacketEvent(Sid.REQUIREDWORK, _ => { });
         }
 
+        public bool IsConnected()
+        {
+            return Connection.Connected;
+        }
+
         internal void LeaveGame() => Connection.WritePacket(new LeaveGamePacket());
 
-        public void EnterChat() => _machine.Fire(Trigger.EnterChat);
-        private void OnEnterChat()
+        public bool EnterChat()
         {
             EnterChatEvent.Reset();
             Connection.WritePacket(new EnterChatRequestPacket(Context.Username));
             OnJoinChannel(0x05, DefaultChannel);
-            _ = EnterChatEvent.WaitForPacket();
+            var result = EnterChatEvent.WaitForPacket(5000);
+
+            if(result != null)
+            {
+                _machine.Fire(Trigger.EnterChat);
+            }
+
+            return result != null;
         }
 
         public void LeaveChat() => _machine.Fire(Trigger.LeaveChat);
@@ -177,17 +186,7 @@ namespace D2NG.Core.BNCS
             }
         }
 
-        public void Login(string username, string password) => _machine.Fire(_loginTrigger, username, password);
-
-        private void OnConnect(string realm)
-        {
-            Connection.Connect(realm);
-
-            var listener = new Thread(Listen);
-            listener.Start();
-        }
-
-        private void OnLogin(string username, string password)
+        public bool Login(string username, string password)
         {
             Context.Username = username;
 
@@ -197,8 +196,27 @@ namespace D2NG.Core.BNCS
                 Context.ServerToken,
                 Context.Username,
                 password));
-            var response = LogonEvent.WaitForPacket();
-            _ = new LogonResponsePacket(response);
+            var response = LogonEvent.WaitForPacket(1000);
+            if (response == null)
+            {
+                return false;
+            }
+            var logonResponse = new LogonResponsePacket(response);
+            var logonSuccess = logonResponse.Status == 0x00;
+            if (logonSuccess)
+            {
+                _machine.Fire(_loginTrigger, username, password);
+            }
+
+            return logonSuccess;
+        }
+
+        private void OnConnect(string realm)
+        {
+            Connection.Connect(realm);
+
+            var listener = new Thread(Listen);
+            listener.Start();
         }
 
         private void OnAuthorizeKeys()
@@ -266,7 +284,11 @@ namespace D2NG.Core.BNCS
         {
             ListRealmsEvent.Reset();
             Connection.WritePacket(new QueryRealmsRequestPacket());
-            var packet = ListRealmsEvent.WaitForPacket();
+            var packet = ListRealmsEvent.WaitForPacket(5000);
+            if(packet == null)
+            {
+                return null;
+            }
             return new QueryRealmsResponsePacket(packet.Raw).Realms;
         }
 

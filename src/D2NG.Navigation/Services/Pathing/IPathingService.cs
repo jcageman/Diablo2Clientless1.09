@@ -1,9 +1,9 @@
 ﻿using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Objects;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using D2NG.Core;
-using D2NG.Core.D2GS.Objects;
 
 namespace D2NG.Navigation.Services.Pathing
 {

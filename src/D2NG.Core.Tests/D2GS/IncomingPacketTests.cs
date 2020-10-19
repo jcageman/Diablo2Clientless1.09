@@ -1,7 +1,10 @@
 ﻿using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
+using System.Collections.Generic;
 using Xunit;
 
 namespace D2NG.Core.Tests.D2GS
@@ -58,7 +61,7 @@ namespace D2NG.Core.Tests.D2GS
             var bytes = new byte[] { 0x0F, 0x00, 0x02, 0x00, 0x00, 0x00, 0x17, 0x11, 0x16, 0x99, 0x15, 0x00, 0x16, 0x16, 0x94, 0x15 };
             var packet = new EntityMovePacket(new D2gsPacket(bytes));
             Assert.Equal(2U, packet.UnitId);
-            Assert.Equal(0, packet.UnitType);
+            Assert.Equal(EntityType.Player, packet.UnitType);
             Assert.Equal(new Point(5654, 5524), packet.CurrentLocation);
             Assert.Equal(new Point(5649, 5529), packet.MoveToLocation);
         }
@@ -73,5 +76,28 @@ namespace D2NG.Core.Tests.D2GS
             Assert.Equal(808, packet.Stamina);
             Assert.Equal(new Point(5057, 1902), packet.Location);
         }
-    }
+
+        [Fact]
+        public void AssignNPC1()
+        {
+            var bytes = new byte[] { 0x56, 0xE9, 0x00, 0x00, 0x00, 0x2C, 0x00, 0x17, 0x1F, 0x79, 0x20, 0x33, 0x01, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xB0, 0x9D, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x11, 0x1A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+            var packet = new AssignNpcPacket(new D2gsPacket(bytes));
+            Assert.Equal(NPCCode.VileHunter, packet.UniqueCode);
+            Assert.Equal(new Point(7959, 8313), packet.Location);
+            Assert.Equal(51, packet.LifePercentage);
+            Assert.Equal(new HashSet<MonsterEnchantment> { MonsterEnchantment.ExtraFast, MonsterEnchantment.LightningEnchanted, MonsterEnchantment.Teleportation }, packet.MonsterEnchantments);
+        }
+
+        [Fact]
+        public void AssignNPC2()
+        {
+            var bytes = new byte[] { 0x56, 0xE5, 0x00, 0x00, 0x00, 0x2C, 0x00, 0x0C, 0x1F, 0x70, 0x20, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+            var packet = new AssignNpcPacket(new D2gsPacket(bytes));
+            Assert.Equal(NPCCode.VileHunter, packet.UniqueCode);
+            Assert.Equal(new Point(7948, 8304), packet.Location);
+            Assert.Empty(packet.MonsterEnchantments);
+        }
+
+
+     }
 }

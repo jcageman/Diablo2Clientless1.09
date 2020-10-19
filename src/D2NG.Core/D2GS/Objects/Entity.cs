@@ -1,6 +1,4 @@
-﻿using D2NG.Core.D2GS.Objects;
-
-namespace D2NG.Core.D2GS
+﻿namespace D2NG.Core.D2GS.Objects
 {
     public abstract class Entity
     {

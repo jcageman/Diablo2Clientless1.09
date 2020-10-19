@@ -15,6 +15,8 @@ using D2NG.Navigation.Services.Pathing;
 
 using Action = D2NG.Core.D2GS.Items.Action;
 using D2NG.Navigation.Extensions;
+using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 
 namespace ConsoleBot.Configurations.Bots
 {
@@ -58,12 +60,12 @@ namespace ConsoleBot.Configurations.Bots
             */
 
             client.Game.CleanupCursorItem();
-            CleanupPotionsInBelt(client.Game);
+            InventoryHelpers.CleanupPotionsInBelt(client.Game);
 
             if (client.Game.Act != Act.Act3)
             {
                 var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, MovementMode.Teleport);
-                if (!TeleportViaPath(client, pathToTownWayPoint))
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, MovementMode.Teleport))
                 {
                     Log.Information($"Teleporting to {client.Game.Act} waypoint failed");
                     return false;
@@ -89,7 +91,7 @@ namespace ConsoleBot.Configurations.Bots
                 Log.Information($"Visiting Deckard Cain with {unidentifiedItemCount} unidentified items");
 
                 var pathDecardCain = await _pathingService.GetPathToNPC(client.Game, NPCCode.DeckardCainAct3, MovementMode.Teleport);
-                if (!TeleportViaPath(client, pathDecardCain))
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathDecardCain, MovementMode.Teleport))
                 {
                     Log.Warning($"Teleporting to Deckard Cain failed at {client.Game.Me.Location}");
                     return false;
@@ -98,7 +100,7 @@ namespace ConsoleBot.Configurations.Bots
                 NPCHelpers.IdentifyItemsAtDeckardCain(client.Game);
 
                 var pathStash = await _pathingService.GetPathToObject(client.Game, EntityCode.Stash, MovementMode.Teleport);
-                if (!TeleportViaPath(client, pathStash))
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathStash, MovementMode.Teleport))
                 {
                     Log.Warning($"Teleporting failed at location {client.Game.Me.Location}");
                 }
@@ -110,47 +112,47 @@ namespace ConsoleBot.Configurations.Bots
                 }
             }
 
-            var healingPotionsInBelt = client.Game.Belt.NumOfHealthPotions();
-            var manaPotionsInBelt = client.Game.Belt.NumOfManaPotions();
-            if (healingPotionsInBelt < 4
-                || manaPotionsInBelt < 4
-                || client.Game.Inventory.Items.FirstOrDefault(i => i.Name == "Tome of Town Portal")?.Amount < 5
-                || client.Game.Me.Life < 500
-                || client.Game.Inventory.Items.Count(i => i.IsIdentified) + client.Game.Cube.Items.Count(i => i.IsIdentified) > 4)
+            if (NPCHelpers.ShouldRefreshCharacterAtNPC(client.Game) || client.Game.Inventory.Items.Count(i => i.IsIdentified) + client.Game.Cube.Items.Count(i => i.IsIdentified) > 4)
             {
                 Log.Information($"Visiting Ormus");
 
                 var pathOrmus = await _pathingService.GetPathToNPC(client.Game, NPCCode.Ormus, MovementMode.Teleport);
-                if (!TeleportViaPath(client, pathOrmus))
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathOrmus, MovementMode.Teleport))
                 {
                     Log.Warning($"Teleporting to Ormus failed at {client.Game.Me.Location}");
                     return false;
                 }
 
-                if (!NPCHelpers.SellItemsAndRefreshPotionsAtOrmus(client.Game))
+                var ormus = NPCHelpers.GetUniqueNPC(client.Game, NPCCode.Ormus);
+                if (ormus == null)
+                {
+                    Log.Warning($"Did not find Ormus at {client.Game.Me.Location}");
+                    return false;
+                }
+
+                if (!NPCHelpers.SellItemsAndRefreshPotionsAtNPC(client.Game, ormus))
                 {
                     Log.Warning($"Refreshing potions at Ormus failed at {client.Game.Me.Location}");
                     return false;
                 }
             }
 
-            if (client.Game.Act == Act.Act3 && client.Game.Stash.Items.Count(i => i.Name == "Flawless Skull") >= 3)
+            if (client.Game.Act == Act.Act3 && CubeHelpers.AnyGemsToTransmuteInStash(client.Game))
             {
                 var pathStash = await _pathingService.GetPathToObject(client.Game, EntityCode.Stash, MovementMode.Teleport);
-                if (!TeleportViaPath(client, pathStash))
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathStash, MovementMode.Teleport))
                 {
                     Log.Warning($"Walking failed at location {client.Game.Me.Location}");
                     return false;
                 }
-                CubeHelpers.TransmutePerfectSkulls(client.Game);
+                CubeHelpers.TransmuteGems(client.Game);
             }
 
-            bool shouldRepair = client.Game.Items.Any(i => i.Action == Action.Equip && i.MaximumDurability > 0 && ((double)i.Durability / i.MaximumDurability) < 0.2);
-            if(shouldRepair)
+            if(NPCHelpers.ShouldGoToRepairNPC(client.Game))
             {
                 Log.Information($"Repairing items at Hratli");
                 var PathHratli = await _pathingService.GetPathToObject(client.Game, EntityCode.Hratli, MovementMode.Teleport);
-                if (!TeleportViaPath(client, PathHratli))
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, PathHratli, MovementMode.Teleport))
                 {
                     Log.Warning($"Teleporting to Hratli failed at {client.Game.Me.Location}");
                     return false;
@@ -162,7 +164,7 @@ namespace ConsoleBot.Configurations.Bots
                     return false;
                 }
 
-                NPCHelpers.RepairItems(client.Game, hratli);
+                NPCHelpers.RepairItemsAndBuyArrows(client.Game, hratli);
             }
 
             bool shouldGamble = client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 7_000_000;
@@ -170,7 +172,7 @@ namespace ConsoleBot.Configurations.Bots
             {
                 Log.Information($"Gambling items at Alkor");
                 var pathAlkor = await _pathingService.GetPathToNPC(client.Game, NPCCode.Alkor, MovementMode.Teleport);
-                if (!TeleportViaPath(client, pathAlkor))
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathAlkor, MovementMode.Teleport))
                 {
                     Log.Warning($"Teleporting to Alkor failed at {client.Game.Me.Location}");
                     return false;
@@ -187,7 +189,7 @@ namespace ConsoleBot.Configurations.Bots
 
             Log.Information("Teleporting to WayPoint");
             var path1 = await _pathingService.GetPathToObject(client.Game, EntityCode.WaypointAct3, MovementMode.Teleport);
-            if (!TeleportViaPath(client, path1))
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, path1, MovementMode.Teleport))
             {
                 Log.Warning($"Teleporting failed at location {client.Game.Me.Location}");
                 return false;
@@ -203,7 +205,7 @@ namespace ConsoleBot.Configurations.Bots
             }, TimeSpan.FromSeconds(5));
 
             var path2 = await _pathingService.GetPathFromWaypointToArea(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel2, Waypoint.DuranceOfHateLevel2, Area.DuranceOfHateLevel3, MovementMode.Teleport);
-            if (!TeleportViaPath(client, path2))
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, path2, MovementMode.Teleport))
             {
                 Log.Warning($"Teleporting to DuranceOfHateLevel3 warp failed at location {client.Game.Me.Location}");
                 return false;
@@ -228,7 +230,7 @@ namespace ConsoleBot.Configurations.Bots
 
             var path3 = await _pathingService.GetPathToLocation(client.Game, new Point(17566, 8070), MovementMode.Teleport);
             Log.Information($"Teleporting to Mephisto");
-            if (!TeleportViaPath(client, path3))
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, path3, MovementMode.Teleport))
             {
                 Log.Warning($"Teleporting to Mephisto failed at location {client.Game.Me.Location}");
                 return false;
@@ -294,50 +296,9 @@ namespace ConsoleBot.Configurations.Bots
             return true;
         }
 
-        private static bool TeleportViaPath(Client client, List<Point> path)
-        {
-            if(path.Count == 0)
-            {
-                Log.Warning($"Teleport of length 0 found, something went wrong while client at location: {client.Game.Me.Location}");
-                return false;
-            }
-
-            foreach (var point in path)
-            {
-                if (!GeneralHelpers.TryWithTimeout((retryCount) => client.Game.TeleportToLocation(point),
-                    TimeSpan.FromSeconds(4)))
-                {
-                    return false;
-                }
-
-                if (!client.Game.IsInGame())
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private void CleanupPotionsInBelt(Game game)
-        {
-            var manaPotionsInWrongSlot = game.Belt.GetManaPotionsInSlots(new List<int>() { 0, 1 });
-            foreach (var manaPotion in manaPotionsInWrongSlot)
-            {
-                game.UseBeltItem(manaPotion);
-            }
-
-            var healthPotionsInWrongSlot = game.Belt.GetHealthPotionsInSlots(new List<int>() { 2, 3 });
-            foreach (var healthPotion in healthPotionsInWrongSlot)
-            {
-                game.UseBeltItem(healthPotion);
-            }
-        }
-
-
         private bool PickupNearbyItems(Client client)
         {
-            var pickupItems = client.Game.Items.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(i)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
+            var pickupItems = client.Game.Items.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(client.Game, i)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
             Log.Information($"Killed Mephisto, picking up {pickupItems.Count()} items ");
             foreach (var item in pickupItems)
             {

@@ -1,4 +1,5 @@
 ﻿using D2NG.Core.MCP.Exceptions;
+using Serilog;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -43,29 +44,41 @@ namespace D2NG.Core.MCP.Packet
                 case 0x00:
                     break;
                 case 0x29:
-                    throw new JoinGameException("Password incorrect");
+                    Log.Debug("Password incorrect");
+                    break;
                 case 0x2A:
-                    throw new JoinGameException("Game does not exist");
+                    Log.Debug("Game does not exist");
+                    break;
                 case 0x2B:
-                    throw new JoinGameException("Game is full");
+                    Log.Debug("Game is full");
+                    break;
                 case 0x2C:
-                    throw new JoinGameException("You do not meet the level requirements for the game");
+                    Log.Debug("You do not meet the level requirements for the game");
+                    break;
                 case 0x6E:
-                    throw new JoinGameException("A dead hardcore chracter cannot join a game");
+                    Log.Debug("A dead hardcore chracter cannot join a game");
+                    break;
                 case 0x71:
-                    throw new JoinGameException("A non-hardcore character cannot join a hardcore game");
+                    Log.Debug("A non-hardcore character cannot join a hardcore game");
+                    break;
                 case 0x73:
-                    throw new JoinGameException("Unable to join a Nightmare game");
+                    Log.Debug("Unable to join a Nightmare game");
+                    break;
                 case 0x74:
-                    throw new JoinGameException("Unable to join a Hell Game");
+                    Log.Debug("Unable to join a Hell Game");
+                    break;
                 case 0x78:
-                    throw new JoinGameException("A non-expansion character cannot join a game created by an expansion character");
+                    Log.Debug("A non-expansion character cannot join a game created by an expansion character");
+                    break;
                 case 0x79:
-                    throw new JoinGameException("An expansion character cannot join a game created by a non-expansion character");
+                    Log.Debug("An expansion character cannot join a game created by a non-expansion character");
+                    break;
                 case 0x7D:
-                    throw new JoinGameException("A non-ladder character cannot join a ladder game");
+                    Log.Debug("A non-ladder character cannot join a ladder game");
+                    break;
                 default:
-                    throw new JoinGameException("Unknown game join failure");
+                    Log.Debug("Unknown game join failure");
+                    break;
             }
         }
     }

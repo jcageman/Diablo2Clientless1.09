@@ -7,7 +7,7 @@ using System;
 
 namespace PacketSniffer
 {
-    public static class IncomingPackets
+    public static class IncomingD2GSPackets
     {
         public static void HandleIncomingPacket(D2gsPacket eventArgs)
         {
@@ -31,9 +31,6 @@ namespace PacketSniffer
                 case InComingPacket.PlayerStop:
                 case InComingPacket.PlayerToTarget:
                 case InComingPacket.ReportKill:
-                case InComingPacket.Recv12:
-                case InComingPacket.Recv13:
-                case InComingPacket.Recv14:
                 case InComingPacket.GoldToInventory:
                 case InComingPacket.AddExperienceByte:
                 case InComingPacket.AddExperienceWord:
@@ -82,7 +79,6 @@ namespace PacketSniffer
                 case InComingPacket.Recv72:
                 case InComingPacket.Recv73:
                 case InComingPacket.PlayerCorpseAssign:
-                case InComingPacket.PlayerPartyInfo:
                 case InComingPacket.PlayerInProximity:
                 case InComingPacket.ButtonAction:
                 case InComingPacket.TradeAccepted:
@@ -103,7 +99,7 @@ namespace PacketSniffer
                 case InComingPacket.AssignPlayerToParty:
                 case InComingPacket.CorpseAssign:
                 case InComingPacket.Pong:
-                case InComingPacket.PartyAutomapInfo:
+                case InComingPacket.PlayerPartyInfo:
                 case InComingPacket.Recv91:
                 case InComingPacket.Recv92:
                 case InComingPacket.Recv93:
@@ -132,6 +128,22 @@ namespace PacketSniffer
                 case InComingPacket.GameQuestInfo:
                     Log.Debug($"Received D2GS packet of type: {incomingPacketType} with data {eventArgs.Raw.ToPrintString()}");
                     break;
+                case InComingPacket.PartyAutomapInfo:
+                    var playerPartyInfoPacket = new PartyAutomapInfoPacket(eventArgs);
+                    Log.Information($"PartyAutomapInfo -> ID: {playerPartyInfoPacket.Id} Location: {playerPartyInfoPacket.Location}");
+                    break;
+                case InComingPacket.AddEntityEffect:
+                    var addEntityEffectPacket = new AddEntityEffectPacket(eventArgs);
+                    Log.Information($"AddEntityEffect -> Type: {addEntityEffectPacket.EntityType} with id  {addEntityEffectPacket.EntityId} effect {addEntityEffectPacket.Effect} unknown {addEntityEffectPacket.Unknown1}  with data: {eventArgs.Raw.ToPrintString()}");
+                    break;
+                case InComingPacket.AddEntityEffect2:
+                    var addEntityEffectPacket2 = new AddEntityEffectPacket2(eventArgs);
+                    Log.Information($"AddEntityEffect2 -> Type: {addEntityEffectPacket2.EntityType} with id  {addEntityEffectPacket2.EntityId} effect {addEntityEffectPacket2.Effect} unknown {addEntityEffectPacket2.Unknown1}  with data: {eventArgs.Raw.ToPrintString()}");
+                    break;
+                case InComingPacket.UpdateEntityEffects:
+                    var removeEntityEffectPacket = new UpdateEntityEffectsPacket(eventArgs);
+                    Log.Information($"UpdateEntityEffectsPacket -> Type: {removeEntityEffectPacket.EntityType} with id  {removeEntityEffectPacket.EntityId} with effects: {string.Join(",",removeEntityEffectPacket.EntityEffects)} with data: {eventArgs.Raw.ToPrintString()}");
+                    break;
                 case InComingPacket.MapReveal:
                     var mapRevealPacket = new MapRevealPacket(eventArgs);
                     Log.Information($"MapReveal -> At {mapRevealPacket.Area} Loc: {mapRevealPacket.X}, {mapRevealPacket.Y}");
@@ -156,11 +168,11 @@ namespace PacketSniffer
                     break;
                 case InComingPacket.AssignNPC2:
                     var assignNpcPacket = new AssignNpcPacket(eventArgs);
-                    Log.Information($"AssignNPC2 -> ID: {assignNpcPacket.EntityId} Unique Code: {assignNpcPacket.UniqueCode} Location: {assignNpcPacket.Location}");
+                    Log.Information($"AssignNPC2 -> ID: {assignNpcPacket.EntityId} Unique Code: {assignNpcPacket.UniqueCode} Location: {assignNpcPacket.Location} Enchantments: {string.Join(",", assignNpcPacket.MonsterEnchantments)} data {eventArgs.Raw.ToPrintString()}" );
                     break;
                 case InComingPacket.AssignNPC1:
                     var assignTownNpcPacket = new AssignNpcPacket(eventArgs);
-                    Log.Information($"AssignNPC1 -> ID: {assignTownNpcPacket.EntityId} Unique Code: {assignTownNpcPacket.UniqueCode} Location: {assignTownNpcPacket.Location}");
+                    Log.Information($"AssignNPC1 -> ID: {assignTownNpcPacket.EntityId} Unique Code: {assignTownNpcPacket.UniqueCode} Location: {assignTownNpcPacket.Location} data {eventArgs.Raw.ToPrintString()}");
                     break;
                 case InComingPacket.NPCState:
                     var npcStatePacket = new NpcStatePacket(eventArgs);
@@ -193,7 +205,7 @@ namespace PacketSniffer
                 case InComingPacket.WorldItemAction:
                 case InComingPacket.OwnedItemAction:
                     var parseItemPacket = new ParseItemPacket(eventArgs);
-                    Log.Information($"{incomingPacketType} -> Id: {parseItemPacket.Item.Id} ({parseItemPacket.Item.Level}) Action: {parseItemPacket.Item.Action} Container: {parseItemPacket.Item.Container} Quality: {parseItemPacket.Item.Quality} Name: {parseItemPacket.Item.Name} Type: {parseItemPacket.Item.Type} Location: {parseItemPacket.Item.Location} ShouldKeep: {Pickit.ShouldKeepItem(parseItemPacket.Item)}");
+                    Log.Information($"{incomingPacketType} -> Id: {parseItemPacket.Item.Id} ({parseItemPacket.Item.Level}) Action: {parseItemPacket.Item.Action} Container: {parseItemPacket.Item.Container} Quality: {parseItemPacket.Item.Quality} Name: {parseItemPacket.Item.Name} Type: {parseItemPacket.Item.Type} Location: {parseItemPacket.Item.Location} u1 {parseItemPacket.Item.PlayerId} print: {parseItemPacket.Raw.ToPrintString()} with description {parseItemPacket.Item.GetFullDescription()}");
                     break;
                 case InComingPacket.ReceiveChat:
                     var chatPacket = new ChatPacket(eventArgs);
@@ -221,6 +233,9 @@ namespace PacketSniffer
                 case InComingPacket.IPBan:
                 case InComingPacket.AttributeUpdate:
                     Log.Information($"Received D2GS packet of type: {incomingPacketType} with data {eventArgs.Raw.ToPrintString()}");
+                    break;
+                default:
+                    Log.Information($"Received Unknown D2GS packet of type: {incomingPacketType} with data {eventArgs.Raw.ToPrintString()}");
                     break;
             }
         }

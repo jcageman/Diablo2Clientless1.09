@@ -3,6 +3,7 @@
     public enum EntityCode : ushort
     {
         TownPortal = 59,
+        RedTownPortal = 60,
         WaypointAct1 = 119,
         WaypointAct1JailAndUp = 157,
         WaypointAct2 = 156,

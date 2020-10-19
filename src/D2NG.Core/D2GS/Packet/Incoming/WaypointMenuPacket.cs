@@ -1,4 +1,5 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
+using D2NG.Core.D2GS.Helpers;
 using D2NG.Core.D2GS.Objects;
 using System;
 using System.Collections.Generic;

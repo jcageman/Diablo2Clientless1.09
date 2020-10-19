@@ -1,4 +1,5 @@
-﻿using D2NG.Core.MCP.Packet;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.MCP.Packet;
 using Serilog;
 using System;
 using System.Collections.Concurrent;

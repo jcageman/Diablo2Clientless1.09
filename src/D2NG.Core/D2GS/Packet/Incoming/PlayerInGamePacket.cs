@@ -1,11 +1,12 @@
-﻿using D2NG.Core.D2GS.Exceptions;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Exceptions;
 using D2NG.Core.Extensions;
 using System.IO;
 using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming
 {
-    internal class PlayerInGamePacket : D2gsPacket
+    public class PlayerInGamePacket : D2gsPacket
     {
         public PlayerInGamePacket(D2gsPacket packet) : base(packet.Raw)
         {

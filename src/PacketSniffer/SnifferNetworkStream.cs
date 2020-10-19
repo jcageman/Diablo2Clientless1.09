@@ -52,5 +52,20 @@ namespace PacketSniffer
             packet = packet.Skip(1).ToArray();
             return firstByte;
         }
+
+        public void AddBytes(byte[] additionalBytes)
+        {
+            packet = packet.Concat(additionalBytes).ToArray();
+        }
+
+        public void SetBytes(byte[] bytes)
+        {
+            packet = bytes;
+        }
+
+        public byte[] GetBytes()
+        {
+            return packet;
+        }
     }
 }

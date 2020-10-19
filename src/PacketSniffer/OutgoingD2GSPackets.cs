@@ -6,7 +6,7 @@ using System;
 
 namespace PacketSniffer
 {
-    public static class OutgoingPackets
+    public static class OutgoingD2GSPackets
     {
         public static void HandleOutgoingPacket(byte[] bytes)
         {
@@ -116,8 +116,15 @@ namespace PacketSniffer
                 case OutGoingPacket.Startup:
                 case OutGoingPacket.JoinGame:
                 case OutGoingPacket.Ping:
-                    Log.Information($"Outgoing packet {packetType}");
-                    Log.Debug($"{bytes.ToPrintString()}");
+                    if (Log.IsEnabled(Serilog.Events.LogEventLevel.Debug))
+                    {
+                        Log.Debug($"Outgoing packet {packetType} with data: {bytes.ToPrintString()}");
+                    }
+                    else
+                    {
+                        Log.Information($"Outgoing packet {packetType}");
+                    }
+                    
                     break;
             }
         }

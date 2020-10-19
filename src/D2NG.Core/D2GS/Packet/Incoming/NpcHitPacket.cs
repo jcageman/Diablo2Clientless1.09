@@ -5,7 +5,7 @@ using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming
 {
-    internal class NpcHitPacket : D2gsPacket
+    public class NpcHitPacket : D2gsPacket
     {
         public uint EntityId { get; }
 

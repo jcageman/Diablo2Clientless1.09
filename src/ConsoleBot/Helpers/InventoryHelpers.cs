@@ -47,8 +47,8 @@ namespace ConsoleBot.Helpers
 
         public static MoveItemResult StashItemsToKeep(Game game, IExternalMessagingClient externalMessagingClient)
         {
-            var inventoryItemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(i) && Pickit.Pickit.CanTouchInventoryItem(i)).ToList();
-            var cubeItemsToKeep = game.Cube.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(i)).ToList();
+            var inventoryItemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
+            var cubeItemsToKeep = game.Cube.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
             var goldOnPerson = game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0);
             if (inventoryItemsToKeep.Count == 0 && cubeItemsToKeep.Count == 0 && goldOnPerson < 200000)
             {
@@ -142,9 +142,9 @@ namespace ConsoleBot.Helpers
             return MoveItemResult.Succes;
         }
 
-        public static bool TransmuteItemsInCube(Game game)
+        public static bool TransmuteItemsInCube(Game game, bool newItemsSpawn)
         {
-            var cube = game.Inventory.FindItemByName("Horadric Cube");
+            var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
             if (cube != null)
             {
                 if (!game.ActivateBufferItem(cube))
@@ -157,7 +157,7 @@ namespace ConsoleBot.Helpers
                 var transmuteResult = GeneralHelpers.TryWithTimeout((retryCount) =>
                 {
                     var newItems = game.Cube.Items.Select(i => i.Id).ToHashSet();
-                    return !newItems.Intersect(oldItems).Any() && newItems.Count > 0;
+                    return !newItems.Intersect(oldItems).Any() && (!newItemsSpawn || newItems.Count > 0);
                 }, MoveItemTimeout);
 
                 if (!transmuteResult)
@@ -230,7 +230,7 @@ namespace ConsoleBot.Helpers
                 return MoveItemResult.NoSpace;
             }
 
-            var cube = game.Inventory.FindItemByName("Horadric Cube");
+            var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
             if (cube == null)
             {
                 Log.Error($"Cube not found");
@@ -269,7 +269,7 @@ namespace ConsoleBot.Helpers
 
         public static MoveItemResult PutInventoryItemInCube(Game game, Item item, Point point)
         {
-            var cube = game.Inventory.FindItemByName("Horadric Cube");
+            var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
             if (cube == null)
             {
                 Log.Error($"Cube not found");
@@ -310,7 +310,7 @@ namespace ConsoleBot.Helpers
         {
             foreach (var item in game.Inventory.Items)
             {
-                if (Pickit.Pickit.CanTouchInventoryItem(item))
+                if (Pickit.Pickit.CanTouchInventoryItem(game, item))
                 {
                     var freeSpace = game.Cube.FindFreeSpace(item);
                     if (freeSpace != null)
@@ -318,6 +318,29 @@ namespace ConsoleBot.Helpers
                         PutInventoryItemInCube(game, item, freeSpace);
                     }
                 }
+            }
+        }
+
+        public static void MoveCubeItemsToInventory(Game game)
+        {
+            foreach (var item in game.Cube.Items)
+            {
+                PutCubeItemInInventory(game, item);
+            }
+        }
+
+        public static void CleanupPotionsInBelt(Game game)
+        {
+            var manaPotionsInWrongSlot = game.Belt.GetManaPotionsInSlots(new List<int>() { 0, 1 });
+            foreach (var manaPotion in manaPotionsInWrongSlot)
+            {
+                game.UseBeltItem(manaPotion);
+            }
+
+            var healthPotionsInWrongSlot = game.Belt.GetHealthPotionsInSlots(new List<int>() { 2, 3 });
+            foreach (var healthPotion in healthPotionsInWrongSlot)
+            {
+                game.UseBeltItem(healthPotion);
             }
         }
     }

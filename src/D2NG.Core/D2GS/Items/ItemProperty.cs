@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Players;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Players;
 
 namespace D2NG.Core.D2GS.Items
 {

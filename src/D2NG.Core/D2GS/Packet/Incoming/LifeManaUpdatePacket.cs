@@ -1,4 +1,5 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
+using D2NG.Core.D2GS.Helpers;
 using Serilog;
 
 namespace D2NG.Core.D2GS.Packet.Incoming

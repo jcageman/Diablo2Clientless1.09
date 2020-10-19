@@ -5,9 +5,9 @@ namespace ConsoleBot.Pickit
 {
     public static class Helms
     {
-        private static readonly HashSet<string> desirableHelms = new HashSet<string> {
-            "Cap", "Skull Cap", "Great Helm", "Crown", "Mask", "Bone Helm",
-            "War Hat", "Death Mask", "Grim Helm" };
+        private static readonly HashSet<ItemName> desirableHelms = new HashSet<ItemName> {
+            ItemName.Cap, ItemName.SkullCap, ItemName.GreatHelm, ItemName.Crown, ItemName.Mask, ItemName.BoneHelm,
+            ItemName.WarHat, ItemName.DeathMask, ItemName.GrimHelm };
         public static bool ShouldPickupItem(Item item)
         {
             if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
@@ -20,14 +20,7 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItem(Item item)
         {
-            if (item.Name == "Grim Helm"
-                && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70
-                && item.GetTotalLifeFromStats() >= 30)
-            {
-                return true;
-            }
-
-            if (item.Name == "Grim Helm"
+            if (item.Name == ItemName.GrimHelm
                 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
                 && item.GetTotalLifeFromStats() >= 20
                 && item.GetTotalResist() >= 40)
@@ -73,7 +66,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Quality == QualityType.Unique && item.Name == "Skull Cap" && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) == 50)
+            if (item.Quality == QualityType.Unique && item.Name == ItemName.SkullCap && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) == 50)
             {
                 return true;
             }

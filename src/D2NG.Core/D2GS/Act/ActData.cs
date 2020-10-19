@@ -63,7 +63,14 @@ namespace D2NG.Core.D2GS.Act
         {
             var npc = new WorldObject(EntityType.NPC, packet.EntityId, 0, packet.Location, EntityState.Alive, 0);
             npc.NPCCode = packet.UniqueCode;
+            npc.MonsterEnchantments = packet.MonsterEnchantments;
             AddWorldObject(npc);
+        }
+
+        internal void UpdateTownPortal(TownPortalStatePacket packet)
+        {
+            var entity = WorldObjects[(packet.TeleportId, EntityType.Object)];
+            entity.TownPortalArea = packet.Area;
         }
 
         internal void RemoveWorldObject(uint entityId, EntityType entityType)

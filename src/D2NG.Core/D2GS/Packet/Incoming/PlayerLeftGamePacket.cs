@@ -4,7 +4,7 @@ using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming
 {
-    internal class PlayerLeftGamePacket : D2gsPacket
+    public class PlayerLeftGamePacket : D2gsPacket
     {
         public PlayerLeftGamePacket(D2gsPacket packet) : base(packet.Raw)
         {

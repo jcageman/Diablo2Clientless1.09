@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using D2NG.Core.D2GS.Enums;
+using System.Text;
 
 namespace D2NG.Core.MCP
 {

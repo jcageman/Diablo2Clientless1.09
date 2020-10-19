@@ -13,11 +13,12 @@ namespace ConsoleBot.Pickit
             }
 
             // Death's
-            if (/*item.Name == "Sash" || */item.Name == "Leather Gloves")
+            /*
+            if (item.Name == "Sash" || item.Name == "Leather Gloves")
             {
                 return true;
             }
-
+            */
             /*
             if (item.Name == "Crown" || item.Name == "Amulet" || item.Name == "Light Gauntlets" || item.Name == "Heavy Belt")
             {
@@ -35,10 +36,12 @@ namespace ConsoleBot.Pickit
             }
 
             // Death's
-            if (/*item.Name == "Sash" || */item.Name == "Leather Gloves")
+            /*
+            if (item.Name == "Sash" || item.Name == "Leather Gloves")
             {
                 return true;
             }
+            */
 
             // Iratha's set:
             /*

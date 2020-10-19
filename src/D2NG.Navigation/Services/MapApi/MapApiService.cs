@@ -1,5 +1,7 @@
 ﻿using D2NG.Core;
 using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Enums;
+using D2NG.Navigation.Core;
 using D2NG.Navigation.Extensions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -30,27 +32,27 @@ namespace D2NG.Navigation.Services.MapApi
 
         private async Task<string> GetSessionCached(uint mapId, Difficulty difficulty)
         {
-            var session = await _cache.GetOrCreateAsync(Tuple.Create("mapapi", mapId, difficulty), async (cacheEntry) =>
+            var session = _cache.GetOrCreate(Tuple.Create("mapapi", mapId, difficulty), (cacheEntry) =>
             {
-                cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(2);
+                cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(5);
                 cacheEntry.RegisterPostEvictionCallback(DeleteSession);
                 var (_, map, diff) = (Tuple<string, uint, Difficulty>)cacheEntry.Key;
-                return await CreateSession(map, diff);
+                return new AsyncLazy<string>(async () => await CreateSession(map, diff));
             });
 
-            return session;
+            return await session.Value;
         }
 
         private async Task<AreaMap> GetAreaFromApiCached(string sessionId, Area area)
         {
-            var areaMap = await _cache.GetOrCreateAsync(Tuple.Create("mapapi", sessionId, area), async (cacheEntry) =>
+            var areaMap = _cache.GetOrCreate(Tuple.Create("mapapi", sessionId, area), (cacheEntry) =>
             {
-                cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(2);
+                cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(5);
                 var (_, sessionId, area) = (Tuple<string, string, Area>)cacheEntry.Key;
-                return await GetAreaFromApi(sessionId, area);
+                return new AsyncLazy<AreaMap>(async () => await GetAreaFromApi(sessionId, area));
             });
 
-            return areaMap;
+            return await areaMap.Value;
         }
 
         private async Task<AreaMap> GetAreaFromApi(string sessionId, Area area)
@@ -81,8 +83,12 @@ namespace D2NG.Navigation.Services.MapApi
         private void DeleteSession(object key, object value, EvictionReason reason, object state)
         {
             var client = _httpClientFactory.CreateClient();
-            var sessionId = (string)value;
-            client.DeleteAsync($"{_mapConfiguration.ApiUrl}/sessions/{sessionId}").Wait();
+            var lazySession = (AsyncLazy<string>)value;
+            if(lazySession.IsValueCreated && lazySession.Value.IsCompleted)
+            {
+                var sessionId = lazySession.Value.Result;
+                client.DeleteAsync($"{_mapConfiguration.ApiUrl}/sessions/{sessionId}").Wait();
+            }
         }
     }
 }

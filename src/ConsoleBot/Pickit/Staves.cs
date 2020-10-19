@@ -34,7 +34,7 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.GetValueOfStatType(StatType.PaladinSkills) == 2
-            && (item.GetTotalResist() >= 30 || item.GetTotalLifeFromStats() >= 50))
+            && (item.GetTotalResist() >= 30 && item.GetTotalLifeFromStats() >= 50))
             {
                 return true;
             }
@@ -54,7 +54,8 @@ namespace ConsoleBot.Pickit
 
             if (item.GetValueOfStatType(StatType.NecromancerSkills) == 2
              && item.GetValueOfStatType(StatType.FasterCastRate) == 20
-             && item.GetTotalResist() >= 30)
+             && item.GetTotalResist() >= 40
+             && item.GetValueOfStatType(StatType.SingleSkill1) + item.GetValueOfStatType(StatType.SingleSkill2) + item.GetValueOfStatType(StatType.SingleSkill3) >= 3)
             {
                 return true;
             }

@@ -1,16 +1,17 @@
 ﻿using D2NG.Core.D2GS.Items;
+using System;
 
 namespace D2NG.Core.DataManager
 {
     class ItemEntry
     {
-        public string Name;
+        public ItemName Name;
         public string Type;
         public ClassificationType Classification;
         public ushort Width, Height;
         public bool Stackable, Usable, Throwable;
 
-        public ItemEntry(string name, string type, ClassificationType classification, ushort width, ushort height, bool stackable, bool usable, bool throwable)
+        public ItemEntry(ItemName name, string type, ClassificationType classification, ushort width, ushort height, bool stackable, bool usable, bool throwable)
         {
             Name = name;
             Type = type;
@@ -72,6 +73,26 @@ namespace D2NG.Core.DataManager
                     return true;
                 default:
                     return false;
+            }
+        }
+
+        public uint GetBeltRows()
+        {
+            if(Classification != ClassificationType.Belt)
+            {
+                return 0;
+            }
+
+            switch (Name)
+            {
+                case ItemName.Sash:
+                case ItemName.LightBelt:
+                    return 2;
+                case ItemName.Belt:
+                case ItemName.HeavyBelt:
+                    return 3;
+                default:
+                    return 4;
             }
         }
     }

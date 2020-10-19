@@ -1,5 +1,7 @@
-﻿using D2NG.Core.D2GS;
+﻿using D2NG.Core.BNCS;
+using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Helpers;
+using D2NG.Core.MCP;
 using Serilog;
 using Serilog.Events;
 using SharpPcap;
@@ -11,8 +13,27 @@ namespace PacketSniffer
     class Program
     {
         public static GameServerConnection gameServerConnection = new GameServerConnection();
+
+        public static BncsConnection bncsConnection = new BncsConnection();
+
+        public static McpConnection mcpConnection = new McpConnection();
         static void Main(string[] args)
         {
+            gameServerConnection._stream = new SnifferNetworkStream(new byte[] { });
+            gameServerConnection.PacketReceived += (obj, eventArgs) =>
+            {
+                IncomingD2GSPackets.HandleIncomingPacket(eventArgs);
+            };
+            bncsConnection._stream = new SnifferNetworkStream(new byte[] { });
+            bncsConnection.PacketReceived += (obj, eventArgs) =>
+            {
+                IncomingBNCSPackets.HandleIncomingPacket(eventArgs);
+            };
+            mcpConnection._stream = new SnifferNetworkStream(new byte[] { });
+            mcpConnection.PacketReceived += (obj, eventArgs) =>
+            {
+                IncomingMCPPackets.HandleIncomingPacket(eventArgs);
+            };
             File.Delete("log.txt");
 
             Log.Logger = new LoggerConfiguration()
@@ -21,10 +42,7 @@ namespace PacketSniffer
             .WriteTo.File("log.txt")
             .CreateLogger();
 
-            gameServerConnection.PacketReceived += (obj, eventArgs) =>
-            {
-                IncomingPackets.HandleIncomingPacket(eventArgs);
-            };
+
 
             // Retrieve the device list from the local machine
             var allDevices = CaptureDeviceList.Instance;
@@ -79,7 +97,7 @@ namespace PacketSniffer
             int readTimeoutMilliseconds = 1000;
 
             selectedDevice.Open(DeviceMode.Promiscuous, readTimeoutMilliseconds);
-            selectedDevice.Filter = "tcp port 4000";
+            selectedDevice.Filter = "tcp port 4000 or 6112 or 6113";
             selectedDevice.Capture();
             selectedDevice.Close();
         }
@@ -96,16 +114,64 @@ namespace PacketSniffer
                 {
                     if (bytes.Length == 2 && bytes[0] == 0xA7 && bytes[1] == 0x01)
                     {
-                        Log.Debug($"Initial packet received: {bytes.ByteArrayToString()}");
+                        Log.Debug($"D2GS Initial packet received: {bytes.ByteArrayToString()}");
                         return;
                     }
-                    Log.Debug($"Full packet received: {bytes.ByteArrayToString()}");
-                    gameServerConnection._stream = new SnifferNetworkStream(bytes);
-                    gameServerConnection.ReadPacket();
+                    Log.Debug($"D2GS Full packet received: {bytes.ByteArrayToString()}");
+                    var stream = gameServerConnection._stream as SnifferNetworkStream;
+                    stream.AddBytes(bytes);
+                    var initialBytes = stream.GetBytes();
+                    try
+                    {
+                        initialBytes = stream.GetBytes();
+                        while (gameServerConnection.ReadPacket() != null)
+                        {
+
+                        }
+                    }
+                    catch
+                    {
+                        stream.SetBytes(initialBytes);
+                    }
                 }
-                else
+                else if(tcpPacket.DestinationPort == 4000)
                 {
-                    OutgoingPackets.HandleOutgoingPacket(bytes);
+                    OutgoingD2GSPackets.HandleOutgoingPacket(bytes);
+                }
+                else if (tcpPacket.SourcePort == 6112)
+                {
+                    Log.Debug($"BNCS Full packet received: {bytes.ByteArrayToString()}");
+                    var stream = bncsConnection._stream as SnifferNetworkStream;
+                    stream.AddBytes(bytes);
+                    try
+                    {
+                        bncsConnection.ReadPacket();
+                    }
+                    catch
+                    {
+
+                    }
+                }
+                else if (tcpPacket.DestinationPort == 6112)
+                {
+                    OutgoingBNCSPackets.HandleOutgoingPacket(bytes);
+                }
+                else if (tcpPacket.SourcePort == 6113)
+                {
+                    if (bytes.Length == 7 && bytes[0] == 0x07 && bytes[2] == 0x01)
+                    {
+                        Log.Debug($"MCP Initial packet received: {bytes.ByteArrayToString()}");
+                        return;
+                    }
+
+                    Log.Debug($"MCP Full packet received: {bytes.ByteArrayToString()}");
+                    var stream = mcpConnection._stream as SnifferNetworkStream;
+                    stream.AddBytes(bytes);
+                    mcpConnection.ReadPacket();
+                }
+                else if (tcpPacket.DestinationPort == 6113)
+                {
+                    OutgoingMCPPackets.HandleOutgoingPacket(bytes);
                 }
             }
         }

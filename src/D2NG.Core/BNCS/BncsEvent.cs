@@ -26,12 +26,6 @@ namespace D2NG.Core.BNCS
             return _packet;
         }
 
-        public BncsPacket WaitForPacket()
-        {
-            _event.WaitOne();
-            return _packet;
-        }
-
         public void Set(BncsPacket packet)
         {
             _packet = packet;

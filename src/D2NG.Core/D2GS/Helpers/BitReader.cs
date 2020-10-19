@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace D2NG.Core.D2GS
+namespace D2NG.Core.D2GS.Helpers
 {
     internal class BitReader
     {
@@ -77,7 +77,7 @@ namespace D2NG.Core.D2GS
             while (length > 0)
             {
                 bool bit = ReadBit();
-                bits |= (bit ? 1 : 0) << (initialLen - length);
+                bits |= (bit ? 1 : 0) << initialLen - length;
 
                 length -= 1;
             }

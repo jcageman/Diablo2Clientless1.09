@@ -1,6 +1,7 @@
 ﻿using ConsoleBot.Enums;
 using D2NG.Core;
 using D2NG.Core.D2GS;
+using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using Serilog;
 using System;
@@ -12,11 +13,33 @@ namespace ConsoleBot.Helpers
 {
     public static class CubeHelpers
     {
-        public static void TransmutePerfectSkulls(Game game)
+        static HashSet<ItemName> flawlessGems = new HashSet<ItemName> { ItemName.FlawlessAmethyst, ItemName.FlawlessDiamond, ItemName.FlawlessEmerald, ItemName.FlawlessRuby, ItemName.FlawlessSapphire, ItemName.FlawlessSkull, ItemName.FlawlessTopaz };
+
+        public static bool AnyGemsToTransmuteInStash(Game game)
         {
-            var flawlessSkulls = game.Stash.Items.Where(i => i.Name == "Flawless Skull")
-                                                 .ToList();
-            if (flawlessSkulls.Count < 3)
+            var groupedGems = game.Stash.Items.Where(i => i.Classification == D2NG.Core.D2GS.Items.ClassificationType.Gem && flawlessGems.Contains(i.Name)).GroupBy(i => i.Name);
+            if (groupedGems.Any())
+            {
+                return groupedGems.Max(g => g.Count()) >= 3;
+            }
+
+            return false;
+        }
+
+        public static void TransmuteGems(Game game)
+        {
+            TransmuteFlawlessWithName(game, ItemName.FlawlessDiamond);
+            TransmuteFlawlessWithName(game, ItemName.FlawlessSkull);
+            TransmuteFlawlessWithName(game, ItemName.FlawlessRuby);
+            TransmuteFlawlessWithName(game, ItemName.FlawlessEmerald);
+            TransmuteFlawlessWithName(game, ItemName.FlawlessAmethyst);
+        }
+
+        private static void TransmuteFlawlessWithName(Game game, ItemName flawlessName)
+        {
+            var flawlessGems = game.Stash.Items.Where(i => i.Name == flawlessName)
+                                     .ToList();
+            if (flawlessGems.Count < 3)
             {
                 return;
             }
@@ -38,7 +61,7 @@ namespace ConsoleBot.Helpers
             {
                 if (game.Me.Location.Distance(stash.Location) >= 5)
                 {
-                    if(game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
+                    if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
                     {
                         game.TeleportToLocation(stash.Location);
                     }
@@ -61,12 +84,12 @@ namespace ConsoleBot.Helpers
                 return;
             }
 
-            var skullsInInventory = new List<uint>();
-            foreach (var skull in flawlessSkulls)
+            var flawlessGemsInInventory = new List<uint>();
+            foreach (var gem in flawlessGems)
             {
-                if (InventoryHelpers.MoveItemFromStashToInventory(game, skull) == MoveItemResult.Succes)
+                if (InventoryHelpers.MoveItemFromStashToInventory(game, gem) == MoveItemResult.Succes)
                 {
-                    skullsInInventory.Add(skull.Id);
+                    flawlessGemsInInventory.Add(gem.Id);
                 }
             }
 
@@ -75,21 +98,21 @@ namespace ConsoleBot.Helpers
             Thread.Sleep(100);
             game.ClickButton(ClickType.CloseStash);
 
-            Log.Information($"Moved skulls to inventory for transmuting");
+            Log.Information($"Moved {flawlessName} to inventory for transmuting");
 
-            var remainingSkulls = skullsInInventory;
-            while (remainingSkulls.Count() > 2)
+            var remainingGems = flawlessGemsInInventory;
+            while (remainingGems.Count() > 2)
             {
-                Log.Information($"Transmuting 3 flawless skulls to perfect skull");
-                var skullsToTransmute = remainingSkulls.Take(3);
-                remainingSkulls = remainingSkulls.Skip(3).ToList();
+                Log.Information($"Transmuting 3 {flawlessName} to perfect");
+                var gemsToTransmute = remainingGems.Take(3);
+                remainingGems = remainingGems.Skip(3).ToList();
                 bool moveSucceeded = true;
-                foreach (var skull in skullsToTransmute)
+                foreach (var gem in gemsToTransmute)
                 {
-                    var inventoryItem = game.Inventory.FindItemById(skull);
+                    var inventoryItem = game.Inventory.FindItemById(gem);
                     if (inventoryItem == null)
                     {
-                        Log.Warning($"Skull to be transmuted not found in inventory");
+                        Log.Warning($"Gem to be transmuted not found in inventory");
                         break;
                     }
                     var freeSpace = game.Cube.FindFreeSpace(inventoryItem);
@@ -112,7 +135,7 @@ namespace ConsoleBot.Helpers
                     return;
                 }
 
-                if (!InventoryHelpers.TransmuteItemsInCube(game))
+                if (!InventoryHelpers.TransmuteItemsInCube(game, true))
                 {
                     Log.Error($"Transmuting items failed");
                     return;
@@ -129,21 +152,22 @@ namespace ConsoleBot.Helpers
                 }
             }
 
+            Log.Information($"Moving items back to stash");
+
             if (!game.OpenStash(stash))
             {
                 Log.Error($"Opening stash failed");
                 return;
             }
 
-            var inventoryItemsToKeep = game.Inventory.Items.Where(i => Pickit.Pickit.ShouldKeepItem(i) && Pickit.Pickit.CanTouchInventoryItem(i))
+            var inventoryItemsToKeep = game.Inventory.Items.Where(i => Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i))
                                                            .ToList();
             foreach (var item in inventoryItemsToKeep)
             {
-                if (InventoryHelpers.MoveItemToStash(game, item) != MoveItemResult.Succes)
-                {
-                    continue;
-                }
+                InventoryHelpers.MoveItemToStash(game, item);
             }
+
+            Log.Information($"Closing stash");
 
             Thread.Sleep(300);
             game.ClickButton(ClickType.CloseStash);

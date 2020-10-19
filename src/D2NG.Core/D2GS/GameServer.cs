@@ -81,6 +81,11 @@ namespace D2NG.Core.D2GS
             return Connection.Connected && InGame;
         }
 
+        public bool IsConnected()
+        {
+            return Connection.Connected;
+        }
+
         private void Listen()
         {
             while (Connection.Connected)
@@ -100,7 +105,7 @@ namespace D2NG.Core.D2GS
         internal void Disconnect()
         {
             Connection.Terminate();
-            _listener.Join();
+            _listener?.Join();
         }
 
         public void LeaveGame()

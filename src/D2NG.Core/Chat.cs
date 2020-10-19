@@ -69,5 +69,10 @@ namespace D2NG.Core
             }
             _bncs.ChatCommand(message.Trim());
         }
+
+        public bool IsConnected()
+        {
+            return _bncs.IsConnected();
+        }
     }
 }

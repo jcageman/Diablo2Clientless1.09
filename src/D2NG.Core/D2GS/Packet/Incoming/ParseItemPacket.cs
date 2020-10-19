@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Action = D2NG.Core.D2GS.Items.Action;
+using D2NG.Core.D2GS.Helpers;
 
 namespace D2NG.Core.D2GS.Packet.Incoming
 {
@@ -27,8 +28,8 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             item.Id = reader.ReadUInt32();
             if (packet == 0x9d)
             {
-                _ = reader.ReadUInt32();
                 _ = reader.ReadByte();
+                item.PlayerId = reader.ReadUInt32();
             }
         }
 
@@ -97,7 +98,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
                 }
                 item.Container = (ContainerType)container;
             }
-            else if (item.Action == Action.PutInBelt || item.Action == Action.RemoveFromBelt)
+            else if (item.Action == Action.PutInBelt || item.Action == Action.RemoveFromBelt || (item.IsPotion && item.Action == Action.UpdateStats))
             {
                 item.Container = ContainerType.Belt;
                 item.Location = new Point((ushort)(item.Location.X % 4), (ushort)(item.Location.X / 4));
@@ -157,6 +158,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             item.Height = entry.Height;
             item.IsArmor = entry.IsArmor();
             item.IsWeapon = entry.IsWeapon();
+            item.BeltRows = entry.GetBeltRows();
             item.Stackable = entry.Stackable;
             item.Usable = entry.Usable;
             item.Throwable = entry.Throwable;

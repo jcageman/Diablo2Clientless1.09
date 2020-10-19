@@ -1,4 +1,6 @@
-﻿using D2NG.Core.D2GS.Packet.Incoming;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Packet.Incoming;
+using System.Collections.Generic;
 
 namespace D2NG.Core.D2GS.Players
 {
@@ -8,6 +10,10 @@ namespace D2NG.Core.D2GS.Players
         public string Name { get; }
         public uint Id { get; }
         public CharacterClass Class { get; }
+
+        public uint? CorpseId { get; set; }
+
+        public HashSet<EntityEffect> Effects { get; internal set; } = new HashSet<EntityEffect>();
 
         internal Player(AssignPlayerPacket assignPlayer)
         {

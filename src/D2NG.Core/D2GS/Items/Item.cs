@@ -13,7 +13,11 @@ namespace D2NG.Core.D2GS.Items
             Properties = new Dictionary<StatType, ItemProperty>();
         }
 
-        public string Name { get; set; }
+        public uint PlayerId { get; set; }
+
+        public byte Unknown2 { get; set; }
+
+        public ItemName Name { get; set; }
 
         public bool Ethereal { get; set; }
 
@@ -86,12 +90,36 @@ namespace D2NG.Core.D2GS.Items
         public uint MaximumDurability { get; set; }
         public bool HasSockets { get; set; }
 
+        public uint BeltRows { get; set; }
+
         public Dictionary<StatType, ItemProperty> Properties { get; set; }
 
 
         public int GetValueOfStatType(StatType statType)
         {
-            return Properties.GetValueOrDefault(statType)?.Value ?? 0;
+            var result = Properties.GetValueOrDefault(statType)?.Value ?? 0;
+            switch (statType)
+            {
+                case StatType.MaximumDamage:
+                    result += Properties.GetValueOrDefault(StatType.MinimumDamage)?.MaximumValue ?? 0;
+                    break;
+                case StatType.MaximumFireDamage:
+                    result += Properties.GetValueOrDefault(StatType.MinimumFireDamage)?.MaximumValue ?? 0;
+                    break;
+                case StatType.MaximumPoisonDamage:
+                    result += Properties.GetValueOrDefault(StatType.MinimumPoisonDamage)?.MaximumValue ?? 0;
+                    break;
+                case StatType.MaximumColdDamage:
+                    result += Properties.GetValueOrDefault(StatType.MinimumColdDamage)?.MaximumValue ?? 0;
+                    break;
+                case StatType.MaximumLightningDamage:
+                    result += Properties.GetValueOrDefault(StatType.MinimumLightningDamage)?.MaximumValue ?? 0;
+                    break;
+                default:
+                    break;
+            }
+
+            return result;
         }
 
         public int GetTotalResist()
@@ -165,7 +193,27 @@ namespace D2NG.Core.D2GS.Items
             string fullDescription = $"{Name} ({Level}): \r\n";
             foreach (var property in Properties)
             {
-                fullDescription += $"\t{property.Key} : {property.Value.Value} \r\n";
+                switch(property.Key)
+                {
+                    case StatType.SingleSkill1:
+                    case StatType.SingleSkill2:
+                    case StatType.SingleSkill3:
+                    case StatType.SingleSkill4:
+                        fullDescription += $"\t{property.Value.Skill} : {property.Value.Value} \r\n";
+                        break;
+                    case StatType.MinimumDamage:
+                    case StatType.MinimumFireDamage:
+                    case StatType.MinimumPoisonDamage:
+                    case StatType.MinimumColdDamage:
+                    case StatType.MinimumLightningDamage:
+                        var maximumDamageValue = property.Value.MaximumValue > 0 ? $" - {property.Value.MaximumValue}" : "";
+                        fullDescription += $"\t{property.Key} : {property.Value.Value}{maximumDamageValue} \r\n";
+                        break;
+                    default:
+                        fullDescription += $"\t{property.Key} : {property.Value.Value} \r\n";
+                        break;
+                }
+                
             }
 
             return fullDescription;

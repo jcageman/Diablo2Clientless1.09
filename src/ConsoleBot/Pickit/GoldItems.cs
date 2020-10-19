@@ -5,16 +5,19 @@ namespace ConsoleBot.Pickit
 {
     public static class GoldItems
     {
+        static HashSet<ItemName> flawlessGems = new HashSet<ItemName> { ItemName.FlawlessAmethyst, ItemName.FlawlessDiamond, ItemName.FlawlessEmerald, ItemName.FlawlessRuby, ItemName.FlawlessSapphire, ItemName.FlawlessSkull, ItemName.FlawlessTopaz };
+        static HashSet<ItemName> perfectGems = new HashSet<ItemName> { ItemName.PerfectAmethyst, ItemName.PerfectDiamond, ItemName.PerfectEmerald, ItemName.PerfectRuby, ItemName.PerfectSapphire, ItemName.PerfectSkull, ItemName.PerfectTopaz };
         public static bool ShouldPickupItem(Item item)
         {
+            
             if (item.Classification == ClassificationType.Gem
-                            && (item.Name.Contains("Flawless") || item.Name.Contains("Perfect")))
+                            && (flawlessGems.Contains(item.Name) || perfectGems.Contains(item.Name)))
             {
                 return true;
             }
 
-            var valuableMagicClassifications = new HashSet<ClassificationType> { ClassificationType.Staff, ClassificationType.Wand, ClassificationType.Scepter };
-            if (item.Quality == QualityType.Magical && valuableMagicClassifications.Contains(item.Classification))
+            var valuableClassifications = new HashSet<ClassificationType> { ClassificationType.Staff, ClassificationType.Wand, ClassificationType.Scepter };
+            if (valuableClassifications.Contains(item.Classification))
             {
                 return true;
             }
@@ -30,8 +33,7 @@ namespace ConsoleBot.Pickit
             }
 
             //Exceptional armors are worth it
-            if (item.Quality == QualityType.Magical
-                && item.Classification == ClassificationType.Armor
+            if (item.Classification == ClassificationType.Armor
                 && item.Type.StartsWith("x"))
             {
                 return true;

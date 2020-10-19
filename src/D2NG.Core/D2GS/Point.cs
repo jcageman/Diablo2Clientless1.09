@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography.X509Certificates;
 
 namespace D2NG.Core.D2GS
 {
@@ -50,6 +48,11 @@ namespace D2NG.Core.D2GS
             return Math.Sqrt(Math.Pow(X - other.X, 2.0) + Math.Pow(Y - other.Y, 2.0));
         }
 
+        public double DistanceSquared(Point other)
+        {
+            return Math.Pow(X - other.X, 2.0) + Math.Pow(Y - other.Y, 2.0);
+        }
+
         private ushort Lerp(ushort first, ushort second, float alpha)
         {
             return (ushort)(first * (1 - alpha) + second * alpha);
@@ -73,7 +76,14 @@ namespace D2NG.Core.D2GS
 
         public Point Add(short x, short y)
         {
-            return new Point((ushort)(X + x), (ushort)(Y + y));
+            int newX = X + x;
+            int newY = Y + y;
+            if (newX < 0 || newY < 0 || newX > ushort.MaxValue || newY > ushort.MaxValue)
+            {
+                throw new ArithmeticException();
+            }
+
+            return new Point((ushort)(newX), (ushort)(newY));
         }
         public (double, double) Substract((double, double) other)
         {

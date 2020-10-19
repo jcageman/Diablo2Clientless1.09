@@ -1,11 +1,12 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
+using D2NG.Core.D2GS.Objects;
 using Serilog;
 using System.IO;
 using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming
 {
-    internal class EntityMovePacket : D2gsPacket
+    public class EntityMovePacket : D2gsPacket
     {
         public EntityMovePacket(D2gsPacket packet) : base(packet.Raw)
         {
@@ -15,7 +16,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             {
                 throw new D2GSPacketException($"Invalid Packet Id {id}");
             }
-            UnitType = reader.ReadByte();
+            UnitType = (EntityType)reader.ReadByte();
             UnitId = reader.ReadUInt32();
             MovementType = reader.ReadByte();
             MoveToLocation = new Point(reader.ReadUInt16(), reader.ReadUInt16());
@@ -30,7 +31,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
                 $"\tMoving to Location: {MoveToLocation}");
         }
 
-        public byte UnitType { get; }
+        public EntityType UnitType { get; }
         public uint UnitId { get; }
 
         public byte MovementType { get; }

@@ -1,11 +1,13 @@
-﻿using D2NG.Core.D2GS.Items;
+﻿using D2NG.Core;
+using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 using System.Collections.Generic;
 
 namespace ConsoleBot.Pickit
 {
     public static class Pickit
     {
-        public static bool ShouldPickupItem(Item item)
+        public static bool ShouldPickupItem(Game game, Item item)
         {
             if (GoldItems.ShouldPickupItem(item))
             {
@@ -14,7 +16,7 @@ namespace ConsoleBot.Pickit
 
             if (item.IsIdentified)
             {
-                return ShouldKeepItem(item);
+                return ShouldKeepItem(game, item);
             }
 
             if (Sets.ShouldPickupItem(item))
@@ -101,14 +103,14 @@ namespace ConsoleBot.Pickit
             return false;
         }
 
-        public static bool ShouldKeepItem(Item item)
+        public static bool ShouldKeepItem(Game game, Item item)
         {
             if (!item.IsIdentified)
             {
                 return true;
             }
 
-            if (!CanTouchInventoryItem(item))
+            if (!CanTouchInventoryItem(game, item))
             {
                 return true;
             }
@@ -204,12 +206,12 @@ namespace ConsoleBot.Pickit
                 return false;
             }
 
-            if (item.Name == "Bone Shield")
+            if (item.Name == ItemName.BoneShield)
             {
                 return true;
             }
 
-            if (item.Name == "Boots" || item.Name == "Heavy Boots")
+            if (item.Name == ItemName.Boots || item.Name == ItemName.HeavyBoots)
             {
                 return true;
             }
@@ -222,10 +224,20 @@ namespace ConsoleBot.Pickit
             return false;
         }
 
-        public static bool CanTouchInventoryItem(Item item)
+        public static bool CanTouchInventoryItem(Game game, Item item)
         {
-            var defaultInventoryItems = new List<string>() { "Tome of Town Portal", "Tome of Identify", "Horadric Cube" };
+            if(item.Container != ContainerType.Inventory)
+            {
+                return true;
+            }
+
+            var defaultInventoryItems = new List<ItemName>() { ItemName.TomeOfTownPortal, ItemName.TomeofIdentify, ItemName.HoradricCube };
             if (defaultInventoryItems.Contains(item.Name))
+            {
+                return false;
+            }
+
+            if(game.Me.Class == CharacterClass.Amazon && item.Name == ItemName.Arrows)
             {
                 return false;
             }

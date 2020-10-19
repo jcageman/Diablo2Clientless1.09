@@ -5,7 +5,7 @@ using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming
 {
-    internal class RemoveObjectPacket : D2gsPacket
+    public class RemoveObjectPacket : D2gsPacket
     {
         public RemoveObjectPacket(D2gsPacket packet) : base(packet.Raw)
         {
