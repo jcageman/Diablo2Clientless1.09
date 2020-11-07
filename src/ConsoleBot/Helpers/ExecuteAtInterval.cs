@@ -3,7 +3,7 @@ using System.Timers;
 
 namespace ConsoleBot.Helpers
 {
-    public class ExecuteAtInterval
+    public class ExecuteAtInterval : IDisposable
     {
         private readonly Timer _timer;
 
@@ -12,6 +12,11 @@ namespace ConsoleBot.Helpers
             _timer = new Timer(interval.TotalMilliseconds);
             _timer.AutoReset = true;
             _timer.Elapsed += eventHandler;
+        }
+
+        public void Dispose()
+        {
+            ((IDisposable)_timer).Dispose();
         }
 
         public void Start()

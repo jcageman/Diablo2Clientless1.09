@@ -138,10 +138,54 @@ namespace D2NG.Navigation.Extensions
             return grid;
         }
 
-        public static GridPosition MapToGridPosition(this AreaMap areaMap, Point point)
+        public static bool TryMapToPointInMap(this AreaMap areaMap, Point point, out Point relativePoint)
         {
-            var relativePosition = point - areaMap.LevelOrigin;
-            return new GridPosition(relativePosition.X, relativePosition.Y);
+            try
+            {
+                var relativePosition = point - areaMap.LevelOrigin;
+                var rows = areaMap.Map.GetLength(0);
+                if(rows == 0)
+                {
+                    relativePoint = null;
+                    return false;
+
+                }
+                var columns = areaMap.Map[0].GetLength(0);
+                if (relativePosition.X < columns && relativePosition.Y < rows)
+                {
+                    relativePoint = relativePosition;
+                    return true;
+                }
+            }
+            catch (ArithmeticException)
+            {
+
+            }
+
+            relativePoint = null;
+            return false;
+        }
+
+        public static bool TryMapToGridPosition(this AreaMap areaMap, Point point, out GridPosition? gridPosition)
+        {
+            try
+            {
+                var relativePosition = point - areaMap.LevelOrigin;
+                var rows = areaMap.Map.GetLength(0);
+                var columns = areaMap.Map[0].GetLength(0);
+                if (relativePosition.X < columns && relativePosition.Y < rows)
+                {
+                    gridPosition = new GridPosition(relativePosition.X, relativePosition.Y);
+                    return true;
+                }
+            }
+            catch(ArithmeticException)
+            {
+
+            }
+
+            gridPosition = null;
+            return false;
         }
 
         public static Point MapToPoint(this AreaMap areaMap, Position position)

@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Items;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 
 namespace ConsoleBot.Pickit
 {
@@ -11,52 +12,55 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItem(Item item)
         {
-            if (item.GetToClassSkills() == 2 && item.GetTotalResist() >= 40)
+            if (item.GetToClassSkills() == 2 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
             {
                 return true;
             }
 
-            if (item.GetToClassSkills() == 1 && item.GetTotalResist() >= 80)
+            if (item.GetToClassSkills() == 2 && item.GetTotalResistFrLrCr() >= 20 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 70)
             {
                 return true;
             }
 
-            if (item.GetToClassSkills() == 1 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResist() >= 70)
+            if (item.GetToClassSkills() >= 1 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
+            {
+                return true;
+            }
+
+            if (item.GetToClassSkills() >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 50)
+            {
+                return true;
+            }
+
+            if (item.GetToClassSkills() >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 40)
             {
                 return true;
             }
 
             if ((item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit)) >= 4
                 && item.GetValueOfStatType(StatType.ExtraGold) >= 80
-                && item.GetTotalResist() >= 40)
-            {
-                return true;
-            }
-
-            if (item.GetValueOfStatType(StatType.BarbarianSkills) >= 1
-                && item.GetValueOfStatType(StatType.ExtraGold) >= 30
-                && item.GetTotalResist() >= 40)
+                && item.GetTotalResistFrLrCr() >= 40)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 4
-                && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.MinimumDamage) * 2 >= 80)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumDamage) * 2 >= 80)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.MinimumDamage) >= 5
-                && item.GetTotalLifeFromStats() >= 80
-                && item.GetTotalResist() >= 70)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 80
+                && item.GetTotalResistFrLrCr() >= 70)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.AmazonSkills) >= 1
                 && item.GetValueOfStatType(StatType.MinimumDamage) >= 5
-                && item.GetTotalLifeFromStats() >= 30
-                && item.GetTotalResist() >= 60)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30
+                && item.GetTotalResistFrLrCr() >= 60)
             {
                 return true;
             }

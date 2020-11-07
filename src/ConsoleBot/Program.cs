@@ -24,7 +24,7 @@ namespace ConsoleBot
             var services = ConfigureServices(args);
             var serviceProvider = services.BuildServiceProvider();
 
-            return await serviceProvider.GetService<Program>().Run();
+            return await serviceProvider.GetService<Program>().Run(serviceProvider);
         }
 
         private static IServiceCollection ConfigureServices(string[] args)
@@ -57,14 +57,19 @@ namespace ConsoleBot
             services.AddMemoryCache();
             services.RegisterNavigationServices(config);
 
-            var configFileName = config.GetSection("bot")["logFile"];
-            File.Delete(configFileName);
+            var logfileName = config.GetSection("bot")["logFile"];
+            if(string.IsNullOrEmpty(logfileName))
+            {
+                Console.WriteLine("Missing logFile parameter in bot config");
+                throw new InvalidProgramException("Missing logFile parameter in bot config");
+            }
+            File.Delete(logfileName);
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Verbose()
                 .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
                 .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
-                .WriteTo.File(configFileName,
-                  restrictedToMinimumLevel: LogEventLevel.Verbose,
+                .WriteTo.File(logfileName,
+                  restrictedToMinimumLevel: LogEventLevel.Information,
                   rollOnFileSizeLimit: true,
                   fileSizeLimitBytes: 20_000_000)
                 .CreateLogger();
@@ -72,10 +77,24 @@ namespace ConsoleBot
             return services;
         }
 
-        private async Task<int> Run()
+        private async Task<int> Run(ServiceProvider serviceProvider)
         {
-            var botConfiguration = _botConfigurationFactory.CreateConfiguration();
-            return await botConfiguration.Run();
+            while(true)
+            {
+                try
+                {
+                    var botConfiguration = _botConfigurationFactory.CreateConfiguration();
+                    await botConfiguration.Run();
+                }
+                catch (Exception e)
+                {
+                    var externalClient = serviceProvider.GetRequiredService<IExternalMessagingClient>();
+                    Log.Information($"Bot crashed with exception {e.Message}, restarting");
+                    await externalClient.SendMessage($"Bot crashed with exception {e.Message}, restarting");
+                    await Task.Delay(TimeSpan.FromSeconds(30));
+                }
+            }
+
         }
     }
 }

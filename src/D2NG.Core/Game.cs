@@ -42,7 +42,7 @@ namespace D2NG.Core
         {
             _gameServer = gameServer;
 
-            _gameServer.OnReceivedPacketEvent(InComingPacket.GameLoading, _ => Log.Information("Game loading..."));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.GameLoading, _ => Log.Information($"{Data?.Me?.Name}: Game loading..."));
             _gameServer.OnReceivedPacketEvent(InComingPacket.GameFlags, p => Initialize(new GameFlags(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.LoadAct, p => Data.Act.LoadActData(new ActDataPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.MapReveal, p => Data.Act.HandleMapRevealPacket(new MapRevealPacket(p)));
@@ -64,6 +64,7 @@ namespace D2NG.Core
             _gameServer.OnReceivedPacketEvent(InComingPacket.SetSkill, p => Data.SetActiveSkill(new SetActiveSkillPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.QuestInfo, p => new QuestInfoPacket(p));
             _gameServer.OnReceivedPacketEvent(InComingPacket.GameQuestInfo, p => new GameQuestInfoPacket(p));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.ObjectState, p => Data.Act.UpdateObjectState(new ObjectStatePacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.NPCState, p => Data.Act.UpdateNPCState(new NpcStatePacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.NPCMove, p => { var packet = new NPCMovePacket(p); Data.Act.UpdateNPCLocation(packet.EntityId, packet.Location); });
             _gameServer.OnReceivedPacketEvent(InComingPacket.NPCStop, p => { var packet = new NPCStopPacket(p); Data.Act.UpdateNPCLocation(packet.EntityId, packet.Location); });
@@ -372,6 +373,11 @@ namespace D2NG.Core
             MoveTo(entity.Location);
         }
 
+        public async Task MoveToAsync(Entity entity)
+        {
+            await MoveToAsync(entity.Location);
+        }
+
         public bool InteractWithNPC(Entity entity)
         {
             var npcInfoPacket = _gameServer.GetResetEventOfType(InComingPacket.NPCInfo);
@@ -402,10 +408,16 @@ namespace D2NG.Core
             return reassignPlayerPacket.WaitOne(500);
         }
 
-        public void InteractWithObject(Entity entity)
+        public void InteractWithPlayer(Player player)
+        {
+            _gameServer.SendPacket(new InteractWithEntityPacket(player.Id, EntityType.Player));
+        }
+
+        public void InteractWithEntity(Entity entity)
         {
             _gameServer.SendPacket(new InteractWithEntityPacket(entity));
         }
+
         public void InitiateEntityChat(Entity entity)
         {
             _gameServer.SendPacket(new InitiateEntityChatPacket(entity));
@@ -527,33 +539,37 @@ namespace D2NG.Core
             {
             }
         }
-        public void UseManaPotion()
+        public bool UseManaPotion()
         {
             var manapotion = Belt.FirstOrDefaultManaPotion();
             if (manapotion != null)
             {
-                Log.Information($"Using mana potion with mana at {Me.Mana} out of {Me.MaxMana}");
+                Log.Information($"{Me.Name} Using mana potion with mana at {Me.Mana} out of {Me.MaxMana}");
                 LastUsedManaPotionTime = DateTime.Now;
                 UseBeltItem(manapotion);
+                return true;
             }
             else
             {
-                Log.Information($"Out of mana potions at {Me.Life} out of {Me.MaxLife}");
+                Log.Information($"{Me.Name} Out of mana potions at {Me.Life} out of {Me.MaxLife}");
+                return false;
             }
         }
 
-        public void UseHealthPotion()
+        public bool UseHealthPotion()
         {
             var healthpotion = Belt.FirstOrDefaultHealthPotion();
             if (healthpotion != null)
             {
-                Log.Information($"Using health potion with health at {Me.Life} out of {Me.MaxLife}");
+                Log.Information($"{Me.Name} Using health potion with health at {Me.Life} out of {Me.MaxLife}");
                 LastUsedHealthPotionTime = DateTime.Now;
                 UseBeltItem(healthpotion);
+                return true;
             }
             else
             {
-                Log.Information($"Out of health potions at {Me.Life} out of {Me.MaxLife}");
+                Log.Information($"{Me.Name} Out of health potions at {Me.Life} out of {Me.MaxLife}");
+                return false;
             }
         }
 
@@ -580,26 +596,58 @@ namespace D2NG.Core
                         continue;
                     }
 
-                    if ((double)Me.Life / Me.MaxLife < 0.1 || (Me.Life < 200 && Me.MaxLife > 600))
+                    if (Me.Effects.Contains(EntityEffect.Playerbody))
                     {
-                        Log.Information($"Leaving game due to life being {Me.Life} of max {Me.MaxLife}");
+                        Log.Information($"Leaving game since {Me.Name} has died");
                         LeaveGame();
                         break;
                     }
 
-                    if ((double)Me.Life / Me.MaxLife < 0.7 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(2))
+                    if (Me.Life / (double)Me.MaxLife < 0.1 || (Me.Life < 200 && Me.MaxLife > 600))
                     {
-                        UseHealthPotion();
+                        Log.Information($"{Me.Name} Leaving game due to life being {Me.Life} of max {Me.MaxLife}");
+                        LeaveGame();
+                        break;
                     }
 
-                    if ((double)Me.Life / Me.MaxLife < 0.3 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(0.7))
+                    if (Me.Life / (double)Me.MaxLife < 0.9 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(10))
                     {
-                        UseHealthPotion();
+                        if(!UseHealthPotion())
+                        {
+                            Log.Information($"{Me.Name} Leaving game due out of potions");
+                            LeaveGame();
+                            break;
+                        }
                     }
 
-                    if (Me.Mana < 40 && DateTime.Now.Subtract(LastUsedManaPotionTime) > TimeSpan.FromSeconds(3))
+                    if (Me.Life / (double)Me.MaxLife < 0.7 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(2))
                     {
-                        UseManaPotion();
+                        if (!UseHealthPotion())
+                        {
+                            Log.Information($"{Me.Name} Leaving game due out of potions");
+                            LeaveGame();
+                            break;
+                        }
+                    }
+
+                    if (Me.Life / (double)Me.MaxLife < 0.3 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(0.7))
+                    {
+                        if (!UseHealthPotion())
+                        {
+                            Log.Information($"{Me.Name} Leaving game due out of potions");
+                            LeaveGame();
+                            break;
+                        }
+                    }
+
+                    if (Me.Mana < 40 && Me.MaxMana > 100 && DateTime.Now.Subtract(LastUsedManaPotionTime) > TimeSpan.FromSeconds(3))
+                    {
+                        if (!UseManaPotion())
+                        {
+                            Log.Information($"{Me.Name} Leaving game due out of potions");
+                            LeaveGame();
+                            break;
+                        }
                     }
 
                     Thread.Sleep(50);

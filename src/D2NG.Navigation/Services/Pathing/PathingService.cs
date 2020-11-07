@@ -9,6 +9,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Roy_T.AStar.Grids;
 using Roy_T.AStar.Paths;
+using Roy_T.AStar.Primitives;
 using Roy_T.AStar.Serialization;
 using Serilog;
 using System;
@@ -124,6 +125,11 @@ namespace D2NG.Navigation.Services.Pathing
 
         private List<Point> GetPath(uint mapId, Difficulty difficulty, Area area, AreaMap map, MovementMode movementMode, Point fromLocation, Point toLocation)
         {
+            if (!map.TryMapToPointInMap(fromLocation, out var fromPosition) || !map.TryMapToPointInMap(toLocation, out var toPosition))
+            {
+                return new List<Point>();
+            }
+
             if (movementMode == MovementMode.Teleport)
             {
                 var teleportPath = new TeleportPather(map);
@@ -141,13 +147,13 @@ namespace D2NG.Navigation.Services.Pathing
                     return map.MapToGrid();
                 });
                 var pathFinder = new PathFinder();
-                var fromPosition = map.MapToGridPosition(fromLocation);
-                var toPosition = map.MapToGridPosition(toLocation);
-                var path = pathFinder.FindPath(fromPosition, toPosition, grid);
+                var fromGridPosition = new GridPosition(fromPosition.X, fromPosition.Y);
+                var toGridPosition = new GridPosition(toPosition.X, toPosition.Y);
+                var path = pathFinder.FindPath(fromGridPosition, toGridPosition, grid);
                 var endPosition = path.Edges.LastOrDefault()?.End.Position;
                 if (endPosition.HasValue && map.MapToPoint(endPosition.Value) == toLocation)
                 {
-                    return path.Edges.Select(e => map.MapToPoint(e.End.Position)).ToList();
+                    return path.Edges.Where((p, i) => i % 5 == 0 || i == path.Edges.Count - 1).Select(e => map.MapToPoint(e.End.Position)).ToList();
                 }
             }
 

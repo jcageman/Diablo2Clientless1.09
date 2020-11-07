@@ -261,5 +261,13 @@ namespace D2NG.Core.Tests.D2GS
             var expected = new List<byte> { 0x6C, 0x69, 0x13, 0x13, 0x13, 0x13, 0x11, 0x6C };
             GameServerConnectionBaseTest(hexString, expected);
         }
+
+        [Fact]
+        public void GameServerConnection27()
+        {
+            string hexString = "303D0DFA4BF965381F40AC36E84B09C0F2040C337E53FECDF9E7F66FCA9C8FD9BF16FF9ADF97F3D39E92FE322703E800";
+            var expected = new List<byte> { 0x6C, 0x69, 0x13, 0x13, 0x13, 0x13, 0x11, 0x6C };
+            GameServerConnectionBaseTest(hexString, expected);
+        }
     }
 }

@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Items;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 using System;
 
 namespace ConsoleBot.Pickit
@@ -24,12 +25,14 @@ namespace ConsoleBot.Pickit
             }
 
             // Faster cast rings
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResist() >= 55)
+            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.FasterCastRate) >= 10
+                && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 30)
             {
                 return true;
             }
 
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResist() >= 30 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) >= 60)
+            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.FasterCastRate) >= 10
+                && item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 60)
             {
                 return true;
             }
@@ -40,64 +43,54 @@ namespace ConsoleBot.Pickit
 
             // BVB ring's
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
-                && item.GetValueOfStatType(StatType.AttackRating) >= 40
-                && item.GetTotalLifeFromStats() >= 70)
+                && item.GetValueOfStatType(StatType.AttackRating) >= 70
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 70)
             {
                 return true;
             }
 
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
                 && totalAddedDamage >= 5
-                && item.GetTotalLifeFromStats() >= 70)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 70)
             {
                 return true;
             }
 
             // Leech ring's
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
-            && totalAddedDamage >= 5
-            && item.GetTotalLifeFromStats() >= 70)
-            {
-                return true;
-            }
-
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 4 && item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
-                && item.GetTotalLifeFromStats() >= 30 && item.GetTotalResist() >= 45)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30 && item.GetTotalResistFrLrCr() >= 45)
             {
                 return true;
             }
 
             if (item.Quality == QualityType.Rare && totalAddedDamage >= 5
-                && item.GetTotalLifeFromStats() >= 70
-                && item.GetTotalResist() >= 40)
-            {
-                return true;
-            }
-
-            if (item.Quality == QualityType.Rare && totalAddedDamage >= 5
+                 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30
                 && (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit)) >= 4
-                && item.GetTotalResist() >= 45)
-            {
-                return true;
-            }
-
-            if (item.Quality == QualityType.Rare && totalAddedDamage >= 5
-                && (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit)) >= 4
-                && item.GetTotalLifeFromStats() >= 70)
+                && item.GetTotalResistFrLrCr() >= 45)
             {
                 return true;
             }
 
             if (item.Quality == QualityType.Rare && totalAddedDamage >= 7
-                && item.GetTotalResist() >= 70)
+                && (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit)) >= 4
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 80)
+            {
+                return true;
+            }
+
+            if (item.Quality == QualityType.Rare && totalAddedDamage >= 7
+                && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
+                && item.GetValueOfStatType(StatType.AttackRating) >= 70
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30
+                && item.GetTotalResistFrLrCr() >= 40)
             {
                 return true;
             }
 
             // Gold ring's
-            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.ExtraGold) > 30
+            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.ExtraGold) > 40
              && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) > 4
-             && item.GetTotalResist() >= 40)
+             && item.GetTotalResistFrLrCr() >= 40)
             {
                 return true;
             }

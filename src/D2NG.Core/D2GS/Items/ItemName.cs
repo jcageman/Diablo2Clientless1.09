@@ -660,6 +660,7 @@
         EssenceOfTerror,
         EssenceOfPain,
         EssenceOfSuffering,
+        EssenceOfAnguish,
         TokenOfAbsolution
     }
 }

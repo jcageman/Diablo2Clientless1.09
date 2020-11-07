@@ -1,10 +1,8 @@
-﻿using D2NG.Core;
-using D2NG.Core.D2GS.Enums;
+﻿using D2NG.Core.D2GS.Enums;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Net;
 
-namespace ConsoleBot
+namespace ConsoleBot.Configurations
 {
     public class BotConfiguration
     {
@@ -19,6 +17,8 @@ namespace ConsoleBot
 
         [Required]
         public string Character { get; set; }
+
+        public MuleConfiguration MuleConfiguration { get; set; }
 
         [Required]
         public string GameNamePrefix { get; set; }

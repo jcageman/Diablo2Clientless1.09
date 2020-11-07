@@ -61,7 +61,7 @@ namespace D2NG.Core
 
         protected void OnConnect(IPAddress ip, int port)
         {
-            Log.Information("[{0}] Connecting to {1}:{2}", GetType(), ip, port);
+            Log.Debug("[{0}] Connecting to {1}:{2}", GetType(), ip, port);
             _tcpClient = new TcpClient()
             {
                 SendTimeout = 10000,
@@ -76,7 +76,7 @@ namespace D2NG.Core
                 throw new UnableToConnectException($"Unable to establish {GetType()}");
             }
             Initialize();
-            Log.Information("[{0}] Successfully connected to {1}:{2}", GetType(), ip, port);
+            Log.Debug("[{0}] Successfully connected to {1}:{2}", GetType(), ip, port);
         }
 
         internal abstract void Initialize();

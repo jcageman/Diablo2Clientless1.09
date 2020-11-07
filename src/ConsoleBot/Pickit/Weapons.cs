@@ -45,14 +45,14 @@ namespace ConsoleBot.Pickit
 
             if (item.Quality == QualityType.Rare
             && desirableExceptionalWeapons.Contains(item.Name)
-            && additionalDamage > 160)
+            && additionalDamage > 180)
             {
                 return true;
             }
 
             if (item.Quality == QualityType.Rare
             && interestingExceptionalWeapons.Contains(item.Name)
-            && (additionalDamage > 200 || item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 190))
+            && (additionalDamage > 210 && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 190))
             {
                 return true;
             }
@@ -60,7 +60,7 @@ namespace ConsoleBot.Pickit
             if (item.Quality == QualityType.Rare
             && item.Name == ItemName.GothicBow
             && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 10
-            && additionalDamage > 150)
+            && additionalDamage > 160)
             {
                 return true;
             }
@@ -68,7 +68,7 @@ namespace ConsoleBot.Pickit
             if (item.Quality == QualityType.Rare
             && desirableBows.Contains(item.Name)
             && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
-            && additionalDamage > 150)
+            && additionalDamage > 160)
             {
                 return true;
             }
@@ -89,15 +89,8 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Quality == QualityType.Rare
-            && item.GetValueOfStatType(StatType.PaladinSkills) >= 2
-            && item.GetTotalResist() >= 30 && item.IsWeapon)
-            {
-                return true;
-            }
-
             /*
-            if (item.Quality == QualityType.Unique && item.Name == "Blade" && item.GetValueOfStatType(StatType.FasterCastRate) == 50)
+            if (item.Quality == QualityType.Unique && item.Name == ItemName.Blade && item.GetValueOfStatType(StatType.FasterCastRate) == 50)
             {
                 return true;
             }

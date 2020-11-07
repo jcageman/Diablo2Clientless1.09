@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Items;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Players;
 
 namespace ConsoleBot.Pickit
@@ -34,27 +35,28 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.GetValueOfStatType(StatType.PaladinSkills) == 2
-            && (item.GetTotalResist() >= 30 && item.GetTotalLifeFromStats() >= 50))
+            && (item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Paladin) >= 50))
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.PaladinSkills) == 2
              && item.GetValueOfStatType(StatType.FasterCastRate) >= 10
-             && (item.GetValueToSkill(Skill.BlessedHammer) >= 1 || item.GetValueToSkill(Skill.Concentration) >= 1))
+             && (item.GetValueToSkill(Skill.BlessedHammer) + item.GetValueToSkill(Skill.Concentration) >= 3))
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.PaladinSkills) == 2
-            && item.GetValueOfStatType(StatType.FasterCastRate) >= 20)
+            && item.GetValueOfStatType(StatType.FasterCastRate) >= 20
+            && item.GetValueToSkill(Skill.BlessedHammer) + item.GetValueToSkill(Skill.Concentration) >= 2)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.NecromancerSkills) == 2
              && item.GetValueOfStatType(StatType.FasterCastRate) == 20
-             && item.GetTotalResist() >= 40
+             && item.GetTotalResistFrLrCr() >= 40
              && item.GetValueOfStatType(StatType.SingleSkill1) + item.GetValueOfStatType(StatType.SingleSkill2) + item.GetValueOfStatType(StatType.SingleSkill3) >= 3)
             {
                 return true;

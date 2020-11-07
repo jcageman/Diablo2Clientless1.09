@@ -43,9 +43,9 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
         private void HandleChatEvent(Client client, BncsPacket obj)
         {
             var packet = new ChatEventPacket(obj.Raw);
-            if (packet.Eid != Eid.SHOWUSER && !packet.Username.Contains(client.LoggedInUserName()))
+            if (packet.Eid != Eid.SHOWUSER && packet.Eid != Eid.USERFLAGS && !packet.Username.Contains(client.LoggedInUserName()))
             {
-                Log.Information(packet.RenderText());
+                Log.Debug(packet.RenderText());
                 if (packet.Eid == Eid.WHISPER || packet.Eid == Eid.TALK)
                 {
                     SendMessage($"To {client.LoggedInUserName()} :" + packet.RenderText()).Wait();
@@ -58,7 +58,7 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
             var packet = new ChatPacket(obj);
             if (packet.ChatType != 0x04)
             {
-                Log.Information(packet.RenderText());
+                Log.Debug(packet.RenderText());
                 if (packet.CharacterName != client.Game.Me?.Name)
                 {
                     SendMessage($"To {client.LoggedInUserName()} :" + packet.RenderText()).Wait();

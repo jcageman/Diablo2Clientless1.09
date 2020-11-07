@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Items;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 
 namespace ConsoleBot.Pickit
 {
@@ -16,27 +17,27 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItem(Item item)
         {
-            if (item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() >= 60)
+            if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60)
             {
                 return true;
             }
 
-            if (item.GetTotalResist() >= 40 && item.GetTotalLifeFromStats() >= 80)
+            if (item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 80)
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 40 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) >= 40)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) >= 20)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 10 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) >= 120)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 10 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 120)
             {
                 return true;
             }

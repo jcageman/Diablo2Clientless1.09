@@ -7,16 +7,18 @@ namespace D2NG.Core.D2GS.Items.Containers
 {
     public class Belt : Container
     {
-        public Belt() : base(4, 4)
+        public Belt() : base(4, 1)
         {
         }
 
         public void UpdateBeltRows(uint rows)
         {
-            Height = rows;
+            var oldHeight = Height;
             var oldBuffer = Buffer;
+            Height = rows;
+            
             Buffer = new bool[Height, Width];
-            for (int y = 0; y < Height; y++)
+            for (int y = 0; y < oldHeight; y++)
             {
                 for (int x = 0; x < Width; x++)
                 {

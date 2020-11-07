@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ConsoleBot.Helpers
@@ -16,6 +17,10 @@ namespace ConsoleBot.Helpers
                 Stopwatch sw = new Stopwatch();
                 sw.Start();
                 success = action(retryCount);
+                if(!success)
+                {
+                    Thread.Sleep(20);
+                }
                 sw.Stop();
                 elapsed += sw.Elapsed;
                 retryCount++;

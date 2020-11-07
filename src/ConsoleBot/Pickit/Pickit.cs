@@ -1,6 +1,7 @@
 ﻿using D2NG.Core;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
+using D2NG.Core.D2GS.Players;
 using System.Collections.Generic;
 
 namespace ConsoleBot.Pickit
@@ -39,7 +40,7 @@ namespace ConsoleBot.Pickit
                 case ClassificationType.Gloves:
                     return Gloves.ShouldPickupItem(item);
                 case ClassificationType.Gold:
-                    return item.Amount > 1000;
+                    return item.Amount > 5000;
                 case ClassificationType.Helm:
                     return Helms.ShouldPickupItem(item);
                 case ClassificationType.Ring:
@@ -135,7 +136,7 @@ namespace ConsoleBot.Pickit
                 case ClassificationType.Gloves:
                     return Gloves.ShouldKeepItem(item);
                 case ClassificationType.Gold:
-                    return item.Amount > 1000;
+                    return item.Amount > 5000;
                 case ClassificationType.Helm:
                     return Helms.ShouldKeepItem(item);
                 case ClassificationType.Ring:
@@ -194,16 +195,25 @@ namespace ConsoleBot.Pickit
                 case ClassificationType.Jewel:
                 case ClassificationType.QuestItem:
                     break;
+                case ClassificationType.Essence:
+                    return item.Name == ItemName.EssenceOfAnguish || item.Name == ItemName.EssenceOfPain || item.Name == ItemName.EssenceOfSuffering;
+                case ClassificationType.Token:
+                    return true;
             }
 
             return false;
         }
 
-        public static bool ShouldGamble(Item item)
+        public static bool ShouldGamble(Self self, Item item)
         {
             if (item.IsIdentified)
             {
                 return false;
+            }
+
+            if(self.Attributes[Attribute.Level] > 86)
+            {
+                return item.Name == ItemName.Amulet;
             }
 
             if (item.Name == ItemName.BoneShield)

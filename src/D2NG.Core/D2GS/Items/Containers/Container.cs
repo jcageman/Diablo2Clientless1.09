@@ -32,13 +32,23 @@ namespace D2NG.Core.D2GS.Items.Containers
         private void SetBuffer(Item item, bool value)
         {
             var itemLocation = GetItemLocation(item);
-            for (int y = 0; y < item.Height; y++)
+            SetBuffer(itemLocation, item.Width, item.Height, value);
+        }
+
+        private void SetBuffer(Point location, int width, int height, bool value)
+        {
+            for (int y = 0; y < height; y++)
             {
-                for (int x = 0; x < item.Width; x++)
+                for (int x = 0; x < width; x++)
                 {
-                    Buffer[itemLocation.Y + y, itemLocation.X + x] = value;
+                    Buffer[location.Y + y, location.X + x] = value;
                 }
             }
+        }
+
+        public void Block(Point location, int width, int height)
+        {
+            SetBuffer(location, width, height, true);
         }
 
         public void Add(Item item)

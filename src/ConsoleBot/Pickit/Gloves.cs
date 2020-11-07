@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Items;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 
 namespace ConsoleBot.Pickit
 {
@@ -18,7 +19,7 @@ namespace ConsoleBot.Pickit
         {
             if (item.Name == ItemName.WarGauntlets
                 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
-                && item.GetTotalLifeFromStats() >= 60
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60
                 && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) > 0)
             {
                 return true;
@@ -26,32 +27,32 @@ namespace ConsoleBot.Pickit
 
             if (item.Name == ItemName.WarGauntlets
                 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
-                && item.GetTotalLifeFromStats() >= 80)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 80)
             {
                 return true;
             }
 
             if (item.Name == ItemName.WarGauntlets
                 && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) > 0
-                && item.GetTotalLifeFromStats() >= 100)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 100)
             {
                 return true;
             }
 
             if (item.Name == ItemName.WarGauntlets
             && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70
-            && item.GetTotalLifeFromStats() >= 20
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 20
             && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) > 0)
             {
                 return true;
             }
 
-            if (item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() >= 60)
+            if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60)
             {
                 return true;
             }
 
-            if (item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() >= 40)
+            if (item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 40)
             {
                 return true;
             }

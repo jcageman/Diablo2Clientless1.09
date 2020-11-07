@@ -45,17 +45,9 @@ namespace ConsoleBot.Helpers
             }
         }
 
-        public static MoveItemResult StashItemsToKeep(Game game, IExternalMessagingClient externalMessagingClient)
+        public static MoveItemResult StashItemsAndGold(Game game, List<Item> items, int gold)
         {
-            var inventoryItemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
-            var cubeItemsToKeep = game.Cube.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
-            var goldOnPerson = game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0);
-            if (inventoryItemsToKeep.Count == 0 && cubeItemsToKeep.Count == 0 && goldOnPerson < 200000)
-            {
-                return MoveItemResult.Succes;
-            }
-
-            Log.Information($"Stashing {inventoryItemsToKeep.Count + cubeItemsToKeep.Count } items and {goldOnPerson} gold");
+            Log.Information($"Stashing {items.Count} items and {gold} gold");
 
             var stashes = game.GetEntityByCode(EntityCode.Stash);
             if (!stashes.Any())
@@ -86,60 +78,108 @@ namespace ConsoleBot.Helpers
                 return MoveItemResult.Failed;
             }
 
-            if (goldOnPerson > 0)
+            if (gold > 0)
             {
-                game.MoveGoldToStash(goldOnPerson);
+                game.MoveGoldToStash(gold);
             }
 
-            Thread.Sleep(100);
-            foreach (Item item in inventoryItemsToKeep)
-            {
-                Log.Information($"Want to keep {item.GetFullDescription()}");
-                if(item.Quality == QualityType.Rare)
-                {
-                    externalMessagingClient.SendMessage($"Want to keep {item.GetFullDescription()}");
-                }
+            var moveResult = MoveItemResult.Succes;
 
+            Thread.Sleep(100);
+            foreach (Item item in items)
+            {
                 if (game.Stash.FindFreeSpace(item) == null)
                 {
-                    game.ClickButton(ClickType.CloseStash);
-                    Thread.Sleep(100);
-                    game.ClickButton(ClickType.CloseStash);
-                    return MoveItemResult.NoSpace;
+                    moveResult = MoveItemResult.NoSpace;
+                    continue;
                 }
 
-                if (MoveItemToStash(game, item) != MoveItemResult.Succes)
+                var currentMoveResult = MoveItemToStash(game, item);
+                if (currentMoveResult != MoveItemResult.Succes)
                 {
-                    return MoveItemResult.Failed;
+                    moveResult = currentMoveResult;
+                    break;
                 };
             }
 
-            foreach (Item item in cubeItemsToKeep)
+            game.ClickButton(ClickType.CloseStash);
+            Thread.Sleep(100);
+            game.ClickButton(ClickType.CloseStash);
+            return moveResult;
+        }
+
+        public static MoveItemResult MoveStashItemsToInventory(Game game, List<Item> items)
+        {
+            Log.Information($"Removing {items.Count} items from Stash");
+
+            var stashes = game.GetEntityByCode(EntityCode.Stash);
+            if (!stashes.Any())
+            {
+                Log.Error($"No stash found");
+                return MoveItemResult.Failed;
+            }
+
+            var stash = stashes.Single();
+
+            bool result = GeneralHelpers.TryWithTimeout((retryCount) =>
+            {
+                if (game.Me.Location.Distance(stash.Location) >= 5)
+                {
+                    game.MoveTo(stash);
+                }
+                else
+                {
+                    return game.OpenStash(stash);
+                }
+
+                return false;
+            }, TimeSpan.FromSeconds(4));
+
+            if (!result)
+            {
+                Log.Error($"Failed to open stash while at location {game.Me.Location} with stash at {stash.Location}");
+                return MoveItemResult.Failed;
+            }
+
+            var moveItemResult = MoveItemResult.Succes;
+
+            Thread.Sleep(100);
+            foreach (Item item in items)
+            {
+                var currentMoveResult = MoveItemFromStashToInventory(game, item);
+                if (currentMoveResult != MoveItemResult.Succes)
+                {
+                    moveItemResult = currentMoveResult;
+                    continue;
+                };
+            }
+
+            game.ClickButton(ClickType.CloseStash);
+            Thread.Sleep(100);
+            game.ClickButton(ClickType.CloseStash);
+            return moveItemResult;
+        }
+
+        public static MoveItemResult StashItemsToKeep(Game game, IExternalMessagingClient externalMessagingClient)
+        {
+            var itemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
+            itemsToKeep.AddRange(game.Cube.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i)));
+            var goldOnPerson = game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0);
+            if (itemsToKeep.Count == 0 && goldOnPerson < 200000)
+            {
+                return MoveItemResult.Succes;
+            }
+
+            foreach(var item in itemsToKeep)
             {
                 Log.Information($"Want to keep {item.GetFullDescription()}");
                 if (item.Quality == QualityType.Rare)
                 {
                     externalMessagingClient.SendMessage($"Want to keep {item.GetFullDescription()}");
                 }
-
-                if (game.Stash.FindFreeSpace(item) == null)
-                {
-                    game.ClickButton(ClickType.CloseStash);
-                    Thread.Sleep(100);
-                    game.ClickButton(ClickType.CloseStash);
-                    return MoveItemResult.NoSpace;
-                }
-                
-                if (MoveItemToStash(game, item) != MoveItemResult.Succes)
-                {
-                    return MoveItemResult.Failed;
-                };
             }
 
-            game.ClickButton(ClickType.CloseStash);
-            Thread.Sleep(100);
-            game.ClickButton(ClickType.CloseStash);
-            return MoveItemResult.Succes;
+            return StashItemsAndGold(game, itemsToKeep, goldOnPerson);
         }
 
         public static bool TransmuteItemsInCube(Game game, bool newItemsSpawn)
@@ -217,9 +257,15 @@ namespace ConsoleBot.Helpers
 
             game.InsertItemIntoContainer(item, location, ItemContainer.Stash);
 
-            return GeneralHelpers.TryWithTimeout(
+            if (!GeneralHelpers.TryWithTimeout(
                 (retryCount) => game.CursorItem == null && game.Stash.FindItemById(item.Id) != null,
-               MoveItemTimeout) ? MoveItemResult.Succes : MoveItemResult.Failed;
+               MoveItemTimeout))
+            {
+                Log.Error($"Inserting item {item.Id} - {item.Name} into stash failed");
+                return MoveItemResult.Failed;
+            }
+
+            return MoveItemResult.Succes;
         }
 
         public static MoveItemResult PutCubeItemInInventory(Game game, Item item)

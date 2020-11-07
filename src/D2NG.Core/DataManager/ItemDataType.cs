@@ -789,6 +789,7 @@ namespace D2NG.Core.DataManager
             itemNameMap["Essence Of Terror"] = ItemName.EssenceOfTerror;
             itemNameMap["Essence Of Pain"] = ItemName.EssenceOfPain;
             itemNameMap["Essence Of Suffering"] = ItemName.EssenceOfSuffering;
+            itemNameMap["Essence Of Anguish"] = ItemName.EssenceOfAnguish;
             itemNameMap["Token Of Absolution"] = ItemName.TokenOfAbsolution;
             return itemNameMap;
         }

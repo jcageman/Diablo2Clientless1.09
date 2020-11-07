@@ -17,6 +17,7 @@ using Action = D2NG.Core.D2GS.Items.Action;
 using D2NG.Navigation.Extensions;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
+using ConsoleBot.Enums;
 
 namespace ConsoleBot.Configurations.Bots
 {
@@ -106,8 +107,13 @@ namespace ConsoleBot.Configurations.Bots
                 }
 
                 var stashItemsResult = InventoryHelpers.StashItemsToKeep(client.Game, _externalMessagingClient);
-                if (stashItemsResult != Enums.MoveItemResult.Succes)
+                if (stashItemsResult != MoveItemResult.Succes)
                 {
+                    if (stashItemsResult == MoveItemResult.NoSpace && !NeedsMule)
+                    {
+                        await _externalMessagingClient.SendMessage($"bot inventory is full, starting mule");
+                        NeedsMule = true;
+                    }
                     Log.Warning($"Stashing items failed with result {stashItemsResult}");
                 }
             }
@@ -227,9 +233,8 @@ namespace ConsoleBot.Configurations.Bots
             }
 
             client.Game.RequestUpdate(client.Game.Me.Id);
-
-            var path3 = await _pathingService.GetPathToLocation(client.Game, new Point(17566, 8070), MovementMode.Teleport);
             Log.Information($"Teleporting to Mephisto");
+            var path3 = await _pathingService.GetPathToLocation(client.Game, new Point(17566, 8070), MovementMode.Teleport);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, path3, MovementMode.Teleport))
             {
                 Log.Warning($"Teleporting to Mephisto failed at location {client.Game.Me.Location}");

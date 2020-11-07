@@ -25,7 +25,7 @@ namespace ConsoleBot.Configurations.Bots.Cows
         private readonly List<Client> _clients;
         private readonly ConcurrentDictionary<uint, AliveMonster> _aliveMonsters = new ConcurrentDictionary<uint, AliveMonster>();
         private readonly ConcurrentDictionary<uint, DeadMonster> _monstersAvailableForCorpseExplosion = new ConcurrentDictionary<uint, DeadMonster>();
-        private readonly ConcurrentBag<Point> _existingClusters = new ConcurrentBag<Point>();
+        private readonly ConcurrentDictionary<Point, Point> _existingClusters = new ConcurrentDictionary<Point, Point>();
         private readonly ConcurrentDictionary<Point, Point> _busyClusters = new ConcurrentDictionary<Point, Point>();
         private readonly ConcurrentDictionary<Client, ConcurrentDictionary<Point, Point>> _cowClustersPerClient = new ConcurrentDictionary<Client, ConcurrentDictionary<Point, Point>>();
         private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new ConcurrentDictionary<uint, Item>();
@@ -103,7 +103,7 @@ namespace ConsoleBot.Configurations.Bots.Cows
                 EndPoint = point
             };
 
-            var anyPointOutside = path.Any(p => MinimumDistanceToLineSegment(p, line) >= 4);
+            var anyPointOutside = path.Any(p => MinimumDistanceToLineSegment(p, line) >= 4.1);
             return !anyPointOutside;
         }
 
@@ -180,16 +180,14 @@ namespace ConsoleBot.Configurations.Bots.Cows
                     return;
                 }
 
-                    var existingCluster = _existingClusters.FirstOrDefault(cluster => packet.Location.Distance(cluster) < 50);
-                if(existingCluster == null)
+                var existingCluster = _existingClusters.Values.FirstOrDefault(cluster => packet.Location.Distance(cluster) < 50);
+                if(existingCluster == null && _existingClusters.TryAdd(packet.Location, packet.Location))
                 {
-                    _existingClusters.Add(packet.Location);
                     var bestClient = _clients.OrderBy(c => c.Game.Me.Location.Distance(packet.Location)).FirstOrDefault();
                     if(bestClient != null)
                     {
                         Log.Information($"Adding new cluster at {packet.Location} to {bestClient.Game.Me.Name}");
                         _cowClustersPerClient[bestClient].TryAdd(packet.Location, packet.Location);
-                        IsActive = true;
                     }
                 }
             }
@@ -321,12 +319,12 @@ namespace ConsoleBot.Configurations.Bots.Cows
                 return true;
             }
 
-            return IsActive &&_busyClusters.IsEmpty && _cowClustersPerClient.Values.All(c => c.IsEmpty);
+            return IsActive && !_busyClusters.Values.Any() && _cowClustersPerClient.Values.All(c => c.IsEmpty);
         }
 
         public void PutItemOnPickitList(Client client, Item item)
         {
-            if (Pickit.Pickit.ShouldPickupItem(client.Game, item))
+            if (Pickit.Pickit.ShouldPickupItem(client.Game, item) && (client.Game.Items.FirstOrDefault(i => i.Id == item.Id)?.Ground ?? false))
             {
                 _pickitItemsOnGround.TryAdd(item.Id, item);
             }

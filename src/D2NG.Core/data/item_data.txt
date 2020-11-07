@@ -656,4 +656,5 @@ Essence Of Hatred|eoh|Essence|1|1|0|0|0
 Essence Of Terror|eot|Essence|1|1|0|0|0
 Essence Of Pain|eop|Essence|1|1|0|0|0
 Essence Of Suffering|eos|Essence|1|1|0|0|0
+Essence Of Anguish|eoa|Essence|1|1|0|0|0
 Token Of Absolution|toa|Token|1|1|0|0|0

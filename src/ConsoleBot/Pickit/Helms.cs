@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Items;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 using System.Collections.Generic;
 
 namespace ConsoleBot.Pickit
@@ -22,51 +23,51 @@ namespace ConsoleBot.Pickit
         {
             if (item.Name == ItemName.GrimHelm
                 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
-                && item.GetTotalLifeFromStats() >= 20
-                && item.GetTotalResist() >= 40)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 40
+                && item.GetTotalResistFrLrCr() >= 40)
             {
                 return true;
             }
 
             if (desirableHelms.Contains(item.Name))
             {
-                if (item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) / 2 >= 30)
+                if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
                 {
                     return true;
                 }
 
-                if (item.GetTotalResist() >= 45 && item.GetTotalLifeFromStats() >= 30 && item.GetValueOfStatType(StatType.MinimumDamage) == 2)
+                if (item.GetTotalResistFrLrCr() >= 45 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 40 && item.GetValueOfStatType(StatType.MinimumDamage) == 2)
                 {
                     return true;
                 }
 
-                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 40 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) / 2 >= 30)
+                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
                 {
                     return true;
                 }
 
-                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) / 2 >= 20)
+                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 30)
                 {
                     return true;
                 }
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) / 2 >= 30)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 45)
             {
                 return true;
             }
 
-            if (item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) / 2 >= 40)
+            if (item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 50)
             {
                 return true;
             }
 
-            if (item.GetTotalResist() >= 50 && item.GetTotalLifeFromStats() + item.GetValueOfStatType(StatType.Mana) / 2 >= 50)
+            if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 60)
             {
                 return true;
             }
 
-            if (item.Quality == QualityType.Unique && item.Name == ItemName.SkullCap && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) == 50)
+            if (item.Quality == QualityType.Unique && item.Name == ItemName.SkullCap && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= 45)
             {
                 return true;
             }

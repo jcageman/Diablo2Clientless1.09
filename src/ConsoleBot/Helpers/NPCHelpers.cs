@@ -163,7 +163,7 @@ namespace ConsoleBot.Helpers
 
                 var inventoryFull = false;
 
-                foreach (var gambleItem in game.Items.Where(i => i.Container == ContainerType.ArmorTab && Pickit.Pickit.ShouldGamble(i)))
+                foreach (var gambleItem in game.Items.Where(i => i.Container == ContainerType.ArmorTab && Pickit.Pickit.ShouldGamble(game.Me, i)))
                 {
                     if (game.Inventory.FindFreeSpace(gambleItem) == null)
                     {

@@ -152,7 +152,7 @@ namespace D2NG.Core
                 return true;
             }
 
-            Log.Information("Joining MCP again");
+            Log.Debug("Joining MCP again");
             if (!RealmLogon())
             {
                 return false;
@@ -182,14 +182,14 @@ namespace D2NG.Core
                 return false;
             }
 
-            Log.Information($"Connecting to {packet.McpIp}:{packet.McpPort}");
+            Log.Debug($"Connecting to {packet.McpIp}:{packet.McpPort}");
             Mcp.Connect(packet.McpIp, packet.McpPort);
             if(!Mcp.Logon(packet.McpCookie, packet.McpStatus, packet.McpChunk, packet.McpUniqueName))
             {
                 Log.Warning("RealmLogin Connecting failed");
                 return false;
             }
-            Log.Information($"Connected to MCP {packet.McpIp}:{packet.McpPort}");
+            Log.Debug($"Connected to MCP {packet.McpIp}:{packet.McpPort}");
             return true;
         }
 

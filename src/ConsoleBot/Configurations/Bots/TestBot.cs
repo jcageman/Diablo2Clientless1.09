@@ -1,11 +1,14 @@
 ﻿using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Configurations.Bots.Cows;
+using ConsoleBot.Enums;
 using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
+using D2NG.Core.D2GS.Items.Containers;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
@@ -45,49 +48,129 @@ namespace ConsoleBot.Configurations.Bots
 
         public async Task<int> Run()
         {
-            var client = new Client();
-            if (!client.Connect(
+            var gameNumber = 2;
+            var client1 = new Client();
+            if (!client1.Connect(
     _config.Realm,
     _config.KeyOwner,
     _config.GameFolder))
             {
                 return 1;
             }
-            var characters = client.Login("tail", "tragic41");
-            if (characters == null)
-            {
-                return 1;
-            }
-            var selectedCharacter = characters.Single(c =>
-                c.Name.Equals("vamos", StringComparison.CurrentCultureIgnoreCase));
-            if (selectedCharacter == null)
+            var selectedCharacter1 = client1.Login("taggert-mule-3", "tragic41")?.Single(c =>
+                c.Name.Equals("tmulethree-two", StringComparison.CurrentCultureIgnoreCase));
+            if (selectedCharacter1 == null)
             {
                 throw new CharacterNotFoundException();
             }
-            client.SelectCharacter(selectedCharacter);
-            client.Chat.EnterChat();
+            client1.SelectCharacter(selectedCharacter1);
+            client1.Chat.EnterChat();
 
-            var joinGame = client.JoinGame($"{_config.GameNamePrefix}{1}", _config.GamePassword);
-            if(!joinGame)
+            var createGame = client1.CreateGame(Difficulty.Normal, $"{_config.GameNamePrefix}{gameNumber}", _config.GamePassword, "gs2");
+            if (!createGame)
             {
                 return 1;
             }
 
-            while(client.Game.Players.Count(p => p.Id != client.Game.Me.Id) < 1)
+            var client2 = new Client();
+            if (!client2.Connect(
+    _config.Realm,
+    _config.KeyOwner,
+    _config.GameFolder))
+            {
+                return 1;
+            }
+            var selectedCharacter2 = client2.Login("taggert-3", "tragic41")?.Single(c =>
+                c.Name.Equals("far", StringComparison.CurrentCultureIgnoreCase));
+            if (selectedCharacter2 == null)
+            {
+                throw new CharacterNotFoundException();
+            }
+            client2.SelectCharacter(selectedCharacter2);
+            client2.Chat.EnterChat();
+
+            var joinGame = client2.JoinGame($"{_config.GameNamePrefix}{gameNumber}", _config.GamePassword);
+            if (!joinGame)
+            {
+                return 1;
+            }
+
+            while (client2.Game.Players.Count(p => p.Id != client2.Game.Me.Id) < 1)
             {
                 Thread.Sleep(2000);
             }
 
-            var cowManager = new CowManager(_pathingService, _mapApiService, new List<Client> { client });
-            while(true)
+            bool tradeAccepted = false;
+            var client1Actions = new HashSet<ButtonAction>();
+            client1.OnReceivedPacketEvent(InComingPacket.ButtonAction, (packet) => client1Actions.Add(new ButtonActionPacket(packet).Action));
+            client1.OnReceivedPacketEvent(InComingPacket.TradeAccepted, (packet) => tradeAccepted = true);
+            var client2Actions = new HashSet<ButtonAction>();
+            client2.OnReceivedPacketEvent(InComingPacket.ButtonAction, (packet) => client2Actions.Add(new ButtonActionPacket(packet).Action));
+
+            var entityPlayerClient1 = client2.Game.Players.First(p => p.Id == client1.Game.Me.Id);
+
+            while (!client1Actions.Contains(ButtonAction.APlayerWantsToTrade))
             {
-                Thread.Sleep(2000);
-                var otherPlayer = client.Game.Players.Where(p => p.Id != client.Game.Me.Id).First();
-                var inLineOfSight = await cowManager.IsInLineOfSight(client, otherPlayer.Location);
-                Log.Information($"Player {otherPlayer.Name} is in sight: {inLineOfSight}");
+                client2.Game.InteractWithPlayer(entityPlayerClient1);
+                await Task.Delay(100);
+            }
+
+            while (!tradeAccepted)
+            {
+                client1.Game.ClickButton(ClickType.AcceptTradeRequest);
+                await Task.Delay(100);
+            }
+
+            MoveAllInventoryItemsToTradeScreen(client1);
+            MoveAllInventoryItemsToTradeScreen(client2);
+
+            client1.Game.ClickButton(ClickType.PressAcceptButton);
+            client2.Game.ClickButton(ClickType.PressAcceptButton);
+
+            while (!client1Actions.Contains(ButtonAction.YouHaveTradedSomeItems))
+            {
+                await Task.Delay(100);
             }
 
             return 0;
+        }
+
+        private static void MoveAllInventoryItemsToTradeScreen(Client client)
+        {
+            var tradeScreenClient2 = new Container(10, 4);
+            foreach (var item in client.Game.Inventory.Items)
+            {
+                var space = tradeScreenClient2.FindFreeSpace(item);
+                if (space == null)
+                {
+                    continue;
+                }
+
+                client.Game.RemoveItemFromContainer(item);
+
+                bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => client.Game.CursorItem?.Id == item.Id, TimeSpan.FromSeconds(3));
+
+                if (!resultToBuffer)
+                {
+                    Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
+                    continue;
+                }
+
+                client.Game.InsertItemIntoContainer(item, space, ItemContainer.Trade);
+
+                var moveResult = GeneralHelpers.TryWithTimeout(
+                    (retryCount) => client.Game.CursorItem == null && client.Game.Items.FirstOrDefault(i => i.Id == item.Id).Container == ContainerType.ForTrade,
+                    TimeSpan.FromSeconds(3));
+                if (!moveResult)
+                {
+                    Log.Error($"Moving item {item.Id} - {item.Name} to trade failed");
+                    continue;
+                }
+
+                var newItem = client.Game.Items.First(i => i.Id == item.Id);
+
+                tradeScreenClient2.Add(newItem);
+            }
         }
     }
 }

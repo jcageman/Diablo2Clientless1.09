@@ -4,11 +4,14 @@ using D2NG.Core.D2GS.Packet;
 using D2NG.Core.Exceptions;
 using Serilog;
 using System;
+using System.Collections.Generic;
 
 namespace D2NG.Core.D2GS
 {
     internal class GameServerConnection : Connection
     {
+        private static int instanceCounter;
+        private readonly int instanceId;
         internal static readonly short[] PacketSizes =
         {
             1, 8, 1, 12, 1, 1, 1, 6, 6, 11, 6, 6, 9, 13, 12, 16,
@@ -28,6 +31,11 @@ namespace D2NG.Core.D2GS
         internal event EventHandler<D2gsPacket> PacketReceived;
 
         internal event EventHandler<D2gsPacket> PacketSent;
+
+        public GameServerConnection()
+        {
+            instanceId = ++instanceCounter;
+        }
 
         internal override void Initialize()
         {
@@ -52,12 +60,16 @@ namespace D2NG.Core.D2GS
 
         internal override byte[] ReadPacket()
         {
+            var readBytes = new List<byte> { };
             var size = _stream.ReadByte();
+            readBytes.Add((byte)size);
             if (size == -1) return null;
 
             if (size >= 0xF0)
             {
-                size = (((size & 0xF) << 8) + _stream.ReadByte() - 2);
+                var secondByte = _stream.ReadByte();
+                readBytes.Add((byte)secondByte);
+                size = (((size & 0xF) << 8) + secondByte - 2);
             }
             else
             {
@@ -67,11 +79,14 @@ namespace D2NG.Core.D2GS
             if (size == 0) return null;
 
             var buffer = ReadBytes(size);
+            readBytes.AddRange(buffer);
+            var fullString = readBytes.ToArray().ByteArrayToString();
+            Log.Verbose($"Instance {instanceId} Full packet received: {fullString}");
 
             Huffman.Decompress(buffer, out var output);
 
             var fullPacketString = output.ToPrintString();
-            Log.Verbose($"Full decompressed packet received: {fullPacketString}");
+            Log.Verbose($"Instance {instanceId} Full decompressed packet received: {fullPacketString}");
 
             var index = 0;
             do

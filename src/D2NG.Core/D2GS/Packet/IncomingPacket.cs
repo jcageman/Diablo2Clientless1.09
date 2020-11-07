@@ -44,6 +44,7 @@
         GameQuestInfo = 0x29,
         NPCTransaction = 0x2A,
         PlaySound = 0x2C,
+        Recv2F = 0x2F,
         UpdateItemStats = 0x3E,
         UseStackableItem = 0x3F,
         Recv40 = 0x40,

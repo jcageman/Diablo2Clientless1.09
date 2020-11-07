@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Players;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Players;
 using System.Collections.Generic;
 
 namespace D2NG.Core.D2GS.Items
@@ -122,21 +123,36 @@ namespace D2NG.Core.D2GS.Items
             return result;
         }
 
-        public int GetTotalResist()
+        public int GetTotalResistFrLrCr()
         {
             var totalResist = 0;
             totalResist += GetValueOfStatType(StatType.ColdResistance);
             totalResist += GetValueOfStatType(StatType.FireResistance);
             totalResist += GetValueOfStatType(StatType.LightningResistance);
-            totalResist += GetValueOfStatType(StatType.PoisonResistance) / 2;
             return totalResist;
         }
-        public int GetTotalLifeFromStats()
+        public int GetTotalLifeFromStats(CharacterClass characterClass)
         {
-            var totalLife = 0;
-            totalLife += GetValueOfStatType(StatType.Life);
-            totalLife += GetValueOfStatType(StatType.Dexterity) * 4;
-            totalLife += GetValueOfStatType(StatType.Strength) * 4;
+            var totalLife = GetValueOfStatType(StatType.Life); ;
+            switch (characterClass)
+            {
+                case CharacterClass.Amazon:
+                case CharacterClass.Sorceress:
+                case CharacterClass.Necromancer:
+                case CharacterClass.Paladin:
+                case CharacterClass.Druid:
+                case CharacterClass.Assassin:
+                    totalLife += GetValueOfStatType(StatType.Dexterity) * 2;
+                    totalLife += GetValueOfStatType(StatType.Strength) * 2;
+                    totalLife += GetValueOfStatType(StatType.Mana);
+                    break;
+                case CharacterClass.Barbarian:
+                    totalLife += GetValueOfStatType(StatType.Dexterity) * 4;
+                    totalLife += GetValueOfStatType(StatType.Strength) * 4;
+                    break;
+
+            }
+
             return totalLife;
         }
 

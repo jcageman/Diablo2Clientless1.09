@@ -123,11 +123,16 @@ namespace D2NG.Core.D2GS
             Connection.WritePacket(new GameLogonPacket(gameHash, gameToken, character));
             if (!successLoadEvent.WaitOne(5000))
             {
+                Log.Error("Game logon failed");
                 return false;
             }
             var loadActComplete = GetResetEventOfType(InComingPacket.LoadActComplete);
             Connection.WritePacket(OutGoingPacket.Startup);
-            loadActComplete.WaitOne();
+            if(!loadActComplete.WaitOne(5000))
+            {
+                Log.Error("Load Act failed");
+                return false;
+            }
             Log.Verbose("Game load complete");
             return true;
         }

@@ -41,6 +41,12 @@ namespace D2NG.Core.D2GS.Act
             }
         }
 
+        internal void UpdateObjectState(ObjectStatePacket packet)
+        {
+            var npc = WorldObjects[(packet.ObjectId, EntityType.Object)];
+            npc.State = packet.State;
+        }
+
         internal void UpdateNPCState(NpcStatePacket packet)
         {
             var npc = WorldObjects[(packet.EntityId, EntityType.NPC)];

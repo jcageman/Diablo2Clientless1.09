@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Items;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 using System.Collections.Generic;
 
 namespace ConsoleBot.Pickit
@@ -27,7 +28,7 @@ namespace ConsoleBot.Pickit
                 && item.Quality == QualityType.Rare
                 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 80
                 && item.GetValueOfStatType(StatType.ReducedRequirements) >= 20
-                && item.GetTotalLifeFromStats() >= 50)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
             {
                 return true;
             }
@@ -35,7 +36,7 @@ namespace ConsoleBot.Pickit
             if (item.Name == ItemName.OrnatePlate
             && item.Quality == QualityType.Rare
             && item.GetValueOfStatType(StatType.EnhancedDefense) >= 90
-            && item.GetTotalLifeFromStats() >= 50)
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
             {
                 return true;
             }
@@ -43,44 +44,44 @@ namespace ConsoleBot.Pickit
             if (defArmors.Contains(item.Name)
             && item.GetValueOfStatType(StatType.EnhancedDefense) >= 60
             && item.GetValueOfStatType(StatType.ReducedRequirements) >= 30
-            && item.GetTotalResist() >= 30
-            && item.GetTotalLifeFromStats() >= 30)
+            && item.GetTotalResistFrLrCr() >= 30
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30)
             {
                 return true;
             }
 
             if (casterArmors.Contains(item.Name))
             {
-                if (item.GetTotalResist() >= 60 && item.GetTotalLifeFromStats() >= 40)
+                if (item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
                 {
                     return true;
                 }
 
-                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 40 && item.GetTotalLifeFromStats() >= 30)
+                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
                 {
                     return true;
                 }
 
-                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() >= 20)
+                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 30)
                 {
                     return true;
                 }
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() >= 30)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 50)
             {
                 return true;
             }
 
-            if (item.GetTotalResist() >= 70 && item.GetTotalLifeFromStats() >= 60)
+            if (item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60)
             {
                 return true;
             }
 
             if (item.Name == ItemName.MagePlate
             && item.GetValueOfStatType(StatType.EnhancedDefense) >= 60
-            && item.GetTotalResist() >= 50
-            && item.GetTotalLifeFromStats() >= 30)
+            && item.GetTotalResistFrLrCr() >= 50
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30)
             {
                 return true;
             }
@@ -90,7 +91,12 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-            */
+
+
+            if (item.Name == ItemName.FullPlateMail && item.Quality == QualityType.Unique)
+            {
+                return true;
+            }            */
             return false;
         }
     }

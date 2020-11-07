@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Items;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 using System.Collections.Generic;
 
 namespace ConsoleBot.Pickit
@@ -38,38 +39,41 @@ namespace ConsoleBot.Pickit
 
             if (DesirableShields.Contains(item.Name))
             {
-                if(item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResist() > 50 && item.GetValueOfStatType(StatType.DamageToMana) >= 5)
+                if(item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResistFrLrCr() > 50 && item.GetValueOfStatType(StatType.DamageToMana) >= 5)
                 {
                     return true;
                 }
 
-                if (item.GetValueOfStatType(StatType.PaladinSkills) >= 2 && item.GetTotalResist() > 50)
+                if (item.GetValueOfStatType(StatType.PaladinSkills) >= 2 && item.GetTotalResistFrLrCr() > 50)
                 {
                     return true;
                 }
 
-                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResist() > 50)
+                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResistFrLrCr() > 50)
                 {
                     return true;
                 }
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResist() > 70 && item.GetTotalLifeFromStats() > 30)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResistFrLrCr() > 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) > 30)
             {
                 return true;
             }
 
-            if (item.Name == ItemName.Pavise && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 90)
+            if (item.Name == ItemName.Pavise
+                && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30
+                && item.GetValueOfStatType(StatType.EnhancedDefense) >= 90
+                && (item.GetValueOfStatType(StatType.MaximumDamage) >= 4 || item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30))
             {
                 return true;
             }
 
-            if ((item.Name == ItemName.GrimShield) && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50 && item.GetTotalResist() > 50)
+            if ((item.Name == ItemName.GrimShield) && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50 && item.GetTotalResistFrLrCr() > 50)
             {
                 return true;
             }
 
-            if ((item.Name == ItemName.TowerShield) && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResist() > 50 && item.GetValueOfStatType(StatType.ReducedRequirements) >= 20)
+            if ((item.Name == ItemName.TowerShield) && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResistFrLrCr() > 50 && item.GetValueOfStatType(StatType.ReducedRequirements) >= 20)
             {
                 return true;
             }

@@ -1,31 +1,25 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Globalization;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using ConsoleBot.Clients.ExternalMessagingClient;
+﻿using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using ConsoleBot.Helpers;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
-using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.Pathing;
 using Serilog;
-using Action = D2NG.Core.D2GS.Items.Action;
-using Attribute = D2NG.Core.D2GS.Players.Attribute;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ConsoleBot.Configurations.Bots
 {
     public class TravincalBot : BaseBotConfiguration, IBotConfiguration
     {
-        private static bool FullInventoryReported = false;
         private readonly IPathingService _pathingService;
 
         public TravincalBot(BotConfiguration config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService)
@@ -195,10 +189,10 @@ namespace ConsoleBot.Configurations.Bots
             var stashResult = InventoryHelpers.StashItemsToKeep(client.Game, _externalMessagingClient);
             if (stashResult != MoveItemResult.Succes)
             {
-                if (stashResult == MoveItemResult.NoSpace && !FullInventoryReported)
+                if (stashResult == MoveItemResult.NoSpace && !NeedsMule)
                 {
-                    await _externalMessagingClient.SendMessage($"bot inventory is full");
-                    FullInventoryReported = true;
+                    await _externalMessagingClient.SendMessage($"bot inventory is full, starting mule");
+                    NeedsMule = true;
                 }
 
                 Log.Information("Stashing items failed");
@@ -486,7 +480,7 @@ namespace ConsoleBot.Configurations.Bots
             {
                 game.MoveTo(townportal);
 
-                game.InteractWithObject(townportal);
+                game.InteractWithEntity(townportal);
                 return GeneralHelpers.TryWithTimeout((retryCount) =>
                 {
                     Thread.Sleep(50);

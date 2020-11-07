@@ -324,13 +324,13 @@ namespace D2NG.Core.D2GS
             switch (item.Action)
             {
                 case Action.Equip:
-                    if (item.PlayerId == Me.Id && item.Classification == ClassificationType.Belt)
+                    if (item.PlayerId == Me?.Id && item.Classification == ClassificationType.Belt)
                     {
                         Belt.UpdateBeltRows(item.BeltRows);
                     }
                     break;
                 case Action.Unequip:
-                    if (item.PlayerId == Me.Id && item.Classification == ClassificationType.Belt)
+                    if (item.PlayerId == Me?.Id && item.Classification == ClassificationType.Belt)
                     {
                         Belt.UpdateBeltRows(1);
                     }
