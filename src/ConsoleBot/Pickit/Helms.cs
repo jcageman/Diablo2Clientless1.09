@@ -67,7 +67,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Quality == QualityType.Unique && item.Name == ItemName.SkullCap && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= 45)
+            if (item.Quality == QualityType.Unique && item.Name == ItemName.SkullCap && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= 48)
             {
                 return true;
             }

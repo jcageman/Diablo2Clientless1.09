@@ -389,6 +389,7 @@ namespace ConsoleBot.Configurations
 
                 if (!resultToBuffer)
                 {
+                    InventoryHelpers.CleanupCursorItem(client.Game);
                     Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
                     continue;
                 }
@@ -396,10 +397,11 @@ namespace ConsoleBot.Configurations
                 client.Game.InsertItemIntoContainer(item, space, ItemContainer.Trade);
 
                 var moveResult = GeneralHelpers.TryWithTimeout(
-                    (retryCount) => client.Game.CursorItem == null && client.Game.Items.FirstOrDefault(i => i.Id == item.Id).Container == ContainerType.ForTrade,
+                    (retryCount) => client.Game.CursorItem == null && client.Game.Items.FirstOrDefault(i => i.Id == item.Id)?.Container == ContainerType.ForTrade,
                     TimeSpan.FromSeconds(3));
                 if (!moveResult)
                 {
+                    InventoryHelpers.CleanupCursorItem(client.Game);
                     Log.Error($"Moving item {item.Id} - {item.Name} to trade failed");
                     continue;
                 }

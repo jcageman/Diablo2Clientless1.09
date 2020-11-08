@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Items;
+﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 using System;
 using System.Collections.Generic;
 
@@ -45,7 +46,7 @@ namespace ConsoleBot.Pickit
 
             if (item.Quality == QualityType.Rare
             && desirableExceptionalWeapons.Contains(item.Name)
-            && additionalDamage > 180)
+            && additionalDamage > 180 && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 170)
             {
                 return true;
             }
@@ -60,7 +61,8 @@ namespace ConsoleBot.Pickit
             if (item.Quality == QualityType.Rare
             && item.Name == ItemName.GothicBow
             && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 10
-            && additionalDamage > 160)
+            && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 150
+            && additionalDamage > 170)
             {
                 return true;
             }
@@ -68,7 +70,8 @@ namespace ConsoleBot.Pickit
             if (item.Quality == QualityType.Rare
             && desirableBows.Contains(item.Name)
             && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
-            && additionalDamage > 160)
+            && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 150
+            && additionalDamage > 170)
             {
                 return true;
             }
@@ -76,6 +79,7 @@ namespace ConsoleBot.Pickit
             if (item.Quality == QualityType.Rare
             && (item.Name == ItemName.LargeSiegeBow || item.Name == ItemName.RazorBow)
             && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
+            && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 170
             && additionalDamage > 180)
             {
                 return true;
@@ -84,7 +88,8 @@ namespace ConsoleBot.Pickit
             if (item.Quality == QualityType.Rare
             && item.Name == ItemName.Flail
             && item.GetValueOfStatType(StatType.PaladinSkills) >= 2
-            && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 40)
+            && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 40
+            && (item.GetTotalResistFrLrCr() > 10 || item.GetTotalLifeFromStats(CharacterClass.Paladin) > 10))
             {
                 return true;
             }
