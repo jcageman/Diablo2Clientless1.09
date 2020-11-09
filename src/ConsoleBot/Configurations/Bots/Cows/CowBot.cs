@@ -119,13 +119,15 @@ namespace ConsoleBot.Configurations.Bots.Cows
 
                 Log.Information($"Joining next game");
 
-                Parallel.ForEach(clients, (client, state, index) =>
-                {
+                var leaveAndRejoinTasks = clients.Select(async (client, index) => {
                     var clientLogin = clientLogins[(int)index];
-                    LeaveGameAndRejoinMCPWithRetry(client, clientLogin);
-                });
+                    await LeaveGameAndRejoinMCPWithRetry(client, clientLogin);
+                }).ToList();
+                await Task.WhenAll(leaveAndRejoinTasks);
 
-                if (!CreateGameWithRetry(ref gameCount, firstFiller, clientLogins.First()))
+                var result = await CreateGameWithRetry(gameCount, firstFiller, clientLogins.First());
+                gameCount = result.Item2;
+                if (!result.Item1)
                 {
                     gameCount++;
                     Thread.Sleep(30000);
@@ -141,7 +143,7 @@ namespace ConsoleBot.Configurations.Bots.Cows
                         var clientLogin = clientLogins[i];
                         var client = clients[i];
                         Thread.Sleep(TimeSpan.FromSeconds(1 + i * 0.7));
-                        if (firstFiller != client && !JoinGameWithRetry(gameCount, client, clientLogin))
+                        if (firstFiller != client && !await JoinGameWithRetry(gameCount, client, clientLogin))
                         {
                             Log.Warning($"Client {client.LoggedInUserName()} failed to join game, retrying new game");
                             gameCount++;
@@ -219,7 +221,9 @@ namespace ConsoleBot.Configurations.Bots.Cows
 
                 try
                 {
-                    var clientTasks = clients.Select(async client => await Task.Run(async () => await GetTaskForClient(client, cowManager, boClient)));
+                    var clientTasks = clients
+                        .Select(async client => await Task.Run(async () => await GetTaskForClient(client, cowManager, boClient)))
+                        .ToList();
                     await Task.WhenAll(clientTasks);
                 }
                 catch(Exception e)
@@ -1275,9 +1279,9 @@ game.Cube.Items.Count(i => !i.IsIdentified);
             return true;
         }
 
-        private bool JoinGameWithRetry(int gameCount, Client client, Tuple<string, string, string> clientLogin)
+        private async Task<bool> JoinGameWithRetry(int gameCount, Client client, Tuple<string, string, string> clientLogin)
         {
-            return GeneralHelpers.TryWithTimeout((retryCount) =>
+            return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
                 bool joinGame = false;
                 try
@@ -1292,7 +1296,7 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                 {
                     var retryDuration = Math.Pow(1 + retryCount, 1.2) * TimeSpan.FromSeconds(1);
                     Log.Information($"Joining game failed for {client.LoggedInUserName()} retrying in {retryDuration.TotalSeconds} seconds");
-                    ConnectToRealmWithRetry(client, clientLogin);
+                    await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, clientLogin.Item1, clientLogin.Item2, clientLogin.Item3, 10);
                     Thread.Sleep(retryDuration);
                 }
 
@@ -1300,10 +1304,10 @@ game.Cube.Items.Count(i => !i.IsIdentified);
             }, TimeSpan.FromSeconds(20));
         }
 
-        private bool CreateGameWithRetry(ref int gameCount, Client client, Tuple<string, string, string> clientLogin)
+        private async Task<Tuple<bool, int>> CreateGameWithRetry(int gameCount, Client client, Tuple<string, string, string> clientLogin)
         {
             var newGameCount = gameCount;
-            var result = GeneralHelpers.TryWithTimeout((retryCount) =>
+            var result = await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
                 bool createGame = false;
                 try
@@ -1319,21 +1323,21 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                     newGameCount++;
                     var retryDuration = Math.Pow(1 + retryCount, 1.2) * TimeSpan.FromSeconds(1);
                     Log.Information($"Creating game failed for {client.LoggedInUserName()} retrying in {retryDuration.TotalSeconds} seconds");
-                    ConnectToRealmWithRetry(client, clientLogin);
-                    Thread.Sleep(retryDuration);
+                    await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, clientLogin.Item1, clientLogin.Item2, clientLogin.Item3, 10);
+                    await Task.Delay(retryDuration);
                 }
 
                 return createGame;
             }, TimeSpan.FromSeconds(15));
             gameCount = newGameCount;
-            return result;
+            return Tuple.Create(result, newGameCount);
         }
 
-        private void LeaveGameAndRejoinMCPWithRetry(Client client, Tuple<string, string, string> clientLogin)
+        private async Task LeaveGameAndRejoinMCPWithRetry(Client client, Tuple<string, string, string> clientLogin)
         {
             if (!client.Chat.IsConnected())
             {
-                ConnectToRealmWithRetry(client, clientLogin);
+                await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, clientLogin.Item1, clientLogin.Item2, clientLogin.Item3, 10);
             }
 
             if (client.Game.IsInGame())
@@ -1345,60 +1349,8 @@ game.Cube.Items.Count(i => !i.IsIdentified);
             if (!client.RejoinMCP())
             {
                 Log.Warning($"Disconnecting client {clientLogin.Item1} since reconnecting to MCP failed, reconnecting to realm");
-                ConnectToRealmWithRetry(client, clientLogin);
+                await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, clientLogin.Item1, clientLogin.Item2, clientLogin.Item3, 10);
             }
-        }
-
-        private void ConnectToRealmWithRetry(Client client, Tuple<string, string, string> clientLogin)
-        {
-            var connectCount = 0;
-            while (connectCount < 10)
-            {
-                try
-                {
-                    client.Disconnect();
-                    if (ConnectToRealm(client, clientLogin))
-                    {
-                        break;
-                    }
-                }
-                catch
-                {
-                }
-
-                connectCount++;
-                Log.Warning($"Connecting to realm failed for {clientLogin.Item1}, doing re-attempt {connectCount} out of 10");
-                Thread.Sleep(Math.Pow(connectCount, 1.5) * TimeSpan.FromSeconds(5));
-            }
-
-            if (connectCount == 10)
-            {
-                throw new Exception("Reconnect tries of 10 reached, aborting");
-            }
-        }
-
-        bool ConnectToRealm(Client client, Tuple<string, string, string> clientLogin)
-        {
-            if (!client.Connect(
-                _config.Realm,
-                _config.KeyOwner,
-                _config.GameFolder))
-            {
-                return false;
-            }
-            var characters = client.Login(clientLogin.Item1, clientLogin.Item2);
-            if (characters == null)
-            {
-                return false;
-            }
-            var selectedCharacter = characters.Single(c =>
-                c.Name.Equals(clientLogin.Item3, StringComparison.CurrentCultureIgnoreCase));
-            if (selectedCharacter == null)
-            {
-                throw new CharacterNotFoundException();
-            }
-            client.SelectCharacter(selectedCharacter);
-            return true;
         }
 
         void HandleEventMessage(Client client, EventNotifyPacket eventNotifyPacket)

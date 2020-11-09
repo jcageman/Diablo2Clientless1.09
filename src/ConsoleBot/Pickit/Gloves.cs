@@ -47,6 +47,11 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            if (item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 80)
+            {
+                return true;
+            }
+
             if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60)
             {
                 return true;

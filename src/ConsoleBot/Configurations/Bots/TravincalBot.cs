@@ -1,6 +1,7 @@
 ﻿using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using ConsoleBot.Helpers;
+using ConsoleBot.Mule;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
@@ -22,8 +23,9 @@ namespace ConsoleBot.Configurations.Bots
     {
         private readonly IPathingService _pathingService;
 
-        public TravincalBot(BotConfiguration config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService)
-        : base(config, externalMessagingClient)
+        public TravincalBot(BotConfiguration config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
+            IMuleService muleService)
+        : base(config, externalMessagingClient, muleService)
         {
             _pathingService = pathingService;
         }
@@ -191,7 +193,7 @@ namespace ConsoleBot.Configurations.Bots
             {
                 if (stashResult == MoveItemResult.NoSpace && !NeedsMule)
                 {
-                    await _externalMessagingClient.SendMessage($"bot inventory is full, starting mule");
+                    await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: bot inventory is full, starting mule");
                     NeedsMule = true;
                 }
 

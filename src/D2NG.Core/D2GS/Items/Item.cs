@@ -133,7 +133,7 @@ namespace D2NG.Core.D2GS.Items
         }
         public int GetTotalLifeFromStats(CharacterClass characterClass)
         {
-            var totalLife = GetValueOfStatType(StatType.Life); ;
+            var totalLife = GetValueOfStatType(StatType.Life);
             switch (characterClass)
             {
                 case CharacterClass.Amazon:

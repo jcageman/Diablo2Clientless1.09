@@ -22,7 +22,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.GetToClassSkills() >= 1 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
+            if (item.GetToClassSkills() >= 2 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
             {
                 return true;
             }
@@ -37,27 +37,36 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if ((item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit)) >= 4
-                && item.GetValueOfStatType(StatType.ExtraGold) >= 80
-                && item.GetTotalResistFrLrCr() >= 40)
+            if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
+                && item.GetValueOfStatType(StatType.ExtraGold) >= 100
+                && item.GetTotalResistFrLrCr() >= 80)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 4
-                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumDamage) * 2 >= 80)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumDamage) * 2 >= 100)
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.MinimumDamage) >= 5
-                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 80
+            if (item.GetValueOfStatType(StatType.MinimumDamage) >= 7
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 120
                 && item.GetTotalResistFrLrCr() >= 70)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.AmazonSkills) >= 1
+                && item.GetValueOfStatType(StatType.MinimumDamage) >= 7
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60
+                && item.GetTotalResistFrLrCr() >= 60)
+            {
+                return true;
+            }
+
+            if (item.GetValueOfStatType(StatType.AmazonSkills) >= 1
+                && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
                 && item.GetValueOfStatType(StatType.MinimumDamage) >= 5
                 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30
                 && item.GetTotalResistFrLrCr() >= 60)

@@ -18,6 +18,7 @@ using D2NG.Navigation.Extensions;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using ConsoleBot.Enums;
+using ConsoleBot.Mule;
 
 namespace ConsoleBot.Configurations.Bots
 {
@@ -25,7 +26,11 @@ namespace ConsoleBot.Configurations.Bots
     {
         private readonly IPathingService _pathingService;
 
-        public MephistoBot(BotConfiguration config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService) : base(config, externalMessagingClient)
+        public MephistoBot(
+            BotConfiguration config,
+            IExternalMessagingClient externalMessagingClient,
+            IPathingService pathingService,
+            IMuleService muleService) : base(config, externalMessagingClient, muleService)
         {
             _pathingService = pathingService;
         }
@@ -111,7 +116,7 @@ namespace ConsoleBot.Configurations.Bots
                 {
                     if (stashItemsResult == MoveItemResult.NoSpace && !NeedsMule)
                     {
-                        await _externalMessagingClient.SendMessage($"bot inventory is full, starting mule");
+                        await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: bot inventory is full, starting mule");
                         NeedsMule = true;
                     }
                     Log.Warning($"Stashing items failed with result {stashItemsResult}");

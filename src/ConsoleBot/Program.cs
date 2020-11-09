@@ -1,5 +1,6 @@
 ﻿using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Configurations;
+using ConsoleBot.Mule;
 using D2NG.Navigation.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,6 +54,7 @@ namespace ConsoleBot
                 .ValidateDataAnnotations();
             services.AddSingleton<IExternalMessagingClient, ExternalMessagingClient>();
             services.AddSingleton<IBotConfigurationFactory, BotConfigurationFactory>();
+            services.AddSingleton<IMuleService, MuleService>();
             services.AddHttpClient();
             services.AddMemoryCache();
             services.RegisterNavigationServices(config);

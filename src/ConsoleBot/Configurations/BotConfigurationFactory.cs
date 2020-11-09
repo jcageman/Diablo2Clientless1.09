@@ -5,6 +5,7 @@ using ConsoleBot.Configurations.Bots;
 using D2NG.Navigation.Services.Pathing;
 using ConsoleBot.Configurations.Bots.Cows;
 using D2NG.Navigation.Services.MapApi;
+using ConsoleBot.Mule;
 
 namespace ConsoleBot.Configurations
 {
@@ -14,13 +15,15 @@ namespace ConsoleBot.Configurations
         private readonly IExternalMessagingClient _externalMessagingClient;
         private readonly IPathingService _pathingService;
         private readonly IMapApiService _mapApiService;
+        protected readonly IMuleService _muleService;
 
-        public BotConfigurationFactory(IOptions<BotConfiguration> config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService, IMapApiService mapApiService)
+        public BotConfigurationFactory(IOptions<BotConfiguration> config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService, IMapApiService mapApiService, IMuleService muleService)
         {
             _config = config.Value ?? throw new ArgumentNullException(nameof(config), $"BotConfigurationFactory constructor fails due to {nameof(config)} being null");
             _externalMessagingClient = externalMessagingClient;
             _pathingService = pathingService;
             _mapApiService = mapApiService;
+            _muleService = muleService;
         }
         public IBotConfiguration CreateConfiguration()
         {
@@ -28,9 +31,9 @@ namespace ConsoleBot.Configurations
             switch (botType)
             {
                 case "travincal":
-                    return new TravincalBot(_config, _externalMessagingClient, _pathingService);
+                    return new TravincalBot(_config, _externalMessagingClient, _pathingService, _muleService);
                 case "mephisto":
-                    return new MephistoBot(_config, _externalMessagingClient, _pathingService);
+                    return new MephistoBot(_config, _externalMessagingClient, _pathingService, _muleService);
                 case "cows":
                     return new CowBot(_config, _externalMessagingClient, _pathingService, _mapApiService);
                 case "test":

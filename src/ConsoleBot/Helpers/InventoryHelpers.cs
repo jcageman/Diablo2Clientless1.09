@@ -24,23 +24,27 @@ namespace ConsoleBot.Helpers
                 var item = game.CursorItem;
                 var freeSpaceCube = game.Cube.FindFreeSpace(item);
                 var freeSpaceInventory = game.Inventory.FindFreeSpace(item);
-                if (freeSpaceCube != null)
-                {
-                    game.InsertItemIntoContainer(item, freeSpaceCube, ItemContainer.Cube);
-                    bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
-                    if (!resultMove)
-                    {
-                        Log.Error($"Moving item {item.Id} - {item.Name} to cube failed");
-                    }
-                }
-                else if (freeSpaceInventory != null)
+                if (freeSpaceInventory != null)
                 {
                     game.InsertItemIntoContainer(game.CursorItem, freeSpaceInventory, ItemContainer.Inventory);
                     bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Inventory.FindItemById(item.Id) != null, MoveItemTimeout);
                     if (!resultMove)
                     {
-                        Log.Error($"Moving item {item.Id} - {item.Name} to inventory failed");
+                        Log.Error($"Moving item {item.Id} - {item.Name} from cursor to inventory failed");
                     }
+                }
+                else if (freeSpaceCube != null && item.Container != ContainerType.TradeOffer)
+                {
+                    game.InsertItemIntoContainer(item, freeSpaceCube, ItemContainer.Cube);
+                    bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
+                    if (!resultMove)
+                    {
+                        Log.Error($"Moving item {item.Id} - {item.Name} from cursor to cube failed");
+                    }
+                }
+                else
+                {
+                    Log.Error($"Moving item {item.Id} - {item.Name} from cursor failed, no space");
                 }
             }
         }
