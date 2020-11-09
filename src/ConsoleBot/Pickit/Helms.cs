@@ -29,9 +29,9 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (desirableHelms.Contains(item.Name))
+            if (desirableHelms.Contains(item.Name) && item.GetValueOfStatType(StatType.Life) >= 30)
             {
-                if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
+                if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 70)
                 {
                     return true;
                 }

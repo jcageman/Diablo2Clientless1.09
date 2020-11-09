@@ -140,7 +140,7 @@ namespace ConsoleBot.Mule
 
             var rightContainer = item.Container == ContainerType.Stash || item.Container == ContainerType.Stash2 || item.Container == ContainerType.Inventory;
 
-            return rightContainer && item.IsIdentified && Pickit.Pickit.ShouldKeepItem(client.Game, item) && Pickit.Pickit.CanTouchInventoryItem(client.Game, item);
+            return rightContainer && item.IsIdentified && Pickit.Pickit.CanTouchInventoryItem(client.Game, item);
         }
 
         private static bool IsSojOrPs(Item i)
@@ -211,7 +211,7 @@ namespace ConsoleBot.Mule
             bool atLeastOneTraded = false;
 
             var tradeScreenClient = new Container(10, 4);
-            foreach (var item in client.Game.Inventory.Items.Where(i => Pickit.Pickit.ShouldKeepItem(client.Game, i) && Pickit.Pickit.CanTouchInventoryItem(client.Game, i)))
+            foreach (var item in client.Game.Inventory.Items.Where(i => IsMuleItem(client, i)))
             {
                 var space = tradeScreenClient.FindFreeSpace(item);
                 if (space == null)
@@ -222,7 +222,14 @@ namespace ConsoleBot.Mule
                 var freeSpaceInventory = temporaryInventory.FindFreeSpace(item);
                 if (freeSpaceInventory == null)
                 {
-                    break;
+                    if(atLeastOneTraded)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        continue;
+                    }
                 }
 
                 client.Game.RemoveItemFromContainer(item);
