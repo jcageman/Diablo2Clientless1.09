@@ -39,7 +39,7 @@ namespace ConsoleBot.Configurations
                 case "test":
                     return new TestBot(_config, _externalMessagingClient, _pathingService, _mapApiService);
                 default:
-                    throw new NotSupportedException($"{nameof(_config.BotType)} contains not supported type {botType}, it should be one of the following: travincal, mephisto or test");
+                    throw new NotSupportedException($"{nameof(_config.BotType)} contains not supported type {botType}, it should be one of the following: travincal, mephisto, cows or test");
             }
         }
     }
