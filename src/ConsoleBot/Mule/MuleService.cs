@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Configurations;
+﻿using ConsoleBot.Bots;
 using ConsoleBot.Enums;
 using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;

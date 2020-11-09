@@ -1,11 +1,9 @@
 ﻿using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Objects;
-using System;
 using System.Collections.Generic;
-using System.Text;
 
-namespace ConsoleBot.Configurations.Bots.Cows
+namespace ConsoleBot.Bots.Types.Cows
 {
     public class AliveMonster
     {

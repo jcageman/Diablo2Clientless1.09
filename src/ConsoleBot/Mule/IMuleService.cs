@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Configurations;
+﻿using ConsoleBot.Bots;
 using D2NG.Core;
 using System.Threading.Tasks;
 

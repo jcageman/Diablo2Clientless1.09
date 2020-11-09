@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace ConsoleBot.Configurations.Bots.CS
+namespace ConsoleBot.Bots.Types.CS
 {
     public class CSBot
     {

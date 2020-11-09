@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace ConsoleBot.Configurations
+namespace ConsoleBot.Mule
 {
     public class MuleCharacter
     {

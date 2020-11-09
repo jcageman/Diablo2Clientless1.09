@@ -1,38 +1,40 @@
 ﻿using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Enums;
 using ConsoleBot.Helpers;
+using ConsoleBot.Mule;
 using D2NG.Core;
+using D2NG.Core.D2GS;
+using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Objects;
+using D2NG.Core.D2GS.Players;
+using D2NG.Navigation.Extensions;
+using D2NG.Navigation.Services.Pathing;
+using Microsoft.Extensions.Options;
 using Serilog;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using D2NG.Core.D2GS;
-using D2NG.Core.D2GS.Act;
-using D2NG.Core.D2GS.Objects;
-using D2NG.Core.D2GS.Players;
-using D2NG.Navigation.Services.Pathing;
 
-using Action = D2NG.Core.D2GS.Items.Action;
-using D2NG.Navigation.Extensions;
-using D2NG.Core.D2GS.Enums;
-using D2NG.Core.D2GS.Items;
-using ConsoleBot.Enums;
-using ConsoleBot.Mule;
-
-namespace ConsoleBot.Configurations.Bots
+namespace ConsoleBot.Bots.Types
 {
-    public class MephistoBot : BaseBotConfiguration, IBotConfiguration
+    public class MephistoBot : SingleClientBotBase, IBotInstance
     {
         private readonly IPathingService _pathingService;
 
         public MephistoBot(
-            BotConfiguration config,
+            IOptions<BotConfiguration> config,
             IExternalMessagingClient externalMessagingClient,
             IPathingService pathingService,
-            IMuleService muleService) : base(config, externalMessagingClient, muleService)
+            IMuleService muleService) : base(config.Value, externalMessagingClient, muleService)
         {
             _pathingService = pathingService;
+        }
+
+        public string GetName()
+        {
+            return "mephisto";
         }
 
         public async Task<int> Run()

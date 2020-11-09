@@ -1,4 +1,5 @@
-﻿using ConsoleBot.Clients.ExternalMessagingClient;
+﻿using ConsoleBot.Bots;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;
 using D2NG.Core;
@@ -13,6 +14,7 @@ using D2NG.Core.D2GS.Players;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
+using Microsoft.Extensions.Options;
 using Serilog;
 using System;
 using System.Collections.Concurrent;
@@ -24,9 +26,9 @@ using System.Threading.Tasks;
 using System.Timers;
 using YamlDotNet.Core.Tokens;
 
-namespace ConsoleBot.Configurations.Bots.Cows
+namespace ConsoleBot.Bots.Types.Cows
 {
-    public class CowBot : IBotConfiguration
+    public class CowBot : IBotInstance
     {
         private readonly BotConfiguration _config;
         private readonly IExternalMessagingClient _externalMessagingClient;
@@ -39,12 +41,17 @@ namespace ConsoleBot.Configurations.Bots.Cows
         private ConcurrentDictionary<string, bool> ShouldFollow = new ConcurrentDictionary<string, bool>();
         private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new ConcurrentDictionary<string, (Point, CancellationTokenSource)>();
         private static int isAnyClientGambling = 0;
-        public CowBot(BotConfiguration config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService, IMapApiService mapApiService)
+        public CowBot(IOptions<BotConfiguration> config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService, IMapApiService mapApiService)
         {
-            _config = config;
+            _config = config.Value;
             _externalMessagingClient = externalMessagingClient;
             _pathingService = pathingService;
             _mapApiService = mapApiService;
+        }
+
+        public string GetName()
+        {
+            return "cows";
         }
 
         public async Task<int> Run()

@@ -1,9 +1,12 @@
-﻿using ConsoleBot.Clients.ExternalMessagingClient;
-using ConsoleBot.Configurations;
+﻿using ConsoleBot.Bots;
+using ConsoleBot.Bots.Types;
+using ConsoleBot.Bots.Types.Cows;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Mule;
 using D2NG.Navigation.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Serilog;
 using Serilog.Events;
 using System;
@@ -14,9 +17,9 @@ namespace ConsoleBot
 {
     internal class Program
     {
-        private readonly IBotConfigurationFactory _botConfigurationFactory;
+        private readonly IBotFactory _botConfigurationFactory;
 
-        public Program(IBotConfigurationFactory botConfigurationFactory)
+        public Program(IBotFactory botConfigurationFactory)
         {
             _botConfigurationFactory = botConfigurationFactory;
         }
@@ -53,7 +56,11 @@ namespace ConsoleBot
                 .Bind(config.GetSection("externalMessaging"))
                 .ValidateDataAnnotations();
             services.AddSingleton<IExternalMessagingClient, ExternalMessagingClient>();
-            services.AddSingleton<IBotConfigurationFactory, BotConfigurationFactory>();
+            services.AddSingleton<IBotInstance, MephistoBot>();
+            services.AddSingleton<IBotInstance, TravincalBot>();
+            services.AddSingleton<IBotInstance, TestBot>();
+            services.AddSingleton<IBotInstance, CowBot>();
+            services.AddSingleton<IBotFactory, BotFactory>();
             services.AddSingleton<IMuleService, MuleService>();
             services.AddHttpClient();
             services.AddMemoryCache();
@@ -85,8 +92,9 @@ namespace ConsoleBot
             {
                 try
                 {
-                    var botConfiguration = _botConfigurationFactory.CreateConfiguration();
-                    await botConfiguration.Run();
+                    var botConfiguration = serviceProvider.GetRequiredService<IOptions<BotConfiguration>>();
+                    var botInstance = _botConfigurationFactory.CreateBot(botConfiguration.Value.BotType);
+                    await botInstance.Run();
                 }
                 catch (Exception e)
                 {

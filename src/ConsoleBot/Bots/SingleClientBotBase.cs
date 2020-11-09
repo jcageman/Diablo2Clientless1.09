@@ -1,4 +1,5 @@
-﻿using ConsoleBot.Clients.ExternalMessagingClient;
+﻿using ConsoleBot.Bots;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
@@ -9,16 +10,16 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ConsoleBot.Configurations
+namespace ConsoleBot.Bots
 {
-    public abstract class BaseBotConfiguration
+    public abstract class SingleClientBotBase
     {
         protected readonly BotConfiguration _config;
         protected readonly IExternalMessagingClient _externalMessagingClient;
         protected readonly IMuleService _muleService;
         protected bool NeedsMule = false;
 
-        public BaseBotConfiguration(
+        public SingleClientBotBase(
             BotConfiguration config,
             IExternalMessagingClient externalMessagingClient,
             IMuleService muleService)

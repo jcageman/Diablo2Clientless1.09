@@ -1,10 +1,8 @@
-﻿using ConsoleBot.Configurations;
-using ConsoleBot.Exceptions;
+﻿using ConsoleBot.Exceptions;
 using D2NG.Core;
 using Serilog;
 using System;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace ConsoleBot.Helpers

@@ -1,5 +1,6 @@
-﻿using ConsoleBot.Clients.ExternalMessagingClient;
-using ConsoleBot.Configurations.Bots.Cows;
+﻿using ConsoleBot.Bots;
+using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Bots.Types.Cows;
 using ConsoleBot.Enums;
 using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;
@@ -28,22 +29,28 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using Telegram.Bot.Types;
+using Microsoft.Extensions.Options;
 
-namespace ConsoleBot.Configurations.Bots
+namespace ConsoleBot.Bots.Types
 {
-    public class TestBot : IBotConfiguration
+    public class TestBot : IBotInstance
     {
         private readonly BotConfiguration _config;
         private readonly IExternalMessagingClient _externalMessagingClient;
         private readonly IPathingService _pathingService;
         private readonly IMapApiService _mapApiService;
 
-        public TestBot(BotConfiguration config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService, IMapApiService mapApiService)
+        public TestBot(IOptions<BotConfiguration> config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService, IMapApiService mapApiService)
         {
-            _config = config;
+            _config = config.Value;
             _externalMessagingClient = externalMessagingClient;
             _pathingService = pathingService;
             _mapApiService = mapApiService;
+        }
+
+        public string GetName()
+        {
+            return "test";
         }
 
         public async Task<int> Run()

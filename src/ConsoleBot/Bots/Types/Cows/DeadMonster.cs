@@ -1,6 +1,6 @@
 ﻿using D2NG.Core.D2GS;
 
-namespace ConsoleBot.Configurations.Bots.Cows
+namespace ConsoleBot.Bots.Types.Cows
 {
     public class DeadMonster
     {
