@@ -62,6 +62,12 @@ namespace ConsoleBot.Bots.Types
             InventoryHelpers.MoveInventoryItemsToCube(client.Game);
             InventoryHelpers.CleanupPotionsInBelt(client.Game);
 
+            if (!await GeneralHelpers.PickupCorpseIfExists(client, _pathingService))
+            {
+                Log.Error($"{client.Game.Me.Name} failed to pickup corpse");
+                return false;
+            }
+
             /*
              *
             while (client.Game.Players.Count < 2)

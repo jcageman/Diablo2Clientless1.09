@@ -70,6 +70,12 @@ namespace ConsoleBot.Bots.Types
             client.Game.CleanupCursorItem();
             InventoryHelpers.CleanupPotionsInBelt(client.Game);
 
+            if (!await GeneralHelpers.PickupCorpseIfExists(client, _pathingService))
+            {
+                Log.Error($"{client.Game.Me.Name} failed to pickup corpse");
+                return false;
+            }
+
             if (client.Game.Act != Act.Act3)
             {
                 var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, MovementMode.Teleport);

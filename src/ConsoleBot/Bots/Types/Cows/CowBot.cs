@@ -279,7 +279,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
             game.MoveTo(game.Me.Location.Add(move.X, move.Y));
 
-            if(!await PickupCorpseIfExists(client))
+            if(!await GeneralHelpers.PickupCorpseIfExists(client, _pathingService))
             {
                 Log.Error($"{client.Game.Me.Name} failed to pickup corpse");
                 return false;
@@ -1251,36 +1251,6 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                     await client.Game.MoveToAsync(newLocation);
                     break;
                 }
-            }
-
-            return true;
-        }
-
-        private async Task<bool> PickupCorpseIfExists(Client client)
-        {
-            var corpseId = client.Game.Me.CorpseId;
-
-            if (corpseId != null)
-            {
-                var pickupSucceeded = false;
-                var corpse = client.Game.Players.FirstOrDefault(p => p.Id == corpseId);
-                Log.Information($"Found corpse {corpse.Id} for {client.LoggedInUserName()}, trying to pickup");
-                pickupSucceeded = await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                {
-                    if (client.Game.Me.Location.Distance(corpse.Location) > 5)
-                    {
-                        Log.Information($"Getting walking path from {client.Game.Me.Location} to {corpse.Location} with distance {client.Game.Me.Location.Distance(corpse.Location)}");
-                        var walkingPath = await _pathingService.GetPathToLocation(client.Game, corpse.Location, MovementMode.Walking);
-                        await MovementHelpers.TakePathOfLocations(client.Game, walkingPath, MovementMode.Walking);
-                        return false;
-                    }
-
-                    return client.Game.PickupBody(corpse);
-                }, TimeSpan.FromSeconds(5));
-
-                var message = pickupSucceeded ? "succeeded" : "failed";
-                Log.Information($"Pickup of corpse {message}");
-                return pickupSucceeded;
             }
 
             return true;
