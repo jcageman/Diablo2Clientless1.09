@@ -32,6 +32,11 @@ namespace ConsoleBot.Mule
             {
                 foreach (var character in account.Characters)
                 {
+                    if (client.Game.CursorItem != null)
+                    {
+                        break;
+                    }
+
                     if (!HasAnyItemsToMule(client))
                     {
                         break;
@@ -72,8 +77,10 @@ namespace ConsoleBot.Mule
                     MoveItemResult moveItemResult = MoveItemResult.Succes;
                     do
                     {
-                        InventoryHelpers.CleanupCursorItem(muleClient.Game);
-                        InventoryHelpers.CleanupCursorItem(client.Game);
+                        if(muleClient.Game.CursorItem != null || client.Game.CursorItem != null)
+                        {
+                            break;
+                        }
                         var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
                         InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0);
                         var stashItems = muleItems.Where(i => i.Container == ContainerType.Stash || i.Container == ContainerType.Stash2).ToList();
@@ -95,7 +102,7 @@ namespace ConsoleBot.Mule
                         {
                             break;
                         }
-                    } while (moveItemResult != MoveItemResult.NoSpace);
+                    } while (moveItemResult == MoveItemResult.Succes);
                     muleClient.Game.LeaveGame();
                     muleClient.Disconnect();
                 }
@@ -239,9 +246,8 @@ namespace ConsoleBot.Mule
 
                 if (!resultToBuffer)
                 {
-                    InventoryHelpers.CleanupCursorItem(client.Game);
                     Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
-                    continue;
+                    return MoveItemResult.Failed;
                 }
 
                 client.Game.InsertItemIntoContainer(item, space, ItemContainer.Trade);
@@ -251,9 +257,8 @@ namespace ConsoleBot.Mule
                     TimeSpan.FromSeconds(3));
                 if (!moveResult)
                 {
-                    InventoryHelpers.CleanupCursorItem(client.Game);
                     Log.Error($"Moving item {item.Id} - {item.Name} to trade failed");
-                    continue;
+                    return MoveItemResult.Failed;
                 }
 
                 var newItem = client.Game.Items.First(i => i.Id == item.Id);
