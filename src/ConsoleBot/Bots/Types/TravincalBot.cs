@@ -137,7 +137,10 @@ namespace ConsoleBot.Bots.Types
             client.Game.RequestUpdate(client.Game.Me.Id);
 
             Log.Information("Doing bo");
-            BarbBo(client.Game);
+            if(!BarbBo(client.Game))
+            {
+                return false;
+            }
 
             Log.Information("Walking to council members");
             
@@ -504,15 +507,42 @@ namespace ConsoleBot.Bots.Types
             return true;
         }
 
-        private void BarbBo(Game game)
+        private bool BarbBo(Game game)
         {
-            game.UseRightHandSkillOnLocation(Skill.BattleCommand, game.Me.Location);
-            Thread.Sleep(500);
-            game.UseRightHandSkillOnLocation(Skill.BattleOrders, game.Me.Location);
-            Thread.Sleep(500);
-            game.UseRightHandSkillOnLocation(Skill.Shout, game.Me.Location);
-            game.UseHealthPotion();
-            Thread.Sleep(300);
+            if(!GeneralHelpers.TryWithTimeout((retryCount) =>
+            {
+                game.UseRightHandSkillOnLocation(Skill.BattleCommand, game.Me.Location);
+                Thread.Sleep(200);
+                return game.Me.Effects.Contains(EntityEffect.Battlecommand);
+            }, TimeSpan.FromSeconds(3)))
+            {
+                Log.Warning("Battle command failed");
+                return false;
+            }
+
+            if (!GeneralHelpers.TryWithTimeout((retryCount) =>
+            {
+                game.UseRightHandSkillOnLocation(Skill.BattleOrders, game.Me.Location);
+                Thread.Sleep(200);
+                return game.Me.Effects.Contains(EntityEffect.BattleOrders);
+            }, TimeSpan.FromSeconds(3)))
+            {
+                Log.Warning("Battle orders failed");
+                return false;
+            }
+
+            if (!GeneralHelpers.TryWithTimeout((retryCount) =>
+            {
+                game.UseRightHandSkillOnLocation(Skill.Shout, game.Me.Location);
+                Thread.Sleep(200);
+                return game.Me.Effects.Contains(EntityEffect.Shout);
+            }, TimeSpan.FromSeconds(3)))
+            {
+                Log.Warning("Shout failed");
+                return false;
+            }
+
+            return game.UseHealthPotion();
         }
 
         private bool MoveToWaypointViaNearestWaypoint(Game game, Waypoint waypoint)

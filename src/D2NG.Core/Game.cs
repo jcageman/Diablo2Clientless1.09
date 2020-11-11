@@ -612,22 +612,12 @@ namespace D2NG.Core
 
                     if (Me.Life / (double)Me.MaxLife < 0.9 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(10))
                     {
-                        if(!UseHealthPotion())
-                        {
-                            Log.Information($"{Me.Name} Leaving game due out of potions");
-                            LeaveGame();
-                            break;
-                        }
+                        UseHealthPotion();
                     }
 
                     if (Me.Life / (double)Me.MaxLife < 0.7 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(2))
                     {
-                        if (!UseHealthPotion())
-                        {
-                            Log.Information($"{Me.Name} Leaving game due out of potions");
-                            LeaveGame();
-                            break;
-                        }
+                        UseHealthPotion();
                     }
 
                     if (Me.Life / (double)Me.MaxLife < 0.3 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(0.7))

@@ -69,10 +69,11 @@ namespace ConsoleBot.Mule
 
                     await Task.Delay(TimeSpan.FromSeconds(2));
 
-                    InventoryHelpers.CleanupCursorItem(muleClient.Game);
                     MoveItemResult moveItemResult = MoveItemResult.Succes;
                     do
                     {
+                        InventoryHelpers.CleanupCursorItem(muleClient.Game);
+                        InventoryHelpers.CleanupCursorItem(client.Game);
                         var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
                         InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0);
                         var stashItems = muleItems.Where(i => i.Container == ContainerType.Stash || i.Container == ContainerType.Stash2).ToList();
