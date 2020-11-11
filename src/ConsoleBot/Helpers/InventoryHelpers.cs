@@ -151,7 +151,11 @@ namespace ConsoleBot.Helpers
             foreach (Item item in items)
             {
                 var currentMoveResult = MoveItemFromStashToInventory(game, item);
-                if (currentMoveResult != MoveItemResult.Succes)
+                if(currentMoveResult == MoveItemResult.Failed)
+                {
+                    break;
+                }
+                else if (currentMoveResult == MoveItemResult.NoSpace)
                 {
                     moveItemResult = currentMoveResult;
                     continue;
