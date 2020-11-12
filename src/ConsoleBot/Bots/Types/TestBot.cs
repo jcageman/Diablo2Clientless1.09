@@ -30,6 +30,7 @@ using System.Threading.Tasks;
 using System.Timers;
 using Telegram.Bot.Types;
 using Microsoft.Extensions.Options;
+using ConsoleBot.Mule;
 
 namespace ConsoleBot.Bots.Types
 {
@@ -55,7 +56,7 @@ namespace ConsoleBot.Bots.Types
 
         public async Task<int> Run()
         {
-            var gameNumber = 2;
+            var gameNumber = 1;
             var client1 = new Client();
             if (!client1.Connect(
     _config.Realm,
@@ -64,8 +65,8 @@ namespace ConsoleBot.Bots.Types
             {
                 return 1;
             }
-            var selectedCharacter1 = client1.Login("taggert-mule-3", "tragic41")?.Single(c =>
-                c.Name.Equals("tmulethree-two", StringComparison.CurrentCultureIgnoreCase));
+            var selectedCharacter1 = client1.Login(_config.Username, _config.Password)?.Single(c =>
+                c.Name.Equals(_config.Character, StringComparison.CurrentCultureIgnoreCase));
             if (selectedCharacter1 == null)
             {
                 throw new CharacterNotFoundException();
@@ -73,111 +74,9 @@ namespace ConsoleBot.Bots.Types
             client1.SelectCharacter(selectedCharacter1);
             client1.Chat.EnterChat();
 
-            var createGame = client1.CreateGame(Difficulty.Normal, $"{_config.GameNamePrefix}{gameNumber}", _config.GamePassword, "gs2");
-            if (!createGame)
-            {
-                return 1;
-            }
-
-            var client2 = new Client();
-            if (!client2.Connect(
-    _config.Realm,
-    _config.KeyOwner,
-    _config.GameFolder))
-            {
-                return 1;
-            }
-            var selectedCharacter2 = client2.Login("taggert-3", "tragic41")?.Single(c =>
-                c.Name.Equals("far", StringComparison.CurrentCultureIgnoreCase));
-            if (selectedCharacter2 == null)
-            {
-                throw new CharacterNotFoundException();
-            }
-            client2.SelectCharacter(selectedCharacter2);
-            client2.Chat.EnterChat();
-
-            var joinGame = client2.JoinGame($"{_config.GameNamePrefix}{gameNumber}", _config.GamePassword);
-            if (!joinGame)
-            {
-                return 1;
-            }
-
-            while (client2.Game.Players.Count(p => p.Id != client2.Game.Me.Id) < 1)
-            {
-                Thread.Sleep(2000);
-            }
-
-            bool tradeAccepted = false;
-            var client1Actions = new HashSet<ButtonAction>();
-            client1.OnReceivedPacketEvent(InComingPacket.ButtonAction, (packet) => client1Actions.Add(new ButtonActionPacket(packet).Action));
-            client1.OnReceivedPacketEvent(InComingPacket.TradeAccepted, (packet) => tradeAccepted = true);
-            var client2Actions = new HashSet<ButtonAction>();
-            client2.OnReceivedPacketEvent(InComingPacket.ButtonAction, (packet) => client2Actions.Add(new ButtonActionPacket(packet).Action));
-
-            var entityPlayerClient1 = client2.Game.Players.First(p => p.Id == client1.Game.Me.Id);
-
-            while (!client1Actions.Contains(ButtonAction.APlayerWantsToTrade))
-            {
-                client2.Game.InteractWithPlayer(entityPlayerClient1);
-                await Task.Delay(100);
-            }
-
-            while (!tradeAccepted)
-            {
-                client1.Game.ClickButton(ClickType.AcceptTradeRequest);
-                await Task.Delay(100);
-            }
-
-            MoveAllInventoryItemsToTradeScreen(client1);
-            MoveAllInventoryItemsToTradeScreen(client2);
-
-            client1.Game.ClickButton(ClickType.PressAcceptButton);
-            client2.Game.ClickButton(ClickType.PressAcceptButton);
-
-            while (!client1Actions.Contains(ButtonAction.YouHaveTradedSomeItems))
-            {
-                await Task.Delay(100);
-            }
-
+            var muleService = new MuleService();
+            await muleService.MuleItemsForClient(client1, _config);
             return 0;
-        }
-
-        private static void MoveAllInventoryItemsToTradeScreen(Client client)
-        {
-            var tradeScreenClient2 = new Container(10, 4);
-            foreach (var item in client.Game.Inventory.Items)
-            {
-                var space = tradeScreenClient2.FindFreeSpace(item);
-                if (space == null)
-                {
-                    continue;
-                }
-
-                client.Game.RemoveItemFromContainer(item);
-
-                bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => client.Game.CursorItem?.Id == item.Id, TimeSpan.FromSeconds(3));
-
-                if (!resultToBuffer)
-                {
-                    Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
-                    continue;
-                }
-
-                client.Game.InsertItemIntoContainer(item, space, ItemContainer.Trade);
-
-                var moveResult = GeneralHelpers.TryWithTimeout(
-                    (retryCount) => client.Game.CursorItem == null && client.Game.Items.FirstOrDefault(i => i.Id == item.Id).Container == ContainerType.ForTrade,
-                    TimeSpan.FromSeconds(3));
-                if (!moveResult)
-                {
-                    Log.Error($"Moving item {item.Id} - {item.Name} to trade failed");
-                    continue;
-                }
-
-                var newItem = client.Game.Items.First(i => i.Id == item.Id);
-
-                tradeScreenClient2.Add(newItem);
-            }
         }
     }
 }

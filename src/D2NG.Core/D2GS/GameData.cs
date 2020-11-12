@@ -388,22 +388,26 @@ namespace D2NG.Core.D2GS
 
         private void RemoveFromContainer(Item item)
         {
-            CursorItem = item;
             switch (item.Container)
             {
                 case ContainerType.Stash:
+                    CursorItem = item;
                     Stash.Remove(item);
                     break;
                 case ContainerType.Stash2:
+                    CursorItem = item;
                     Stash.Remove(item);
                     break;
                 case ContainerType.Belt:
+                    CursorItem = item;
                     Belt.Remove(item);
                     break;
                 case ContainerType.Cube:
+                    CursorItem = item;
                     Cube.Remove(item);
                     break;
                 case ContainerType.Inventory:
+                    CursorItem = item;
                     Inventory.Remove(item);
                     break;
                 default:

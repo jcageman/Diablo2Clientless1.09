@@ -77,10 +77,6 @@ namespace ConsoleBot.Mule
                     MoveItemResult moveItemResult = MoveItemResult.Succes;
                     do
                     {
-                        if(muleClient.Game.CursorItem != null || client.Game.CursorItem != null)
-                        {
-                            break;
-                        }
                         var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
                         InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0);
                         var stashItems = muleItems.Where(i => i.Container == ContainerType.Stash || i.Container == ContainerType.Stash2).ToList();
@@ -242,11 +238,11 @@ namespace ConsoleBot.Mule
 
                 client.Game.RemoveItemFromContainer(item);
 
-                bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => client.Game.CursorItem?.Id == item.Id, TimeSpan.FromSeconds(3));
-
+                bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => client.Game.CursorItem?.Id == item.Id, TimeSpan.FromSeconds(5));
                 if (!resultToBuffer)
                 {
                     Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
+                    InventoryHelpers.CleanupCursorItem(client.Game);
                     return MoveItemResult.Failed;
                 }
 
@@ -254,9 +250,10 @@ namespace ConsoleBot.Mule
 
                 var moveResult = GeneralHelpers.TryWithTimeout(
                     (retryCount) => client.Game.CursorItem == null && client.Game.Items.FirstOrDefault(i => i.Id == item.Id)?.Container == ContainerType.ForTrade,
-                    TimeSpan.FromSeconds(3));
+                    TimeSpan.FromSeconds(5));
                 if (!moveResult)
                 {
+                    InventoryHelpers.CleanupCursorItem(client.Game);
                     Log.Error($"Moving item {item.Id} - {item.Name} to trade failed");
                     return MoveItemResult.Failed;
                 }
