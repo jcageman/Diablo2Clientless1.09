@@ -32,10 +32,7 @@ namespace ConsoleBot.Mule
             {
                 foreach (var character in account.Characters)
                 {
-                    if (client.Game.CursorItem != null)
-                    {
-                        break;
-                    }
+                    InventoryHelpers.CleanupCursorItem(client.Game);
 
                     if (!HasAnyItemsToMule(client))
                     {
@@ -77,6 +74,8 @@ namespace ConsoleBot.Mule
                     MoveItemResult moveItemResult = MoveItemResult.Succes;
                     do
                     {
+                        InventoryHelpers.CleanupCursorItem(client.Game);
+                        InventoryHelpers.CleanupCursorItem(muleClient.Game);
                         var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
                         InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0);
                         var stashItems = muleItems.Where(i => i.Container == ContainerType.Stash || i.Container == ContainerType.Stash2).ToList();
