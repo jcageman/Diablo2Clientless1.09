@@ -49,18 +49,18 @@ namespace ConsoleBot.Bots
                     if(successiveFailures > 10 && totalCount > 15)
                     {
                         Log.Error($"bot stopping due to high successive failures: {successiveFailures} with run total {totalCount}");
-                        await _externalMessagingClient.SendMessage($"bot stopping due to high successive failures: {successiveFailures} with run total {totalCount}");
                         client.Disconnect();
                         break;
                     }
-                    else if(successiveFailures > 5)
+                    else if(successiveFailures > 0 && successiveFailures % 5 == 0)
                     {
                         gameDescriptionIndex++;
                         if (gameDescriptionIndex == _config.GameDescriptions?.Count)
                         {
                             gameDescriptionIndex = 0;
                         }
-                        await _externalMessagingClient.SendMessage($"Many successive failures, swithing GS to {_config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)} ");
+                        var reconnectMessage = $"Many successive failures, swithing GS to {_config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)}";
+                        Log.Warning(reconnectMessage);
                         bool reconnectResult = await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _config.Username, _config.Password, _config.Character, 10);
                         if (!reconnectResult)
                         {
@@ -98,7 +98,7 @@ namespace ConsoleBot.Bots
                         else
                         {
                             successiveFailures += 1;
-                            Thread.Sleep(10000);
+                            await Task.Delay(Math.Pow(successiveFailures, 1.5) * TimeSpan.FromSeconds(5));
                         }
 
                         if (client.Game.IsInGame())
