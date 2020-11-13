@@ -252,8 +252,8 @@ namespace ConsoleBot.Mule
                     TimeSpan.FromSeconds(5));
                 if (!moveResult)
                 {
-                    InventoryHelpers.CleanupCursorItem(client.Game);
                     Log.Error($"Moving item {item.Id} - {item.Name} to trade failed");
+                    InventoryHelpers.CleanupCursorItem(client.Game);
                     return MoveItemResult.Failed;
                 }
 
