@@ -40,13 +40,20 @@ namespace ConsoleBot.Bots.Types
         private readonly IExternalMessagingClient _externalMessagingClient;
         private readonly IPathingService _pathingService;
         private readonly IMapApiService _mapApiService;
+        private readonly IMuleService _muleService;
 
-        public TestBot(IOptions<BotConfiguration> config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService, IMapApiService mapApiService)
+        public TestBot(
+            IOptions<BotConfiguration> config,
+            IExternalMessagingClient externalMessagingClient,
+            IPathingService pathingService,
+            IMapApiService mapApiService,
+            IMuleService muleService)
         {
             _config = config.Value;
             _externalMessagingClient = externalMessagingClient;
             _pathingService = pathingService;
             _mapApiService = mapApiService;
+            _muleService = muleService;
         }
 
         public string GetName()
@@ -73,8 +80,7 @@ namespace ConsoleBot.Bots.Types
             client1.SelectCharacter(selectedCharacter1);
             client1.Chat.EnterChat();
 
-            var muleService = new MuleService();
-            await muleService.MuleItemsForClient(client1, _config);
+            await _muleService.MuleItemsForClient(client1);
         }
     }
 }

@@ -42,13 +42,33 @@ namespace ConsoleBot
                 throw new InvalidProgramException("Missing config parameter");
             }
 
+            if(!File.Exists(config["config"]))
+            {
+                Console.WriteLine("Non-existing file in config parameter");
+                throw new InvalidProgramException("Non-existing file in config parameter");
+            }
+
             builder.AddJsonFile(config["config"], optional: true, reloadOnChange: true);
+
+            if (config["muleconfig"] != null)
+            {
+                if (!File.Exists(config["muleconfig"]))
+                {
+                    Console.WriteLine("Non-existing file in muleconfig parameter");
+                    throw new InvalidProgramException("Non-existing file in muleconfig parameter");
+                }
+                builder.AddJsonFile(config["muleconfig"], optional: true, reloadOnChange: true);
+            }
+
             config = builder.Build();
 
             IServiceCollection services = new ServiceCollection();
 
             services.AddSingleton<Program>();
             services.AddOptions();
+            services.AddOptions<MuleConfiguration>()
+                .Bind(config.GetSection("mule"))
+                .ValidateDataAnnotations();
             services.AddOptions<BotConfiguration>()
                 .Bind(config.GetSection("bot"))
                 .ValidateDataAnnotations();

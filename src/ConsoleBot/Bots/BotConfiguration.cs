@@ -19,8 +19,6 @@ namespace ConsoleBot.Bots
         [Required]
         public string Character { get; set; }
 
-        public MuleConfiguration MuleConfiguration { get; set; }
-
         [Required]
         public string GameNamePrefix { get; set; }
 

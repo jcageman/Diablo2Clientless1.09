@@ -74,7 +74,7 @@ namespace ConsoleBot.Bots
                         gameCount = 1;
                     }
 
-                    if(NeedsMule && await _muleService.MuleItemsForClient(client, _config))
+                    if(NeedsMule && await _muleService.MuleItemsForClient(client))
                     {
                         NeedsMule = false;
                         await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: finished mule");

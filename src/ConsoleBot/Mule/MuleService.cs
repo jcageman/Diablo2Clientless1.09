@@ -9,6 +9,7 @@ using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Items.Containers;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
+using Microsoft.Extensions.Options;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -20,15 +21,25 @@ namespace ConsoleBot.Mule
     public class MuleService : IMuleService
     {
         static int GameCount = 0;
-        public async Task<bool> MuleItemsForClient(Client client, BotConfiguration configuration)
+
+        private readonly BotConfiguration _botConfig;
+        private readonly MuleConfiguration _muleConfig;
+
+        public MuleService(IOptions<BotConfiguration> botConfig, IOptions<MuleConfiguration> muleConfig)
         {
-            var muleGameName = $"{configuration.GameNamePrefix}m{GameCount++}";
-            if (!client.CreateGame(Difficulty.Normal, muleGameName, configuration.GamePassword, configuration.GameDescriptions?.ElementAtOrDefault(0)))
+            _botConfig = botConfig.Value;
+            _muleConfig = muleConfig.Value;
+
+        }
+        public async Task<bool> MuleItemsForClient(Client client)
+        {
+            var muleGameName = $"{_botConfig.GameNamePrefix}m{GameCount++}";
+            if (!client.CreateGame(Difficulty.Normal, muleGameName, _botConfig.GamePassword, _botConfig.GameDescriptions?.ElementAtOrDefault(0)))
             {
                 return false;
             }
 
-            foreach (var account in configuration.MuleConfiguration.Accounts)
+            foreach (var account in _muleConfig.Accounts)
             {
                 foreach (var character in account.Characters)
                 {
@@ -47,9 +58,9 @@ namespace ConsoleBot.Mule
 
                     var muleClient = new Client();
                     var connect = muleClient.Connect(
-                    configuration.Realm,
-                    configuration.KeyOwner,
-                    configuration.GameFolder);
+                    _botConfig.Realm,
+                    _botConfig.KeyOwner,
+                    _botConfig.GameFolder);
                     if (!connect)
                     {
                         return false;
@@ -64,7 +75,7 @@ namespace ConsoleBot.Mule
                         throw new CharacterNotFoundException();
                     }
                     muleClient.SelectCharacter(selectedCharacter);
-                    if (!muleClient.JoinGame(muleGameName, configuration.GamePassword))
+                    if (!muleClient.JoinGame(muleGameName, _botConfig.GamePassword))
                     {
                         continue;
                     }
@@ -78,10 +89,12 @@ namespace ConsoleBot.Mule
                         InventoryHelpers.CleanupCursorItem(muleClient.Game);
                         var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
                         InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0);
+                        InventoryHelpers.CleanupCursorItem(muleClient.Game);
                         var stashItems = muleItems.Where(i => i.Container == ContainerType.Stash || i.Container == ContainerType.Stash2).ToList();
                         if (stashItems.Count > 0)
                         {
                             moveItemResult = InventoryHelpers.MoveStashItemsToInventory(client.Game, stashItems);
+                            InventoryHelpers.CleanupCursorItem(client.Game);
                         }
                         else
                         {
