@@ -54,7 +54,7 @@ namespace ConsoleBot.Bots.Types.Cows
             return "cows";
         }
 
-        public async Task<int> Run()
+        public async Task Run()
         {
             var clients = new List<Client>();
             List<Tuple<string, string, string>> clientLogins = new List<Tuple<string, string, string>>();
@@ -208,7 +208,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 if (boClient == null)
                 {
                     Log.Error($"Expected at least bo barb in game");
-                    return 1;
+                    return;
                 }
 
                 LeadKillingPlayerId = firstFiller.Game.Players.FirstOrDefault(p => p.Class == CharacterClass.Amazon)?.Id;

@@ -5,6 +5,6 @@ namespace ConsoleBot.Bots
     public interface IBotInstance
     {
         public string GetName();
-        public Task<int> Run();
+        public Task Run();
     }
 }

@@ -37,7 +37,7 @@ namespace ConsoleBot.Helpers
                 await Task.Delay(Math.Pow(connectCount, 1.5) * TimeSpan.FromSeconds(5));
             }
 
-            return connectCount < 10;
+            return connectCount < maxRetries;
         }
 
         public static bool ConnectToRealm(Client client, 

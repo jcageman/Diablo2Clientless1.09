@@ -31,7 +31,7 @@ namespace ConsoleBot.Bots
 
         protected abstract Task<bool> RunSingleGame(Client client);
 
-        protected async Task<int> CreateGameLoop(Client client)
+        protected async Task CreateGameLoop(Client client)
         {
             try
             {
@@ -52,6 +52,21 @@ namespace ConsoleBot.Bots
                         await _externalMessagingClient.SendMessage($"bot stopping due to high successive failures: {successiveFailures} with run total {totalCount}");
                         client.Disconnect();
                         break;
+                    }
+                    else if(successiveFailures > 5)
+                    {
+                        gameDescriptionIndex++;
+                        if (gameDescriptionIndex == _config.GameDescriptions?.Count)
+                        {
+                            gameDescriptionIndex = 0;
+                        }
+                        await _externalMessagingClient.SendMessage($"Many successive failures, swithing GS to {_config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)} ");
+                        bool reconnectResult = await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _config.Username, _config.Password, _config.Character, 10);
+                        if (!reconnectResult)
+                        {
+                            await _externalMessagingClient.SendMessage($"Reconnect tries of 10 reached, restarting bot");
+                            return;
+                        }
                     }
 
                     if(gameCount >= 100)
@@ -82,6 +97,7 @@ namespace ConsoleBot.Bots
                         }
                         else
                         {
+                            successiveFailures += 1;
                             Thread.Sleep(10000);
                         }
 
@@ -105,37 +121,14 @@ namespace ConsoleBot.Bots
 
                         successiveFailures += 1;
                         Log.Warning($"Disconnecting client due to exception {e}, reconnecting to realm, game description is now: {_config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)}");
-                        var connectCount = 0;
-                        while (connectCount < 10)
+                        bool reconnectResult = await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _config.Username, _config.Password, _config.Character, 10);
+                        if (!reconnectResult)
                         {
-                            try
-                            {
-                                client.Disconnect();
-                                if (RealmConnectHelpers.ConnectToRealm(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _config.Username, _config.Password, _config.Character))
-                                {
-                                    break;
-                                }
-                            }
-                            catch
-                            {
-                            }
-                            
-                            connectCount++;
-                            Log.Warning($"Connecting to realm failed, doing re-attempt {connectCount} out of 10");
-                            Thread.Sleep(10000);
+                            await _externalMessagingClient.SendMessage($"Reconnect tries of 10 reached, restarting bot");
+                            return;
                         }
-
-                        if (connectCount == 10)
-                        {
-                            throw new Exception("Reconnect tries of 10 reached, aborting");
-                        }
-
-                        Log.Warning($"Sleeping for {5*successiveFailures} seconds");
-                        Thread.Sleep(5000 * successiveFailures);
                     }
                 }
-
-                return 0;
             }
             catch (Exception e)
             {

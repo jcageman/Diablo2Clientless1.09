@@ -54,16 +54,15 @@ namespace ConsoleBot.Bots.Types
             return "test";
         }
 
-        public async Task<int> Run()
+        public async Task Run()
         {
-            var gameNumber = 1;
             var client1 = new Client();
             if (!client1.Connect(
     _config.Realm,
     _config.KeyOwner,
     _config.GameFolder))
             {
-                return 1;
+                return;
             }
             var selectedCharacter1 = client1.Login(_config.Username, _config.Password)?.Single(c =>
                 c.Name.Equals(_config.Character, StringComparison.CurrentCultureIgnoreCase));
@@ -76,7 +75,6 @@ namespace ConsoleBot.Bots.Types
 
             var muleService = new MuleService();
             await muleService.MuleItemsForClient(client1, _config);
-            return 0;
         }
     }
 }

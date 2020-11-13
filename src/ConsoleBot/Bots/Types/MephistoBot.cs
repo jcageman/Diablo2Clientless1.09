@@ -37,11 +37,11 @@ namespace ConsoleBot.Bots.Types
             return "mephisto";
         }
 
-        public async Task<int> Run()
+        public async Task Run()
         {
             var client = new Client();
             _externalMessagingClient.RegisterClient(client);
-            return await CreateGameLoop(client);
+            await CreateGameLoop(client);
         }
 
         protected override async Task<bool> RunSingleGame(Client client)
