@@ -68,7 +68,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if ((item.Name == ItemName.GrimShield) && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50 && item.GetTotalResistFrLrCr() > 50)
+            if ((item.Name == ItemName.GrimShield) && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70 && item.GetTotalResistFrLrCr() > 50)
             {
                 return true;
             }

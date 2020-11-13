@@ -45,7 +45,7 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 4
-                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumDamage) * 2 >= 100)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumDamage) * 4 + item.GetValueOfStatType(StatType.BarbarianSkills) * 20 >= 100)
             {
                 return true;
             }
