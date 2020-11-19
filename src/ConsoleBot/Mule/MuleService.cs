@@ -114,13 +114,13 @@ namespace ConsoleBot.Mule
                             break;
                         }
                     } while (moveItemResult == MoveItemResult.Succes);
-
-                    if(moveItemResult == MoveItemResult.Failed)
+                    muleClient.Game.LeaveGame();
+                    muleClient.Disconnect();
+                    if (moveItemResult == MoveItemResult.Failed)
                     {
                         break;
                     }
-                    muleClient.Game.LeaveGame();
-                    muleClient.Disconnect();
+
                 }
             }
 
@@ -202,7 +202,7 @@ namespace ConsoleBot.Mule
             }
 
             client.Game.ClickButton(ClickType.AcceptTradeRequest);
-            while ((!tradeAccepted || !clientActions.Contains(ButtonAction.APlayerAcceptedTrade)) && tries < 20)
+            while (!tradeAccepted && tries < 20)
             {
                 await Task.Delay(100);
                 tries++;
