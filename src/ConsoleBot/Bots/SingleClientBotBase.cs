@@ -7,6 +7,7 @@ using D2NG.Core;
 using Serilog;
 using System;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -46,13 +47,7 @@ namespace ConsoleBot.Bots
                 int gameDescriptionIndex = 0;
                 while (true)
                 {
-                    if(successiveFailures > 10 && totalCount > 15)
-                    {
-                        Log.Error($"bot stopping due to high successive failures: {successiveFailures} with run total {totalCount}");
-                        client.Disconnect();
-                        break;
-                    }
-                    else if(successiveFailures > 0 && successiveFailures % 5 == 0)
+                    if(successiveFailures > 0 && successiveFailures % 10 == 0)
                     {
                         gameDescriptionIndex++;
                         if (gameDescriptionIndex == _config.GameDescriptions?.Count)
@@ -94,11 +89,12 @@ namespace ConsoleBot.Bots
                             {
                                 successiveFailures = 0;
                             }
+                            await Task.Delay(TimeSpan.FromSeconds(2));
                         }
                         else
                         {
                             successiveFailures += 1;
-                            await Task.Delay(Math.Pow(successiveFailures, 1.5) * TimeSpan.FromSeconds(5));
+                            await Task.Delay(Math.Pow(successiveFailures, 1.3) * TimeSpan.FromSeconds(5));
                         }
 
                         if (client.Game.IsInGame())
@@ -113,6 +109,10 @@ namespace ConsoleBot.Bots
                     }
                     catch (Exception e)
                     {
+                        if(e is HttpRequestException httpEx)
+                        {
+                            await _externalMessagingClient.SendMessage($"{client.LoggedInUserName() } Received http exception, map server is probably down");
+                        }
                         gameDescriptionIndex++;
                         if(gameDescriptionIndex == _config.GameDescriptions?.Count)
                         {

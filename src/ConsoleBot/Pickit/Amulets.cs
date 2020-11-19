@@ -12,27 +12,37 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItem(Item item)
         {
-            if (item.GetToClassSkills() == 2 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
+            var toCasterSkills = item.GetValueOfStatType(StatType.SorceressSkills);
+            toCasterSkills += item.GetValueOfStatType(StatType.NecromancerSkills);
+            toCasterSkills += item.GetValueOfStatType(StatType.PaladinSkills);
+            toCasterSkills += item.GetValueOfStatType(StatType.DruidSkills);
+
+            var toMeleeSkills = item.GetValueOfStatType(StatType.BarbarianSkills);
+            toMeleeSkills += item.GetValueOfStatType(StatType.AmazonSkills);
+            toMeleeSkills += item.GetValueOfStatType(StatType.AssassinSkills);
+            toMeleeSkills += item.GetValueOfStatType(StatType.DruidSkills);
+
+            if (toCasterSkills == 2 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
             {
                 return true;
             }
 
-            if (item.GetToClassSkills() == 2 && item.GetTotalResistFrLrCr() >= 20 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 70)
+            if (toCasterSkills == 2 && item.GetTotalResistFrLrCr() >= 20 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 70)
             {
                 return true;
             }
 
-            if (item.GetToClassSkills() >= 2 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
+            if (toMeleeSkills >= 2 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
             {
                 return true;
             }
 
-            if (item.GetToClassSkills() >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 50)
+            if (toCasterSkills >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 50)
             {
                 return true;
             }
 
-            if (item.GetToClassSkills() >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 40)
+            if (toCasterSkills >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 40)
             {
                 return true;
             }
@@ -44,7 +54,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 4
+            if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
                 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumDamage) * 4 + item.GetValueOfStatType(StatType.BarbarianSkills) * 20 >= 100)
             {
                 return true;

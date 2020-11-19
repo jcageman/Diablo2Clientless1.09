@@ -1,4 +1,5 @@
 ﻿using ConsoleBot.Bots;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;
@@ -24,12 +25,13 @@ namespace ConsoleBot.Mule
 
         private readonly BotConfiguration _botConfig;
         private readonly MuleConfiguration _muleConfig;
+        private readonly IExternalMessagingClient _externalMessagingClient;
 
-        public MuleService(IOptions<BotConfiguration> botConfig, IOptions<MuleConfiguration> muleConfig)
+        public MuleService(IOptions<BotConfiguration> botConfig, IOptions<MuleConfiguration> muleConfig, IExternalMessagingClient externalMessagingClient)
         {
             _botConfig = botConfig.Value;
             _muleConfig = muleConfig.Value;
-
+            _externalMessagingClient = externalMessagingClient;
         }
         public async Task<bool> MuleItemsForClient(Client client)
         {
@@ -85,11 +87,12 @@ namespace ConsoleBot.Mule
                     MoveItemResult moveItemResult = MoveItemResult.Succes;
                     do
                     {
-                        InventoryHelpers.CleanupCursorItem(client.Game);
-                        InventoryHelpers.CleanupCursorItem(muleClient.Game);
-                        var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
-                        InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0);
-                        InventoryHelpers.CleanupCursorItem(muleClient.Game);
+                        var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => Pickit.Pickit.CanTouchInventoryItem(muleClient.Game, i)).ToList();
+                        if(InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0) == MoveItemResult.Failed)
+                        {
+                            break;
+                        }
+
                         var stashItems = muleItems.Where(i => i.Container == ContainerType.Stash || i.Container == ContainerType.Stash2).ToList();
                         if (stashItems.Count > 0)
                         {
@@ -103,7 +106,7 @@ namespace ConsoleBot.Mule
 
                         if (moveItemResult != MoveItemResult.Failed)
                         {
-                            moveItemResult = await TradeInventoryItems(client, muleClient);
+                            moveItemResult = await TradeInventoryItems(client, muleClient, muleItems.ToHashSet());
                         }
                         muleItems = GetMuleItems(client, character);
                         if (!muleItems.Any())
@@ -111,11 +114,18 @@ namespace ConsoleBot.Mule
                             break;
                         }
                     } while (moveItemResult == MoveItemResult.Succes);
+
+                    if(moveItemResult == MoveItemResult.Failed)
+                    {
+                        break;
+                    }
                     muleClient.Game.LeaveGame();
                     muleClient.Disconnect();
                 }
             }
 
+            var stashInventoryItems = client.Game.Inventory.Items.Where(i => Pickit.Pickit.ShouldKeepItem(client.Game, i) && Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
+            InventoryHelpers.StashItemsAndGold(client.Game, stashInventoryItems, 0);
             client.Game.LeaveGame();
 
             if (!client.RejoinMCP())
@@ -165,7 +175,7 @@ namespace ConsoleBot.Mule
             && i.GetValueOfStatType(StatType.AllSkills) == 1) || (i.Name == ItemName.PerfectSkull);
         }
 
-        private static async Task<MoveItemResult> TradeInventoryItems(Client client, Client muleClient)
+        private async Task<MoveItemResult> TradeInventoryItems(Client client, Client muleClient, HashSet<Item> muleItems)
         {
             bool tradeAccepted = false;
             var clientActions = new HashSet<ButtonAction>();
@@ -178,31 +188,34 @@ namespace ConsoleBot.Mule
 
             var tries = 0;
 
-            while (!clientActions.Contains(ButtonAction.APlayerWantsToTrade) && tries < 20)
+            muleClient.Game.InteractWithPlayer(entityPlayerClient);
+            
+            while(!clientActions.Contains(ButtonAction.APlayerWantsToTrade) && tries < 20)
             {
-                muleClient.Game.InteractWithPlayer(entityPlayerClient);
                 await Task.Delay(100);
                 tries++;
             }
 
-            if (tries > 20)
+            if (tries >= 20)
             {
                 return MoveItemResult.Failed;
             }
 
-            while (!tradeAccepted && tries < 20)
+            client.Game.ClickButton(ClickType.AcceptTradeRequest);
+            while ((!tradeAccepted || !clientActions.Contains(ButtonAction.APlayerAcceptedTrade)) && tries < 20)
             {
-                client.Game.ClickButton(ClickType.AcceptTradeRequest);
                 await Task.Delay(100);
                 tries++;
             }
 
-            if (tries > 20)
+            if (tries >= 20)
             {
                 return MoveItemResult.Failed;
             }
 
-            var movedItems = MoveAllInventoryItemsToTradeScreenThatFit(client, muleClient.Game.Inventory);
+            await Task.Delay(500);
+            var tradeItems = client.Game.Inventory.Items.Where(i => muleItems.Contains(i)).ToList();
+            var movedItems = await MoveAllInventoryItemsToTradeScreenThatFit(client, muleClient.Game.Inventory, tradeItems);
 
             client.Game.ClickButton(ClickType.PressAcceptButton);
             muleClient.Game.ClickButton(ClickType.PressAcceptButton);
@@ -213,13 +226,18 @@ namespace ConsoleBot.Mule
                 tries++;
             }
 
+            if (tries >= 20)
+            {
+                return MoveItemResult.Failed;
+            }
+
             return movedItems;
         }
 
-        private static MoveItemResult MoveAllInventoryItemsToTradeScreenThatFit(Client client, Container inventory)
+        private async Task<MoveItemResult> MoveAllInventoryItemsToTradeScreenThatFit(Client client, Container muleInventory, List<Item> tradeableItems)
         {
             var temporaryInventory = new Inventory();
-            foreach (var item in inventory.Items)
+            foreach (var item in muleInventory.Items)
             {
                 temporaryInventory.Add(item);
             }
@@ -227,7 +245,7 @@ namespace ConsoleBot.Mule
             bool atLeastOneTraded = false;
 
             var tradeScreenClient = new Container(10, 4);
-            foreach (var item in client.Game.Inventory.Items.Where(i => IsMuleItem(client, i)))
+            foreach (var item in tradeableItems)
             {
                 var space = tradeScreenClient.FindFreeSpace(item);
                 if (space == null)
@@ -254,10 +272,11 @@ namespace ConsoleBot.Mule
                 if (!resultToBuffer)
                 {
                     Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
-                    InventoryHelpers.CleanupCursorItem(client.Game);
+                    await _externalMessagingClient.SendMessage($"Moving item {item.Id} - {item.Name} to buffer failed");
                     return MoveItemResult.Failed;
                 }
 
+                await Task.Delay(100);
                 client.Game.InsertItemIntoContainer(item, space, ItemContainer.Trade);
 
                 var moveResult = GeneralHelpers.TryWithTimeout(
@@ -266,9 +285,11 @@ namespace ConsoleBot.Mule
                 if (!moveResult)
                 {
                     Log.Error($"Moving item {item.Id} - {item.Name} to trade failed");
-                    InventoryHelpers.CleanupCursorItem(client.Game);
+                    await _externalMessagingClient.SendMessage($"Moving item {item.Id} - {item.Name} to trade failed ");
                     return MoveItemResult.Failed;
                 }
+
+                await Task.Delay(100);
 
                 var newItem = client.Game.Items.First(i => i.Id == item.Id);
                 temporaryInventory.Block(freeSpaceInventory, newItem.Width, newItem.Height);

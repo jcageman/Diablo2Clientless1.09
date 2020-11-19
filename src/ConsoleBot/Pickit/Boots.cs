@@ -29,7 +29,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.FasterRunWalk) >= 30 && item.GetTotalResistFrLrCr() >= 90)
+            if (item.GetValueOfStatType(StatType.FasterRunWalk) >= 30 && item.GetTotalResistFrLrCr() >= 100)
             {
                 return true;
             }

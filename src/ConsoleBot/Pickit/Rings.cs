@@ -56,6 +56,23 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            // BVA non-leech rings
+            if (item.Quality == QualityType.Rare
+                && (item.GetValueOfStatType(StatType.AttackRating) >= 70 || totalAddedDamage >= 5)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 80
+                && item.GetTotalResistFrLrCr() >= 50)
+            {
+                return true;
+            }
+
+            if (item.Quality == QualityType.Rare
+            && (item.GetValueOfStatType(StatType.AttackRating) >= 30)
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 100
+            && item.GetTotalResistFrLrCr() >= 45)
+            {
+                return true;
+            }
+
             // Leech ring's
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 4 && item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
                 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30 && item.GetTotalResistFrLrCr() >= 45)

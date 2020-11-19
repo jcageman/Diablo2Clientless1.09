@@ -33,7 +33,7 @@ namespace ConsoleBot.Helpers
                         Log.Error($"Moving item {item.Id} - {item.Name} from cursor to inventory failed");
                     }
                 }
-                else if (freeSpaceCube != null && item.Container != ContainerType.TradeOffer)
+                else if (freeSpaceCube != null)
                 {
                     game.InsertItemIntoContainer(item, freeSpaceCube, ItemContainer.Cube);
                     bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
@@ -51,8 +51,6 @@ namespace ConsoleBot.Helpers
 
         public static MoveItemResult StashItemsAndGold(Game game, List<Item> items, int gold)
         {
-            Log.Information($"Stashing {items.Count} items and {gold} gold");
-
             var stashes = game.GetEntityByCode(EntityCode.Stash);
             if (!stashes.Any())
             {
@@ -114,8 +112,6 @@ namespace ConsoleBot.Helpers
 
         public static MoveItemResult MoveStashItemsToInventory(Game game, List<Item> items)
         {
-            Log.Information($"Removing {items.Count} items from Stash");
-
             var stashes = game.GetEntityByCode(EntityCode.Stash);
             if (!stashes.Any())
             {

@@ -27,7 +27,7 @@ namespace ConsoleBot.Pickit
 
             if (item.Name == ItemName.WarGauntlets
                 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
-                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 80)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 100)
             {
                 return true;
             }
@@ -41,23 +41,22 @@ namespace ConsoleBot.Pickit
 
             if (item.Name == ItemName.WarGauntlets
             && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70
-            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 20
-            && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) > 0)
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60)
             {
                 return true;
             }
 
-            if (item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 80)
+            if (item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) * 10 >= 120)
             {
                 return true;
             }
 
-            if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60)
+            if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) * 10 >= 100)
             {
                 return true;
             }
 
-            if (item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 40)
+            if (item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) * 10 >= 70)
             {
                 return true;
             }

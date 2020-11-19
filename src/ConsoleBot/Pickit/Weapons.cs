@@ -51,6 +51,14 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            var desirablePvmWeapons = new HashSet<ItemName> { ItemName.MarteldeFer, ItemName.AncientAxe, ItemName.Lance, ItemName.ExecutionerSword };
+            if (item.Quality == QualityType.Rare
+            && desirablePvmWeapons.Contains(item.Name)
+            && additionalDamage > 140 && item.GetValueOfStatType(StatType.ReducedRequirements) <= -20 && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6)
+            {
+                return true;
+            }
+
             if (item.Quality == QualityType.Rare
             && interestingExceptionalWeapons.Contains(item.Name)
             && (additionalDamage > 210 && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 190))

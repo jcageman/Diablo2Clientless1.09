@@ -121,14 +121,14 @@ namespace D2NG.Core.D2GS
         {
             var successLoadEvent = GetResetEventOfType(InComingPacket.LoadSuccessful);
             Connection.WritePacket(new GameLogonPacket(gameHash, gameToken, character));
-            if (!successLoadEvent.WaitOne(5000))
+            if (!successLoadEvent.WaitOne(10000))
             {
                 Log.Error("Game logon failed");
                 return false;
             }
             var loadActComplete = GetResetEventOfType(InComingPacket.LoadActComplete);
             Connection.WritePacket(OutGoingPacket.Startup);
-            if(!loadActComplete.WaitOne(5000))
+            if(!loadActComplete.WaitOne(10000))
             {
                 Log.Error("Load Act failed");
                 return false;
