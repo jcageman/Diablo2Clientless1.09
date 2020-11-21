@@ -118,6 +118,22 @@ namespace D2NG.Core.D2GS.Items.Containers
             return true;
         }
 
+        public bool HasAnyFreeSpace()
+        {
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    if (Buffer[y, x])
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
         public override string ToString()
         {
             return string.Join("\n", Buffer.OfType<bool>()

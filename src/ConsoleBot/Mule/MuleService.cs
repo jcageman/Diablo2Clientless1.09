@@ -59,24 +59,15 @@ namespace ConsoleBot.Mule
                     }
 
                     var muleClient = new Client();
-                    var connect = muleClient.Connect(
-                    _botConfig.Realm,
-                    _botConfig.KeyOwner,
-                    _botConfig.GameFolder);
-                    if (!connect)
+                    if(!RealmConnectHelpers.ConnectToRealm(
+                        muleClient,
+                        _botConfig.Realm,
+                        _botConfig.KeyOwner,
+                        _botConfig.GameFolder, account.Username, account.Password, character.Name))
                     {
                         return false;
                     }
 
-                    var characters = muleClient.Login(account.Username, account.Password);
-
-                    var selectedCharacter = characters.FirstOrDefault(c =>
-    c.Name.Equals(character.Name, StringComparison.CurrentCultureIgnoreCase));
-                    if (selectedCharacter == null)
-                    {
-                        throw new CharacterNotFoundException(character.Name);
-                    }
-                    muleClient.SelectCharacter(selectedCharacter);
                     if (!muleClient.JoinGame(muleGameName, _botConfig.GamePassword))
                     {
                         continue;
@@ -88,7 +79,6 @@ namespace ConsoleBot.Mule
                     MoveItemResult moveItemResult = MoveItemResult.Succes;
                     do
                     {
-                        
                         var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => Pickit.Pickit.CanTouchInventoryItem(muleClient.Game, i)).ToList();
                         moveItemResult = InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0);
                         if(moveItemResult == MoveItemResult.Failed)
@@ -96,10 +86,16 @@ namespace ConsoleBot.Mule
                             break;
                         }
 
-                        var stashItems = muleItems.Where(i => i.Container == ContainerType.Stash || i.Container == ContainerType.Stash2).ToList();
-                        if (stashItems.Count > 0)
+                        var itemsToTrade = GetItemsToTrade(muleClient.Game.Inventory, muleItems);
+                        if(!itemsToTrade.Any())
                         {
-                            moveItemResult = InventoryHelpers.MoveStashItemsToInventory(client.Game, stashItems);
+                            break;
+                        }
+
+                        var stashItemsToTrade = itemsToTrade.Where(i => i.Container == ContainerType.Stash || i.Container == ContainerType.Stash2).ToList();
+                        if (stashItemsToTrade.Count > 0)
+                        {
+                            moveItemResult = InventoryHelpers.MoveStashItemsToInventory(client.Game, stashItemsToTrade);
                             InventoryHelpers.CleanupCursorItem(client.Game);
                         }
                         else
@@ -107,9 +103,15 @@ namespace ConsoleBot.Mule
                             moveItemResult = MoveItemResult.Succes;
                         }
 
+                        itemsToTrade = GetItemsToTrade(muleClient.Game.Inventory, muleItems);
+                        if (!itemsToTrade.Any())
+                        {
+                            break;
+                        }
+
                         if (moveItemResult != MoveItemResult.Failed)
                         {
-                            moveItemResult = await TradeInventoryItems(client, muleClient, muleItems.ToHashSet());
+                            moveItemResult = await TradeInventoryItems(client, muleClient, itemsToTrade);
                         }
                         muleItems = GetMuleItems(client, character);
                         if (!muleItems.Any())
@@ -123,7 +125,6 @@ namespace ConsoleBot.Mule
                     {
                         return false;
                     }
-
                 }
             }
 
@@ -178,7 +179,7 @@ namespace ConsoleBot.Mule
             && i.GetValueOfStatType(StatType.AllSkills) == 1) || (i.Name == ItemName.PerfectSkull);
         }
 
-        private async Task<MoveItemResult> TradeInventoryItems(Client client, Client muleClient, HashSet<Item> muleItems)
+        private async Task<MoveItemResult> TradeInventoryItems(Client client, Client muleClient, List<Item> tradeItems)
         {
             bool tradeAccepted = false;
             var clientActions = new HashSet<ButtonAction>();
@@ -217,7 +218,6 @@ namespace ConsoleBot.Mule
             }
 
             await Task.Delay(500);
-            var tradeItems = client.Game.Inventory.Items.Where(i => muleItems.Contains(i)).ToList();
             var movedItems = await MoveAllInventoryItemsToTradeScreenThatFit(client, muleClient.Game.Inventory, tradeItems);
 
             client.Game.ClickButton(ClickType.PressAcceptButton);
@@ -235,6 +235,43 @@ namespace ConsoleBot.Mule
             }
 
             return movedItems;
+        }
+
+        private List<Item> GetItemsToTrade(Container muleInventory, List<Item> tradeableItems)
+        {
+            if(!muleInventory.HasAnyFreeSpace())
+            {
+                return new List<Item>();
+            }
+
+            var itemsToTrade = new List<Item>();
+            var temporaryInventory = new Inventory();
+            foreach (var item in muleInventory.Items)
+            {
+                temporaryInventory.Add(item);
+            }
+
+            var tradeScreenClient = new Container(10, 4);
+            foreach (var item in tradeableItems)
+            {
+                var freeTradeScreenSpace = tradeScreenClient.FindFreeSpace(item);
+                if (freeTradeScreenSpace == null)
+                {
+                    continue;
+                }
+
+                var freeSpaceInventory = temporaryInventory.FindFreeSpace(item);
+                if (freeSpaceInventory == null)
+                {
+                    continue;
+                }
+
+                temporaryInventory.Block(freeSpaceInventory, item.Width, item.Height);
+                tradeScreenClient.Block(freeTradeScreenSpace, item.Width, item.Height);
+                itemsToTrade.Add(item);
+            }
+
+            return itemsToTrade;
         }
 
         private async Task<MoveItemResult> MoveAllInventoryItemsToTradeScreenThatFit(Client client, Container muleInventory, List<Item> tradeableItems)

@@ -62,7 +62,7 @@ namespace ConsoleBot.Helpers
                 return false;
             }
 
-            var selectedCharacter = characters.Single(c =>
+            var selectedCharacter = characters.FirstOrDefault(c =>
                 c.Name.Equals(charactername, StringComparison.CurrentCultureIgnoreCase));
             if (selectedCharacter == null)
             {
