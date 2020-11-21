@@ -69,10 +69,23 @@ namespace ConsoleBot.Bots
                         gameCount = 1;
                     }
 
-                    if(NeedsMule && await _muleService.MuleItemsForClient(client))
+                    if(NeedsMule)
                     {
-                        NeedsMule = false;
-                        await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: finished mule");
+                        if(await _muleService.MuleItemsForClient(client))
+                        {
+                            NeedsMule = false;
+                            await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: finished mule");
+                        }
+                        else
+                        {
+                            await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: failed to mule all items, trying again");
+                            if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _config.Username, _config.Password, _config.Character, 10))
+                            {
+                                throw new Exception("Could not connect to realm");
+                            }
+                            successiveFailures++;
+                            continue;
+                        }
                     }
 
                     try
@@ -104,15 +117,21 @@ namespace ConsoleBot.Bots
 
                         if(!client.RejoinMCP())
                         {
-                            throw new Exception("Rejoining MCP failed");
+                            var reconnectMessage = $"Reconnecting to MCP failed, reconnecting to realm instead";
+                            Log.Warning(reconnectMessage);
+                            if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _config.Username, _config.Password, _config.Character, 10))
+                            {
+                                throw new Exception("Could not connect to realm");
+                            }
                         }
+                    }
+                    catch(HttpRequestException e)
+                    {
+                        await _externalMessagingClient.SendMessage($"{client.LoggedInUserName() } Received http exception {e}, map server is probably down, shutting down bot");
+                        return;
                     }
                     catch (Exception e)
                     {
-                        if(e is HttpRequestException httpEx)
-                        {
-                            await _externalMessagingClient.SendMessage($"{client.LoggedInUserName() } Received http exception, map server is probably down");
-                        }
                         gameDescriptionIndex++;
                         if(gameDescriptionIndex == _config.GameDescriptions?.Count)
                         {

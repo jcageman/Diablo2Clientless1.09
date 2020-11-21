@@ -216,11 +216,6 @@ namespace ConsoleBot.Pickit
                 return item.Name == ItemName.Amulet;
             }
 
-            if (item.Name == ItemName.BoneShield)
-            {
-                return true;
-            }
-
             if (item.Name == ItemName.Boots || item.Name == ItemName.HeavyBoots)
             {
                 return true;

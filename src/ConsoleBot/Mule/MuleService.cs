@@ -83,12 +83,15 @@ namespace ConsoleBot.Mule
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(2));
+                    InventoryHelpers.CleanupCursorItem(muleClient.Game);
 
                     MoveItemResult moveItemResult = MoveItemResult.Succes;
                     do
                     {
+                        
                         var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => Pickit.Pickit.CanTouchInventoryItem(muleClient.Game, i)).ToList();
-                        if(InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0) == MoveItemResult.Failed)
+                        moveItemResult = InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0);
+                        if(moveItemResult == MoveItemResult.Failed)
                         {
                             break;
                         }
@@ -118,7 +121,7 @@ namespace ConsoleBot.Mule
                     muleClient.Disconnect();
                     if (moveItemResult == MoveItemResult.Failed)
                     {
-                        break;
+                        return false;
                     }
 
                 }
@@ -130,7 +133,7 @@ namespace ConsoleBot.Mule
 
             if (!client.RejoinMCP())
             {
-                throw new Exception("Rejoining MCP failed");
+                return false;
             }
 
             return true;

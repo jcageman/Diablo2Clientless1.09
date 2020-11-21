@@ -28,7 +28,7 @@ namespace ConsoleBot.Pickit
                 && item.Quality == QualityType.Rare
                 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 80
                 && item.GetValueOfStatType(StatType.ReducedRequirements) <= -20
-                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60)
             {
                 return true;
             }
@@ -36,16 +36,16 @@ namespace ConsoleBot.Pickit
             if (item.Name == ItemName.OrnatePlate
             && item.Quality == QualityType.Rare
             && item.GetValueOfStatType(StatType.EnhancedDefense) >= 90
-            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 70)
             {
                 return true;
             }
 
             if (defArmors.Contains(item.Name)
-            && item.GetValueOfStatType(StatType.EnhancedDefense) >= 60
+            && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70
             && item.GetValueOfStatType(StatType.ReducedRequirements) <= -30
             && item.GetTotalResistFrLrCr() >= 30
-            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30)
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
             {
                 return true;
             }
