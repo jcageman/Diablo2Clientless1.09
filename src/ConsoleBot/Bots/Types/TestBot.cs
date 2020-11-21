@@ -75,7 +75,7 @@ namespace ConsoleBot.Bots.Types
                 c.Name.Equals(_config.Character, StringComparison.CurrentCultureIgnoreCase));
             if (selectedCharacter1 == null)
             {
-                throw new CharacterNotFoundException();
+                throw new CharacterNotFoundException(_config.Character);
             }
             client1.SelectCharacter(selectedCharacter1);
             client1.Chat.EnterChat();

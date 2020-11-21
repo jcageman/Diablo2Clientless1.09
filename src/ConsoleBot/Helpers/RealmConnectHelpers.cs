@@ -66,7 +66,7 @@ namespace ConsoleBot.Helpers
                 c.Name.Equals(charactername, StringComparison.CurrentCultureIgnoreCase));
             if (selectedCharacter == null)
             {
-                throw new CharacterNotFoundException();
+                throw new CharacterNotFoundException(charactername);
             }
             client.SelectCharacter(selectedCharacter);
 

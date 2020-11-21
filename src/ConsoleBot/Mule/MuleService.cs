@@ -70,11 +70,11 @@ namespace ConsoleBot.Mule
 
                     var characters = muleClient.Login(account.Username, account.Password);
 
-                    var selectedCharacter = characters.Single(c =>
+                    var selectedCharacter = characters.FirstOrDefault(c =>
     c.Name.Equals(character.Name, StringComparison.CurrentCultureIgnoreCase));
                     if (selectedCharacter == null)
                     {
-                        throw new CharacterNotFoundException();
+                        throw new CharacterNotFoundException(character.Name);
                     }
                     muleClient.SelectCharacter(selectedCharacter);
                     if (!muleClient.JoinGame(muleGameName, _botConfig.GamePassword))

@@ -6,11 +6,8 @@ namespace ConsoleBot.Exceptions
     [Serializable]
     public class CharacterNotFoundException : Exception
     {
-        public CharacterNotFoundException()
-        {
-        }
 
-        public CharacterNotFoundException(string message) : base(message)
+        public CharacterNotFoundException(string characterName) : base($"Character with name '{characterName}' was not found")
         {
         }
 
