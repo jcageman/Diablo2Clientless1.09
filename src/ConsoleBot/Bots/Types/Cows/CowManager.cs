@@ -26,6 +26,7 @@ namespace ConsoleBot.Bots.Types.Cows
         private readonly ConcurrentDictionary<uint, AliveMonster> _aliveMonsters = new ConcurrentDictionary<uint, AliveMonster>();
         private readonly ConcurrentDictionary<uint, DeadMonster> _monstersAvailableForCorpseExplosion = new ConcurrentDictionary<uint, DeadMonster>();
         private readonly ConcurrentDictionary<Point, Point> _existingClusters = new ConcurrentDictionary<Point, Point>();
+        private readonly ConcurrentDictionary<Point, Point> _usedClusters = new ConcurrentDictionary<Point, Point>();
         private readonly ConcurrentDictionary<Point, Point> _busyClusters = new ConcurrentDictionary<Point, Point>();
         private readonly ConcurrentDictionary<Client, ConcurrentDictionary<Point, Point>> _cowClustersPerClient = new ConcurrentDictionary<Client, ConcurrentDictionary<Point, Point>>();
         private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new ConcurrentDictionary<uint, Item>();
@@ -103,8 +104,12 @@ namespace ConsoleBot.Bots.Types.Cows
                 EndPoint = point
             };
 
-            var anyPointOutside = path.Any(p => MinimumDistanceToLineSegment(p, line) >= 4.1);
-            return !anyPointOutside;
+            var pointsOutside = false;
+            if (path.Count() > 1)
+            {
+                pointsOutside = ((double)path.Count(p => MinimumDistanceToLineSegment(p, line) >= 4.1)) / path.Count > 0.2;
+            }
+            return !pointsOutside;
         }
 
         public async Task<bool> IsVisitable(Client client, Point point)
@@ -175,14 +180,17 @@ namespace ConsoleBot.Bots.Types.Cows
                     MonsterEnchantments = packet.MonsterEnchantments
                 }), (existingCowId, existingCow) => existingCow);
 
+                /*
                 if (_cowKingLocation.Distance(packet.Location) < 70)
                 {
                     return;
                 }
+                */
 
-                var existingCluster = _existingClusters.Values.FirstOrDefault(cluster => packet.Location.Distance(cluster) < 50);
-                if(existingCluster == null && _existingClusters.TryAdd(packet.Location, packet.Location))
+                var usedCluster = _usedClusters.Values.FirstOrDefault(cluster => packet.Location.Distance(cluster) < 50);
+                if(usedCluster == null && _existingClusters.TryAdd(packet.Location, packet.Location))
                 {
+                    _usedClusters.TryAdd(packet.Location, packet.Location);
                     var bestClient = _clients.OrderBy(c => c.Game.Me.Location.Distance(packet.Location)).FirstOrDefault();
                     if(bestClient != null)
                     {
@@ -207,7 +215,13 @@ namespace ConsoleBot.Bots.Types.Cows
         {
             if(packet.EntityState == EntityState.Dead || packet.EntityState == EntityState.Dieing)
             {
-                if(_aliveMonsters.TryRemove(packet.EntityId, out var _))
+                var clustersToRemove = _existingClusters.Where(cluster => packet.Location.Distance(cluster.Value) < 30);
+                foreach(var cluster in clustersToRemove)
+                {
+                    _existingClusters.TryRemove(cluster.Key, out  _);
+                }
+
+                if (_aliveMonsters.TryRemove(packet.EntityId, out var _))
                 {
                     _monstersAvailableForCorpseExplosion.TryAdd(packet.EntityId, new DeadMonster
                     {

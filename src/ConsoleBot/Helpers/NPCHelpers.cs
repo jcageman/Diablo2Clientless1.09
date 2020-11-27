@@ -61,7 +61,7 @@ namespace ConsoleBot.Helpers
                 Log.Information($"Refreshing arrows at {npc.NPCCode} {game.Me.Location}");
                 var arrows = game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Name == ItemName.Arrows);
                 var numberOfArrows = game.Inventory.Items.Count(i => i.Name == ItemName.Arrows);
-                while (numberOfArrows < 7 && game.Inventory.FindFreeSpace(arrows) != null)
+                while (numberOfArrows < 5 && game.Inventory.FindFreeSpace(arrows) != null)
                 {
                     game.BuyItem(npc, arrows, false);
                     numberOfArrows += 1;
@@ -313,7 +313,7 @@ namespace ConsoleBot.Helpers
         public static bool ShouldGoToRepairNPC(Game game)
         {
             bool shouldRepair = game.Items.Any(i => i.Action == D2NG.Core.D2GS.Items.Action.Equip && i.MaximumDurability > 0 && ((double)i.Durability / i.MaximumDurability) < 0.2);
-            bool shouldBuyArrows = game.Me.Class == CharacterClass.Amazon && game.Inventory.Items.Count(i => i.Name == ItemName.Arrows) <= 4;
+            bool shouldBuyArrows = game.Me.Class == CharacterClass.Amazon && game.Inventory.Items.Count(i => i.Name == ItemName.Arrows) <= 2;
             return shouldRepair || shouldBuyArrows;
         }
 

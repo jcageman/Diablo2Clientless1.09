@@ -175,6 +175,11 @@ namespace D2NG.Core
                 return false;
             }
 
+            if(!Bncs.IsConnected())
+            {
+                return false;
+            }
+
             var packet = Bncs.RealmLogon(_mcpRealm);
             if (packet == null)
             {

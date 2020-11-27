@@ -22,27 +22,47 @@ namespace ConsoleBot.Pickit
             toMeleeSkills += item.GetValueOfStatType(StatType.AssassinSkills);
             toMeleeSkills += item.GetValueOfStatType(StatType.DruidSkills);
 
-            if (toCasterSkills == 2 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
+            if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
             {
                 return true;
             }
 
-            if (toCasterSkills == 2 && item.GetTotalResistFrLrCr() >= 20 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 70)
+            if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetTotalResistFrLrCr() >= 20 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 70)
             {
                 return true;
             }
 
-            if (toMeleeSkills >= 2 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
+            if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 50)
             {
                 return true;
             }
 
-            if (toCasterSkills >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 50)
+            if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 40)
+            {
+                return true;
+            }
+
+            if (toCasterSkills == 2 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 40)
+            {
+                return true;
+            }
+
+            if (toCasterSkills == 2 && item.GetTotalResistFrLrCr() >= 20 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 70)
+            {
+                return true;
+            }
+
+            if (toCasterSkills >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 50)
             {
                 return true;
             }
 
             if (toCasterSkills >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 40)
+            {
+                return true;
+            }
+
+            if (toMeleeSkills >= 2 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
             {
                 return true;
             }

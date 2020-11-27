@@ -30,7 +30,7 @@ namespace ConsoleBot.Helpers
                     bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Inventory.FindItemById(item.Id) != null, MoveItemTimeout);
                     if (!resultMove)
                     {
-                        Log.Error($"Moving item {item.Id} - {item.Name} from cursor to inventory failed");
+                        Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to inventory failed");
                     }
                 }
                 else if (freeSpaceCube != null)
@@ -39,12 +39,12 @@ namespace ConsoleBot.Helpers
                     bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
                     if (!resultMove)
                     {
-                        Log.Error($"Moving item {item.Id} - {item.Name} from cursor to cube failed");
+                        Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to cube failed");
                     }
                 }
                 else
                 {
-                    Log.Error($"Moving item {item.Id} - {item.Name} from cursor failed, no space");
+                    Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor failed, no space");
                 }
             }
         }
@@ -54,7 +54,7 @@ namespace ConsoleBot.Helpers
             var stashes = game.GetEntityByCode(EntityCode.Stash);
             if (!stashes.Any())
             {
-                Log.Error($"No stash found");
+                Log.Error($"{game.Me.Name}: No stash found");
                 return MoveItemResult.Failed;
             }
 
@@ -76,7 +76,7 @@ namespace ConsoleBot.Helpers
 
             if (!result)
             {
-                Log.Error($"Failed to open stash while at location {game.Me.Location} with stash at {stash.Location}");
+                Log.Error($"{game.Me.Name}: Failed to open stash while at location {game.Me.Location} with stash at {stash.Location}");
                 return MoveItemResult.Failed;
             }
 
@@ -115,7 +115,7 @@ namespace ConsoleBot.Helpers
             var stashes = game.GetEntityByCode(EntityCode.Stash);
             if (!stashes.Any())
             {
-                Log.Error($"No stash found");
+                Log.Error($"{game.Me.Name}: No stash found");
                 return MoveItemResult.Failed;
             }
 
@@ -137,7 +137,7 @@ namespace ConsoleBot.Helpers
 
             if (!result)
             {
-                Log.Error($"Failed to open stash while at location {game.Me.Location} with stash at {stash.Location}");
+                Log.Error($"{game.Me.Name}: Failed to open stash while at location {game.Me.Location} with stash at {stash.Location}");
                 return MoveItemResult.Failed;
             }
 
@@ -176,10 +176,10 @@ namespace ConsoleBot.Helpers
 
             foreach(var item in itemsToKeep)
             {
-                Log.Information($"Want to keep {item.GetFullDescription()}");
+                Log.Information($"{game.Me.Name}: Want to keep {item.GetFullDescription()}");
                 if (item.Quality == QualityType.Rare)
                 {
-                    externalMessagingClient.SendMessage($"Want to keep {item.GetFullDescription()}");
+                    externalMessagingClient.SendMessage($"{game.Me.Name}: Want to keep {item.GetFullDescription()}");
                 }
             }
 
@@ -206,7 +206,7 @@ namespace ConsoleBot.Helpers
 
                 if (!transmuteResult)
                 {
-                    Log.Error($"Transmuting items failed");
+                    Log.Error($"{game.Me.Name}: Transmuting items failed");
                     game.ClickButton(ClickType.CloseHoradricCube);
                     return false;
                 }
@@ -231,7 +231,7 @@ namespace ConsoleBot.Helpers
 
             if (!resultToBuffer)
             {
-                Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
+                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
                 return MoveItemResult.Failed;
             }
             game.InsertItemIntoContainer(item, location, ItemContainer.Inventory);
@@ -255,7 +255,7 @@ namespace ConsoleBot.Helpers
                 MoveItemTimeout);
             if (!resultToBuffer)
             {
-                Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
+                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
                 return MoveItemResult.Failed;
             }
 
@@ -265,7 +265,7 @@ namespace ConsoleBot.Helpers
                 (retryCount) => game.CursorItem == null && game.Stash.FindItemById(item.Id) != null,
                MoveItemTimeout))
             {
-                Log.Error($"Inserting item {item.Id} - {item.Name} into stash failed");
+                Log.Error($"{game.Me.Name}: Inserting item {item.Id} - {item.Name} into stash failed");
                 return MoveItemResult.Failed;
             }
 
@@ -283,13 +283,13 @@ namespace ConsoleBot.Helpers
             var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
             if (cube == null)
             {
-                Log.Error($"Cube not found");
+                Log.Error($"{game.Me.Name}: Cube not found");
                 return MoveItemResult.Failed;
             }
 
             if (!game.ActivateBufferItem(cube))
             {
-                Log.Error($"Opening cube for {item.Id} - {item.GetFullDescription()} failed with cursor {game.CursorItem?.Id}");
+                Log.Error($"{game.Me.Name}: Opening cube for {item.Id} - {item.GetFullDescription()} failed with cursor {game.CursorItem?.Id}");
                 return MoveItemResult.Failed;
             }
 
@@ -298,7 +298,7 @@ namespace ConsoleBot.Helpers
             bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
             if (!resultToBuffer)
             {
-                Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
+                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
                 game.ClickButton(ClickType.CloseHoradricCube);
                 return MoveItemResult.Failed;
             }
@@ -308,7 +308,7 @@ namespace ConsoleBot.Helpers
             bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Inventory.FindItemById(item.Id) != null, MoveItemTimeout);
             if (!resultMove)
             {
-                Log.Error($"Moving item {item.Id} - {item.Name} to cube failed");
+                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to cube failed");
                 game.ClickButton(ClickType.CloseHoradricCube);
                 return MoveItemResult.Failed;
             }
@@ -322,13 +322,13 @@ namespace ConsoleBot.Helpers
             var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
             if (cube == null)
             {
-                Log.Error($"Cube not found");
+                Log.Error($"{game.Me.Name}: Cube not found");
                 return MoveItemResult.Failed;
             }
 
             if (!game.ActivateBufferItem(cube))
             {
-                Log.Error($"Opening cube for {item.Id} - {item.GetFullDescription()} failed with cursor {game.CursorItem?.Id}");
+                Log.Error($"{game.Me.Name}: Opening cube for {item.Id} - {item.GetFullDescription()} failed with cursor {game.CursorItem?.Id}");
                 return MoveItemResult.Failed;
             }
 
@@ -337,7 +337,7 @@ namespace ConsoleBot.Helpers
             bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
             if (!resultToBuffer)
             {
-                Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
+                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
                 game.ClickButton(ClickType.CloseHoradricCube);
                 return MoveItemResult.Failed;
             }
@@ -347,7 +347,7 @@ namespace ConsoleBot.Helpers
             bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
             if (!resultMove)
             {
-                Log.Error($"Moving item {item.Id} - {item.Name} to cube failed");
+                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to cube failed");
                 game.ClickButton(ClickType.CloseHoradricCube);
                 return MoveItemResult.Failed;
             }

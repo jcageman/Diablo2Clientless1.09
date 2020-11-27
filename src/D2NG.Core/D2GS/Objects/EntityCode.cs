@@ -4,6 +4,7 @@
     {
         TownPortal = 59,
         RedTownPortal = 60,
+        TristamPortal = 61,
         WaypointAct1 = 119,
         WaypointAct1JailAndUp = 157,
         WaypointAct2 = 156,
@@ -13,6 +14,7 @@
         WaypointAct3 = 237,
         WaypointAct3Durance = 324,
         WaypointAct4Levels = 238,
+        WirtsLeg = 268,
         Hratli = 379,
         RightSeal1 = 392,
         RightSeal2 = 393,

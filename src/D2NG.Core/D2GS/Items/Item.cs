@@ -137,14 +137,21 @@ namespace D2NG.Core.D2GS.Items
             switch (characterClass)
             {
                 case CharacterClass.Amazon:
+                    totalLife += GetValueOfStatType(StatType.Dexterity) * 3;
+                    totalLife += GetValueOfStatType(StatType.Strength) * 3;
+                    break;
                 case CharacterClass.Sorceress:
+                    totalLife += GetValueOfStatType(StatType.Dexterity) * 2;
+                    totalLife += GetValueOfStatType(StatType.Strength) * 2;
+                    totalLife += GetValueOfStatType(StatType.Mana);
+                    totalLife += GetValueOfStatType(StatType.Energy) * 2;
+                    break;
                 case CharacterClass.Necromancer:
                 case CharacterClass.Paladin:
                 case CharacterClass.Druid:
                 case CharacterClass.Assassin:
                     totalLife += GetValueOfStatType(StatType.Dexterity) * 2;
                     totalLife += GetValueOfStatType(StatType.Strength) * 2;
-                    totalLife += GetValueOfStatType(StatType.Mana);
                     break;
                 case CharacterClass.Barbarian:
                     totalLife += GetValueOfStatType(StatType.Dexterity) * 4;

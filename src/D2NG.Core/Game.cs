@@ -42,7 +42,15 @@ namespace D2NG.Core
         {
             _gameServer = gameServer;
 
-            _gameServer.OnReceivedPacketEvent(InComingPacket.GameLoading, _ => Log.Information($"{Data?.Me?.Name}: Game loading..."));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.GameLoading, _ =>
+            {
+                if (IsInGame())
+                {
+                    Log.Information($"{Data?.Me?.Name}: Game loading..., About to drop, leaving game");
+                    LeaveGame();
+                }
+            }
+            );
             _gameServer.OnReceivedPacketEvent(InComingPacket.GameFlags, p => Initialize(new GameFlags(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.LoadAct, p => Data.Act.LoadActData(new ActDataPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.MapReveal, p => Data.Act.HandleMapRevealPacket(new MapRevealPacket(p)));
@@ -523,6 +531,7 @@ namespace D2NG.Core
                 {
                     if (lastPong - lastPing > TimeSpan.FromSeconds(30))
                     {
+                        Log.Error($"Connecting seems to have dropped, stopping ping");
                         // assume the connection dropped
                         return;
                     }
@@ -551,7 +560,6 @@ namespace D2NG.Core
             }
             else
             {
-                Log.Information($"{Me.Name} Out of mana potions at {Me.Life} out of {Me.MaxLife}");
                 return false;
             }
         }
@@ -568,7 +576,6 @@ namespace D2NG.Core
             }
             else
             {
-                Log.Information($"{Me.Name} Out of health potions at {Me.Life} out of {Me.MaxLife}");
                 return false;
             }
         }

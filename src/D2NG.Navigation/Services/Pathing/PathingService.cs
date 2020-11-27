@@ -153,11 +153,17 @@ namespace D2NG.Navigation.Services.Pathing
                 var endPosition = path.Edges.LastOrDefault()?.End.Position;
                 if (endPosition.HasValue && map.MapToPoint(endPosition.Value) == toLocation)
                 {
-                    return path.Edges.Where((p, i) => i % 5 == 0 || i == path.Edges.Count - 1).Select(e => map.MapToPoint(e.End.Position)).ToList();
+                    return path.Edges.Where((p, i) => i % 3 == 0 || i == path.Edges.Count - 1).Select(e => map.MapToPoint(e.End.Position)).ToList();
                 }
             }
 
             return new List<Point>();
+        }
+
+        public async Task<bool> IsValidPointInArea(uint mapId, Difficulty difficulty, Area area, Point currentLocation)
+        {
+            var map = await _mapApiService.GetArea(mapId, difficulty, area);
+            return map.TryMapToPointInMap(currentLocation, out var _);
         }
     }
 }
