@@ -65,11 +65,13 @@ namespace ConsoleBot.Mule
                         _botConfig.KeyOwner,
                         _botConfig.GameFolder, account.Username, account.Password, character.Name))
                     {
+                        Log.Error($"Fail to connect to realm with {account.Username} with character {character.Name}");
                         return false;
                     }
 
                     if (!muleClient.JoinGame(muleGameName, _botConfig.GamePassword))
                     {
+                        Log.Error($"Fail to join game with {account.Username} with character {character.Name}");
                         continue;
                     }
 
@@ -103,7 +105,8 @@ namespace ConsoleBot.Mule
                             moveItemResult = MoveItemResult.Succes;
                         }
 
-                        itemsToTrade = GetItemsToTrade(muleClient.Game.Inventory, muleItems);
+                        var itemIdsToTrade = itemsToTrade.Select(i => i.Id).ToHashSet();
+                        itemsToTrade = client.Game.Inventory.Items.Where(i => itemIdsToTrade.Contains(i.Id)).ToList();
                         if (!itemsToTrade.Any())
                         {
                             break;
@@ -128,7 +131,7 @@ namespace ConsoleBot.Mule
                 }
             }
 
-            var stashInventoryItems = client.Game.Inventory.Items.Where(i => Pickit.Pickit.ShouldKeepItem(client.Game, i) && Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
+            var stashInventoryItems = client.Game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(client.Game, i) && Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
             InventoryHelpers.StashItemsAndGold(client.Game, stashInventoryItems, 0);
             client.Game.LeaveGame();
 

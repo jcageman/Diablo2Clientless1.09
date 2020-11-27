@@ -41,17 +41,18 @@ namespace ConsoleBot.Pickit
             var totalMaxDamage = Math.Max(item.GetValueOfStatType(StatType.MaximumDamage), item.GetValueOfStatType(StatType.SecondaryMaximumDamage));
             var totalAddedDamage = totalMinDamage + totalMaxDamage;
 
-            // BVB ring's
+            // BVB / ZvZ ring's
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
-                && item.GetValueOfStatType(StatType.AttackRating) >= 70
-                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 70)
+                && totalAddedDamage >= 7
+                && item.GetValueOfStatType(StatType.Dexterity) + item.GetValueOfStatType(StatType.Strength) >= 10)
             {
                 return true;
             }
 
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
-                && totalAddedDamage >= 5
-                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 70)
+                && item.GetValueOfStatType(StatType.AttackRating) >= 70
+                && totalAddedDamage >= 3
+                && item.GetValueOfStatType(StatType.Strength) >= 10)
             {
                 return true;
             }
@@ -66,9 +67,17 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.Quality == QualityType.Rare
-            && (item.GetValueOfStatType(StatType.AttackRating) >= 30)
+            && (item.GetValueOfStatType(StatType.AttackRating) >= 30 || totalAddedDamage >= 5)
             && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 100
             && item.GetTotalResistFrLrCr() >= 45)
+            {
+                return true;
+            }
+
+            if (item.Quality == QualityType.Rare
+            && (item.GetValueOfStatType(StatType.AttackRating) >= 30 || totalAddedDamage >= 5)
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 80
+            && item.GetTotalResistFrLrCr() >= 55)
             {
                 return true;
             }
@@ -97,7 +106,6 @@ namespace ConsoleBot.Pickit
 
             if (item.Quality == QualityType.Rare && totalAddedDamage >= 7
                 && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
-                && item.GetValueOfStatType(StatType.AttackRating) >= 70
                 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30
                 && item.GetTotalResistFrLrCr() >= 40)
             {

@@ -124,14 +124,14 @@ namespace D2NG.Core.D2GS.Items.Containers
             {
                 for (int x = 0; x < Width; x++)
                 {
-                    if (Buffer[y, x])
+                    if (!Buffer[y, x])
                     {
-                        return false;
+                        return true;
                     }
                 }
             }
 
-            return true;
+            return false;
         }
 
         public override string ToString()

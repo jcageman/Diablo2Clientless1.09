@@ -55,13 +55,14 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
-                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumDamage) * 4 + item.GetValueOfStatType(StatType.BarbarianSkills) * 20 >= 100)
+                && item.GetValueOfStatType(StatType.MinimumDamage) >= 7
+                && item.GetValueOfStatType(StatType.Strength) + item.GetValueOfStatType(StatType.BarbarianSkills) * 4 >= 10)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.MinimumDamage) >= 7
-                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 120
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 100
                 && item.GetTotalResistFrLrCr() >= 70)
             {
                 return true;
@@ -69,7 +70,7 @@ namespace ConsoleBot.Pickit
 
             if (item.GetValueOfStatType(StatType.AmazonSkills) >= 1
                 && item.GetValueOfStatType(StatType.MinimumDamage) >= 7
-                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 40
                 && item.GetTotalResistFrLrCr() >= 60)
             {
                 return true;
@@ -80,6 +81,13 @@ namespace ConsoleBot.Pickit
                 && item.GetValueOfStatType(StatType.MinimumDamage) >= 5
                 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30
                 && item.GetTotalResistFrLrCr() >= 60)
+            {
+                return true;
+            }
+
+            if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 5
+            && item.GetValueOfStatType(StatType.MinimumDamage) >= 7
+            && item.GetValueOfStatType(StatType.Dexterity) >= 10)
             {
                 return true;
             }
