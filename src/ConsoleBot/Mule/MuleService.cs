@@ -43,7 +43,15 @@ namespace ConsoleBot.Mule
 
             foreach (var account in _muleConfig.Accounts)
             {
-                foreach (var character in account.Characters)
+                List<Item> muleItems = GetMuleItems(client, account.MatchesAny);
+                if (!muleItems.Any())
+                {
+                    continue;
+                }
+
+                var accountCharacters = GetAccountCharactersForMule(account);
+
+                foreach (var character in accountCharacters)
                 {
                     InventoryHelpers.CleanupCursorItem(client.Game);
 
@@ -52,26 +60,20 @@ namespace ConsoleBot.Mule
                         break;
                     }
 
-                    List<Item> muleItems = GetMuleItems(client, character);
-                    if (!muleItems.Any())
-                    {
-                        continue;
-                    }
-
                     var muleClient = new Client();
                     if(!RealmConnectHelpers.ConnectToRealm(
                         muleClient,
                         _botConfig.Realm,
                         _botConfig.KeyOwner,
-                        _botConfig.GameFolder, account.Username, account.Password, character.Name))
+                        _botConfig.GameFolder, account.Username, account.Password, character))
                     {
-                        Log.Error($"Fail to connect to realm with {account.Username} with character {character.Name}");
+                        Log.Error($"Fail to connect to realm with {account.Username} with character {character}");
                         return false;
                     }
 
                     if (!muleClient.JoinGame(muleGameName, _botConfig.GamePassword))
                     {
-                        Log.Error($"Fail to join game with {account.Username} with character {character.Name}");
+                        Log.Error($"Fail to join game with {account.Username} with character {character}");
                         continue;
                     }
 
@@ -115,8 +117,9 @@ namespace ConsoleBot.Mule
                         if (moveItemResult != MoveItemResult.Failed)
                         {
                             moveItemResult = await TradeInventoryItems(client, muleClient, itemsToTrade);
+                            await Task.Delay(TimeSpan.FromSeconds(5));
                         }
-                        muleItems = GetMuleItems(client, character);
+                        muleItems = GetMuleItems(client, account.MatchesAny);
                         if (!muleItems.Any())
                         {
                             break;
@@ -143,20 +146,74 @@ namespace ConsoleBot.Mule
             return true;
         }
 
-        private static List<Item> GetMuleItems(Client client, MuleCharacter character)
+        private List<string> GetAccountCharactersForMule(MuleAccount account)
         {
-            var muleItems = client.Game.Items.Where(i => IsMuleItem(client, i));
-            List<Item> items = new List<Item>();
-            if (character.SojMule)
+            var characterNames = account.IncludedCharacters.Select(c => c.ToLower()).ToList();
+            if (!characterNames.Any())
             {
-                items = muleItems.Where(i => IsSojOrPs(i)).ToList();
-            }
-            else
-            {
-                items = muleItems.Where(i => !IsSojOrPs(i)).ToList();
+                var client = new Client();
+                var connect = client.Connect(
+                _botConfig.Realm,
+                    _botConfig.KeyOwner,
+                    _botConfig.GameFolder);
+                if (!connect)
+                {
+                    return characterNames;
+                }
+                var characters = client.Login(account.Username, account.Password);
+                if (characters == null)
+                {
+                    return characterNames;
+                }
+
+                characterNames = characters.Select(c => c.Name.ToLower()).ToList();
+                client.Disconnect();
             }
 
-            return items;
+            characterNames = characterNames.Except(account.ExcludedCharacters.Select(c => c.ToLower())).ToList();
+            return characterNames;
+        }
+
+        private static List<Item> GetMuleItems(Client client, List<MuleRule> muleRules)
+        {
+            var muleItems = client.Game.Items.Where(i => IsMuleItem(client, i));
+            if(muleRules.Count == 0)
+            {
+                return muleItems.ToList();
+            }
+
+            return muleItems.Where(i => muleRules.Any(f => MatchesRule(i, f))).ToList();
+        }
+
+        private static bool MatchesRule(Item item, MuleRule muleRule)
+        {
+            return muleRule.MatchesAll.All(f => MatchesFilter(item, f));
+        }
+
+        private static bool MatchesFilter(Item item, MuleFilter filter)
+        {
+            bool isMatch = true;
+            if(filter.ItemName != null)
+            {
+                isMatch&= item.Name == filter.ItemName;
+            }
+
+            if (filter.ClassificationType != null)
+            {
+                isMatch &= item.Classification == filter.ClassificationType;
+            }
+
+            if (filter.QualityType != null)
+            {
+                isMatch &= item.Quality == filter.QualityType;
+            }
+
+            if(filter.NotFilter.HasValue && filter.NotFilter.Value)
+            {
+                isMatch = !isMatch;
+            }
+
+            return isMatch;
         }
 
         private static bool HasAnyItemsToMule(Client client)

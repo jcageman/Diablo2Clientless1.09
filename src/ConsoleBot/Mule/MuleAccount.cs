@@ -11,8 +11,8 @@ namespace ConsoleBot.Mule
 
         [Required]
         public string Password { get; set; }
-
-        [Required]
-        public List<MuleCharacter> Characters { get; set; }
+        public List<MuleRule> MatchesAny { get; set; } = new List<MuleRule>();
+        public List<string> IncludedCharacters { get; set; } = new List<string>();
+        public List<string> ExcludedCharacters { get; set; } = new List<string>();
     }
 }
