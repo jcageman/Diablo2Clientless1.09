@@ -22,7 +22,7 @@ namespace ConsoleBot.Bots.Types.Cows
     internal class CowManager
     {
         private readonly IPathingService _pathingService;
-        private readonly List<Client> _clients;
+        private readonly List<Client> _killingClients;
         private readonly ConcurrentDictionary<uint, AliveMonster> _aliveMonsters = new ConcurrentDictionary<uint, AliveMonster>();
         private readonly ConcurrentDictionary<uint, DeadMonster> _monstersAvailableForCorpseExplosion = new ConcurrentDictionary<uint, DeadMonster>();
         private readonly ConcurrentDictionary<Point, Point> _existingClusters = new ConcurrentDictionary<Point, Point>();
@@ -31,16 +31,20 @@ namespace ConsoleBot.Bots.Types.Cows
         private readonly ConcurrentDictionary<Client, ConcurrentDictionary<Point, Point>> _cowClustersPerClient = new ConcurrentDictionary<Client, ConcurrentDictionary<Point, Point>>();
         private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new ConcurrentDictionary<uint, Item>();
         private readonly ConcurrentDictionary<uint, Item> _pickitPotionsOnGround = new ConcurrentDictionary<uint, Item>();
-        private readonly Point _cowKingLocation = null;
         private bool IsActive = false;
-        public CowManager(IPathingService pathingService, IMapApiService mapApiService, List<Client> clients)
+        public CowManager(IPathingService pathingService, List<Client> killingclients, List<Client> listeningClients)
         {
-            var areaTask = mapApiService.GetArea(clients.First().Game.MapId, Difficulty.Normal, D2NG.Core.D2GS.Act.Area.CowLevel);
-            areaTask.Wait();
-            _cowKingLocation = areaTask.Result.Npcs[(int)NPCCode.CowKing].First();
             _pathingService = pathingService;
-            _clients = clients;
-            foreach(var client in _clients)
+            _killingClients = killingclients;
+            foreach(var killingClient in _killingClients)
+            {
+                _cowClustersPerClient.TryAdd(killingClient, new ConcurrentDictionary<Point, Point>());
+            }
+
+            var allClients = new List<Client>();
+            allClients.AddRange(killingclients);
+            allClients.AddRange(listeningClients);
+            foreach (var client in allClients)
             {
                 client.OnReceivedPacketEvent(InComingPacket.AssignNPC2, p => HandleAssignNPC(new AssignNpcPacket(p)));
                 client.OnReceivedPacketEvent(InComingPacket.AssignNPC1, p => HandleAssignNPC(new AssignNpcPacket(p)));
@@ -51,7 +55,6 @@ namespace ConsoleBot.Bots.Types.Cows
                 client.OnReceivedPacketEvent(InComingPacket.NPCHit, p => { var packet = new NpcHitPacket(p); UpdateNPCLife(packet.EntityId, packet.LifePercentage); });
                 client.OnReceivedPacketEvent(InComingPacket.RemoveObject, p => HandleRemoveObject(new RemoveObjectPacket(p)));
                 client.Game.OnWorldItemEvent(i => HandleItemDrop(client.Game, i));
-                _cowClustersPerClient.TryAdd(client, new ConcurrentDictionary<Point, Point>());
             }
         }
 
@@ -180,23 +183,18 @@ namespace ConsoleBot.Bots.Types.Cows
                     MonsterEnchantments = packet.MonsterEnchantments
                 }), (existingCowId, existingCow) => existingCow);
 
-                /*
-                if (_cowKingLocation.Distance(packet.Location) < 70)
-                {
-                    return;
-                }
-                */
-
                 var usedCluster = _usedClusters.Values.FirstOrDefault(cluster => packet.Location.Distance(cluster) < 50);
                 if(usedCluster == null && _existingClusters.TryAdd(packet.Location, packet.Location))
                 {
                     _usedClusters.TryAdd(packet.Location, packet.Location);
-                    var bestClient = _clients.OrderBy(c => c.Game.Me.Location.Distance(packet.Location)).FirstOrDefault();
+                    var bestClient = _killingClients.OrderBy(c => c.Game.Me.Location.Distance(packet.Location)).FirstOrDefault();
                     if(bestClient != null)
                     {
                         Log.Information($"Adding new cluster at {packet.Location} to {bestClient.Game.Me.Name}");
                         _cowClustersPerClient[bestClient].TryAdd(packet.Location, packet.Location);
                     }
+
+                    IsActive = true;
                 }
             }
         }
@@ -264,11 +262,6 @@ namespace ConsoleBot.Bots.Types.Cows
             return false;
         }
 
-        public Point GetCowKingLocation()
-        {
-            return _cowKingLocation;
-        }
-
         public List<AliveMonster> GetNearbyAliveMonsters(Client client, double distance, int numberOfCows)
         {
             return GetNearbyAliveMonsters(client.Game.Me.Location, distance, numberOfCows);
@@ -301,10 +294,10 @@ namespace ConsoleBot.Bots.Types.Cows
 
             foreach(var clustersForClient in _cowClustersPerClient.Values)
             {
-                var orderedByDistance = clusters.Keys.OrderBy(p => client.Game.Me.Location.Distance(p));
+                var orderedByDistance = clustersForClient.Keys.OrderBy(p => client.Game.Me.Location.Distance(p));
                 foreach (var cluster in orderedByDistance)
                 {
-                    if (clusters.TryRemove(cluster, out var removedCluster))
+                    if (clustersForClient.TryRemove(cluster, out var removedCluster))
                     {
                         _busyClusters.TryAdd(removedCluster, removedCluster);
                         return removedCluster;
@@ -315,20 +308,9 @@ namespace ConsoleBot.Bots.Types.Cows
             return _busyClusters.Values.FirstOrDefault();
         }
 
-        public void GiveUpCluster(Client client, Point cluster)
-        {
-            var bestClient = _clients.Where(c => c != client && c.Game.Me.Class != client.Game.Me.Class).OrderBy(c => c.Game.Me.Location.Distance(cluster)).FirstOrDefault();
-            if (bestClient != null)
-            {
-                Log.Information($"Gave up cluster {cluster} for {client.Game.Me.Name} to {bestClient.Game.Me.Name}");
-                _busyClusters.Remove(cluster, out var _);
-                _cowClustersPerClient[bestClient].TryAdd(cluster, cluster);
-            }
-        }
-
         public bool IsFinished()
         {
-            if(_clients.All(c => !c.Game.IsInGame()))
+            if(_killingClients.All(c => !c.Game.IsInGame()))
             {
                 return true;
             }

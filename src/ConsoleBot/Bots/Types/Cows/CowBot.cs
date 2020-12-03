@@ -34,7 +34,7 @@ namespace ConsoleBot.Bots.Types.Cows
         private TaskCompletionSource<bool> NextGame = new TaskCompletionSource<bool>();
         private TaskCompletionSource<bool> CowPortalOpen = new TaskCompletionSource<bool>();
         private ConcurrentDictionary<string, ManualResetEvent> PlayersInGame = new ConcurrentDictionary<string, ManualResetEvent>();
-        private uint? LeadKillingPlayerId;
+        private uint? BoClientPlayerId;
         private ConcurrentDictionary<string, bool> ShouldFollow = new ConcurrentDictionary<string, bool>();
         private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new ConcurrentDictionary<string, (Point, CancellationTokenSource)>();
         private static int isAnyClientGambling = 0;
@@ -68,7 +68,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 client.OnReceivedPacketEvent(InComingPacket.EntityMove, async (packet) =>
                 {
                     var entityMovePacket = new EntityMovePacket(packet);
-                    if (entityMovePacket.UnitType == EntityType.Player && entityMovePacket.UnitId == LeadKillingPlayerId && ShouldFollowLeadClient(client))
+                    if (entityMovePacket.UnitType == EntityType.Player && entityMovePacket.UnitId == BoClientPlayerId && ShouldFollowLeadClient(client))
                     {
                         await FollowToLocation(client, entityMovePacket.MoveToLocation);
                     }
@@ -77,7 +77,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 client.OnReceivedPacketEvent(InComingPacket.ReassignPlayer, async (packet) =>
                 {
                     var reassignPlayerPacket = new ReassignPlayerPacket(packet);
-                    if (reassignPlayerPacket.UnitType == EntityType.Player && reassignPlayerPacket.UnitId == LeadKillingPlayerId && ShouldFollowLeadClient(client))
+                    if (reassignPlayerPacket.UnitType == EntityType.Player && reassignPlayerPacket.UnitId == BoClientPlayerId && ShouldFollowLeadClient(client))
                     {
                         await FollowToLocation(client, reassignPlayerPacket.Location);
                     }
@@ -85,7 +85,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 client.OnReceivedPacketEvent(InComingPacket.PartyAutomapInfo, async (packet) =>
                 {
                     var partyAutomapInfoPacket = new PartyAutomapInfoPacket(packet);
-                    if (partyAutomapInfoPacket.Id == LeadKillingPlayerId && ShouldFollowLeadClient(client))
+                    if (partyAutomapInfoPacket.Id == BoClientPlayerId && ShouldFollowLeadClient(client))
                     {
                         await FollowToLocation(client, partyAutomapInfoPacket.Location);
                     }
@@ -119,7 +119,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
                 CowPortalOpen = new TaskCompletionSource<bool>();
                 NextGame = new TaskCompletionSource<bool>();
-                LeadKillingPlayerId = null;
+                BoClientPlayerId = null;
 
                 Log.Information($"Joining next game");
 
@@ -197,6 +197,8 @@ namespace ConsoleBot.Bots.Types.Cows
                     continue;
                 }
 
+                await Task.Delay(TimeSpan.FromSeconds(2));
+
                 foreach (var player in firstFiller.Game.Players)
                 {
                     if (firstFiller.Game.Me.Id == player.Id)
@@ -225,22 +227,17 @@ namespace ConsoleBot.Bots.Types.Cows
                     return;
                 }
 
-                LeadKillingPlayerId = firstFiller.Game.Players.FirstOrDefault(p => p.Class == CharacterClass.Amazon)?.Id;
-                if (!LeadKillingPlayerId.HasValue)
-                {
-                    LeadKillingPlayerId = boClient.Game.Me.Id;
-                }
+                BoClientPlayerId = boClient.Game.Me.Id;
 
                 Log.Information($"Waiting for cow portal to open");
                 await CowPortalOpen.Task;
                 Log.Information($"Cow portal open, moving to cow level");
 
-                await Task.Delay(TimeSpan.FromSeconds(3));
-
-                var clientsForKilling = clients.Where(c => c.Game.Me.Class == CharacterClass.Amazon && c.Game.Me.HasSkill(Skill.MultipleShot)).ToList();
-                //clientsForKilling.AddRange(clients.Where(c => c.Game.Me.Class == CharacterClass.Sorceress && c.Game.Me.HasSkill(Skill.Nova)));
-                Log.Information($"Selected {string.Join(",", clientsForKilling.Select(c => c.Game.Me.Name))} for killing");
-                var cowManager = new CowManager(_pathingService, _mapApiService, clientsForKilling);
+                var killingClients = clients.Where(c => c.Game.Me.Class == CharacterClass.Sorceress && c.Game.Me.HasSkill(Skill.Nova)).ToList();
+                Log.Information($"Selected {string.Join(",", killingClients.Select(c => c.Game.Me.Name))} for cow manager");
+                var listeningClients = clients.Where(c => c.Game.Me.Class == CharacterClass.Sorceress && !killingClients.Contains(c)).ToList();
+                listeningClients.Add(boClient);
+                var cowManager = new CowManager(_pathingService, killingClients, listeningClients);
 
                 try
                 {
@@ -698,9 +695,9 @@ game.Cube.Items.Count(i => !i.IsIdentified);
             switch (client.Game.Me.Class)
             {
                 case CharacterClass.Amazon:
-                    if (LeadKillingPlayerId == client.Game.Me.Id)
+                    if (client.Game.Me.HasSkill(Skill.GuidedArrow) && client.Game.Me.HasSkill(Skill.MultipleShot))
                     {
-                        await AmaLeadClient(client, cowManager);
+                        await BowAmaClient(client, cowManager);
                     }
                     else
                     {
@@ -733,11 +730,17 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                 case CharacterClass.Assassin:
                     throw new InvalidOperationException();
             }
+
+            if(client.Game.IsInGame())
+            {
+                client.Game.LeaveGame();
+            }
         }
 
-        async Task AmaLeadClient(Client client, CowManager cowManager)
+        async Task BowAmaClient(Client client, CowManager cowManager)
         {
             Log.Information($"Starting Ama Client {client.Game.Me.Name}, cowing manager is finished is: {cowManager.IsFinished()}");
+            SetShouldFollowLead(client, true);
             Point targetLocation = null;
             Entity entity = null;
             ElapsedEventHandler multiShotAction = (sender, args) =>
@@ -759,35 +762,10 @@ game.Cube.Items.Count(i => !i.IsIdentified);
             using var executeGuided = new ExecuteAtInterval(guidedAction, TimeSpan.FromSeconds(0.2));
 
             var timer = new Stopwatch();
-            CancellationTokenSource movementCancellationSource = null;
-            Task movementTask = null;
             bool hasUsedPotion = false;
-            Point currentCluster = null;
             timer.Start();
             while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.5)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
             {
-                if(timer.Elapsed > TimeSpan.FromMinutes(10))
-                {
-                    Log.Information($"{client.Game.Me.Name} leaving game, 10 minutes elapsed");
-                    client.Game.LeaveGame();
-                    break;
-                }
-
-                if(movementTask != null && movementTask.IsCompleted)
-                {
-                    movementCancellationSource = null;
-                    movementTask = null;
-                }
-
-                /*
-                if(cowManager.GetCowKingLocation().Distance(client.Game.Me.Location) < 50)
-                {
-                    Log.Information($"{client.Game.Me.Name} leaving game, due to King too nearby");
-                    client.Game.LeaveGame();
-                    break;
-                }
-                */
-
                 if(client.Game.Inventory.Items.Where(i => i.Name == ItemName.Arrows).Sum(i => i.Amount) < 200)
                 {
                     Log.Information($"{client.Game.Me.Name} leaving game, due to low arrows");
@@ -796,10 +774,11 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                 }
 
                 var nearbyAliveCows = cowManager.GetNearbyAliveMonsters(client, 35.0, 2);
-                if(!nearbyAliveCows.Any() && movementTask == null)
+                if(!nearbyAliveCows.Any())
                 {
-                    await PickupItemsFromPickupList(client, cowManager, 10);
-                    SetShouldFollowLead(client, false);
+                    executeGuided.Stop();
+                    executeMultiShot.Stop();
+                    SetShouldFollowLead(client, true);
                 }
                 else if (nearbyAliveCows.Any())
                 {
@@ -807,46 +786,21 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                     var secondHellBovine = nearbyAliveCows.Skip(1).FirstOrDefault();
                     var distanceToNearest = nearestHellBovine.Location.Distance(client.Game.Me.Location);
                     var distanceSecondToNearest = secondHellBovine?.Location.Distance(client.Game.Me.Location);
-                    if (!await cowManager.IsInLineOfSight(client, nearestHellBovine.Location))
+                    if (await cowManager.IsInLineOfSight(client, nearestHellBovine.Location))
                     {
-                        if (movementTask != null && !movementTask.IsCompleted)
-                        {
-                            continue;
-                        }
-
-                        executeGuided.Stop();
-                        executeMultiShot.Stop();
-                        var walkingPathNearest = await _pathingService.GetPathToLocation(client.Game, nearestHellBovine.Location, MovementMode.Walking);
-                        Log.Information($"{client.Game.Me.Name} nearest is not in line of sight, moving to {nearestHellBovine.Location}");
-                        movementCancellationSource = new CancellationTokenSource();
-                        movementTask = MovementHelpers.TakePathOfLocations(client.Game, walkingPathNearest, MovementMode.Walking, movementCancellationSource.Token);
-                    }
-                    else if((nearestHellBovine.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted) || (distanceSecondToNearest.HasValue && distanceSecondToNearest - distanceToNearest > 10))
+                        if ((nearestHellBovine.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted) || (distanceSecondToNearest.HasValue && distanceSecondToNearest - distanceToNearest > 10))
                         && client.Game.WorldObjects.TryGetValue((nearestHellBovine.Id, EntityType.NPC), out var cowEntity))
-                    {
-                        if (movementTask != null)
                         {
-                            movementCancellationSource.Cancel();
-                            movementCancellationSource = null;
-                            movementTask = null;
+                            entity = cowEntity;
+                            executeGuided.Start();
+                            executeMultiShot.Stop();
                         }
-
-                        entity = cowEntity;
-                        executeGuided.Start();
-                        executeMultiShot.Stop();
-                    }
-                    else
-                    {
-                        if (movementTask != null)
+                        else
                         {
-                            movementCancellationSource.Cancel();
-                            movementCancellationSource = null;
-                            movementTask = null;
+                            targetLocation = nearestHellBovine.Location.GetPointBeforePointInSameDirection(client.Game.Me.Location, 15);
+                            executeMultiShot.Start();
+                            executeGuided.Stop();
                         }
-
-                        targetLocation = nearestHellBovine.Location.GetPointBeforePointInSameDirection(client.Game.Me.Location, 15);
-                        executeMultiShot.Start();
-                        executeGuided.Stop();
                     }
 
                     continue;
@@ -857,37 +811,6 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                     client.Game.UseHealthPotion();
                     hasUsedPotion = true;
                 }
-
-                if (currentCluster == null || client.Game.Me.Location.Distance(currentCluster) < 20)
-                {
-                    currentCluster = cowManager.GetNextCluster(client, currentCluster);
-                    if (currentCluster == null)
-                    {
-                        Log.Information($"No cluster found for {client.Game.Me.Name}");
-                        break;
-                    }
-                    Log.Information($"Client {client.Game.Me.Name} obtained next cluster at {currentCluster}");
-                }
-
-                if(movementTask != null && !movementTask.IsCompleted)
-                {
-                    continue;
-                }
-
-                Log.Information($"{client.Game.Me.Name} Moving to cluster location {currentCluster}");
-
-                executeMultiShot.Stop();
-                executeGuided.Stop();
-                var walkingPath = await _pathingService.GetPathToLocation(client.Game, currentCluster, MovementMode.Walking);
-                movementCancellationSource = new CancellationTokenSource();
-                movementTask = MovementHelpers.TakePathOfLocations(client.Game, walkingPath, MovementMode.Walking, movementCancellationSource.Token);
-            }
-
-            if (movementTask != null)
-            {
-                movementCancellationSource.Cancel();
-                movementCancellationSource = null;
-                await movementTask;
             }
 
             NextGame.TrySetResult(true);
@@ -913,37 +836,56 @@ game.Cube.Items.Count(i => !i.IsIdentified);
             using var executeNova = new ExecuteAtInterval(novaAction, TimeSpan.FromSeconds(0.2));
 
             var clusterStopWatch = new Stopwatch();
+            var moveStopWatch = new Stopwatch();
+            moveStopWatch.Start();
 
             bool hasUsedPotion = false;
 
+            var random = new Random();
+
             Point currentCluster = null;
-            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.5)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
             {
-                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == LeadKillingPlayerId);
-                if (!client.Game.Me.Effects.Contains(EntityEffect.BattleOrders) || !client.Game.Me.Effects.Contains(EntityEffect.Shout))
+                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
+                if (leadPlayer != null && leadPlayer.Location != currentCluster && cowManager.GetNearbyAliveMonsters(leadPlayer.Location, 30.0, 10).Any())
                 {
-                    Log.Information($"Lost bo on client {client.Game.Me.Name}, moving to barb for bo");
-                    
-                    if (leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) > 10)
-                    {
-                        var teleportPathLead = await _pathingService.GetPathToLocation(client.Game, leadPlayer.Location, MovementMode.Teleport);
-                        await MovementHelpers.TakePathOfLocations(client.Game, teleportPathLead.ToList(), MovementMode.Teleport);
-                    }
-
-                    continue;
-                }
-
-                if(leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) > 15)
-                {
+                    Log.Information($"{client.Game.Me.Name},Lead client in danger, moving to lead client");
+                    currentCluster = leadPlayer.Location;
                     executeStaticField.Stop();
                     executeNova.Stop();
 
-                    var teleportPath = await _pathingService.GetPathToLocation(client.Game, leadPlayer.Location, MovementMode.Teleport);
+                    var teleportPath = await _pathingService.GetPathToLocation(client.Game, currentCluster, MovementMode.Teleport);
                     if (teleportPath.Count > 0)
                     {
-                        //Log.Information($"Client {client.Game.Me.Name} teleporting nearby lead player {leadPlayer.Location}");
-                        await MovementHelpers.TakePathOfLocations(client.Game, teleportPath.ToList(), MovementMode.Teleport);
+                        Log.Information($"Client {client.Game.Me.Name} teleporting nearby cluster {currentCluster}");
+                        if (teleportPath.Count > 1)
+                        {
+                            await MovementHelpers.TakePathOfLocations(client.Game, teleportPath.SkipLast(1).ToList(), MovementMode.Teleport);
+                        }
+
+                        await TeleportToNearbySafeSpot(client, cowManager, teleportPath.Last());
+                        moveStopWatch.Restart();
                     }
+                }
+
+                if (!client.Game.Me.Effects.Contains(EntityEffect.BattleOrders) || !client.Game.Me.Effects.Contains(EntityEffect.Shout))
+                {
+                    Log.Information($"Lost bo on client {client.Game.Me.Name}, moving to barb for bo");
+
+                    if (leadPlayer != null)
+                    {
+                        if (leadPlayer.Location.Distance(client.Game.Me.Location) > 10)
+                        {
+                            var teleportPathLead = await _pathingService.GetPathToLocation(client.Game, leadPlayer.Location, MovementMode.Teleport);
+                            await MovementHelpers.TakePathOfLocations(client.Game, teleportPathLead.ToList(), MovementMode.Teleport);
+                        }
+                        else
+                        {
+                            var randomPointNear = leadPlayer.Location.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5));
+                            await client.Game.MoveToAsync(randomPointNear);
+                        }
+                    }
+
                     continue;
                 }
 
@@ -961,26 +903,28 @@ game.Cube.Items.Count(i => !i.IsIdentified);
 
                 var nearbyAliveCows = cowManager.GetNearbyAliveMonsters(client, 30.0, 10);
                 var lightningEnhancedCows = nearbyAliveCows.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted));
-                if (clusterStopWatch.Elapsed > TimeSpan.FromSeconds(30) && currentCluster != null)
+                if (clusterStopWatch.Elapsed > TimeSpan.FromSeconds(30) && currentCluster != null && leadPlayer?.Location != currentCluster)
                 {
                     Log.Information($"Taking too much time on cluster, skipping current cluster and moving to next cluster {client.Game.Me.Name}");
-                    currentCluster = null;
+                    clusterStopWatch.Restart();
                 }
-
-                if (lightningEnhancedCows && currentCluster != null)
+                else if (lightningEnhancedCows && leadPlayer?.Location != currentCluster)
                 {
                     Log.Information($"Lightning enhanced cow nearby, giving up current cluster and moving to next cluster {client.Game.Me.Name}");
-                    cowManager.GiveUpCluster(client, currentCluster);
-                    currentCluster = null;
                 }
-
-                if (nearbyAliveCows.Any())
+                else if (nearbyAliveCows.Any())
                 {
                     var nearestAlive = nearbyAliveCows.FirstOrDefault();
                     var distanceToNearest = nearestAlive.Location.Distance(client.Game.Me.Location);
-                    if (distanceToNearest > 20)
+                    if (distanceToNearest > 30)
                     {
-                        client.Game.TeleportToLocation(client.Game.Me.Location.GetPointBeforePointInSameDirection(nearestAlive.Location, 15));
+                        await TeleportToNearbySafeSpot(client, cowManager, nearestAlive.Location);
+                        moveStopWatch.Restart();
+                    }
+                    else if (moveStopWatch.Elapsed > TimeSpan.FromSeconds(3))
+                    {
+                        await TeleportToNearbySafeSpot(client, cowManager, client.Game.Me.Location);
+                        moveStopWatch.Restart();
                     }
 
                     if (client.Game.Me.HasSkill(Skill.FrostNova) && distanceToNearest < 10 && client.Game.WorldObjects.TryGetValue((nearestAlive.Id, EntityType.NPC), out var cow) && !cow.Effects.Contains(EntityEffect.Cold))
@@ -989,10 +933,6 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                         client.Game.UseRightHandSkillOnLocation(Skill.FrostNova, client.Game.Me.Location);
                     }
 
-                    if (distanceToNearest < 5 && nearestAlive.LifePercentage > 50)
-                    {
-                        await TeleportToNearbySafeSpot(client, cowManager, client.Game.Me.Location);
-                    }
                     if (nearestAlive.LifePercentage < 30 && distanceToNearest < 15)
                     {
                         executeStaticField.Stop();
@@ -1009,8 +949,11 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                     }
                     else if (distanceToNearest < 20)
                     {
-                        client.Game.UseRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
-                        executeStaticField.Start();
+                        if (client.Game.Me.HasSkill(Skill.StaticField))
+                        {
+                            client.Game.UseRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
+                            executeStaticField.Start();
+                        }
                         executeNova.Stop();
                     }
 
@@ -1027,35 +970,32 @@ game.Cube.Items.Count(i => !i.IsIdentified);
 
                     SetShouldFollowLead(client, false);
                 }
-                /*
-                if (currentCluster == null || client.Game.Me.Location.Distance(currentCluster) < 20)
-                {
-                    currentCluster = cowManager.GetNextCluster(client, currentCluster);
-                    if (currentCluster == null)
-                    {
-                        Log.Information($"No cluster found for {client.Game.Me.Name}");
-                        continue;
-                    }
 
-                    clusterStopWatch.Start();
-                    Log.Information($"Client {client.Game.Me.Name} obtained next cluster at {currentCluster}");
+                currentCluster = cowManager.GetNextCluster(client, currentCluster);
+                if (currentCluster == null)
+                {
+                    Log.Information($"No cluster found for {client.Game.Me.Name}");
+                    continue;
                 }
+
+                clusterStopWatch.Restart();
+                Log.Information($"Client {client.Game.Me.Name} obtained next cluster at {currentCluster}");
 
                 executeStaticField.Stop();
                 executeNova.Stop();
 
-                var teleportPath = await _pathingService.GetPathToLocation(client.Game, currentCluster, MovementMode.Teleport);
-                if(teleportPath.Count > 0)
+                var clusterPath = await _pathingService.GetPathToLocation(client.Game, currentCluster, MovementMode.Teleport);
+                if (clusterPath.Count > 0)
                 {
                     Log.Information($"Client {client.Game.Me.Name} teleporting nearby cluster {currentCluster}");
-                    if(teleportPath.Count > 1)
+                    if (clusterPath.Count > 1)
                     {
-                        MovementHelpers.TakePathOfLocations(client.Game, teleportPath.SkipLast(1).ToList(), MovementMode.Teleport);
+                        await MovementHelpers.TakePathOfLocations(client.Game, clusterPath.SkipLast(1).ToList(), MovementMode.Teleport);
                     }
 
-                    await TeleportToNearbySafeSpot(client, cowManager, teleportPath.Last());
+                    await TeleportToNearbySafeSpot(client, cowManager, clusterPath.Last());
+                    moveStopWatch.Restart();
                 }
-                */
             }
 
             Log.Information($"Stopped Sorc Client {client.Game.Me.Name}, cowing manager is finished is: {cowManager.IsFinished()}");
@@ -1077,7 +1017,7 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                 foreach (var y in new List<short> { -15, 0, 15, -20, 20, 25 })
                 {
                     var distance = Math.Sqrt(Math.Pow(x,2) + Math.Pow(y,2));
-                    if (distance == 0 || distance > 25)
+                    if (distance < 10 || distance > 20)
                     {
                         continue;
                     }
@@ -1109,7 +1049,11 @@ game.Cube.Items.Count(i => !i.IsIdentified);
         async Task BasicFollowClient(Client client, CowManager cowManager)
         {
             SetShouldFollowLead(client, true);
+
+            var timer = new Stopwatch();
+            timer.Start();
             bool hasUsedPotion = false;
+            var random = new Random();
             while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
             {
                 if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
@@ -1117,6 +1061,17 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                     client.Game.UseHealthPotion();
                     client.Game.UseHealthPotion();
                     hasUsedPotion = true;
+                }
+
+                if(timer.Elapsed > TimeSpan.FromSeconds(5) && client.Game.Me.HasSkill(Skill.Teleport))
+                {
+                    var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
+                    if(leadPlayer != null)
+                    {
+                        var randomPointNear = leadPlayer.Location.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5));
+                        await client.Game.TeleportToLocationAsync(randomPointNear);
+                        timer.Restart();
+                    }
                 }
 
                 if (!cowManager.GetNearbyAliveMonsters(client, 20, 1).Any())
@@ -1222,7 +1177,7 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                     client.Game.UseRightHandSkillOnLocation(Skill.BoneArmor, client.Game.Me.Location);
                 }
 
-                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == LeadKillingPlayerId);
+                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
                 if (leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) > 15)
                 {
                     continue;
@@ -1262,7 +1217,6 @@ game.Cube.Items.Count(i => !i.IsIdentified);
         async Task BarbClient(Client client, CowManager cowManager, bool shouldBo)
         {
             Log.Information($"Starting BoBarb Client {client.Game.Me.Name}");
-            SetShouldFollowLead(client, true);
             bool hasUsedPotion = false;
             if (shouldBo)
             {
@@ -1283,7 +1237,7 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                     CastAllShouts(client);
                 }
 
-                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == LeadKillingPlayerId);
+                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
                 if (leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) > 25)
                 {
                     continue;
@@ -1294,7 +1248,6 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                 {
                     await PickupItemsFromPickupList(client, cowManager, 15);
                     await PickupNearbyPotionsIfNeeded(client, cowManager, 15);
-                    SetShouldFollowLead(client, true);
                 }
                 else if(client.Game.Me.HasSkill(Skill.Whirlwind))
                 {
@@ -1370,7 +1323,7 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                     flipflop = !flipflop;
                 }
 
-                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == LeadKillingPlayerId);
+                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
                 if (!cowManager.GetNearbyAliveMonsters(client, 20, 1).Any() && leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) < 15)
                 {
                     await PickupItemsFromPickupList(client, cowManager, 15);
@@ -1414,6 +1367,7 @@ game.Cube.Items.Count(i => !i.IsIdentified);
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
                 await client.Game.MoveToAsync(cowPortal);
+                
                 if(retryCount > 0 && retryCount % 5 == 0)
                 {
                     client.Game.RequestUpdate(client.Game.Me.Id);

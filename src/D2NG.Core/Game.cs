@@ -342,9 +342,14 @@ namespace D2NG.Core
         }
 
         public void MoveTo(ushort x, ushort y) => MoveTo(new Point(x, y));
-        public void MoveTo(Point location)
+        public bool MoveTo(Point location)
         {
             var distance = Me.Location.Distance(location);
+            if (distance > 20)
+            {
+                return false;
+            }
+
             if (distance < 10 && DateTime.Now.Subtract(lastTeleport) > TimeSpan.FromSeconds(5))
             {
                 _gameServer.SendPacket(new UpdatePlayerLocationPacket(location));
@@ -357,11 +362,17 @@ namespace D2NG.Core
                 Thread.Sleep((int)(distance * 80 / Data.WalkingSpeedMultiplier));
             }
             Me.Location = location;
+            return true;
         }
 
-        public async Task MoveToAsync(Point location)
+        public async Task<bool> MoveToAsync(Point location)
         {
             var distance = Me.Location.Distance(location);
+            if(distance > 20)
+            {
+                return false;
+            }
+
             if (distance < 10 && DateTime.Now.Subtract(lastTeleport) > TimeSpan.FromSeconds(5))
             {
                 _gameServer.SendPacket(new UpdatePlayerLocationPacket(location));
@@ -374,11 +385,12 @@ namespace D2NG.Core
                 await Task.Delay((int)(distance * 80 / Data.WalkingSpeedMultiplier));
             }
             Me.Location = location;
+            return true;
         }
 
-        public void MoveTo(Entity entity)
+        public bool MoveTo(Entity entity)
         {
-            MoveTo(entity.Location);
+            return MoveTo(entity.Location);
         }
 
         public async Task MoveToAsync(Entity entity)
@@ -406,7 +418,7 @@ namespace D2NG.Core
         {
             var buttonActionPacket = _gameServer.GetResetEventOfType(InComingPacket.ButtonAction);
             _gameServer.SendPacket(new InteractWithEntityPacket(stash));
-            return buttonActionPacket.WaitOne(200);
+            return buttonActionPacket.WaitOne(500);
         }
 
         public bool TakeWarp(WarpData warpData)

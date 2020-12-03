@@ -453,9 +453,9 @@ namespace D2NG.Core.D2GS
                     break;
                 case EntityType.Player:
                     Act.RemoveWorldObject(packet.EntityId, packet.EntityType);
-                    Players.RemoveAll(p => p.Id == packet.EntityId);
                     foreach(var player in Players.Where(p => p.CorpseId == packet.EntityId))
                     {
+                        Players.RemoveAll(p => p.Id == packet.EntityId);
                         player.CorpseId = null;
                     }
                     break;
