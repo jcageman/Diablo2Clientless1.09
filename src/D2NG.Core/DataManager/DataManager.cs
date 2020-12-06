@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Reflection;
 
 namespace D2NG.Core.DataManager
 {
@@ -33,7 +34,7 @@ namespace D2NG.Core.DataManager
                             m_itemProperties,
                             m_skills;
 
-        public DataManager(String dataDirectory = "data")
+        public DataManager()
         {
             String[] fileNames =
             {
@@ -49,6 +50,11 @@ namespace D2NG.Core.DataManager
                 "item_properties.txt",
                 "skills.txt"
             };
+
+            string assemblyFile = (
+            new System.Uri(Assembly.GetExecutingAssembly().CodeBase)
+            ).AbsolutePath.Replace("%20", " ");
+            string dataDirectory = Path.Combine(Path.GetDirectoryName(assemblyFile), "data");
 
             String itemDataFile = Path.Combine(dataDirectory, "item_data.txt");
             m_experiences = new PlainTextDataType(Path.Combine(dataDirectory, fileNames[0]));

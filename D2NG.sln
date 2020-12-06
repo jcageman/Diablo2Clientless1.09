@@ -13,7 +13,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MpqLib", "src\MpqLib\MpqLib
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PacketSniffer", "src\PacketSniffer\PacketSniffer.csproj", "{22118EF9-3A90-4F72-A2D3-B0C554D55D8C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "D2NG.Navigation", "src\D2NG.Navigation\D2NG.Navigation.csproj", "{0F6744AA-BC3B-4A09-AAD0-12898B4740C8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "D2NG.Navigation", "src\D2NG.Navigation\D2NG.Navigation.csproj", "{0F6744AA-BC3B-4A09-AAD0-12898B4740C8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "D2NG.MuleManager", "src\D2NG.MuleManager\D2NG.MuleManager.csproj", "{BACEA532-93C9-49E6-8732-0974D2D17166}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -45,6 +47,10 @@ Global
 		{0F6744AA-BC3B-4A09-AAD0-12898B4740C8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0F6744AA-BC3B-4A09-AAD0-12898B4740C8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0F6744AA-BC3B-4A09-AAD0-12898B4740C8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BACEA532-93C9-49E6-8732-0974D2D17166}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BACEA532-93C9-49E6-8732-0974D2D17166}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BACEA532-93C9-49E6-8732-0974D2D17166}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BACEA532-93C9-49E6-8732-0974D2D17166}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

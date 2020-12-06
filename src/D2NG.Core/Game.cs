@@ -159,7 +159,7 @@ namespace D2NG.Core
 
             if (!Data.Me.AllowedWaypoints.Contains(waypoint))
             {
-                throw new InvalidOperationException($"cannot take waypoint {waypoint}, since character does not have it yet,list of available waypoints: {Data.Me.AllowedWaypoints}");
+                throw new InvalidOperationException($"cannot take waypoint {waypoint}, since character does not have it yet. List of available waypoints: {Data.Me.AllowedWaypoints}");
             }
 
             _gameServer.SendPacket(new TakeWaypointPacket(Data.Me.LastSelectedWaypointId, waypoint));
@@ -418,7 +418,7 @@ namespace D2NG.Core
         {
             var buttonActionPacket = _gameServer.GetResetEventOfType(InComingPacket.ButtonAction);
             _gameServer.SendPacket(new InteractWithEntityPacket(stash));
-            return buttonActionPacket.WaitOne(500);
+            return buttonActionPacket.WaitOne(200);
         }
 
         public bool TakeWarp(WarpData warpData)
