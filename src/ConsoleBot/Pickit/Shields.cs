@@ -44,7 +44,12 @@ namespace ConsoleBot.Pickit
                     return true;
                 }
 
-                if (item.GetValueOfStatType(StatType.PaladinSkills) >= 2 && item.GetTotalResistFrLrCr() > 50)
+                if (item.GetValueOfStatType(StatType.PaladinSkills) >= 2 && item.GetTotalResistFrLrCr() > 50 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30)
+                {
+                    return true;
+                }
+
+                if (item.GetValueOfStatType(StatType.PaladinSkills) >= 2 && item.GetTotalResistFrLrCr() > 70 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30)
                 {
                     return true;
                 }

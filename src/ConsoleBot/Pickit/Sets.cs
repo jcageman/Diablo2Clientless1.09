@@ -7,25 +7,7 @@ namespace ConsoleBot.Pickit
     {
         public static bool ShouldPickupItem(Item item)
         {
-            if (item.Quality != QualityType.Set)
-            {
-                return false;
-            }
-
-            // Death's
-            /*
-            if (item.Name == "Sash" || item.Name == "Leather Gloves")
-            {
-                return true;
-            }
-            */
-            /*
-            if (item.Name == "Crown" || item.Name == "Amulet" || item.Name == "Light Gauntlets" || item.Name == "Heavy Belt")
-            {
-                return true;
-            }
-            */
-            return false;
+            return ShouldKeepItem(item);
         }
 
         public static bool ShouldKeepItem(Item item)
@@ -64,7 +46,28 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-            */
+
+            // hsarus
+            if (item.Name == ItemName.Belt)
+            {
+                return true;
+            }
+
+            if (item.Name == ItemName.ChainBoots)
+            {
+                return true;
+            }
+
+            //sigons
+            if (item.Name == ItemName.GreatHelm)
+            {
+                return true;
+            }
+
+            if (item.Name == ItemName.TowerShield)
+            {
+                return true;
+            }            */
 
             return false;
         }

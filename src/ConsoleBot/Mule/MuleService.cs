@@ -38,12 +38,13 @@ namespace ConsoleBot.Mule
             var muleGameName = $"{_botConfig.GameNamePrefix}m{GameCount++}";
             if (!client.CreateGame(Difficulty.Normal, muleGameName, _botConfig.GamePassword, _botConfig.GameDescriptions?.ElementAtOrDefault(0)))
             {
+                await Task.Delay(TimeSpan.FromSeconds(10));
                 return false;
             }
 
             foreach (var account in _muleConfig.Accounts)
             {
-                List<Item> muleItems = GetMuleItems(client, account.MatchesAny);
+                List<Item> muleItems = GetMuleItems(client, account);
                 if (!muleItems.Any())
                 {
                     continue;
@@ -119,12 +120,14 @@ namespace ConsoleBot.Mule
                             moveItemResult = await TradeInventoryItems(client, muleClient, itemsToTrade);
                             await Task.Delay(TimeSpan.FromSeconds(5));
                         }
-                        muleItems = GetMuleItems(client, account.MatchesAny);
+                        muleItems = GetMuleItems(client, account);
                         if (!muleItems.Any())
                         {
                             break;
                         }
                     } while (moveItemResult == MoveItemResult.Succes);
+
+                    await Task.Delay(TimeSpan.FromSeconds(4));
                     muleClient.Game.LeaveGame();
                     muleClient.Disconnect();
                     if (moveItemResult == MoveItemResult.Failed)
@@ -174,15 +177,15 @@ namespace ConsoleBot.Mule
             return characterNames;
         }
 
-        private static List<Item> GetMuleItems(Client client, List<MuleRule> muleRules)
+        private static List<Item> GetMuleItems(Client client, MuleAccount muleAccount)
         {
             var muleItems = client.Game.Items.Where(i => IsMuleItem(client, i));
-            if(muleRules.Count == 0)
+            if(muleAccount.MatchesAny.Count == 0)
             {
                 return muleItems.ToList();
             }
 
-            return muleItems.Where(i => muleRules.Any(f => MatchesRule(i, f))).ToList();
+            return muleItems.Where(i => muleAccount.MatchesAny.Any(f => MatchesRule(i, f))).ToList();
         }
 
         private static bool MatchesRule(Item item, MuleRule muleRule)

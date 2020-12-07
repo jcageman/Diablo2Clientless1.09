@@ -16,6 +16,12 @@ namespace ConsoleBot.Pickit
                 return true;
             }
             /*
+            if (item.Name == ItemName.FlawlessDiamond || item.Name == ItemName.PerfectDiamond)
+            {
+                return true;
+            }
+
+
             if (item.Name == "Flawless Amethyst" || item.Name == "Perfect Amethyst")
             {
                 return true;

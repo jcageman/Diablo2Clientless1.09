@@ -44,7 +44,7 @@ namespace ConsoleBot.Pickit
             if (defArmors.Contains(item.Name)
             && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70
             && item.GetValueOfStatType(StatType.ReducedRequirements) <= -30
-            && item.GetTotalResistFrLrCr() >= 30
+            && item.GetTotalResistFrLrCr() >= 40
             && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
             {
                 return true;
@@ -85,9 +85,24 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-
             /*
-            if(item.Name == "Studded Leather" && item.Quality == QualityType.Unique)
+            if (item.Name == ItemName.LeatherArmor && item.Quality == QualityType.Unique)
+            {
+                return true;
+            }
+
+
+            if (item.Name == ItemName.ScaleMail && item.Quality == QualityType.Unique)
+            {
+                return true;
+            }
+
+            if (item.Name == ItemName.GothicPlate && item.Quality == QualityType.Unique)
+            {
+                return true;
+            }
+
+            if(item.Name == ItemName.StuddedLeather && item.Quality == QualityType.Unique)
             {
                 return true;
             }
@@ -96,7 +111,8 @@ namespace ConsoleBot.Pickit
             if (item.Name == ItemName.FullPlateMail && item.Quality == QualityType.Unique)
             {
                 return true;
-            }            */
+            }
+            */
             return false;
         }
     }

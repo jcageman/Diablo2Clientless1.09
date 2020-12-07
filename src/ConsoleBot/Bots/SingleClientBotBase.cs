@@ -78,6 +78,7 @@ namespace ConsoleBot.Bots
                         }
                         else
                         {
+                            await Task.Delay(Math.Pow(successiveFailures, 1.3) * TimeSpan.FromSeconds(5));
                             await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: failed to mule all items, trying again");
                             if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _config.Username, _config.Password, _config.Character, 10))
                             {
@@ -125,9 +126,9 @@ namespace ConsoleBot.Bots
                             }
                         }
                     }
-                    catch(HttpRequestException e)
+                    catch(HttpRequestException)
                     {
-                        await _externalMessagingClient.SendMessage($"{client.LoggedInUserName() } Received http exception {e}, map server is probably down, shutting down bot");
+                        await _externalMessagingClient.SendMessage($"{client.LoggedInUserName() } Received http exception, map server is probably down, restarting bot");
                         return;
                     }
                     catch (Exception e)
@@ -153,8 +154,16 @@ namespace ConsoleBot.Bots
             {
                 Log.Error(e, $"Unhandled Exception: {e}");
                 await _externalMessagingClient.SendMessage($"bot crashed with exception: {e}");
-                client.Disconnect();
                 throw e;
+            }
+            finally
+            {
+                if(client.Game.IsInGame())
+                {
+                    client.Game.LeaveGame();
+                }
+
+                client.Disconnect();
             }
         }
     }

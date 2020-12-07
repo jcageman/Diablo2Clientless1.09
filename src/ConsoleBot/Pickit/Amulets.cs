@@ -42,12 +42,12 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (toCasterSkills == 2 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 40)
+            if (toCasterSkills == 2 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 30)
             {
                 return true;
             }
 
-            if (toCasterSkills == 2 && item.GetTotalResistFrLrCr() >= 20 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 70)
+            if (toCasterSkills == 2 && item.GetTotalResistFrLrCr() >= 45 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 70)
             {
                 return true;
             }
@@ -57,7 +57,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (toCasterSkills >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 40)
+            if (toCasterSkills >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 70)
             {
                 return true;
             }

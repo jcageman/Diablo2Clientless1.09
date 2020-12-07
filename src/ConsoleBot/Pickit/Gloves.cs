@@ -26,13 +26,6 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.Name == ItemName.WarGauntlets
-                && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
-                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 100)
-            {
-                return true;
-            }
-
-            if (item.Name == ItemName.WarGauntlets
                 && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) > 0
                 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 100)
             {
@@ -40,8 +33,8 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.Name == ItemName.WarGauntlets
-            && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70
-            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60)
+    && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
+    && item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) * 10 >= 90)
             {
                 return true;
             }

@@ -174,10 +174,10 @@ namespace ConsoleBot.Helpers
                 return MoveItemResult.Succes;
             }
 
-            foreach(var item in itemsToKeep)
+            foreach (var item in itemsToKeep)
             {
                 Log.Information($"{game.Me.Name}: Want to keep {item.GetFullDescription()}");
-                if (item.Quality == QualityType.Rare)
+                if (!(item.Name == ItemName.Ring && item.Quality == QualityType.Unique) && item.Classification != ClassificationType.Gem)
                 {
                     externalMessagingClient.SendMessage($"{game.Me.Name}: Want to keep {item.GetFullDescription()}");
                 }
