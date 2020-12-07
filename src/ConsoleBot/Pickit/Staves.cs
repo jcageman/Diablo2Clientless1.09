@@ -14,15 +14,13 @@ namespace ConsoleBot.Pickit
         public static bool ShouldKeepItem(Item item)
         {
             if (item.GetValueOfStatType(StatType.SorceressSkills) == 2
-            && item.GetValueToSkill(Skill.EnergyShield) == 3
-            && item.GetValueToSkill(Skill.ThunderStorm) == 3)
+            && item.GetValueToSkill(Skill.EnergyShield) + item.GetValueToSkill(Skill.ThunderStorm) >= 4)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.SorceressSkills) == 2
-            && item.GetValueToSkill(Skill.EnergyShield) == 3
-            && item.GetValueToSkill(Skill.ShiverArmor) == 3)
+            && item.GetValueToSkill(Skill.EnergyShield) + item.GetValueToSkill(Skill.ShiverArmor) >= 4)
             {
                 return true;
             }

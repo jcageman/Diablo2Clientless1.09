@@ -51,7 +51,7 @@ namespace ConsoleBot.Pickit
                     return true;
                 }
 
-                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 20 && item.GetTotalResistFrLrCr() >= 90)
+                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 20 && item.GetTotalResistFrLrCr() >= 120)
                 {
                     return true;
                 }
