@@ -43,6 +43,13 @@ namespace D2NG.MuleManager
     .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
     .CreateLogger();
             services.AddLogging(configure => configure.AddSerilog());
+            services.AddCors(options =>
+            {
+                options.AddPolicy("CorsPolicy",
+                    builder => builder.AllowAnyOrigin()
+                    .AllowAnyMethod()
+                    .AllowAnyHeader());
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -53,6 +60,7 @@ namespace D2NG.MuleManager
                 app.UseDeveloperExceptionPage();
             }
 
+            app.UseCors("CorsPolicy");
             app.UseHttpsRedirection();
 
             app.UseRouting();

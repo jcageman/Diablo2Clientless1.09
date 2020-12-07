@@ -1,0 +1,148 @@
+﻿@page "/"
+
+@inject HttpClient Http
+@using D2NG.MuleManager.UI.Models
+
+<h1>Mule Items</h1>
+
+@if (muleItems == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Account - Character</th>
+                <th>Quality</th>
+                <th>Item</th>
+                <th>Stats</th>
+            </tr>
+            <tr>
+                <th></th>
+                <th>
+                    <select @onchange=@UpdateQualityType>
+                        @foreach (var template in itemTypes)
+                        {
+                            <option value=@template>@template</option>
+                        }
+                    </select>
+                </th>
+                <th>
+                    <select @onchange=@UpdateItemName>
+                        @foreach (var template in Enum.GetValues(typeof(ItemName)))
+                        {
+                            <option value=@template>@template</option>
+                        }
+                    </select>
+                </th>
+                <th>
+                    Filter 1<select @onchange=@UpdateStatType>
+                        @foreach (var template in Enum.GetValues(typeof(StatType)))
+                        {
+                            <option value=@template>@template</option>
+                        }
+                    </select>
+                    <br />Filter 2<select @onchange=@UpdateStatType2>
+                        @foreach (var template in Enum.GetValues(typeof(StatType)))
+                        {
+                            <option value=@template>@template</option>
+                        }
+                    </select>
+                    <br />OrderBy Descending
+                    <select @onchange=@OrderByStatType>
+                        @foreach (var template in Enum.GetValues(typeof(StatType)))
+                        {
+                            <option value=@template>@template</option>
+                        }
+                    </select>
+                </th>
+            </tr>
+
+        </thead>
+        <tbody>
+            @foreach (var item in filteredMuleItems)
+            {
+                <tr>
+                    <td>@item.AccountName - @item.CharacterName</td>
+                    <td>@item.QualityType</td>
+                    <td>@item.ItemName</td>
+                    <td>@((MarkupString)string.Join("<br />", item.Stats.Select(k => $"{k.Key} : {k.Value}")))</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+
+    List<string> itemTypes = new List<string>() { "Inferior", "Normal", "Superior", "Magical", "Set", "Rare", "Unique", "Crafted" };
+    string selectedQualityType;
+    string selectedItemName;
+    string selectedStatType1;
+    string selectedStatType2;
+    string selectedOrderByStatType;
+
+    void UpdateQualityType(ChangeEventArgs e)
+    {
+        selectedQualityType = e.Value.ToString();
+        UpdateFilteredItems();
+    }
+
+    void UpdateItemName(ChangeEventArgs e)
+    {
+        selectedItemName = e.Value.ToString();
+        UpdateFilteredItems();
+    }
+
+    void UpdateStatType(ChangeEventArgs e)
+    {
+        selectedStatType1 = e.Value.ToString();
+        UpdateFilteredItems();
+    }
+
+    void UpdateStatType2(ChangeEventArgs e)
+    {
+        selectedStatType2 = e.Value.ToString();
+        UpdateFilteredItems();
+    }
+
+    void OrderByStatType(ChangeEventArgs e)
+    {
+        selectedOrderByStatType = e.Value.ToString();
+        UpdateFilteredItems();
+    }
+
+    void UpdateFilteredItems()
+    {
+        filteredMuleItems = muleItems.Where(i =>
+        (selectedQualityType == null || i.QualityType.ToString() == selectedQualityType)
+        && (selectedItemName == null || i.ItemName.ToString() == selectedItemName)
+        && (selectedStatType1 == null || i.Stats.ContainsKey(selectedStatType1))
+        && (selectedStatType2 == null || i.Stats.ContainsKey(selectedStatType2))).OrderByDescending(i => selectedOrderByStatType != null ? i.Stats.GetValueOrDefault(selectedOrderByStatType, 0) : 0).ToList();
+    }
+
+    private MuleItem[] muleItems;
+
+    private List<MuleItem> filteredMuleItems;
+
+    protected override async Task OnInitializedAsync()
+    {
+        muleItems = await Http.GetFromJsonAsync<MuleItem[]>("https://localhost:5001/items");
+        filteredMuleItems = muleItems.ToList();
+    }
+
+    public class MuleItem
+    {
+        public string Id { get; set; }
+        public string AccountName { get; set; }
+        public string CharacterName { get; set; }
+        public string ItemName { get; set; }
+        public string QualityType { get; set; }
+
+        public Dictionary<string, int> Stats { get; set; }
+    }
+}
