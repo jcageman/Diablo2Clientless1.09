@@ -10,6 +10,7 @@ namespace D2NG.MuleManager.Services.MuleManager
         public string CharacterName { get; set; }
         public string ItemName { get; set; }
         public string QualityType { get; set; }
+        public string ClassificationType { get; set; }
 
         public Dictionary<string, int> Stats { get; set; }
     }

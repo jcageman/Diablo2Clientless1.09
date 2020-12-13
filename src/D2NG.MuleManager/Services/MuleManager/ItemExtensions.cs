@@ -16,6 +16,7 @@ namespace D2NG.MuleManager.Services.MuleManager
                 CharacterName = character.Name,
                 ItemName = item.Name.ToString(),
                 QualityType = item.Quality.ToString(),
+                ClassificationType = item.Classification.ToString(),
                 Stats = item.Properties.ToDictionary(k => k.Key.ToString(), v => v.Value.Value)
             };
         }

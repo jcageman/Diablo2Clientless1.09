@@ -242,7 +242,12 @@ namespace ConsoleBot.Pickit
                 return false;
             }
 
-            if(game.Me.Class == CharacterClass.Amazon && item.Name == ItemName.Arrows)
+            if (item.Name == ItemName.WirtsLeg)
+            {
+                return false;
+            }
+
+            if (game.Me.Class == CharacterClass.Amazon && item.Name == ItemName.Arrows)
             {
                 return false;
             }

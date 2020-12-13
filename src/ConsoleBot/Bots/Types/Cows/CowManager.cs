@@ -7,9 +7,7 @@ using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Players;
 using D2NG.Navigation.Extensions;
-using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
-using Roy_T.AStar.Primitives;
 using Serilog;
 using System;
 using System.Collections.Concurrent;
@@ -25,10 +23,9 @@ namespace ConsoleBot.Bots.Types.Cows
         private readonly List<Client> _killingClients;
         private readonly ConcurrentDictionary<uint, AliveMonster> _aliveMonsters = new ConcurrentDictionary<uint, AliveMonster>();
         private readonly ConcurrentDictionary<uint, DeadMonster> _monstersAvailableForCorpseExplosion = new ConcurrentDictionary<uint, DeadMonster>();
-        private readonly ConcurrentDictionary<Point, Point> _existingClusters = new ConcurrentDictionary<Point, Point>();
         private readonly ConcurrentDictionary<Point, Point> _usedClusters = new ConcurrentDictionary<Point, Point>();
         private readonly ConcurrentDictionary<Point, Point> _busyClusters = new ConcurrentDictionary<Point, Point>();
-        private readonly ConcurrentDictionary<Client, ConcurrentDictionary<Point, Point>> _cowClustersPerClient = new ConcurrentDictionary<Client, ConcurrentDictionary<Point, Point>>();
+        private readonly ConcurrentDictionary<Point, Point> _cowClusters = new ConcurrentDictionary<Point, Point>();
         private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new ConcurrentDictionary<uint, Item>();
         private readonly ConcurrentDictionary<uint, Item> _pickitPotionsOnGround = new ConcurrentDictionary<uint, Item>();
         private bool IsActive = false;
@@ -36,10 +33,6 @@ namespace ConsoleBot.Bots.Types.Cows
         {
             _pathingService = pathingService;
             _killingClients = killingclients;
-            foreach(var killingClient in _killingClients)
-            {
-                _cowClustersPerClient.TryAdd(killingClient, new ConcurrentDictionary<Point, Point>());
-            }
 
             var allClients = new List<Client>();
             allClients.AddRange(killingclients);
@@ -53,7 +46,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 client.OnReceivedPacketEvent(InComingPacket.NPCStop, p => { var packet = new NPCStopPacket(p); HandleNPCMove(packet.EntityId, packet.Location); });
                 client.OnReceivedPacketEvent(InComingPacket.NPCMoveToTarget, p => { var packet = new NPCMoveToTargetPacket(p); HandleNPCMove(packet.EntityId, packet.Location); });
                 client.OnReceivedPacketEvent(InComingPacket.NPCHit, p => { var packet = new NpcHitPacket(p); UpdateNPCLife(packet.EntityId, packet.LifePercentage); });
-                client.OnReceivedPacketEvent(InComingPacket.RemoveObject, p => HandleRemoveObject(new RemoveObjectPacket(p)));
+                //client.OnReceivedPacketEvent(InComingPacket.RemoveObject, p => HandleRemoveObject(new RemoveObjectPacket(p)));
                 client.Game.OnWorldItemEvent(i => HandleItemDrop(client.Game, i));
             }
         }
@@ -110,7 +103,7 @@ namespace ConsoleBot.Bots.Types.Cows
             var pointsOutside = false;
             if (path.Count() > 1)
             {
-                pointsOutside = ((double)path.Count(p => MinimumDistanceToLineSegment(p, line) >= 4.1)) / path.Count > 0.2;
+                pointsOutside = ((double)path.Count(p => MinimumDistanceToLineSegment(p, line) >= 4.1)) / path.Count > 0.15;
             }
             return !pointsOutside;
         }
@@ -173,7 +166,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
         private void HandleAssignNPC(AssignNpcPacket packet)
         {
-            if (packet.UniqueCode == NPCCode.HellBovine || packet.UniqueCode == NPCCode.DrehyaTemple || packet.UniqueCode == NPCCode.Imp4)
+            if (packet.UniqueCode == NPCCode.HellBovine)
             {
                 _aliveMonsters.AddOrUpdate(packet.EntityId, (newCowId => new AliveMonster
                 {
@@ -183,16 +176,11 @@ namespace ConsoleBot.Bots.Types.Cows
                     MonsterEnchantments = packet.MonsterEnchantments
                 }), (existingCowId, existingCow) => existingCow);
 
-                var usedCluster = _usedClusters.Values.FirstOrDefault(cluster => packet.Location.Distance(cluster) < 50);
-                if(usedCluster == null && _existingClusters.TryAdd(packet.Location, packet.Location))
+                var usedCluster = _usedClusters.Values.FirstOrDefault(cluster => packet.Location.Distance(cluster) < 30);
+                if(usedCluster == null && _usedClusters.TryAdd(packet.Location, packet.Location))
                 {
-                    _usedClusters.TryAdd(packet.Location, packet.Location);
-                    var bestClient = _killingClients.OrderBy(c => c.Game.Me.Location.Distance(packet.Location)).FirstOrDefault();
-                    if(bestClient != null)
-                    {
-                        Log.Information($"Adding new cluster at {packet.Location} to {bestClient.Game.Me.Name}");
-                        _cowClustersPerClient[bestClient].TryAdd(packet.Location, packet.Location);
-                    }
+                    Log.Information($"Adding new cluster at {packet.Location}");
+                    _cowClusters.TryAdd(packet.Location, packet.Location);
 
                     IsActive = true;
                 }
@@ -213,12 +201,6 @@ namespace ConsoleBot.Bots.Types.Cows
         {
             if(packet.EntityState == EntityState.Dead || packet.EntityState == EntityState.Dieing)
             {
-                var clustersToRemove = _existingClusters.Where(cluster => packet.Location.Distance(cluster.Value) < 30);
-                foreach(var cluster in clustersToRemove)
-                {
-                    _existingClusters.TryRemove(cluster.Key, out  _);
-                }
-
                 if (_aliveMonsters.TryRemove(packet.EntityId, out var _))
                 {
                     _monstersAvailableForCorpseExplosion.TryAdd(packet.EntityId, new DeadMonster
@@ -272,6 +254,11 @@ namespace ConsoleBot.Bots.Types.Cows
             return _aliveMonsters.Values.Where(c => c.Location.Distance(location) < distance).OrderBy(c => c.Location.Distance(location)).Take(numberOfMonsters).ToList();
         }
 
+        public void GiveUpCluster(Point cluster)
+        {
+            _cowClusters.TryAdd(cluster, cluster);
+        }
+
         public Point GetNextCluster(Client client, Point previousCluster)
         {
             if(previousCluster != null)
@@ -279,29 +266,13 @@ namespace ConsoleBot.Bots.Types.Cows
                 _busyClusters.Remove(previousCluster, out var _);
             }
 
-            if (_cowClustersPerClient.TryGetValue(client, out var clusters))
+            var orderedByDistance = _cowClusters.Keys.OrderBy(p => client.Game.Me.Location.Distance(p));
+            foreach(var cluster in orderedByDistance)
             {
-                var orderedByDistance = clusters.Keys.OrderBy(p => client.Game.Me.Location.Distance(p));
-                foreach(var cluster in orderedByDistance)
+                if(_cowClusters.TryRemove(cluster, out var removedCluster))
                 {
-                    if(clusters.TryRemove(cluster, out var removedCluster))
-                    {
-                        _busyClusters.TryAdd(removedCluster, removedCluster);
-                        return removedCluster;
-                    }
-                }
-            }
-
-            foreach(var clustersForClient in _cowClustersPerClient.Values)
-            {
-                var orderedByDistance = clustersForClient.Keys.OrderBy(p => client.Game.Me.Location.Distance(p));
-                foreach (var cluster in orderedByDistance)
-                {
-                    if (clustersForClient.TryRemove(cluster, out var removedCluster))
-                    {
-                        _busyClusters.TryAdd(removedCluster, removedCluster);
-                        return removedCluster;
-                    }
+                    _busyClusters.TryAdd(removedCluster, removedCluster);
+                    return removedCluster;
                 }
             }
 
@@ -315,7 +286,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 return true;
             }
 
-            return IsActive && !_busyClusters.Values.Any() && _cowClustersPerClient.Values.All(c => c.IsEmpty);
+            return IsActive && !_busyClusters.Values.Any() && _cowClusters.IsEmpty;
         }
 
         public void PutItemOnPickitList(Client client, Item item)

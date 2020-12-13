@@ -32,11 +32,16 @@ else
                     </select>
                 </th>
                 <th>
-                    <select @onchange=@UpdateItemName>
+                    ItemName: <select @onchange=@UpdateItemName>
                         @foreach (var template in Enum.GetValues(typeof(ItemName)))
                         {
                             <option value=@template>@template</option>
                         }
+                    </select> Or <select @onchange=@UpdateClassificationType>
+                    @foreach (var template in Enum.GetValues(typeof(ClassificationType)))
+                    {
+                        <option value=@template>@template</option>
+                    }
                     </select>
                 </th>
                 <th>
@@ -81,6 +86,7 @@ else
 
     List<string> itemTypes = new List<string>() { "Inferior", "Normal", "Superior", "Magical", "Set", "Rare", "Unique", "Crafted" };
     string selectedQualityType;
+    string selectedClassificationType;
     string selectedItemName;
     string selectedStatType1;
     string selectedStatType2;
@@ -95,6 +101,14 @@ else
     void UpdateItemName(ChangeEventArgs e)
     {
         selectedItemName = e.Value.ToString();
+        selectedClassificationType = null;
+        UpdateFilteredItems();
+    }
+
+    void UpdateClassificationType(ChangeEventArgs e)
+    {
+        selectedQualityType = null;
+        selectedClassificationType = e.Value.ToString();
         UpdateFilteredItems();
     }
 
@@ -120,6 +134,7 @@ else
     {
         filteredMuleItems = muleItems.Where(i =>
         (selectedQualityType == null || i.QualityType.ToString() == selectedQualityType)
+        && (selectedClassificationType == null || i.ClassificationType.ToString() == selectedClassificationType)
         && (selectedItemName == null || i.ItemName.ToString() == selectedItemName)
         && (selectedStatType1 == null || i.Stats.ContainsKey(selectedStatType1))
         && (selectedStatType2 == null || i.Stats.ContainsKey(selectedStatType2))).OrderByDescending(i => selectedOrderByStatType != null ? i.Stats.GetValueOrDefault(selectedOrderByStatType, 0) : 0).ToList();
@@ -142,7 +157,7 @@ else
         public string CharacterName { get; set; }
         public string ItemName { get; set; }
         public string QualityType { get; set; }
-
+        public string ClassificationType { get; set; }
         public Dictionary<string, int> Stats { get; set; }
     }
 }
