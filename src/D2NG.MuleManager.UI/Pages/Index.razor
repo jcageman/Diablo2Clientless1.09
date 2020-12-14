@@ -5,82 +5,80 @@
 
 <h1>Mule Items</h1>
 
-@if (muleItems == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
-{
+<button class="btn btn-primary" @onclick="LoadMules">
+    Load mules
+</button>
+<button class="btn btn-primary" @onclick="UpdateMules">
+    Update mules
+</button>
 
-
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Account - Character</th>
-                <th>Quality</th>
-                <th>Item</th>
-                <th>Stats</th>
-            </tr>
-            <tr>
-                <th></th>
-                <th>
-                    <select @onchange=@UpdateQualityType>
-                        @foreach (var template in itemTypes)
-                        {
-                            <option value=@template>@template</option>
-                        }
-                    </select>
-                </th>
-                <th>
-                    ItemName: <select @onchange=@UpdateItemName>
-                        @foreach (var template in Enum.GetValues(typeof(ItemName)))
-                        {
-                            <option value=@template>@template</option>
-                        }
-                    </select> Or <select @onchange=@UpdateClassificationType>
-                    @foreach (var template in Enum.GetValues(typeof(ClassificationType)))
+<table class="table">
+    <thead>
+        <tr>
+            <th>Account - Character</th>
+            <th>Quality</th>
+            <th>Item</th>
+            <th>Stats</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <select @onchange=@UpdateQualityType>
+                    @foreach (var template in itemTypes)
                     {
                         <option value=@template>@template</option>
                     }
-                    </select>
-                </th>
-                <th>
-                    Filter 1<select @onchange=@UpdateStatType>
-                        @foreach (var template in Enum.GetValues(typeof(StatType)))
-                        {
-                            <option value=@template>@template</option>
-                        }
-                    </select>
-                    <br />Filter 2<select @onchange=@UpdateStatType2>
-                        @foreach (var template in Enum.GetValues(typeof(StatType)))
-                        {
-                            <option value=@template>@template</option>
-                        }
-                    </select>
-                    <br />OrderBy Descending
-                    <select @onchange=@OrderByStatType>
-                        @foreach (var template in Enum.GetValues(typeof(StatType)))
-                        {
-                            <option value=@template>@template</option>
-                        }
-                    </select>
-                </th>
-            </tr>
+                </select>
+            </th>
+            <th>
+                ItemName: <select @onchange=@UpdateItemName>
+                    @foreach (var template in Enum.GetValues(typeof(ItemName)))
+                    {
+                        <option value=@template>@template</option>
+                    }
+                </select> <br />Or Classification: <select @onchange=@UpdateClassificationType>
+                @foreach (var template in Enum.GetValues(typeof(ClassificationType)))
+                {
+                    <option value=@template>@template</option>
+                }
+                </select>
+            </th>
+            <th>
+                Filter 1<select @onchange=@UpdateStatType>
+                    @foreach (var template in Enum.GetValues(typeof(StatType)))
+                    {
+                        <option value=@template>@template</option>
+                    }
+                </select>
+                <br />Filter 2<select @onchange=@UpdateStatType2>
+                    @foreach (var template in Enum.GetValues(typeof(StatType)))
+                    {
+                        <option value=@template>@template</option>
+                    }
+                </select>
+                <br />OrderBy Descending
+                <select @onchange=@OrderByStatType>
+                    @foreach (var template in Enum.GetValues(typeof(StatType)))
+                    {
+                        <option value=@template>@template</option>
+                    }
+                </select>
+            </th>
+        </tr>
 
-        </thead>
-        <tbody>
-            @foreach (var item in filteredMuleItems)
-            {
-                <tr>
-                    <td>@item.AccountName - @item.CharacterName</td>
-                    <td>@item.QualityType</td>
-                    <td>@item.ItemName</td>
-                    <td>@((MarkupString)string.Join("<br />", item.Stats.Select(k => $"{k.Key} : {k.Value}")))</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
+    </thead>
+    <tbody>
+        @foreach (var item in filteredMuleItems)
+        {
+            <tr>
+                <td>@item.AccountName - @item.CharacterName</td>
+                <td>@item.QualityType</td>
+                <td>@item.ItemName</td>
+                <td>@((MarkupString)string.Join("<br />", item.Stats.Select(k => $"{k.Key} : {k.Value}")))</td>
+            </tr>
+        }
+    </tbody>
+</table>
 
 @code {
 
@@ -107,7 +105,7 @@ else
 
     void UpdateClassificationType(ChangeEventArgs e)
     {
-        selectedQualityType = null;
+        selectedItemName = null;
         selectedClassificationType = e.Value.ToString();
         UpdateFilteredItems();
     }
@@ -140,14 +138,20 @@ else
         && (selectedStatType2 == null || i.Stats.ContainsKey(selectedStatType2))).OrderByDescending(i => selectedOrderByStatType != null ? i.Stats.GetValueOrDefault(selectedOrderByStatType, 0) : 0).ToList();
     }
 
-    private MuleItem[] muleItems;
+    private MuleItem[] muleItems = new MuleItem[0];
 
-    private List<MuleItem> filteredMuleItems;
+    private List<MuleItem> filteredMuleItems = new List<MuleItem>();
 
-    protected override async Task OnInitializedAsync()
+    protected async Task LoadMules()
     {
         muleItems = await Http.GetFromJsonAsync<MuleItem[]>("https://localhost:5001/items");
-        filteredMuleItems = muleItems.ToList();
+        UpdateFilteredItems();
+    }
+
+    protected async Task UpdateMules(MouseEventArgs e)
+    {
+        await Http.PutAsync("https://localhost:5001/items", null);
+        await LoadMules();
     }
 
     public class MuleItem
