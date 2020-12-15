@@ -74,6 +74,13 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            if (item.GetValueOfStatType(StatType.BarbarianSkills) == 2
+            && item.GetValueOfStatType(StatType.ExtraGold) >= 100
+            && item.GetTotalResistFrLrCr() >= 60)
+            {
+                return true;
+            }
+
             if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
                 && item.GetValueOfStatType(StatType.MinimumDamage) >= 7
                 && item.GetValueOfStatType(StatType.Strength) + item.GetValueOfStatType(StatType.BarbarianSkills) * 4 >= 10)
