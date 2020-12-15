@@ -210,7 +210,7 @@ namespace ConsoleBot.Pickit
             {
                 return false;
             }
-
+            /*
             if(self.Attributes[Attribute.Level] > 86)
             {
                 return item.Name == ItemName.Amulet;
@@ -219,7 +219,7 @@ namespace ConsoleBot.Pickit
             if (item.Name == ItemName.Boots || item.Name == ItemName.HeavyBoots)
             {
                 return true;
-            }
+            }*/
 
             if (item.Classification == ClassificationType.Ring)
             {
