@@ -101,11 +101,12 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-
+            /*
             if (item.Quality == QualityType.Unique && item.Name == ItemName.Blade && item.GetValueOfStatType(StatType.FasterCastRate) == 50)
             {
                 return true;
             }
+            */
             return false;
         }
     }
