@@ -14,7 +14,7 @@
         WaypointAct3 = 237,
         WaypointAct3Durance = 324,
         WaypointAct4Levels = 238,
-        WirtsLeg = 268,
+        WirtsBody = 268,
         Hratli = 379,
         RightSeal1 = 392,
         RightSeal2 = 393,

@@ -5,6 +5,7 @@ using D2NG.Core.Exceptions;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace D2NG.Core.D2GS
 {
@@ -79,6 +80,11 @@ namespace D2NG.Core.D2GS
             if (size == 0) return null;
 
             var buffer = ReadBytes(size);
+            if(buffer.Length == 0)
+            {
+                Log.Information($"Empty buffer length received");
+                return null;
+            }
             readBytes.AddRange(buffer);
             var fullString = readBytes.ToArray().ByteArrayToString();
             Log.Verbose($"Instance {instanceId} Full packet received: {fullString}");
@@ -113,7 +119,11 @@ namespace D2NG.Core.D2GS
         private byte[] ReadBytes(int count)
         {
             var buffer = new byte[count];
-            _stream.Read(buffer, 0, count);
+            var bytesRead = _stream.Read(buffer, 0, count);
+            if(bytesRead != count)
+            {
+                return new byte[0];
+            }
             return buffer;
         }
 
