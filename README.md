@@ -29,8 +29,8 @@ The above `config.json` should look as follows:
         "channelToJoin": "",
         "gamefolder": "C:\\Diablo II1.09D",
         "botType" : "mephisto",
-		"logFile": "meph1log.txt",
-		"mephisto" : {"username": "test", "password": "testpass", "character" : "testcharacter"}
+	"logFile": "meph1log.txt",
+	"mephisto" : {"username": "test", "password": "testpass", "character" : "testcharacter"}
 	},
     "externalMessaging" : {
         "telegramApiKey": "5231-xxerew",
