@@ -71,11 +71,11 @@ namespace ConsoleBot.Bots.Types
             {
                 return;
             }
-            var selectedCharacter1 = client1.Login(_config.Username, _config.Password)?.Single(c =>
-                c.Name.Equals(_config.Character, StringComparison.CurrentCultureIgnoreCase));
+            var selectedCharacter1 = client1.Login("test", "1234")?.Single(c =>
+                c.Name.Equals("testcharacter", StringComparison.CurrentCultureIgnoreCase));
             if (selectedCharacter1 == null)
             {
-                throw new CharacterNotFoundException(_config.Character);
+                throw new CharacterNotFoundException("testcharacter");
             }
             client1.SelectCharacter(selectedCharacter1);
             client1.Chat.EnterChat();

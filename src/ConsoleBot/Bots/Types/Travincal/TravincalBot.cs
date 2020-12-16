@@ -19,15 +19,15 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ConsoleBot.Bots.Types
+namespace ConsoleBot.Bots.Types.Travincal
 {
     public class TravincalBot : SingleClientBotBase, IBotInstance
     {
         private readonly IPathingService _pathingService;
 
-        public TravincalBot(IOptions<BotConfiguration> config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
+        public TravincalBot(IOptions<BotConfiguration> config, IOptions<TravincalConfiguration> travconfig, IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
             IMuleService muleService)
-        : base(config.Value, externalMessagingClient, muleService)
+        : base(config.Value, travconfig.Value, externalMessagingClient, muleService)
         {
             _pathingService = pathingService;
         }

@@ -76,14 +76,10 @@ namespace ConsoleBot
                 .Bind(config.GetSection("externalMessaging"))
                 .ValidateDataAnnotations();
             services.AddSingleton<IExternalMessagingClient, ExternalMessagingClient>();
-            services.AddSingleton<IBotInstance, MephistoBot>();
-            services.AddSingleton<IBotInstance, TravincalBot>();
-            services.AddSingleton<IBotInstance, TestBot>();
-            services.AddSingleton<IBotInstance, CowBot>();
-            services.AddSingleton<IBotFactory, BotFactory>();
             services.AddSingleton<IMuleService, MuleService>();
             services.AddHttpClient();
             services.AddMemoryCache();
+            services.RegisterBotServices(config);
             services.RegisterNavigationServices(config);
 
             var logfileName = config.GetSection("bot")["logFile"];

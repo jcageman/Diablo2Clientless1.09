@@ -17,17 +17,17 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ConsoleBot.Bots.Types
+namespace ConsoleBot.Bots.Types.Mephisto
 {
     public class MephistoBot : SingleClientBotBase, IBotInstance
     {
         private readonly IPathingService _pathingService;
-
         public MephistoBot(
             IOptions<BotConfiguration> config,
+            IOptions<MephistoConfiguration> mephconfig,
             IExternalMessagingClient externalMessagingClient,
             IPathingService pathingService,
-            IMuleService muleService) : base(config.Value, externalMessagingClient, muleService)
+            IMuleService muleService) : base(config.Value, mephconfig.Value, externalMessagingClient, muleService)
         {
             _pathingService = pathingService;
         }

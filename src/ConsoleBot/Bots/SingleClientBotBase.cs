@@ -1,4 +1,5 @@
 ﻿using ConsoleBot.Bots;
+using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;
@@ -15,6 +16,7 @@ namespace ConsoleBot.Bots
 {
     public abstract class SingleClientBotBase
     {
+        protected readonly AccountCharacter _accountCharacter;
         protected readonly BotConfiguration _config;
         protected readonly IExternalMessagingClient _externalMessagingClient;
         protected readonly IMuleService _muleService;
@@ -22,10 +24,12 @@ namespace ConsoleBot.Bots
 
         public SingleClientBotBase(
             BotConfiguration config,
+            AccountCharacter accountCharacter,
             IExternalMessagingClient externalMessagingClient,
             IMuleService muleService)
         {
             _config = config;
+            _accountCharacter = accountCharacter;
             _externalMessagingClient = externalMessagingClient;
             _muleService = muleService;
         }
@@ -34,9 +38,10 @@ namespace ConsoleBot.Bots
 
         protected async Task CreateGameLoop(Client client)
         {
+            _accountCharacter.Validate();
             try
             {
-                if (!RealmConnectHelpers.ConnectToRealm(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _config.Username, _config.Password, _config.Character))
+                if (!RealmConnectHelpers.ConnectToRealm(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _accountCharacter.Username, _accountCharacter.Password, _accountCharacter.Character))
                 {
                     throw new Exception("Could not connect to realm");
                 }
@@ -56,7 +61,7 @@ namespace ConsoleBot.Bots
                         }
                         var reconnectMessage = $"Many successive failures, swithing GS to {_config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)}";
                         Log.Warning(reconnectMessage);
-                        bool reconnectResult = await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _config.Username, _config.Password, _config.Character, 10);
+                        bool reconnectResult = await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _accountCharacter.Username, _accountCharacter.Password, _accountCharacter.Character, 10);
                         if (!reconnectResult)
                         {
                             await _externalMessagingClient.SendMessage($"Reconnect tries of 10 reached, restarting bot");
@@ -80,7 +85,7 @@ namespace ConsoleBot.Bots
                         {
                             await Task.Delay(Math.Pow(successiveFailures, 1.3) * TimeSpan.FromSeconds(5));
                             await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: failed to mule all items, trying again");
-                            if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _config.Username, _config.Password, _config.Character, 10))
+                            if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _accountCharacter.Username, _accountCharacter.Password, _accountCharacter.Character, 10))
                             {
                                 throw new Exception("Could not connect to realm");
                             }
@@ -120,7 +125,7 @@ namespace ConsoleBot.Bots
                         {
                             var reconnectMessage = $"Reconnecting to MCP failed, reconnecting to realm instead";
                             Log.Warning(reconnectMessage);
-                            if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _config.Username, _config.Password, _config.Character, 10))
+                            if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _accountCharacter.Username, _accountCharacter.Password, _accountCharacter.Character, 10))
                             {
                                 throw new Exception("Could not connect to realm");
                             }
@@ -141,7 +146,7 @@ namespace ConsoleBot.Bots
 
                         successiveFailures += 1;
                         Log.Warning($"Disconnecting client due to exception {e}, reconnecting to realm, game description is now: {_config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)}");
-                        bool reconnectResult = await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _config.Username, _config.Password, _config.Character, 10);
+                        bool reconnectResult = await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, _accountCharacter.Username, _accountCharacter.Password, _accountCharacter.Character, 10);
                         if (!reconnectResult)
                         {
                             await _externalMessagingClient.SendMessage($"Reconnect tries of 10 reached, restarting bot");

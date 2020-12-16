@@ -11,15 +11,6 @@ namespace ConsoleBot.Bots
         public string Realm { get; set; }
 
         [Required]
-        public string Username { get; set; }
-
-        [Required]
-        public string Password { get; set; }
-
-        [Required]
-        public string Character { get; set; }
-
-        [Required]
         public string GameNamePrefix { get; set; }
 
         public string GamePassword { get; set; }

@@ -46,7 +46,6 @@ namespace ConsoleBot.Bots.Types.Cows
                 client.OnReceivedPacketEvent(InComingPacket.NPCStop, p => { var packet = new NPCStopPacket(p); HandleNPCMove(packet.EntityId, packet.Location); });
                 client.OnReceivedPacketEvent(InComingPacket.NPCMoveToTarget, p => { var packet = new NPCMoveToTargetPacket(p); HandleNPCMove(packet.EntityId, packet.Location); });
                 client.OnReceivedPacketEvent(InComingPacket.NPCHit, p => { var packet = new NpcHitPacket(p); UpdateNPCLife(packet.EntityId, packet.LifePercentage); });
-                //client.OnReceivedPacketEvent(InComingPacket.RemoveObject, p => HandleRemoveObject(new RemoveObjectPacket(p)));
                 client.Game.OnWorldItemEvent(i => HandleItemDrop(client.Game, i));
             }
         }
@@ -85,10 +84,20 @@ namespace ConsoleBot.Bots.Types.Cows
             return p.Distance(projection);
         }
 
-        public async Task<bool> IsInLineOfSight(Client client, Point point)
+        public async Task<bool> IsInLineOfSight(Client client,  Point toLocation)
         {
-            var directDistance = client.Game.Me.Location.Distance(point);
-            var path = await _pathingService.GetPathToLocation(client.Game, point, MovementMode.Walking);
+            return await IsInLineOfSight(client, client.Game.Me.Location, toLocation);
+        }
+
+        public async Task<bool> IsInLineOfSight(Client client, Point fromLocation, Point toLocation)
+        {
+            var directDistance = fromLocation.Distance(toLocation);
+            if(directDistance == 0)
+            {
+                return true;
+            }
+
+            var path = await _pathingService.GetPathToLocation(client.Game, toLocation, MovementMode.Walking);
             if(path.Count == 0)
             {
                 return true;
@@ -96,8 +105,8 @@ namespace ConsoleBot.Bots.Types.Cows
 
             var line = new Line
             {
-                StartPoint = client.Game.Me.Location,
-                EndPoint = point
+                StartPoint = fromLocation,
+                EndPoint = toLocation
             };
 
             var pointsOutside = false;
@@ -183,16 +192,6 @@ namespace ConsoleBot.Bots.Types.Cows
                     _cowClusters.TryAdd(packet.Location, packet.Location);
 
                     IsActive = true;
-                }
-            }
-        }
-
-        private void HandleRemoveObject(RemoveObjectPacket packet)
-        {
-            if (packet.EntityType == EntityType.NPC)
-            {
-                if (_aliveMonsters.TryRemove(packet.EntityId, out var _))
-                {
                 }
             }
         }

@@ -30,7 +30,7 @@ namespace ConsoleBot.Bots.Types.Cows
         private readonly BotConfiguration _config;
         private readonly IExternalMessagingClient _externalMessagingClient;
         private readonly IPathingService _pathingService;
-        private readonly IMapApiService _mapApiService;
+        private readonly CowConfiguration _cowconfig;
         private TaskCompletionSource<bool> NextGame = new TaskCompletionSource<bool>();
         private TaskCompletionSource<bool> CowPortalOpen = new TaskCompletionSource<bool>();
         private ConcurrentDictionary<string, ManualResetEvent> PlayersInGame = new ConcurrentDictionary<string, ManualResetEvent>();
@@ -38,12 +38,12 @@ namespace ConsoleBot.Bots.Types.Cows
         private ConcurrentDictionary<string, bool> ShouldFollow = new ConcurrentDictionary<string, bool>();
         private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new ConcurrentDictionary<string, (Point, CancellationTokenSource)>();
         private static int isAnyClientGambling = 0;
-        public CowBot(IOptions<BotConfiguration> config, IExternalMessagingClient externalMessagingClient, IPathingService pathingService, IMapApiService mapApiService)
+        public CowBot(IOptions<BotConfiguration> config, IOptions<CowConfiguration> cowconfig, IExternalMessagingClient externalMessagingClient, IPathingService pathingService, IMapApiService mapApiService)
         {
             _config = config.Value;
             _externalMessagingClient = externalMessagingClient;
             _pathingService = pathingService;
-            _mapApiService = mapApiService;
+            _cowconfig = cowconfig.Value;
         }
 
         public string GetName()
@@ -53,18 +53,16 @@ namespace ConsoleBot.Bots.Types.Cows
 
         public async Task Run()
         {
+            _cowconfig.Validate();
             var clients = new List<Client>();
-            List<Tuple<string, string, string>> clientLogins = new List<Tuple<string, string, string>>();
-            // add logins here for now
-
-            foreach (var clientLogin in clientLogins)
+            foreach (var account in _cowconfig.Accounts)
             {
                 var client = new Client();
                 client.OnReceivedPacketEvent(InComingPacket.EventMessage, (packet) => HandleEventMessage(client, new EventNotifyPacket(packet)));
                 _externalMessagingClient.RegisterClient(client);
-                PlayersInGame.TryAdd(clientLogin.Item3.ToLower(), new ManualResetEvent(false));
-                ShouldFollow.TryAdd(clientLogin.Item3.ToLower(), false);
-                FollowTasks.TryAdd(clientLogin.Item3.ToLower(), (null,new CancellationTokenSource()));
+                PlayersInGame.TryAdd(account.Character.ToLower(), new ManualResetEvent(false));
+                ShouldFollow.TryAdd(account.Character.ToLower(), false);
+                FollowTasks.TryAdd(account.Character.ToLower(), (null,new CancellationTokenSource()));
                 client.OnReceivedPacketEvent(InComingPacket.EntityMove, async (packet) =>
                 {
                     var entityMovePacket = new EntityMovePacket(packet);
@@ -126,8 +124,8 @@ namespace ConsoleBot.Bots.Types.Cows
                 try
                 {
                     var leaveAndRejoinTasks = clients.Select(async (client, index) => {
-                        var clientLogin = clientLogins[(int)index];
-                        return await LeaveGameAndRejoinMCPWithRetry(client, clientLogin);
+                        var account = _cowconfig.Accounts[(int)index];
+                        return await LeaveGameAndRejoinMCPWithRetry(client, account);
                     }).ToList();
                     var rejoinResults = await Task.WhenAll(leaveAndRejoinTasks);
                     if(rejoinResults.Any(r => !r))
@@ -136,7 +134,7 @@ namespace ConsoleBot.Bots.Types.Cows
                         continue;
                     }
 
-                    var result = await CreateGameWithRetry(gameCount, firstFiller, clientLogins.First());
+                    var result = await CreateGameWithRetry(gameCount, firstFiller, _cowconfig.Accounts.First());
                     gameCount = result.Item2;
                     if (!result.Item1)
                     {
@@ -159,10 +157,10 @@ namespace ConsoleBot.Bots.Types.Cows
                     var rand = new Random();
                     for (int i = 0; i < clients.Count(); i++)
                     {
-                        var clientLogin = clientLogins[i];
+                        var account = _cowconfig.Accounts[i];
                         var client = clients[i];
                         Thread.Sleep(TimeSpan.FromSeconds(1 + i * 0.7));
-                        if (firstFiller != client && !await JoinGameWithRetry(gameCount, client, clientLogin))
+                        if (firstFiller != client && !await JoinGameWithRetry(gameCount, client, account))
                         {
                             Log.Warning($"Client {client.LoggedInUserName()} failed to join game, retrying new game");
                             gameCount++;
@@ -170,7 +168,7 @@ namespace ConsoleBot.Bots.Types.Cows
                         }
 
                         var randomMove = ((short)rand.Next(-7, 7), (short)rand.Next(-7, 7));
-                        townTasks.Add(TownManagement(client, randomMove, _config));
+                        townTasks.Add(TownManagement(client, randomMove, _cowconfig));
                     }
 
                     var townResults = await Task.WhenAll(townTasks);
@@ -266,7 +264,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }
         }
 
-        private async Task<bool> TownManagement(Client client, (short X, short Y)move, BotConfiguration configuration)
+        private async Task<bool> TownManagement(Client client, (short X, short Y)move, CowConfiguration configuration)
         {
             var timer = new Stopwatch();
             timer.Start();
@@ -327,7 +325,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 return false;
             }
 
-            var portalCharacter = configuration.Character.Equals(game.Me.Name, StringComparison.InvariantCultureIgnoreCase);
+            var portalCharacter = configuration.PortalCharacterName.Equals(game.Me.Name, StringComparison.InvariantCultureIgnoreCase);
 
             var unidentifiedItemCount = game.Inventory.Items.Count(i => !i.IsIdentified) +
 game.Cube.Items.Count(i => !i.IsIdentified);
@@ -1085,9 +1083,8 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                         continue;
                     }
 
-
                     var tryLocation = toLocation.Add(x, y);
-                    if (await cowManager.IsVisitable(client, tryLocation) && cowManager.GetNearbyAliveMonsters(tryLocation, 10.0, 5).Count() < 5)
+                    if (await cowManager.IsVisitable(client, tryLocation) && await cowManager.IsInLineOfSight(client, tryLocation, toLocation) && cowManager.GetNearbyAliveMonsters(tryLocation, 10.0, 5).Count() < 5)
                     {
                         Log.Information($"Client {client.Game.Me.Name} found empty spot to teleport to at {tryLocation}");
                         if (!client.Game.IsInGame() || GeneralHelpers.TryWithTimeout((retryCount) => client.Game.TeleportToLocation(tryLocation), TimeSpan.FromSeconds(4)))
@@ -1485,7 +1482,7 @@ game.Cube.Items.Count(i => !i.IsIdentified);
             return true;
         }
 
-        private async Task<bool> JoinGameWithRetry(int gameCount, Client client, Tuple<string, string, string> clientLogin)
+        private async Task<bool> JoinGameWithRetry(int gameCount, Client client, AccountCharacter cowAccount)
         {
             return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
@@ -1502,7 +1499,7 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                 {
                     var retryDuration = Math.Pow(1 + retryCount, 1.2) * TimeSpan.FromSeconds(1);
                     Log.Information($"Joining game failed for {client.LoggedInUserName()} retrying in {retryDuration.TotalSeconds} seconds");
-                    await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, clientLogin.Item1, clientLogin.Item2, clientLogin.Item3, 10);
+                    await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, cowAccount.Username, cowAccount.Password, cowAccount.Character, 10);
                     Thread.Sleep(retryDuration);
                 }
 
@@ -1510,7 +1507,7 @@ game.Cube.Items.Count(i => !i.IsIdentified);
             }, TimeSpan.FromSeconds(20));
         }
 
-        private async Task<Tuple<bool, int>> CreateGameWithRetry(int gameCount, Client client, Tuple<string, string, string> clientLogin)
+        private async Task<Tuple<bool, int>> CreateGameWithRetry(int gameCount, Client client, AccountCharacter cowAccount)
         {
             var newGameCount = gameCount;
             var result = await GeneralHelpers.TryWithTimeout(async (retryCount) =>
@@ -1529,7 +1526,7 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                     newGameCount++;
                     var retryDuration = Math.Pow(1 + retryCount, 1.2) * TimeSpan.FromSeconds(1);
                     Log.Information($"Creating game failed for {client.LoggedInUserName()} retrying in {retryDuration.TotalSeconds} seconds");
-                    await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, clientLogin.Item1, clientLogin.Item2, clientLogin.Item3, 10);
+                    await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, cowAccount.Username, cowAccount.Password, cowAccount.Character, 10);
                     await Task.Delay(retryDuration);
                 }
 
@@ -1539,11 +1536,11 @@ game.Cube.Items.Count(i => !i.IsIdentified);
             return Tuple.Create(result, newGameCount);
         }
 
-        private async Task<bool> LeaveGameAndRejoinMCPWithRetry(Client client, Tuple<string, string, string> clientLogin)
+        private async Task<bool> LeaveGameAndRejoinMCPWithRetry(Client client, AccountCharacter cowAccount)
         {
             if (!client.Chat.IsConnected())
             {
-                if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, clientLogin.Item1, clientLogin.Item2, clientLogin.Item3, 10))
+                if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, cowAccount.Username, cowAccount.Password, cowAccount.Character, 10))
                 {
                     return false;
                 }
@@ -1557,8 +1554,8 @@ game.Cube.Items.Count(i => !i.IsIdentified);
 
             if (!client.RejoinMCP())
             {
-                Log.Warning($"Disconnecting client {clientLogin.Item1} since reconnecting to MCP failed, reconnecting to realm");
-                return await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, clientLogin.Item1, clientLogin.Item2, clientLogin.Item3, 10);
+                Log.Warning($"Disconnecting client {cowAccount.Username} since reconnecting to MCP failed, reconnecting to realm");
+                return await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, cowAccount.Username, cowAccount.Password, cowAccount.Character, 10);
             }
 
             return true;

@@ -1,10 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using System.Threading.Tasks;
 
 namespace ConsoleBot.Bots.Types.CS
 {
-    public class CSBot
+    public class CSBot : IBotInstance
     {
         /*
          * Notes
@@ -35,6 +34,14 @@ namespace ConsoleBot.Bots.Types.CS
 
          * 
          * */
+        public string GetName()
+        {
+            return "cs";
+        }
 
+        public Task Run()
+        {
+            throw new NotImplementedException();
+        }
     }
 }
