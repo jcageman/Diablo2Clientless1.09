@@ -1,4 +1,5 @@
 ﻿using ConsoleBot.Bots;
+using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using ConsoleBot.Exceptions;
@@ -62,11 +63,15 @@ namespace ConsoleBot.Mule
                     }
 
                     var muleClient = new Client();
-                    if(!RealmConnectHelpers.ConnectToRealm(
-                        muleClient,
-                        _botConfig.Realm,
-                        _botConfig.KeyOwner,
-                        _botConfig.GameFolder, account.Username, account.Password, character))
+                    var accountCharacter = new AccountCharacter()
+                    {
+                        Username = account.Username,
+                        Password = account.Password,
+                        Character = character
+                    };
+
+                    if (!RealmConnectHelpers.ConnectToRealm(
+                        muleClient, _botConfig, accountCharacter))
                     {
                         Log.Error($"Fail to connect to realm with {account.Username} with character {character}");
                         return false;

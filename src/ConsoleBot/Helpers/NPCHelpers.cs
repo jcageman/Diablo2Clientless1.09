@@ -222,21 +222,54 @@ namespace ConsoleBot.Helpers
 
         public static NPCCode GetDeckardCainForAct(D2NG.Core.D2GS.Act.Act act)
         {
-            switch (act)
+            return act switch
             {
-                case D2NG.Core.D2GS.Act.Act.Act1:
-                    return NPCCode.DeckardCainAct1;
-                case D2NG.Core.D2GS.Act.Act.Act2:
-                    return NPCCode.DeckardCainAct2;
-                case D2NG.Core.D2GS.Act.Act.Act3:
-                    return NPCCode.DeckardCainAct3;
-                case D2NG.Core.D2GS.Act.Act.Act4:
-                    return NPCCode.DeckardCainAct4;
-                case D2NG.Core.D2GS.Act.Act.Act5:
-                    return NPCCode.DeckardCainAct5;
-            }
+                D2NG.Core.D2GS.Act.Act.Act1 => NPCCode.DeckardCainAct1,
+                D2NG.Core.D2GS.Act.Act.Act2 => NPCCode.DeckardCainAct2,
+                D2NG.Core.D2GS.Act.Act.Act3 => NPCCode.DeckardCainAct3,
+                D2NG.Core.D2GS.Act.Act.Act4 => NPCCode.DeckardCainAct4,
+                D2NG.Core.D2GS.Act.Act.Act5 => NPCCode.DeckardCainAct5,
+                _ => throw new InvalidEnumArgumentException(nameof(act)),
+            };
+        }
 
-            throw new InvalidEnumArgumentException(nameof(act));
+        public static NPCCode GetSellNPC(D2NG.Core.D2GS.Act.Act act)
+        {
+            return act switch
+            {
+                D2NG.Core.D2GS.Act.Act.Act1 => NPCCode.Akara,
+                D2NG.Core.D2GS.Act.Act.Act2 => NPCCode.Drognan,
+                D2NG.Core.D2GS.Act.Act.Act3 => NPCCode.Ormus,
+                D2NG.Core.D2GS.Act.Act.Act4 => NPCCode.JamellaAct4,
+                D2NG.Core.D2GS.Act.Act.Act5 => NPCCode.Larzuk,
+                _ => throw new InvalidEnumArgumentException(nameof(act)),
+            };
+        }
+
+        public static NPCCode GetGambleNPC(D2NG.Core.D2GS.Act.Act act)
+        {
+            return act switch
+            {
+                D2NG.Core.D2GS.Act.Act.Act1 => NPCCode.Gheed,
+                D2NG.Core.D2GS.Act.Act.Act2 => NPCCode.Elzix,
+                D2NG.Core.D2GS.Act.Act.Act3 => NPCCode.Alkor,
+                D2NG.Core.D2GS.Act.Act.Act4 => NPCCode.JamellaAct4,
+                D2NG.Core.D2GS.Act.Act.Act5 => NPCCode.Nihlathak,
+                _ => throw new InvalidEnumArgumentException(nameof(act)),
+            };
+        }
+
+        public static NPCCode GetRepairNPC(D2NG.Core.D2GS.Act.Act act)
+        {
+            return act switch
+            {
+                D2NG.Core.D2GS.Act.Act.Act1 => NPCCode.Charsi,
+                D2NG.Core.D2GS.Act.Act.Act2 => NPCCode.Fara,
+                D2NG.Core.D2GS.Act.Act.Act3 => NPCCode.Hratli,
+                D2NG.Core.D2GS.Act.Act.Act4 => NPCCode.Halbu,
+                D2NG.Core.D2GS.Act.Act.Act5 => NPCCode.Larzuk,
+                _ => throw new InvalidEnumArgumentException(nameof(act)),
+            };
         }
 
         public static bool IdentifyItemsAtDeckardCain(Game game)

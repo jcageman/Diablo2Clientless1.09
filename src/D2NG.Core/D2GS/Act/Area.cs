@@ -110,7 +110,7 @@
         PlainsOfDespair = 105,
         CityOfTheDamned = 106,
         RiverOfFlame = 107,
-        ChaosSanctum = 108,
+        ChaosSanctuary = 108,
         Harrogath = 109,
         BloodyFoothills = 110,
         FrigidHighlands = 111,

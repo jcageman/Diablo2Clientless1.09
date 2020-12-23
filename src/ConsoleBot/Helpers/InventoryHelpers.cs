@@ -371,12 +371,17 @@ namespace ConsoleBot.Helpers
             }
         }
 
-        public static void MoveCubeItemsToInventory(Game game)
+        public static bool MoveCubeItemsToInventory(Game game)
         {
             foreach (var item in game.Cube.Items)
             {
-                PutCubeItemInInventory(game, item);
+                if(PutCubeItemInInventory(game, item) != MoveItemResult.Succes)
+                {
+                    return false;
+                }
             }
+
+            return true;
         }
 
         public static void CleanupPotionsInBelt(Game game)

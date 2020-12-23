@@ -1,7 +1,7 @@
 ﻿using ConsoleBot.Clients.ExternalMessagingClient;
-using ConsoleBot.Enums;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
+using ConsoleBot.TownManagement;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
@@ -22,14 +22,18 @@ namespace ConsoleBot.Bots.Types.Mephisto
     public class MephistoBot : SingleClientBotBase, IBotInstance
     {
         private readonly IPathingService _pathingService;
+        private readonly ITownManagementService _townManagementService;
+
         public MephistoBot(
             IOptions<BotConfiguration> config,
             IOptions<MephistoConfiguration> mephconfig,
             IExternalMessagingClient externalMessagingClient,
             IPathingService pathingService,
-            IMuleService muleService) : base(config.Value, mephconfig.Value, externalMessagingClient, muleService)
+            IMuleService muleService,
+            ITownManagementService townManagementService) : base(config.Value, mephconfig.Value, externalMessagingClient, muleService)
         {
             _pathingService = pathingService;
+            _townManagementService = townManagementService;
         }
 
         public string GetName()
@@ -67,161 +71,19 @@ namespace ConsoleBot.Bots.Types.Mephisto
             }
             */
 
-            client.Game.CleanupCursorItem();
-            InventoryHelpers.CleanupPotionsInBelt(client.Game);
-
-            if (!await GeneralHelpers.PickupCorpseIfExists(client, _pathingService))
+            var townManagementOptions = new TownManagementOptions()
             {
-                Log.Error($"{client.Game.Me.Name} failed to pickup corpse");
+                Act = Act.Act3
+            };
+
+            await _townManagementService.PerformTownTasks(client, townManagementOptions);
+
+            Log.Information("Taking DuranceOfHateLevel2 Waypoint");
+            if (!await _townManagementService.TakeWaypoint(client, Waypoint.DuranceOfHateLevel2))
+            {
+                Log.Information("Taking DuranceOfHateLevel2 waypoint failed");
                 return false;
             }
-
-            if (client.Game.Act != Act.Act3)
-            {
-                var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, MovementMode.Teleport);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, MovementMode.Teleport))
-                {
-                    Log.Information($"Teleporting to {client.Game.Act} waypoint failed");
-                    return false;
-                }
-
-                var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPoint()).Single();
-                Log.Information("Taking waypoint to KurastDocks");
-                if(!GeneralHelpers.TryWithTimeout((_) =>
-                {
-
-                    client.Game.TakeWaypoint(townWaypoint, Waypoint.KurastDocks);
-                    return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == Waypoint.KurastDocks.ToArea(), TimeSpan.FromSeconds(2));
-                }, TimeSpan.FromSeconds(5)))
-                {
-
-                }
-            }
-
-            var unidentifiedItemCount = client.Game.Inventory.Items.Count(i => !i.IsIdentified) +
-                                        client.Game.Cube.Items.Count(i => !i.IsIdentified);
-            if (unidentifiedItemCount > 6)
-            {
-                Log.Information($"Visiting Deckard Cain with {unidentifiedItemCount} unidentified items");
-
-                var pathDecardCain = await _pathingService.GetPathToNPC(client.Game, NPCCode.DeckardCainAct3, MovementMode.Teleport);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathDecardCain, MovementMode.Teleport))
-                {
-                    Log.Warning($"Teleporting to Deckard Cain failed at {client.Game.Me.Location}");
-                    return false;
-                }
-
-                NPCHelpers.IdentifyItemsAtDeckardCain(client.Game);
-
-                var pathStash = await _pathingService.GetPathToObject(client.Game, EntityCode.Stash, MovementMode.Teleport);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathStash, MovementMode.Teleport))
-                {
-                    Log.Warning($"Teleporting failed at location {client.Game.Me.Location}");
-                }
-
-                var stashItemsResult = InventoryHelpers.StashItemsToKeep(client.Game, _externalMessagingClient);
-                if (stashItemsResult != MoveItemResult.Succes)
-                {
-                    if (stashItemsResult == MoveItemResult.NoSpace && !NeedsMule)
-                    {
-                        await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: bot inventory is full, starting mule");
-                        NeedsMule = true;
-                    }
-                    Log.Warning($"Stashing items failed with result {stashItemsResult}");
-                }
-            }
-
-            if (NPCHelpers.ShouldRefreshCharacterAtNPC(client.Game) || client.Game.Inventory.Items.Count(i => i.IsIdentified) + client.Game.Cube.Items.Count(i => i.IsIdentified) > 4)
-            {
-                Log.Information($"Visiting Ormus");
-
-                var pathOrmus = await _pathingService.GetPathToNPC(client.Game, NPCCode.Ormus, MovementMode.Teleport);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathOrmus, MovementMode.Teleport))
-                {
-                    Log.Warning($"Teleporting to Ormus failed at {client.Game.Me.Location}");
-                    return false;
-                }
-
-                var ormus = NPCHelpers.GetUniqueNPC(client.Game, NPCCode.Ormus);
-                if (ormus == null)
-                {
-                    Log.Warning($"Did not find Ormus at {client.Game.Me.Location}");
-                    return false;
-                }
-
-                if (!NPCHelpers.SellItemsAndRefreshPotionsAtNPC(client.Game, ormus))
-                {
-                    Log.Warning($"Refreshing potions at Ormus failed at {client.Game.Me.Location}");
-                    return false;
-                }
-            }
-
-            if (client.Game.Act == Act.Act3 && CubeHelpers.AnyGemsToTransmuteInStash(client.Game))
-            {
-                var pathStash = await _pathingService.GetPathToObject(client.Game, EntityCode.Stash, MovementMode.Teleport);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathStash, MovementMode.Teleport))
-                {
-                    Log.Warning($"Walking failed at location {client.Game.Me.Location}");
-                    return false;
-                }
-                CubeHelpers.TransmuteGems(client.Game);
-            }
-
-            if(NPCHelpers.ShouldGoToRepairNPC(client.Game))
-            {
-                Log.Information($"Repairing items at Hratli");
-                var PathHratli = await _pathingService.GetPathToObject(client.Game, EntityCode.Hratli, MovementMode.Teleport);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, PathHratli, MovementMode.Teleport))
-                {
-                    Log.Warning($"Teleporting to Hratli failed at {client.Game.Me.Location}");
-                    return false;
-                }
-
-                var hratli = NPCHelpers.GetUniqueNPC(client.Game, NPCCode.Hratli);
-                if (hratli == null)
-                {
-                    return false;
-                }
-
-                NPCHelpers.RepairItemsAndBuyArrows(client.Game, hratli);
-            }
-
-            bool shouldGamble = client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 7_000_000;
-            if (shouldGamble)
-            {
-                Log.Information($"Gambling items at Alkor");
-                var pathAlkor = await _pathingService.GetPathToNPC(client.Game, NPCCode.Alkor, MovementMode.Teleport);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathAlkor, MovementMode.Teleport))
-                {
-                    Log.Warning($"Teleporting to Alkor failed at {client.Game.Me.Location}");
-                    return false;
-                }
-
-                var alkor = NPCHelpers.GetUniqueNPC(client.Game, NPCCode.Alkor);
-                if (alkor == null)
-                {
-                    return false;
-                }
-
-                NPCHelpers.GambleItems(client.Game, alkor);
-            }
-
-            Log.Information("Teleporting to WayPoint");
-            var path1 = await _pathingService.GetPathToObject(client.Game, EntityCode.WaypointAct3, MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, path1, MovementMode.Teleport))
-            {
-                Log.Warning($"Teleporting failed at location {client.Game.Me.Location}");
-                return false;
-            }
-
-            var waypoint = client.Game.GetEntityByCode(EntityCode.WaypointAct3).Single();
-            Log.Information("Taking waypoint to DuranceOfHateLevel2");
-            GeneralHelpers.TryWithTimeout((_) =>
-            {
-
-                client.Game.TakeWaypoint(waypoint, Waypoint.DuranceOfHateLevel2);
-                return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == Waypoint.DuranceOfHateLevel2.ToArea(), TimeSpan.FromSeconds(2));
-            }, TimeSpan.FromSeconds(5));
 
             var path2 = await _pathingService.GetPathFromWaypointToArea(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel2, Waypoint.DuranceOfHateLevel2, Area.DuranceOfHateLevel3, MovementMode.Teleport);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, path2, MovementMode.Teleport))
@@ -245,7 +107,17 @@ namespace ConsoleBot.Bots.Types.Mephisto
                 return false;
             }
 
-            client.Game.RequestUpdate(client.Game.Me.Id);
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                client.Game.RequestUpdate(client.Game.Me.Id);
+                var isValidPoint = await _pathingService.IsValidPointInArea(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel3, client.Game.Me.Location);
+                return isValidPoint;
+            }, TimeSpan.FromSeconds(3.5)))
+            {
+                Log.Error("Checking whether moved to area failed");
+                return false;
+            }
+
             Log.Information($"Teleporting to Mephisto");
             var path3 = await _pathingService.GetPathToLocation(client.Game, new Point(17566, 8070), MovementMode.Teleport);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, path3, MovementMode.Teleport))
@@ -298,7 +170,7 @@ namespace ConsoleBot.Bots.Types.Mephisto
                 }
 
                 return GeneralHelpers.TryWithTimeout((_) => mephisto.State == EntityState.Dead,
-                    TimeSpan.FromSeconds(1));
+                    TimeSpan.FromSeconds(0.7));
             }, TimeSpan.FromSeconds(30)))
             {
                 Log.Warning($"Killing Mephisto failed at location {client.Game.Me.Location}");

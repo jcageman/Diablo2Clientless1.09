@@ -3,6 +3,7 @@ using ConsoleBot.Bots.Types;
 using ConsoleBot.Bots.Types.Cows;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Mule;
+using ConsoleBot.TownManagement;
 using D2NG.Navigation.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -77,6 +78,7 @@ namespace ConsoleBot
                 .ValidateDataAnnotations();
             services.AddSingleton<IExternalMessagingClient, ExternalMessagingClient>();
             services.AddSingleton<IMuleService, MuleService>();
+            services.AddSingleton<ITownManagementService, TownManagementService>();
             services.AddHttpClient();
             services.AddMemoryCache();
             services.RegisterBotServices(config);

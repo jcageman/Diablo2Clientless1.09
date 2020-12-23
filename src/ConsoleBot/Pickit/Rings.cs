@@ -32,6 +32,13 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.FasterCastRate) >= 10
+            && item.GetTotalResistFrLrCr() >= 45 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 30
+            && item.GetValueOfStatType(StatType.ReplenishLife) >= 6)
+            {
+                return true;
+            }
+
+            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.FasterCastRate) >= 10
                 && item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 60)
             {
                 return true;

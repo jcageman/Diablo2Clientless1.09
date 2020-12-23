@@ -1,8 +1,7 @@
-﻿using ConsoleBot.Bots;
-using ConsoleBot.Clients.ExternalMessagingClient;
-using ConsoleBot.Enums;
+﻿using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
+using ConsoleBot.TownManagement;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
@@ -24,12 +23,14 @@ namespace ConsoleBot.Bots.Types.Travincal
     public class TravincalBot : SingleClientBotBase, IBotInstance
     {
         private readonly IPathingService _pathingService;
+        private readonly ITownManagementService _townManagementService;
 
         public TravincalBot(IOptions<BotConfiguration> config, IOptions<TravincalConfiguration> travconfig, IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
-            IMuleService muleService)
+            IMuleService muleService, ITownManagementService townManagementService)
         : base(config.Value, travconfig.Value, externalMessagingClient, muleService)
         {
             _pathingService = pathingService;
+            _townManagementService = townManagementService;
         }
 
         public string GetName()
@@ -58,16 +59,6 @@ namespace ConsoleBot.Bots.Types.Travincal
                 throw new NotSupportedException("Only barbarian is supported on travincal");
             }
 
-            client.Game.CleanupCursorItem();
-            InventoryHelpers.MoveInventoryItemsToCube(client.Game);
-            InventoryHelpers.CleanupPotionsInBelt(client.Game);
-
-            if (!await GeneralHelpers.PickupCorpseIfExists(client, _pathingService))
-            {
-                Log.Error($"{client.Game.Me.Name} failed to pickup corpse");
-                return false;
-            }
-
             /*
              *
             while (client.Game.Players.Count < 2)
@@ -76,71 +67,19 @@ namespace ConsoleBot.Bots.Types.Travincal
             }
              */
 
-            if (client.Game.Act != Act.Act3)
+            var townManagementOptions = new TownManagementOptions()
             {
-                var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, MovementMode.Walking);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, MovementMode.Walking))
-                {
-                    Log.Information($"Walking to {client.Game.Act} waypoint failed");
-                    return false;
-                }
+                Act = Act.Act4
+            };
 
-                if (!MoveToWaypointViaNearestWaypoint(client.Game, Waypoint.KurastDocks))
-                {
-                    Log.Debug("Taking kurast docks waypoint failed");
-                    return false;
-                }
-            }
-
-            if (NPCHelpers.ShouldRefreshCharacterAtNPC(client.Game))
-            {
-                var pathOrmus = await _pathingService.GetPathToNPC(client.Game, NPCCode.Ormus, MovementMode.Walking);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathOrmus, MovementMode.Walking))
-                {
-                    Log.Warning($"Walking to Ormus failed at {client.Game.Me.Location}");
-                }
-
-                var ormus1 = NPCHelpers.GetUniqueNPC(client.Game, NPCCode.Ormus);
-                if (ormus1 == null)
-                {
-                    Log.Warning($"Did not find Ormus at {client.Game.Me.Location}");
-                    return false;
-                }
-
-                if (!NPCHelpers.SellItemsAndRefreshPotionsAtNPC(client.Game, ormus1))
-                {
-                    return false;
-                }
-            }
-
-            if (client.Game.Act == Act.Act3 && CubeHelpers.AnyGemsToTransmuteInStash(client.Game))
-            {
-                var pathStash = await _pathingService.GetPathToObject(client.Game, EntityCode.Stash, MovementMode.Walking);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathStash, MovementMode.Walking))
-                {
-                    Log.Warning($"Walking failed at location {client.Game.Me.Location}");
-                }
-                CubeHelpers.TransmuteGems(client.Game);
-            }
-
-            Log.Information("Walking to wp");
-            var pathToWayPoint = await _pathingService.ToTownWayPoint(client.Game, MovementMode.Walking);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToWayPoint, MovementMode.Walking))
-            {
-                Log.Information($"Walking to {client.Game.Act} waypoint failed");
-                return false;
-            }
-
-            await Act4RepairAndGamble(client.Game);
+            await _townManagementService.PerformTownTasks(client, townManagementOptions);
 
             Log.Information("Taking travincal wp");
-            if (!MoveToWaypointViaNearestWaypoint(client.Game, Waypoint.Travincal))
+            if (!await _townManagementService.TakeWaypoint(client, Waypoint.Travincal))
             {
                 Log.Information("Taking trav waypoint failed");
                 return false;
             }
-
-            client.Game.RequestUpdate(client.Game.Me.Id);
 
             Log.Information("Doing bo");
             if(!BarbBo(client.Game))
@@ -183,127 +122,15 @@ namespace ConsoleBot.Bots.Types.Travincal
             }
 
             Log.Information("Moving to town");
-            if (!MoveToA3Town(client.Game))
+            if (!await _townManagementService.TakeTownPortalToTown(client))
             {
                 Log.Information("Move to town failed");
                 return false;
             }
 
-            var pathDeckardCain = await _pathingService.GetPathToNPC(client.Game, NPCCode.DeckardCainAct3, MovementMode.Walking);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathDeckardCain, MovementMode.Walking))
-            {
-                Log.Warning($"Walking to Deckhard Cain failed at {client.Game.Me.Location}");
-                return false;
-            }
-
-            Log.Information("Identifying items");
-            if (!NPCHelpers.IdentifyItemsAtDeckardCain(client.Game))
-            {
-                Log.Information("Identify items failed");
-                return false;
-            }
-
-            Log.Information("Stashing items to keep");
-            var stashResult = InventoryHelpers.StashItemsToKeep(client.Game, _externalMessagingClient);
-            if (stashResult != MoveItemResult.Succes)
-            {
-                if (stashResult == MoveItemResult.NoSpace && !NeedsMule)
-                {
-                    await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: bot inventory is full, starting mule");
-                    NeedsMule = true;
-                }
-
-                Log.Information("Stashing items failed");
-                
-            }
-
-            Log.Information("Walking to ormus");
-            var pathOrmus2 = await _pathingService.GetPathToNPC(client.Game, NPCCode.Ormus, MovementMode.Walking);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathOrmus2, MovementMode.Walking))
-            {
-                Log.Warning($"Walking to Ormus failed at {client.Game.Me.Location}");
-                return false;
-            }
-
-            Log.Information("Selling items at ormus");
-            var ormus = NPCHelpers.GetUniqueNPC(client.Game, NPCCode.Ormus);
-            if (ormus == null)
-            {
-                Log.Warning($"Did not find Ormus at {client.Game.Me.Location}");
-                return false;
-            }
-
-            if (!NPCHelpers.SellItemsAndRefreshPotionsAtNPC(client.Game, ormus))
-            {
-                Log.Information("Selling items failed");
-                return false;
-            }
+            await _townManagementService.PerformTownTasks(client, townManagementOptions);
 
             Log.Information("Successfully finished game");
-            return true;
-        }
-
-        private async Task<bool> Act4RepairAndGamble(Game game)
-        {
-            bool shouldRepair = NPCHelpers.ShouldGoToRepairNPC(game);
-            bool shouldGamble = game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 7_000_000;
-            if (!shouldRepair && !shouldGamble)
-            {
-                return true;
-            }
-
-            if (!MoveToWaypointViaNearestWaypoint(game, Waypoint.ThePandemoniumFortress))
-            {
-                Log.Information("Taking pandemonium waypoint failed");
-                return false;
-            }
-
-            if (shouldRepair)
-            {
-                var pathHalbu = await _pathingService.GetPathToNPC(game, NPCCode.Halbu, MovementMode.Walking);
-                if (!await MovementHelpers.TakePathOfLocations(game, pathHalbu, MovementMode.Walking))
-                {
-                    Log.Warning($"Walking to Halbu failed at {game.Me.Location}");
-                }
-
-                var halbu = NPCHelpers.GetUniqueNPC(game, NPCCode.Halbu);
-                if (halbu == null)
-                {
-                    return false;
-                }
-                NPCHelpers.RepairItemsAndBuyArrows(game, halbu);
-            }
-
-            if (shouldGamble)
-            {
-                var pathJamella = await _pathingService.GetPathToNPC(game, NPCCode.JamellaAct4, MovementMode.Walking);
-                if (!await MovementHelpers.TakePathOfLocations(game, pathJamella, MovementMode.Walking))
-                {
-                    Log.Warning($"Walking to Jamella failed at {game.Me.Location}");
-                }
-
-                var jamella = NPCHelpers.GetUniqueNPC(game, NPCCode.JamellaAct4);
-                if (jamella == null)
-                {
-                    return false;
-                }
-
-                NPCHelpers.GambleItems(game, jamella);
-            }
-
-            var pathToWayPoint = await _pathingService.ToTownWayPoint(game, MovementMode.Walking);
-            if (!await MovementHelpers.TakePathOfLocations(game, pathToWayPoint, MovementMode.Walking))
-            {
-                Log.Information($"Walking to {game.Act} waypoint failed");
-                return false;
-            }
-
-            if (!MoveToWaypointViaNearestWaypoint(game, Waypoint.KurastDocks))
-            {
-                Log.Debug("Taking kurast docks waypoint failed");
-                return false;
-            }
-
             return true;
         }
 
@@ -395,9 +222,6 @@ namespace ConsoleBot.Bots.Types.Travincal
 
             return true;
         }
-
-
-
         private async Task<bool> KillCouncilMembers(Game game)
         {
             var startTime = DateTime.Now;
@@ -474,45 +298,6 @@ namespace ConsoleBot.Bots.Types.Travincal
             return councilMembers;
         }
 
-        private bool MoveToA3Town(Game game)
-        {
-            var existingTownPortals = game.GetEntityByCode(EntityCode.TownPortal).ToHashSet();
-            if (!GeneralHelpers.TryWithTimeout((retryCount) =>
-            {
-                return game.CreateTownPortal();
-            }, TimeSpan.FromSeconds(3.5)))
-            {
-                Log.Error("Failed to create town portal");
-                return false;
-            }
-
-            var newTownPortals = game.GetEntityByCode(EntityCode.TownPortal).Where(t => !existingTownPortals.Contains(t)).ToList();
-            if (!newTownPortals.Any())
-            {
-                Log.Error("No town portal found");
-                return false;
-            }
-
-            var townportal = newTownPortals.First();
-            if(!GeneralHelpers.TryWithTimeout((retryCount) =>
-            {
-                game.MoveTo(townportal);
-
-                game.InteractWithEntity(townportal);
-                return GeneralHelpers.TryWithTimeout((retryCount) =>
-                {
-                    Thread.Sleep(50);
-                    return game.Area == Area.KurastDocks;
-                }, TimeSpan.FromSeconds(1));
-            }, TimeSpan.FromSeconds(3.5)))
-            {
-                return false;
-            }
-
-            game.RequestUpdate(game.Me.Id);
-            return true;
-        }
-
         private bool BarbBo(Game game)
         {
             if(!GeneralHelpers.TryWithTimeout((retryCount) =>
@@ -549,40 +334,6 @@ namespace ConsoleBot.Bots.Types.Travincal
             }
 
             return game.UseHealthPotion();
-        }
-
-        private bool MoveToWaypointViaNearestWaypoint(Game game, Waypoint waypoint)
-        {
-            WorldObject townWaypoint = null;
-            GeneralHelpers.TryWithTimeout((retryCount) =>
-            {
-                townWaypoint = game.GetEntityByCode(game.Act.MapTownWayPoint()).Single();
-                return townWaypoint != null;
-            }, TimeSpan.FromSeconds(2));
-
-            if (townWaypoint == null)
-            {
-                Log.Error("No waypoint found");
-                return false;
-            }
-
-            Log.Debug("Walking to waypoint");
-            if(!GeneralHelpers.TryWithTimeout((retryCount) =>
-            {
-                while (game.Me.Location.Distance(townWaypoint.Location) > 5)
-                {
-                    game.MoveTo(townWaypoint);
-                }
-                Log.Debug("Taking waypoint");
-                game.TakeWaypoint(townWaypoint, waypoint);
-                return GeneralHelpers.TryWithTimeout((retryCount) => game.Area == waypoint.ToArea(), TimeSpan.FromSeconds(2));
-            }, TimeSpan.FromSeconds(5)))
-            {
-                return false;
-            }
-
-            game.RequestUpdate(game.Me.Id);
-            return true;
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
+using ConsoleBot.TownManagement;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
@@ -30,6 +31,7 @@ namespace ConsoleBot.Bots.Types.Cows
         private readonly BotConfiguration _config;
         private readonly IExternalMessagingClient _externalMessagingClient;
         private readonly IPathingService _pathingService;
+        private readonly ITownManagementService _townManagementService;
         private readonly CowConfiguration _cowconfig;
         private TaskCompletionSource<bool> NextGame = new TaskCompletionSource<bool>();
         private TaskCompletionSource<bool> CowPortalOpen = new TaskCompletionSource<bool>();
@@ -37,12 +39,12 @@ namespace ConsoleBot.Bots.Types.Cows
         private uint? BoClientPlayerId;
         private ConcurrentDictionary<string, bool> ShouldFollow = new ConcurrentDictionary<string, bool>();
         private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new ConcurrentDictionary<string, (Point, CancellationTokenSource)>();
-        private static int isAnyClientGambling = 0;
-        public CowBot(IOptions<BotConfiguration> config, IOptions<CowConfiguration> cowconfig, IExternalMessagingClient externalMessagingClient, IPathingService pathingService, IMapApiService mapApiService)
+        public CowBot(IOptions<BotConfiguration> config, IOptions<CowConfiguration> cowconfig, IExternalMessagingClient externalMessagingClient, IPathingService pathingService, ITownManagementService townManagementService)
         {
             _config = config.Value;
             _externalMessagingClient = externalMessagingClient;
             _pathingService = pathingService;
+            _townManagementService = townManagementService;
             _cowconfig = cowconfig.Value;
         }
 
@@ -134,7 +136,7 @@ namespace ConsoleBot.Bots.Types.Cows
                         continue;
                     }
 
-                    var result = await CreateGameWithRetry(gameCount, firstFiller, _cowconfig.Accounts.First());
+                    var result = await RealmConnectHelpers.CreateGameWithRetry(gameCount, firstFiller, _config, _cowconfig.Accounts.First());
                     gameCount = result.Item2;
                     if (!result.Item1)
                     {
@@ -154,31 +156,36 @@ namespace ConsoleBot.Bots.Types.Cows
                 try
                 {
                     var townTasks = new List<Task<bool>>();
+                    bool anyTownFailures = false;
                     var rand = new Random();
                     for (int i = 0; i < clients.Count(); i++)
                     {
                         var account = _cowconfig.Accounts[i];
                         var client = clients[i];
                         Thread.Sleep(TimeSpan.FromSeconds(1 + i * 0.7));
-                        if (firstFiller != client && !await JoinGameWithRetry(gameCount, client, account))
+                        if (firstFiller != client && !await RealmConnectHelpers.JoinGameWithRetry(gameCount, client, _config, account))
                         {
                             Log.Warning($"Client {client.LoggedInUserName()} failed to join game, retrying new game");
-                            gameCount++;
+                            anyTownFailures = true;
                             break;
                         }
 
-                        var randomMove = ((short)rand.Next(-7, 7), (short)rand.Next(-7, 7));
-                        townTasks.Add(TownManagement(client, randomMove, _cowconfig));
+                       townTasks.Add(PrepareForCowsTasks(client));
                     }
 
                     var townResults = await Task.WhenAll(townTasks);
+                    if(anyTownFailures)
+                    {
+                        gameCount++;
+                        continue;
+                    }
+
                     if (townResults.Any(r => !r))
                     {
                         Log.Warning($"One or more characters failed there town task");
                         gameCount++;
                         continue;
                     }
-
                 }
                 catch (Exception e)
                 {
@@ -252,19 +259,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }
         }
 
-        private static void LeaveGameAndDisconnectWithAllClients(List<Client> clients)
-        {
-            foreach (var client in clients)
-            {
-                if (client.Game.IsInGame())
-                {
-                    client.Game.LeaveGame();
-                }
-                client.Disconnect();
-            }
-        }
-
-        private async Task<bool> TownManagement(Client client, (short X, short Y)move, CowConfiguration configuration)
+        private async Task<bool> PrepareForCowsTasks(Client client)
         {
             var timer = new Stopwatch();
             timer.Start();
@@ -273,7 +268,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 await Task.Delay(100);
             }
 
-            if(client.Game.Me == null)
+            if (client.Game.Me == null)
             {
                 Log.Error($"{client.Game.Me.Name} failed to initialize Me");
                 return false;
@@ -288,245 +283,129 @@ namespace ConsoleBot.Bots.Types.Cows
                 return false;
             }
 
-            var game = client.Game;
-            var movementMode = game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
-            game.CleanupCursorItem();
-            InventoryHelpers.CleanupPotionsInBelt(game);
+            var initialLocation = client.Game.Me.Location;
 
-            if (client.Game.Act != Act.Act1)
+            var townManagementOptions = new TownManagementOptions()
             {
-                var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, movementMode);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
-                {
-                    Log.Information($"Teleporting to {client.Game.Act} waypoint failed");
-                    return false;
-                }
+                Act = Act.Act1,
+            };
 
-                var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPoint()).Single();
-                Log.Information("Taking waypoint to RogueEncampment");
-                if (!GeneralHelpers.TryWithTimeout((_) =>
+            var isPortalCharacter = _cowconfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.InvariantCultureIgnoreCase);
+            if (isPortalCharacter)
+            {
+                var tomesOfTp = client.Game.Inventory.Items.Count(i => i.Name == ItemName.TomeOfTownPortal);
+                if (tomesOfTp < 2)
                 {
-
-                    client.Game.TakeWaypoint(townWaypoint, Waypoint.RogueEncampment);
-                    return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == Waypoint.RogueEncampment.ToArea(), TimeSpan.FromSeconds(2));
-                }, TimeSpan.FromSeconds(5)))
-                {
-                    Log.Information($"Moving to {client.Game.Act} failed");
-                    return false;
+                    townManagementOptions.ItemsToBuy = new Dictionary<ItemName, int>()
+                                   {
+                                       { ItemName.TomeOfTownPortal, 2 - tomesOfTp }
+                                   };
                 }
             }
-
-            var initialLocation = game.Me.Location;
-            game.MoveTo(game.Me.Location.Add(move.X, move.Y));
-
-            if(!await GeneralHelpers.PickupCorpseIfExists(client, _pathingService))
+            
+            if(!await _townManagementService.PerformTownTasks(client, townManagementOptions))
             {
-                Log.Error($"{client.Game.Me.Name} failed to pickup corpse");
                 return false;
             }
 
-            var portalCharacter = configuration.PortalCharacterName.Equals(game.Me.Name, StringComparison.InvariantCultureIgnoreCase);
-
-            var unidentifiedItemCount = game.Inventory.Items.Count(i => !i.IsIdentified) +
-game.Cube.Items.Count(i => !i.IsIdentified);
-            if (unidentifiedItemCount > 6 || (portalCharacter && unidentifiedItemCount > 0))
+            if(isPortalCharacter)
             {
-                Log.Information($"Visiting Deckard Cain with {unidentifiedItemCount} unidentified items");
-                var deckhardCainCode = NPCHelpers.GetDeckardCainForAct(game.Act);
-
-                var deckardCain = NPCHelpers.GetUniqueNPC(game, deckhardCainCode);
-                if (deckardCain == null)
+                if(!await CreateCowLevel(client, initialLocation))
                 {
-                    Log.Warning($"Failed to find deckard cain at location {game.Me.Location}");
-                }
-
-                var pathDeckardCain = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.RogueEncampment, game.Me.Location, deckardCain.Location, movementMode);
-                if (!await MovementHelpers.TakePathOfLocations(game, pathDeckardCain, movementMode))
-                {
-                    Log.Warning($"Client {game.Me.Name} {movementMode} to deckard cain failed at {game.Me.Location}");
-                }
-                else
-                {
-                    NPCHelpers.IdentifyItemsAtDeckardCain(game);
+                    return false;
                 }
             }
 
-            var sellItemCount = game.Inventory.Items.Count(i => !Pickit.Pickit.ShouldKeepItem(game, i)) + game.Cube.Items.Count(i => !Pickit.Pickit.ShouldKeepItem(game, i));
-            if (NPCHelpers.ShouldRefreshCharacterAtNPC(game) || sellItemCount > 5 || portalCharacter)
+            return true;
+        }
+
+        private static void LeaveGameAndDisconnectWithAllClients(List<Client> clients)
+        {
+            foreach (var client in clients)
             {
-                Log.Information($"Client {game.Me.Name} moving to Akara for refresh and selling {sellItemCount} items");
-                var pathAkara = await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, Area.RogueEncampment, game.Me.Location, NPCCode.Akara, movementMode);
-                if (pathAkara.Count > 0 && await MovementHelpers.TakePathOfLocations(game, pathAkara, movementMode))
+                if (client.Game.IsInGame())
                 {
-                    var akara = NPCHelpers.GetUniqueNPC(game, NPCCode.Akara);
-                    if (akara == null)
-                    {
-                        Log.Warning($"Client {game.Me.Name} Did not find Akara at {game.Me.Location}");
-                    }
-
-                    var additionalBuys = new Dictionary<ItemName, int>();
-                    var tomesOfTownPortal = game.Inventory.Items.Count(i => i.Name == ItemName.TomeOfTownPortal);
-                    if(portalCharacter && tomesOfTownPortal < 2)
-                    {
-                        additionalBuys.Add(ItemName.TomeOfTownPortal, 1);
-                    }
-
-                    if (!NPCHelpers.SellItemsAndRefreshPotionsAtNPC(game, akara, additionalBuys))
-                    {
-                        Log.Warning($"Client {game.Me.Name} Selling items and refreshing potions failed at {game.Me.Location}");
-                    }
+                    client.Game.LeaveGame();
                 }
-                else
+                client.Disconnect();
+            }
+        }
+
+
+        private async Task<bool> CreateCowLevel(Client client, Point cowLevelLocation)
+        {
+            var game = client.Game;
+            var movementMode = game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+            if (!game.Inventory.Items.Any(i => i.Name == ItemName.WirtsLeg))
+            {
+                if (!await GetWirtsLeg(client))
                 {
-                    Log.Warning($"Client {game.Me.Name} {movementMode} to Akara failed at {game.Me.Location}");
+                    return false;
                 }
             }
 
-            if (NPCHelpers.ShouldGoToRepairNPC(game))
+            var pathBack = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.RogueEncampment, game.Me.Location, cowLevelLocation, movementMode);
+            if (!await MovementHelpers.TakePathOfLocations(game, pathBack, movementMode))
             {
-                Log.Information($"Client {game.Me.Name} moving to Charsi for repair/arrows");
-                var pathCharsi = await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, Area.RogueEncampment, game.Me.Location, NPCCode.Charsi, movementMode);
-                if (pathCharsi.Count > 0 && await MovementHelpers.TakePathOfLocations(game, pathCharsi, movementMode))
-                {
-                    var charsi = NPCHelpers.GetUniqueNPC(game, NPCCode.Charsi);
-                    if (charsi == null)
-                    {
-                        Log.Warning($"Client {game.Me.Name} Did not find Charsi at {game.Me.Location}");
-                        return false;
-                    }
+                Log.Warning($"Client {game.Me.Name} {movementMode} back failed at {game.Me.Location}");
+                return false;
+            }
 
-                    if (!NPCHelpers.RepairItemsAndBuyArrows(game, charsi))
-                    {
-                        Log.Warning($"Client {game.Me.Name} Selling items and refreshing potions failed at {game.Me.Location}");
-                    }
-                }
-                else
+            var wirtsleg = game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg);
+            if (wirtsleg == null)
+            {
+                Log.Error($"Wirts leg not found");
+                return false;
+            }
+
+            var tomesOfTp = game.Inventory.Items.Where(i => i.Name == ItemName.TomeOfTownPortal);
+            if (tomesOfTp.Count() < 2)
+            {
+                Log.Error($"Not enough tomes of town portal found");
+                return false;
+            }
+
+            var lowestQuantity = tomesOfTp.OrderBy(i => i.Amount).First();
+            if (game.Cube.Items.Any())
+            {
+                if(!InventoryHelpers.MoveCubeItemsToInventory(game))
                 {
-                    Log.Warning($"Client {game.Me.Name} {movementMode} to Charsi failed at {game.Me.Location}");
+                    Log.Error($"Couldn't move all items out of cube");
+                    return false;
                 }
             }
 
-            var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, Area.RogueEncampment, game.Me.Location, EntityCode.Stash, movementMode);
-            if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))
+            var freeSpaceTownPortal = game.Cube.FindFreeSpace(lowestQuantity);
+            if (game.Cube.Items.Any() || freeSpaceTownPortal == null)
             {
-                Log.Warning($"{movementMode} failed at location {game.Me.Location}");
+                Log.Error($"Something wrong with cube for transmute town portal");
+                return false;
             }
 
-            var stashItemsResult = InventoryHelpers.StashItemsToKeep(game, _externalMessagingClient);
-            if (stashItemsResult != Enums.MoveItemResult.Succes)
+            if (InventoryHelpers.PutInventoryItemInCube(game, lowestQuantity, freeSpaceTownPortal) != Enums.MoveItemResult.Succes)
             {
-                Log.Warning($"Stashing items failed with result {stashItemsResult}");
+                Log.Error($"Moving tome of town portal to cube failed");
+                return false;
             }
 
-            if (CubeHelpers.AnyGemsToTransmuteInStash(client.Game))
+
+            var freeSpaceLeg = game.Cube.FindFreeSpace(wirtsleg);
+            if (freeSpaceLeg == null)
             {
-                CubeHelpers.TransmuteGems(client.Game);
+                Log.Error($"No space found for leg, which is weird");
+                return false;
             }
 
-            bool shouldGamble = client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 7_000_000;
-            if (shouldGamble && System.Threading.Interlocked.Exchange(ref isAnyClientGambling, 1) == 0)
+            if (InventoryHelpers.PutInventoryItemInCube(game, wirtsleg, freeSpaceLeg) != Enums.MoveItemResult.Succes)
             {
-                Log.Information($"Gambling items at Gheed");
-                var pathGheed = await _pathingService.GetPathToNPC(client.Game, NPCCode.Gheed, movementMode);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathGheed, movementMode))
-                {
-                    Log.Warning($"{movementMode} to Gheed failed at {client.Game.Me.Location}");
-                    return false;
-                }
-
-                var gheed = NPCHelpers.GetUniqueNPC(client.Game, NPCCode.Gheed);
-                if (gheed == null)
-                {
-                    return false;
-                }
-
-                NPCHelpers.GambleItems(client.Game, gheed);
-                System.Threading.Interlocked.Exchange(ref isAnyClientGambling, 0);
-                var pathStash2 = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, Area.RogueEncampment, game.Me.Location, EntityCode.Stash, movementMode);
-                if (!await MovementHelpers.TakePathOfLocations(game, pathStash2, movementMode))
-                {
-                    Log.Warning($"{movementMode} failed at location {game.Me.Location}");
-                }
+                Log.Error($"Moving wirts leg to cube failed");
+                return false;
             }
 
-            if (portalCharacter)
+            if (!InventoryHelpers.TransmuteItemsInCube(game, false))
             {
-                if(!game.Inventory.Items.Any(i => i.Name == ItemName.WirtsLeg))
-                {
-                    if (!await GetWirtsLeg(client))
-                    {
-                        return false;
-                    }
-                }
-
-                var pathBack = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.RogueEncampment, game.Me.Location, initialLocation, movementMode);
-                if (!await MovementHelpers.TakePathOfLocations(game, pathBack, movementMode))
-                {
-                    Log.Warning($"Client {game.Me.Name} {movementMode} back failed at {game.Me.Location}");
-                    return false;
-                }
-
-                var wirtsleg = game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg);
-                if (wirtsleg == null)
-                {
-                    Log.Error($"Wirts leg not found");
-                    return false;
-                }
-
-                var tomesOfTp = game.Inventory.Items.Where(i => i.Name == ItemName.TomeOfTownPortal);
-                if (tomesOfTp.Count() < 2)
-                {
-                    Log.Error($"Not enough tomes of town portal found");
-                    return false;
-                }
-
-                var lowestQuantity = tomesOfTp.OrderBy(i => i.Amount).First();
-                if (game.Cube.Items.Any())
-                {
-                    InventoryHelpers.MoveCubeItemsToInventory(game);
-                }
-
-                var freeSpaceTownPortal = game.Cube.FindFreeSpace(lowestQuantity);
-                if (game.Cube.Items.Any() || freeSpaceTownPortal == null)
-                {
-                    Log.Error($"Something wrong with cube for transmute town portal");
-                    return false;
-                }
-
-                if (InventoryHelpers.PutInventoryItemInCube(game, lowestQuantity, freeSpaceTownPortal) != Enums.MoveItemResult.Succes)
-                {
-                    Log.Error($"Moving tome of town portal to cube failed");
-                    return false;
-                }
-
-
-                var freeSpaceLeg = game.Cube.FindFreeSpace(wirtsleg);
-                if (freeSpaceLeg == null)
-                {
-                    Log.Error($"No space found for leg, which is weird");
-                    return false;
-                }
-
-                if (InventoryHelpers.PutInventoryItemInCube(game, wirtsleg, freeSpaceLeg) != Enums.MoveItemResult.Succes)
-                {
-                    Log.Error($"Moving wirts leg to cube failed");
-                    return false;
-                }
-
-                if (!InventoryHelpers.TransmuteItemsInCube(game, false))
-                {
-                    Log.Error($"Transmuting leg and tome failed");
-                    return false;
-                }
-            }
-            else
-            {
-                var pathBack = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.RogueEncampment, game.Me.Location, initialLocation, movementMode);
-                if (!await MovementHelpers.TakePathOfLocations(game, pathBack, movementMode))
-                {
-                    Log.Warning($"Client {game.Me.Name} {movementMode} back failed at {game.Me.Location}");
-                    return false;
-                }
+                Log.Error($"Transmuting leg and tome failed");
+                return false;
             }
 
             return true;
@@ -541,7 +420,7 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                 return false;
             }
 
-            var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPoint()).Single();
+            var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).Single();
             Log.Information("Taking waypoint to StonyFields");
             if (!GeneralHelpers.TryWithTimeout((_) =>
             {
@@ -604,13 +483,13 @@ game.Cube.Items.Count(i => !i.IsIdentified);
 
             if (!GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                if(retryCount % 4 == 0)
+                if (retryCount % 4 == 0)
                 {
-                    if(client.Game.Me.HasSkill(Skill.Nova))
+                    if (client.Game.Me.HasSkill(Skill.Nova))
                     {
                         client.Game.UseRightHandSkillOnLocation(Skill.Nova, client.Game.Me.Location);
                     }
-                    else if(client.Game.Me.HasSkill(Skill.FrozenOrb))
+                    else if (client.Game.Me.HasSkill(Skill.FrozenOrb))
                     {
                         client.Game.UseRightHandSkillOnLocation(Skill.FrozenOrb, client.Game.Me.Location);
                     }
@@ -620,9 +499,9 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                 {
                     return false;
                 }
-                
+
                 var wirtsLegItem = client.Game.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg && i.Ground);
-                if(client.Game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg) != null)
+                if (client.Game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg) != null)
                 {
                     return true;
                 }
@@ -641,41 +520,12 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                 Log.Error($"Getting leg failed, while it's at location: {client.Game.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg)?.Location} and i'm at location {client.Game.Me.Location}");
                 return false;
             }
-            var existingTownPortals = client.Game.GetEntityByCode(EntityCode.TownPortal).ToHashSet();
-            if (!GeneralHelpers.TryWithTimeout((retryCount) =>
+            
+            if(!await _townManagementService.TakeTownPortalToTown(client))
             {
-                return client.Game.CreateTownPortal();
-            }, TimeSpan.FromSeconds(3.5)))
-            {
-                Log.Error("Failed to create town portal");
                 return false;
             }
 
-            var newTownPortals = client.Game.GetEntityByCode(EntityCode.TownPortal).Where(t => !existingTownPortals.Contains(t)).ToList();
-            if (!newTownPortals.Any())
-            {
-                Log.Error("No town portal found");
-                return false;
-            }
-
-            var townportal = newTownPortals.First();
-            if (!GeneralHelpers.TryWithTimeout((retryCount) =>
-            {
-                client.Game.MoveTo(townportal);
-
-                client.Game.InteractWithEntity(townportal);
-                return GeneralHelpers.TryWithTimeout((retryCount) =>
-                {
-                    Thread.Sleep(50);
-                    return client.Game.Area == Area.RogueEncampment;
-                }, TimeSpan.FromSeconds(1));
-            }, TimeSpan.FromSeconds(3.5)))
-            {
-                Log.Error("Moving to town failed");
-                return false;
-            }
-
-            client.Game.RequestUpdate(client.Game.Me.Id);
             Log.Information("Got leg and in town again");
             return true;
         }
@@ -1173,13 +1023,13 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                 await MoveToLocation(client, item.Location);
                 if (item.Ground)
                 {
-                    if(!GeneralHelpers.TryWithTimeout((retryCount) =>
+                    if(!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                     {
                         client.Game.MoveTo(item.Location);
                         client.Game.PickupItem(item);
-                        return GeneralHelpers.TryWithTimeout((retryCount) =>
+                        return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                         {
-                            Thread.Sleep(50);
+                            await Task.Delay(50);
                             return client.Game.Belt.FindItemById(item.Id) != null;
                         }, TimeSpan.FromSeconds(0.2));
                     }, TimeSpan.FromSeconds(3)))
@@ -1445,10 +1295,11 @@ game.Cube.Items.Count(i => !i.IsIdentified);
                 }
 
                 client.Game.InteractWithEntity(cowPortal);
-                return GeneralHelpers.TryWithTimeout((retryCount) =>
+                return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
+                    await Task.Delay(50);
                     return client.Game.Area == Area.CowLevel;
-                }, TimeSpan.FromSeconds(0.2));
+                }, TimeSpan.FromSeconds(0.5));
             }, TimeSpan.FromSeconds(10)))
             {
                 return false;
@@ -1482,65 +1333,11 @@ game.Cube.Items.Count(i => !i.IsIdentified);
             return true;
         }
 
-        private async Task<bool> JoinGameWithRetry(int gameCount, Client client, AccountCharacter cowAccount)
-        {
-            return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                bool joinGame = false;
-                try
-                {
-                    joinGame = client.JoinGame($"{_config.GameNamePrefix}{gameCount}", _config.GamePassword);
-                }
-                catch
-                {
-                }
-
-                if (!joinGame)
-                {
-                    var retryDuration = Math.Pow(1 + retryCount, 1.2) * TimeSpan.FromSeconds(1);
-                    Log.Information($"Joining game failed for {client.LoggedInUserName()} retrying in {retryDuration.TotalSeconds} seconds");
-                    await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, cowAccount.Username, cowAccount.Password, cowAccount.Character, 10);
-                    Thread.Sleep(retryDuration);
-                }
-
-                return joinGame;
-            }, TimeSpan.FromSeconds(20));
-        }
-
-        private async Task<Tuple<bool, int>> CreateGameWithRetry(int gameCount, Client client, AccountCharacter cowAccount)
-        {
-            var newGameCount = gameCount;
-            var result = await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                bool createGame = false;
-                try
-                {
-                    createGame = client.CreateGame(Difficulty.Hell, $"{_config.GameNamePrefix}{newGameCount}", _config.GamePassword, _config.GameDescriptions[0]);
-                }
-                catch
-                {
-                }
-
-                if (!createGame)
-                {
-                    newGameCount++;
-                    var retryDuration = Math.Pow(1 + retryCount, 1.2) * TimeSpan.FromSeconds(1);
-                    Log.Information($"Creating game failed for {client.LoggedInUserName()} retrying in {retryDuration.TotalSeconds} seconds");
-                    await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, cowAccount.Username, cowAccount.Password, cowAccount.Character, 10);
-                    await Task.Delay(retryDuration);
-                }
-
-                return createGame;
-            }, TimeSpan.FromSeconds(15));
-            gameCount = newGameCount;
-            return Tuple.Create(result, newGameCount);
-        }
-
         private async Task<bool> LeaveGameAndRejoinMCPWithRetry(Client client, AccountCharacter cowAccount)
         {
             if (!client.Chat.IsConnected())
             {
-                if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, cowAccount.Username, cowAccount.Password, cowAccount.Character, 10))
+                if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, cowAccount, 10))
                 {
                     return false;
                 }
@@ -1555,7 +1352,7 @@ game.Cube.Items.Count(i => !i.IsIdentified);
             if (!client.RejoinMCP())
             {
                 Log.Warning($"Disconnecting client {cowAccount.Username} since reconnecting to MCP failed, reconnecting to realm");
-                return await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config.Realm, _config.KeyOwner, _config.GameFolder, cowAccount.Username, cowAccount.Password, cowAccount.Character, 10);
+                return await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, cowAccount, 10);
             }
 
             return true;
