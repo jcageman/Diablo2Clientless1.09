@@ -745,7 +745,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 var cowsNearLead = cowManager.GetNearbyAliveMonsters(leadPlayer.Location, 20.0, 10);
                 if (leadPlayer != null && leadPlayer.Location != currentCluster && cowsNearLead.Any())
                 {
-                    Log.Information($"{client.Game.Me.Name},Lead client in danger, moving to lead client");
+                    Log.Information($"{client.Game.Me.Name}, lead client in danger, moving to lead client");
                     if(currentCluster != null)
                     {
                         cowManager.GiveUpCluster(currentCluster);
@@ -819,7 +819,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 {
                     Log.Information($"Lightning enhanced cow nearby, giving up current cluster and moving to next cluster {client.Game.Me.Name}");
                 }
-                else if (nearbyAliveCows.Any())
+                else if (nearbyAliveCows.Any() && cowManager.GetNearbyAliveMonsters(nearbyAliveCows.FirstOrDefault().Location, 15.0, 10).Count > 5)
                 {
                     var nearestAlive = nearbyAliveCows.FirstOrDefault();
                     var distanceToNearest = nearestAlive.Location.Distance(client.Game.Me.Location);

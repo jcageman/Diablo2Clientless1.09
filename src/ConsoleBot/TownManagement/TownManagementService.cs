@@ -1,6 +1,7 @@
 ﻿using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using D2NG.Core;
+using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Objects;
@@ -9,6 +10,7 @@ using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.Pathing;
 using Serilog;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
@@ -230,16 +232,24 @@ namespace ConsoleBot.TownManagement
                 Log.Information($"Visiting Deckard Cain with {unidentifiedItemCount} unidentified items");
                 var deckhardCainCode = NPCHelpers.GetDeckardCainForAct(game.Act);
 
-                var pathDeckardCain = await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, deckhardCainCode, movementMode);
+                var deckardCain = NPCHelpers.GetUniqueNPC(game, deckhardCainCode);
+                var pathDeckardCain = new List<Point>();
+                if (deckardCain != null)
+                {
+                    pathDeckardCain = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, deckardCain.Location, movementMode);
+                }
+                else
+                {
+                    pathDeckardCain = await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, deckhardCainCode, movementMode);
+                }
+
                 if (!await MovementHelpers.TakePathOfLocations(game, pathDeckardCain, movementMode))
                 {
                     Log.Warning($"Client {game.Me.Name} {movementMode} to deckard cain failed at {game.Me.Location}");
                     return false;
                 }
-                else
-                {
-                    return NPCHelpers.IdentifyItemsAtDeckardCain(game);
-                }
+
+                return NPCHelpers.IdentifyItemsAtDeckardCain(game);
             }
 
             return true;
