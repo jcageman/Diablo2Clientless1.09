@@ -14,6 +14,7 @@
         WaypointAct3 = 237,
         WaypointAct3Durance = 324,
         WaypointAct4Levels = 238,
+        DiabloStar = 255,
         WirtsBody = 268,
         Hratli = 379,
         RightSeal1 = 392,

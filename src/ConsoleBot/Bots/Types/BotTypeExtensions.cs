@@ -1,4 +1,5 @@
 ﻿using ConsoleBot.Bots.Types.Cows;
+using ConsoleBot.Bots.Types.CS;
 using ConsoleBot.Bots.Types.Mephisto;
 using ConsoleBot.Bots.Types.Travincal;
 using Microsoft.Extensions.Configuration;
@@ -14,6 +15,7 @@ namespace ConsoleBot.Bots.Types
             services.AddSingleton<IBotInstance, TravincalBot>();
             services.AddSingleton<IBotInstance, TestBot>();
             services.AddSingleton<IBotInstance, CowBot>();
+            services.AddSingleton<IBotInstance, CSBot>();
             services.AddSingleton<IBotFactory, BotFactory>();
             services.AddOptions<CowConfiguration>()
                 .Bind(config.GetSection("bot").GetSection("cows"));
@@ -21,6 +23,8 @@ namespace ConsoleBot.Bots.Types
                 .Bind(config.GetSection("bot").GetSection("mephisto"));
             services.AddOptions<TravincalConfiguration>()
                 .Bind(config.GetSection("bot").GetSection("travincal"));
+            services.AddOptions<CsConfiguration>()
+                .Bind(config.GetSection("bot").GetSection("cs"));
         }
     }
 }

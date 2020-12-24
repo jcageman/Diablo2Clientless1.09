@@ -1314,7 +1314,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
                 await Task.Delay(100);
 
-                return await _pathingService.IsValidPointInArea(client.Game.MapId, Difficulty.Normal, Area.CowLevel, client.Game.Me.Location);
+                return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.CowLevel, client.Game.Me.Location);
             }, TimeSpan.FromSeconds(10)))
             {
                 return false;

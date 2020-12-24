@@ -383,9 +383,9 @@ namespace ConsoleBot.Helpers
             if (!GeneralHelpers.TryWithTimeout((retryCount) =>
             {
                 healingPotion = game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type == "hp5")
-                                ?? game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type.StartsWith("hp"));
+                                ?? game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type.StartsWith("hp4"));
                 manaPotion = game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type == "mp5")
-                 ?? game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type.StartsWith("mp"));
+                 ?? game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Type.StartsWith("mp4"));
                 return healingPotion != null && manaPotion != null;
             }, TimeSpan.FromSeconds(3)))
             {

@@ -110,7 +110,7 @@ namespace ConsoleBot.Bots.Types.Mephisto
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
                 client.Game.RequestUpdate(client.Game.Me.Id);
-                var isValidPoint = await _pathingService.IsValidPointInArea(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel3, client.Game.Me.Location);
+                var isValidPoint = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel3, client.Game.Me.Location);
                 return isValidPoint;
             }, TimeSpan.FromSeconds(3.5)))
             {

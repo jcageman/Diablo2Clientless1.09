@@ -9,7 +9,7 @@ namespace D2NG.Navigation.Services.Pathing
 {
     public interface IPathingService
     {
-        public Task<bool> IsValidPointInArea(uint mapId, Difficulty difficulty, Area area, Point currentLocation);
+        public Task<bool> IsNavigatablePointInArea(uint mapId, Difficulty difficulty, Area area, Point currentLocation);
         public Task<List<Point>> GetPathToLocation(uint mapId, Difficulty difficulty, Area area, Point fromLocation,
             Point toLocation, MovementMode movementMode);
 

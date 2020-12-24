@@ -160,10 +160,10 @@ namespace D2NG.Navigation.Services.Pathing
             return new List<Point>();
         }
 
-        public async Task<bool> IsValidPointInArea(uint mapId, Difficulty difficulty, Area area, Point currentLocation)
+        public async Task<bool> IsNavigatablePointInArea(uint mapId, Difficulty difficulty, Area area, Point currentLocation)
         {
             var map = await _mapApiService.GetArea(mapId, difficulty, area);
-            return map.TryMapToPointInMap(currentLocation, out var _);
+            return map.TryMapToPointInMap(currentLocation, out var pointInMap) && AreaMapExtensions.IsMovable(map.Map[pointInMap.Y][pointInMap.X]);
         }
     }
 }

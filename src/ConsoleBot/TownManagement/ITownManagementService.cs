@@ -7,6 +7,7 @@ namespace ConsoleBot.TownManagement
 {
     public interface ITownManagementService
     {
+        bool CreateTownPortalToTown(Client client);
         Task<bool> PerformTownTasks(Client client, TownManagementOptions options);
         Task<bool> TakeTownPortalToTown(Client client);
         Task<bool> TakeWaypoint(Client client, Waypoint waypoint);

@@ -76,7 +76,7 @@ namespace ConsoleBot.TownManagement
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
                 client.Game.RequestUpdate(client.Game.Me.Id);
-                var isValidPoint = await _pathingService.IsValidPointInArea(client.Game.MapId, Difficulty.Normal, waypoint.ToArea(), client.Game.Me.Location);
+                var isValidPoint = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, waypoint.ToArea(), client.Game.Me.Location);
                 return isValidPoint;
             }, TimeSpan.FromSeconds(3.5)))
             {
@@ -87,7 +87,21 @@ namespace ConsoleBot.TownManagement
             return true;
         }
 
-        public async Task<bool> TakeTownPortalToTown(Client client)
+        public bool CreateTownPortalToTown(Client client)
+        {
+            if (!GeneralHelpers.TryWithTimeout((retryCount) =>
+            {
+                return client.Game.CreateTownPortal();
+            }, TimeSpan.FromSeconds(3.5)))
+            {
+                Log.Error("Failed to create town portal");
+                return false;
+            }
+
+            return true;
+        }
+
+            public async Task<bool> TakeTownPortalToTown(Client client)
         {
             var existingTownPortals = client.Game.GetEntityByCode(EntityCode.TownPortal).ToHashSet();
             if (!GeneralHelpers.TryWithTimeout((retryCount) =>
@@ -128,7 +142,7 @@ namespace ConsoleBot.TownManagement
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
                 client.Game.RequestUpdate(client.Game.Me.Id);
-                var isValidPoint = await _pathingService.IsValidPointInArea(client.Game.MapId, Difficulty.Normal, townArea, client.Game.Me.Location);
+                var isValidPoint = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, townArea, client.Game.Me.Location);
                 return isValidPoint;
             }, TimeSpan.FromSeconds(3.5)))
             {
