@@ -1,9 +1,12 @@
-﻿using ConsoleBot.Clients.ExternalMessagingClient;
+﻿using ConsoleBot.Attack;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.TownManagement;
 using D2NG.Core;
+using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
@@ -16,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ConsoleBot.Bots.Types.CS
@@ -55,7 +59,8 @@ namespace ConsoleBot.Bots.Types.CS
         private readonly BotConfiguration _config;
         private readonly IExternalMessagingClient _externalMessagingClient;
         private readonly IPathingService _pathingService;
-        ITownManagementService _townManagementService;
+        private readonly ITownManagementService _townManagementService;
+        private readonly IAttackService _attackService;
         private readonly CsConfiguration _csconfig;
 
         public CSBot(
@@ -63,13 +68,15 @@ namespace ConsoleBot.Bots.Types.CS
             IOptions<CsConfiguration> csconfig,
             IExternalMessagingClient externalMessagingClient,
             IPathingService pathingService,
-            ITownManagementService townManagementService)
+            ITownManagementService townManagementService,
+            IAttackService attackService)
         {
             _config = config.Value;
             _externalMessagingClient = externalMessagingClient;
             _pathingService = pathingService;
             _csconfig = csconfig.Value;
             _townManagementService = townManagementService;
+            _attackService = attackService;
         }
 
         public string GetName()
@@ -84,30 +91,41 @@ namespace ConsoleBot.Bots.Types.CS
             foreach (var account in _csconfig.Accounts)
             {
                 var client = new Client();
+                var accountAndClient = Tuple.Create(account, client);
                 client.OnReceivedPacketEvent(InComingPacket.EventMessage, (packet) => HandleEventMessage(client, new EventNotifyPacket(packet)));
+                if(GetIsLeadClient(accountAndClient))
+                {
+                    client.OnReceivedPacketEvent(InComingPacket.PlayerInGame, (packet) => NewPlayerJoinGame(client, new PlayerInGamePacket(packet)));
+                }
                 _externalMessagingClient.RegisterClient(client);
-                clients.Add(Tuple.Create(account,client));
+                clients.Add(accountAndClient);
             }
 
             int gameCount = 1;
 
             while (true)
-            {
-                var firstClient = clients.First();
+            {;
+                var leaveTasks = clients.Select(async (c, i) =>
+                {
+                    return await LeaveGameAndRejoinMCPWithRetry(c.Item2, c.Item1);
+                }).ToList();
+                var leaveResults = await Task.WhenAll(leaveTasks);
+                if (leaveResults.Any(r => !r))
+                {
+                    Log.Warning($"One or more characters failed to leave and rejoin");
+                    continue;
+                }
 
-                if(!await LeaveGameAndRejoinMCPWithRetry(firstClient.Item2, firstClient.Item1))
+                var leadClient = clients.First(c => GetIsLeadClient(c));
+                var result = await RealmConnectHelpers.CreateGameWithRetry(gameCount, leadClient.Item2, _config, leadClient.Item1);
+                gameCount = result.Item2;
+                if (!result.Item1)
                 {
                     continue;
                 }
 
-                var result = await RealmConnectHelpers.CreateGameWithRetry(gameCount, firstClient.Item2, _config, firstClient.Item1);
-                if(!result.Item1)
-                {
-                    gameCount = result.Item2;
-                    continue;
-                }
-
-                await GameLoop(clients, gameCount++);
+                await GameLoop(clients, gameCount);
+                gameCount++;
             }
 
         }
@@ -139,8 +157,22 @@ namespace ConsoleBot.Bots.Types.CS
 
         public async Task GameLoop(List<Tuple<AccountCharacter, Client>> clients, int gameCount)
         {
-            var townTasks = clients.Select(async c =>
+            var leadClient = clients.Single(c => GetIsLeadClient(c));
+            var csManager = new CSManager(new List<Client>{ leadClient.Item2 });
+            uint currentTeleportId = 0;
+            var nextGameCancellation = new CancellationTokenSource();
+            var gameTasks = clients.Select(async (c,i) =>
             {
+                bool isLeadClient = leadClient == c;
+                if (!isLeadClient)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2 * i));
+                    if (!await RealmConnectHelpers.JoinGameWithRetry(gameCount, c.Item2, _config, c.Item1))
+                    {
+                        return false;
+                    }
+                }
+
                 Log.Information("In game");
                 var client = c.Item2;
                 client.Game.RequestUpdate(client.Game.Me.Id);
@@ -161,36 +193,125 @@ namespace ConsoleBot.Bots.Types.CS
                     return false;
                 }
 
-                if(c.Item1.Character.Equals(_csconfig.TeleportCharacterName, StringComparison.CurrentCultureIgnoreCase))
+                Func<uint> getTeleportId = () => currentTeleportId;
+
+                if (c.Item1.Character.Equals(_csconfig.TeleportCharacterName, StringComparison.CurrentCultureIgnoreCase))
                 {
-                    return await TeleportToCs(c.Item2);
+                    var result = await TaxiCs(c.Item2, csManager, t => currentTeleportId = t);
+                    nextGameCancellation.Cancel();
+                    return result;
+                }
+                else
+                {
+                    var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+                    var pathToTpLocation = await _pathingService.GetPathToLocation(client.Game, new Point(5042, 5036), movementMode);
+                    if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTpLocation, movementMode))
+                    {
+                        Log.Warning($"Client {client.Game.Me.Name} {movementMode} to portal area failed at {client.Game.Me.Location}");
+                        return false;
+                    }
+
+                    await BaseCsBot(csManager, getTeleportId, nextGameCancellation, client, GetKillActionForClass(client));
                 }
 
                 return true;
             }
             ).ToList();
-            var townResults = await Task.WhenAll(townTasks);
+            var firstCompletedResult = await Task.WhenAny(gameTasks);
+            if (!await firstCompletedResult)
+            {
+                Log.Warning($"One or more characters failed there town task");
+                nextGameCancellation.Cancel();
+                await Task.WhenAll(gameTasks);
+                return;
+            }
+
+            var townResults = await Task.WhenAll(gameTasks);
             if (townResults.Any(r => !r))
             {
                 Log.Warning($"One or more characters failed there town task");
+                nextGameCancellation.Cancel();
                 return;
             }
+            
         }
 
-        private async Task<bool> TeleportToCs(Client client)
+        private async Task<bool> BaseCsBot(CSManager csManager, Func<uint> getTeleportId,
+                                           CancellationTokenSource nextGameCancellation, Client client,
+                                           Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> action)
         {
-            Log.Information($"Taking waypoint to {Waypoint.RiverOfFlame}");
-            if (!await _townManagementService.TakeWaypoint(client, Waypoint.RiverOfFlame))
+            var localTeleportId = 0U;
+            while (!nextGameCancellation.IsCancellationRequested && client.Game.IsInGame())
             {
-                Log.Warning($"Teleporting failed at location {client.Game.Me.Location}");
+                await Task.Delay(100);
+                if (localTeleportId != getTeleportId() && !client.Game.IsInTown())
+                {
+                    Log.Information($"Client {client.Game.Me.Name} Taking town portal to town");
+                    if (!await _townManagementService.TakeTownPortalToTown(client))
+                    {
+                        continue;
+                    }
+                }
+
+                if (client.Game.IsInTown() && getTeleportId() != 0 && getTeleportId() != localTeleportId)
+                {
+                    Log.Information($"Client {client.Game.Me.Name} taking town portal to chaos");
+                    var teleportPlayer = client.Game.Players.First(p => p.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.CurrentCultureIgnoreCase));
+                    if (!await _townManagementService.TakeTownPortalToArea(client, teleportPlayer, Area.ChaosSanctuary))
+                    {
+                        continue;
+                    }
+
+                    localTeleportId = getTeleportId();
+                }
+
+                if(!client.Game.IsInTown())
+                {
+                    var anyPlayersWithoutShouts = ClassHelpers.AnyPlayerIsMissingShouts(client);
+                    if (anyPlayersWithoutShouts && client.Game.Me.Class == CharacterClass.Barbarian)
+                    {
+                        await ClassHelpers.CastAllShouts(client);
+                    }
+                    else if (ClassHelpers.IsMissingShouts(client.Game.Me))
+                    {
+                        Log.Information($"Client {client.Game.Me.Name} waiting for bo");
+                        await WaitForBo(client);
+                    }
+                    else
+                    {
+                        await Task.Delay(100);
+                        await KillBosses(client, csManager, nextGameCancellation, client.Game.Me.Location, action, localTeleportId, getTeleportId);
+                    }
+                }
+            }
+
+            if(!nextGameCancellation.IsCancellationRequested && !client.Game.IsInGame())
+            {
                 return false;
             }
 
-            Log.Information($"Teleporting to {Area.ChaosSanctuary}");
+            return true;
+        }
+
+        private bool GetIsLeadClient(Tuple<AccountCharacter, Client> c)
+        {
+            return c.Item1.Character.Equals(_csconfig.TeleportCharacterName, StringComparison.CurrentCultureIgnoreCase);
+        }
+
+        private async Task<bool> TaxiCs(Client client, CSManager csManager, Action<uint> setTeleportId)
+        {
+            Log.Information($"Client {client.Game.Me.Name} Taking waypoint to {Waypoint.RiverOfFlame}");
+            if (!await _townManagementService.TakeWaypoint(client, Waypoint.RiverOfFlame))
+            {
+                Log.Warning($"Client {client.Game.Me.Name} Teleporting failed at location {client.Game.Me.Location}");
+                return false;
+            }
+
+            Log.Information($"Client {client.Game.Me.Name} Teleporting to {Area.ChaosSanctuary}");
             var pathToChaos = await _pathingService.GetPathToObjectWithOffset(client.Game.MapId, Difficulty.Normal, Area.RiverOfFlame, client.Game.Me.Location, EntityCode.WaypointAct4Levels, -6, -319, MovementMode.Teleport);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToChaos, MovementMode.Teleport))
             {
-                Log.Warning($"Teleporting to {Area.ChaosSanctuary} warp failed at location {client.Game.Me.Location}");
+                Log.Warning($"Client {client.Game.Me.Name} Teleporting to {Area.ChaosSanctuary} warp failed at location {client.Game.Me.Location}");
                 return false;
             }
 
@@ -203,95 +324,104 @@ namespace ConsoleBot.Bots.Types.CS
                 return false;
             }
 
-            if (!await KillLeftSeal(client))
+            var pathToDiabloStar = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, Area.ChaosSanctuary, client.Game.Me.Location, EntityCode.DiabloStar, MovementMode.Teleport);
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToDiabloStar, MovementMode.Teleport))
+            {
+                Log.Warning($"Client {client.Game.Me.Name} Teleporting to {EntityCode.DiabloStar} failed at location {client.Game.Me.Location}");
+                return false;
+            }
+
+            if (!_townManagementService.CreateTownPortal(client))
             {
                 return false;
             }
 
-            if (!await KillTopSeal(client))
+            var myPortal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
+            setTeleportId.Invoke(myPortal.Id);
+            csManager.ResetAliveMonsters();
+            if (!await WaitForBo(client))
             {
                 return false;
             }
 
-            if (!await KillRightSeal(client))
+            csManager.ResetAliveMonsters();
+
+            setTeleportId.Invoke(0);
+
+            if (!await KillLeftSeal(client, csManager, setTeleportId))
             {
                 return false;
             }
 
-            return await KillDiablo(client);
+            csManager.ResetAliveMonsters();
+            setTeleportId.Invoke(0);
+
+            if (!await KillTopSeal(client, csManager, setTeleportId))
+            {
+                return false;
+            }
+
+            csManager.ResetAliveMonsters();
+            setTeleportId.Invoke(0);
+
+            if (!await KillRightSeal(client, csManager, setTeleportId))
+            {
+                return false;
+            }
+
+            csManager.ResetAliveMonsters();
+            setTeleportId.Invoke(0);
+
+            return await KillDiablo(client, csManager, setTeleportId);
         }
 
-        private async Task<bool> KillDiablo(Client client)
+        private static async Task<bool> WaitForBo(Client client)
         {
-            var pathToSeal = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, Area.ChaosSanctuary, client.Game.Me.Location, EntityCode.DiabloStar, MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToSeal, MovementMode.Teleport))
-            {
-                Log.Warning($"Teleporting to {EntityCode.RightSeal1} failed at location {client.Game.Me.Location}");
-                return false;
-            }
-
-            if (!_townManagementService.CreateTownPortalToTown(client))
-            {
-                return false;
-            }
-
+            var initialLocation = client.Game.Me.Location;
             var stopWatch = new Stopwatch();
-
-            bool bFoundBosses = false;
-            var bosses = new List<WorldObject>();
-            do
+            stopWatch.Start();
+            while (stopWatch.Elapsed < TimeSpan.FromSeconds(10) && ClassHelpers.AnyPlayerIsMissingShouts(client))
             {
-                if (!bFoundBosses || stopWatch.Elapsed > TimeSpan.FromSeconds(1))
-                {
-                    bosses = client.Game.GetNPCsByCode(NPCCode.Diablo)
-                    .Where(npc => npc.State != EntityState.Dead && npc.State != EntityState.Dieing && npc.Location.Distance(client.Game.Me.Location) <= 20)
-                    .ToList();
-                    if (stopWatch.IsRunning)
-                    {
-                        stopWatch.Restart();
-                    }
+                await Task.Delay(TimeSpan.FromSeconds(0.5));
+                await client.Game.MoveToAsync(initialLocation.Add((short)new Random().Next(-5, 5), (short)new Random().Next(-5, 5)));
+            }
 
-                }
+            if (stopWatch.Elapsed >= TimeSpan.FromSeconds(10))
+            {
+                Log.Warning($"Client {client.Game.Me.Name} Failed waiting for bo at area {client.Game.Area} at location {client.Game.Me.Location}");
+                return false;
+            }
 
-                if (!bosses.Any())
-                {
-                    continue;
-                }
-
-                if (!bFoundBosses)
-                {
-                    bFoundBosses = true;
-                    stopWatch.Start();
-                }
-
-                var nearest = bosses.OrderBy(npc => npc.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
-                if (nearest.Location.Distance(client.Game.Me.Location) > 10)
-                {
-                    if (!await GeneralHelpers.TryWithTimeout(async (_) =>
-                    {
-                        return await client.Game.TeleportToLocationAsync(nearest.Location);
-                    }, TimeSpan.FromSeconds(2)))
-                    {
-                        continue;
-                    }
-                }
-
-                await Task.Delay(TimeSpan.FromSeconds(0.1));
-                if (nearest.LifePercentage > 40)
-                {
-                    client.Game.UseRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
-                }
-                else
-                {
-                    client.Game.UseRightHandSkillOnLocation(Skill.Nova, client.Game.Me.Location);
-                }
-
-            } while (!bFoundBosses || bosses.Any());
+            client.Game.UseHealthPotion();
 
             return true;
         }
 
-        private async Task<bool> KillRightSeal(Client client)
+        private async Task<bool> KillDiablo(Client client, CSManager csManager, Action<uint> setTeleportId)
+        {
+            var pathToDiabloStar = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, Area.ChaosSanctuary, client.Game.Me.Location, EntityCode.DiabloStar, MovementMode.Teleport);
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToDiabloStar, MovementMode.Teleport))
+            {
+                Log.Warning($"Client {client.Game.Me.Name} Teleporting to {EntityCode.DiabloStar} failed at location {client.Game.Me.Location}");
+                return false;
+            }
+
+            if (!_townManagementService.CreateTownPortal(client))
+            {
+                return false;
+            }
+
+            var myPortal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
+            setTeleportId.Invoke(myPortal.Id);
+            var action = GetSorceressKillAction(client);
+            if (!await KillBosses(client, csManager, null, client.Game.Me.Location, action, 0, () => 0))
+            {
+                return false;
+            }
+            return true;
+        }
+
+        private async Task<bool> KillRightSeal(Client client, CSManager csManager, Action<uint> setTeleportId)
         {
             Log.Information($"Teleporting to {EntityCode.RightSeal1}");
             var pathToSeal = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, Area.ChaosSanctuary, client.Game.Me.Location, EntityCode.RightSeal1, MovementMode.Teleport);
@@ -305,14 +435,6 @@ namespace ConsoleBot.Bots.Types.CS
             var seal2 = client.Game.GetEntityByCode(EntityCode.RightSeal2).First();
             Log.Information($"{EntityCode.RightSeal1} at location {seal1.Location}");
             Log.Information($"{EntityCode.RightSeal2} at location {seal2.Location}");
-            /*
-            right seal
-            "x": 7915,
-            "y": 5275
-            Good kill locations
-            (7924, 5275)-- > seals below each other
-           (7917, 5290)-- > one left down, one right up
-            */
             var killLocation = seal1.Location.X < seal2.Location.X ? seal1.Location.Add(30, -10) : seal1.Location.Add(12, -38);
             Log.Information($"Kill at location {killLocation}");
 
@@ -324,10 +446,13 @@ namespace ConsoleBot.Bots.Types.CS
                 return false;
             }
 
-            if (!_townManagementService.CreateTownPortalToTown(client))
+            if (!_townManagementService.CreateTownPortal(client))
             {
                 return false;
             }
+
+            var myPortal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
+            setTeleportId.Invoke(myPortal.Id);
 
             if (!await GeneralHelpers.TryWithTimeout(async (_) =>
             {
@@ -371,56 +496,16 @@ namespace ConsoleBot.Bots.Types.CS
                 return false;
             }
 
-            var stopWatch = new Stopwatch();
-
-            bool bFoundBosses = false;
-            var bosses = new List<WorldObject>();
-            do
+            var action = GetSorceressKillAction(client);
+            if(!await KillBosses(client, csManager, null, killLocation, action, 0, () => 0))
             {
-                if (!stopWatch.IsRunning || stopWatch.Elapsed > TimeSpan.FromSeconds(1))
-                {
-                    bosses = client.Game.GetNPCsByCode(NPCCode.VenomLord)
-                    .Where(npc => npc.State != EntityState.Dead && npc.State != EntityState.Dieing && npc.Location.Distance(killLocation) <= 20)
-                    .ToList();
-                    if (stopWatch.IsRunning)
-                    {
-                        stopWatch.Restart();
-                    }
-
-                }
-
-                if (!bosses.Any())
-                {
-                    continue;
-                }
-
-                if (!bFoundBosses)
-                {
-                    bFoundBosses = true;
-                    stopWatch.Start();
-                }
-
-                var nearest = bosses.OrderBy(npc => npc.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
-                if (nearest.Location.Distance(client.Game.Me.Location) > 10)
-                {
-                    if (!await GeneralHelpers.TryWithTimeout(async (_) =>
-                    {
-                        return await client.Game.TeleportToLocationAsync(nearest.Location);
-                    }, TimeSpan.FromSeconds(2)))
-                    {
-                        continue;
-                    }
-                }
-
-                await Task.Delay(TimeSpan.FromSeconds(0.2));
-                client.Game.UseRightHandSkillOnLocation(Skill.Nova, client.Game.Me.Location);
-
-            } while (!bFoundBosses || bosses.Any());
+                return false;
+            }
 
             return true;
         }
 
-        private async Task<bool> KillTopSeal(Client client)
+        private async Task<bool> KillTopSeal(Client client, CSManager csManager, Action<uint> setTeleportId)
         {
             Log.Information($"Teleporting to {EntityCode.TopSeal}");
             var pathToTopSeal = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, Area.ChaosSanctuary, client.Game.Me.Location, EntityCode.TopSeal, MovementMode.Teleport);
@@ -442,10 +527,13 @@ namespace ConsoleBot.Bots.Types.CS
                 return false;
             }
 
-            if (!_townManagementService.CreateTownPortalToTown(client))
+            if (!_townManagementService.CreateTownPortal(client))
             {
                 return false;
             }
+
+            var myPortal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
+            setTeleportId.Invoke(myPortal.Id);
 
             var pathToTopSeal2 = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, Area.ChaosSanctuary, client.Game.Me.Location, EntityCode.TopSeal, MovementMode.Teleport);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTopSeal2, MovementMode.Teleport))
@@ -471,59 +559,16 @@ namespace ConsoleBot.Bots.Types.CS
                 return false;
             }
 
-            var stopWatch = new Stopwatch();
-
-            bool bFoundBosses = false;
-            var bosses = new List<WorldObject>();
-            do
+            var action = GetSorceressKillAction(client);
+            if (!await KillBosses(client, csManager, null, killLocation, action, 0, () => 0))
             {
-                if (!stopWatch.IsRunning || stopWatch.Elapsed > TimeSpan.FromSeconds(1))
-                {
-                    bosses = client.Game.GetNPCsByCode(NPCCode.OblivionKnight)
-                    .Where(npc => npc.State != EntityState.Dead && npc.State != EntityState.Dieing && npc.Location.Distance(killLocation) <= 25)
-                    .ToList();
-                    bosses.AddRange(client.Game.GetNPCsByCode(NPCCode.DoomKnight)
-                    .Where(npc => npc.State != EntityState.Dead && npc.State != EntityState.Dieing && npc.Location.Distance(killLocation) <= 25)
-                    .ToList());
-                    if (stopWatch.IsRunning)
-                    {
-                        stopWatch.Restart();
-                    }
-                }
-
-                if (!bosses.Any())
-                {
-                    continue;
-                }
-
-                if (!bFoundBosses)
-                {
-                    bFoundBosses = true;
-                    stopWatch.Start();
-                }
-
-                var nearest = bosses.OrderBy(npc => npc.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
-                if (nearest.Location.Distance(client.Game.Me.Location) > 10)
-                {
-                    Log.Information($"Teleporting to {nearest.Location}");
-                    if (!await GeneralHelpers.TryWithTimeout(async (_) =>
-                    {
-                        return await client.Game.TeleportToLocationAsync(nearest.Location);
-                    }, TimeSpan.FromSeconds(2)))
-                    {
-                        continue;
-                    }
-                }
-
-                await Task.Delay(TimeSpan.FromSeconds(0.2));
-                client.Game.UseRightHandSkillOnLocation(Skill.Nova, client.Game.Me.Location);
-
-            } while (!bFoundBosses || bosses.Any());
+                return false;
+            }
 
             return true;
         }
 
-        private async Task<bool> KillLeftSeal(Client client)
+        private async Task<bool> KillLeftSeal(Client client, CSManager csManager, Action<uint> setTeleportId)
         {
             Log.Information($"Teleporting to {EntityCode.LeftSeal1}");
             var pathToLeftSeal = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, Area.ChaosSanctuary, client.Game.Me.Location, EntityCode.LeftSeal1, MovementMode.Teleport);
@@ -548,10 +593,13 @@ namespace ConsoleBot.Bots.Types.CS
                 return false;
             }
 
-            if (!_townManagementService.CreateTownPortalToTown(client))
+            if (!_townManagementService.CreateTownPortal(client))
             {
                 return false;
             }
+
+            var myPortal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
+            setTeleportId.Invoke(myPortal.Id);
 
             if (!await GeneralHelpers.TryWithTimeout(async (_) =>
             {
@@ -595,17 +643,239 @@ namespace ConsoleBot.Bots.Types.CS
                 return false;
             }
 
+            var action = GetSorceressKillAction(client);
+            if (!await KillBosses(client, csManager, null, leftSealKillLocation, action, 0, () => 0))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> GetKillActionForClass(Client client)
+        {
+            return client.Game.Me.Class switch
+            {
+                CharacterClass.Barbarian => GetBarbarianKillAction(client),
+                CharacterClass.Sorceress => GetSorceressKillAction(client),
+                CharacterClass.Paladin => GetPaladinKillAction(client),
+                _ => new Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task>((csManager, enemies, bosses) =>
+{
+    return Task.CompletedTask;
+}),
+            };
+        }
+
+        private Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> GetBarbarianKillAction(Client client)
+        {
+            Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> action = (async (csManager, enemies, bosses) =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(0.1));
+                if(client.Game.Me.Effects.Contains(EntityEffect.Ironmaiden))
+                {
+                    var nearbyPlayer = client.Game.Players.Where(p => p.Id != client.Game.Me.Id).OrderBy(p => p.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
+                    if(nearbyPlayer != null && nearbyPlayer.Location.Distance(client.Game.Me.Location) < 40)
+                    {
+                        var pathNearest = await _pathingService.GetPathToLocation(client.Game, nearbyPlayer.Location, MovementMode.Walking);
+                        if (!await MovementHelpers.TakePathOfLocations(client.Game, pathNearest, MovementMode.Walking))
+                        {
+                            Log.Warning($"Walking to Player failed at {client.Game.Me.Location}");
+                        }
+                    }
+
+                    await PickupItemsFromPickupList(client, csManager, 20);
+                    await PickupNearbyRejuvenationsIfNeeded(client, csManager, 20);
+
+                    return;
+                }
+
+                var nearest = bosses.FirstOrDefault();
+                if(nearest == null)
+                {
+                    await PickupItemsFromPickupList(client, csManager, 10);
+                    await PickupNearbyRejuvenationsIfNeeded(client, csManager, 10);
+                }
+
+                if (nearest == null || nearest.Location.Distance(client.Game.Me.Location) > 50)
+                {
+                    return;
+                }
+
+                if (client.Game.Me.Location.Distance(nearest.Location) > 5)
+                {
+                    var closeTo = client.Game.Me.Location.GetPointBeforePointInSameDirection(nearest.Location, 6);
+                    if (client.Game.Me.Location.Distance(closeTo) > 3)
+                    {
+                        closeTo = nearest.Location;
+                    }
+
+                    var pathNearest = await _pathingService.GetPathToLocation(client.Game, nearest.Location, MovementMode.Walking);
+                    if (!await MovementHelpers.TakePathOfLocations(client.Game, pathNearest, MovementMode.Walking))
+                    {
+                        Log.Warning($"Walking to Boss failed at {client.Game.Me.Location}");
+                    }
+                }
+
+                var wwDirection = client.Game.Me.Location.GetPointPastPointInSameDirection(nearest.Location, 6);
+                if (client.Game.Me.Location.Equals(nearest.Location) || !await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, client.Game.Area, wwDirection))
+                {
+                    Log.Warning($"Finding ww target location, are equals: {client.Game.Me.Location.Equals(nearest.Location)}");
+                    var bestPathCount = int.MaxValue;
+                    foreach (var (p1, p2) in new List<(short, short)> { (-6, 0), (6, 0), (0, -6), (0, 6) })
+                    {
+                        var move = nearest.Location.Add(-6, 0);
+                        if(!await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, client.Game.Area, move))
+                        {
+                            continue;
+                        }
+
+                        var path = await _pathingService.GetPathToLocation(client.Game, move, MovementMode.Walking);
+                        if (path.Count > 0 && path.Count < bestPathCount)
+                        {
+                            bestPathCount = path.Count;
+                            wwDirection = move;
+                        }
+                    }
+                }
+
+                var wwDistance = client.Game.Me.Location.Distance(wwDirection);
+                client.Game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
+                await Task.Delay(TimeSpan.FromSeconds(wwDistance * 0.005 + 0.2));
+            });
+            return action;
+        }
+
+        private Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> GetPaladinKillAction(Client client)
+        {
+            var auraTimer = new Stopwatch();
+            auraTimer.Start();
+            var bhTimer = new Stopwatch();
+            bhTimer.Start();
+            var flipFlop = true;
+            Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> action = async (csManager, enemies, bosses) =>
+            {
+                if (!client.Game.Me.Effects.Contains(EntityEffect.Holyshield))
+                {
+                    client.Game.UseRightHandSkillOnLocation(Skill.HolyShield, client.Game.Me.Location);
+                    await Task.Delay(100);
+                }
+
+                if (auraTimer.Elapsed > TimeSpan.FromSeconds(4))
+                {
+                    client.Game.ChangeSkill(flipFlop ? Skill.Concentration : Skill.Fanaticism, Hand.Right);
+                    auraTimer.Restart();
+                    flipFlop = !flipFlop;
+                }
+
+                var nearest = bosses.FirstOrDefault();
+                if (nearest == null)
+                {
+                    await PickupItemsFromPickupList(client, csManager, 10);
+                    await PickupNearbyRejuvenationsIfNeeded(client, csManager, 10);
+                }
+
+                if (nearest == null || nearest.Location.Distance(client.Game.Me.Location) > 50)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(0.1));
+                    return;
+                }
+
+                if (nearest.Location.Distance(client.Game.Me.Location) > 15)
+                {
+                    var goalLocation = client.Game.Me.Location.GetPointBeforePointInSameDirection(nearest.Location, 3);
+                    Log.Warning($"Walking to Nearest at {nearest.Location} towards {goalLocation} while at {client.Game.Me.Location}");
+                    client.Game.ChangeSkill(Skill.Vigor, Hand.Right);
+                    var pathNearest = await _pathingService.GetPathToLocation(client.Game, goalLocation, MovementMode.Walking);
+                    if (!await MovementHelpers.TakePathOfLocations(client.Game, pathNearest, MovementMode.Walking))
+                    {
+                        Log.Warning($"Walking to Nearest failed at {client.Game.Me.Location}");
+                    }
+                    client.Game.ChangeSkill(flipFlop ? Skill.Concentration : Skill.Fanaticism, Hand.Right);
+                }
+
+                if (bhTimer.Elapsed > TimeSpan.FromSeconds(0.3))
+                {
+                    client.Game.ShiftHoldLeftHandSkillOnLocation(Skill.BlessedHammer, client.Game.Me.Location);
+                    bhTimer.Restart();
+                }
+                
+                await Task.Delay(100);
+            };
+            return action;
+        }
+
+        private Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> GetSorceressKillAction(Client client)
+        {
+            var moveTimer = new Stopwatch();
+            moveTimer.Start();
+            Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> action = (async (csManager, enemies, bosses) =>
+            {
+                if (!client.Game.Me.Effects.Contains(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
+                {
+                    client.Game.UseRightHandSkillOnLocation(Skill.ShiverArmor, client.Game.Me.Location);
+                    await Task.Delay(TimeSpan.FromSeconds(0.1));
+                }
+
+                var nearest = bosses.FirstOrDefault();
+                if(nearest == null)
+                {
+                    await PickupItemsFromPickupList(client, csManager, 30);
+                    await PickupNearbyRejuvenationsIfNeeded(client, csManager, 30);
+                    nearest = enemies.FirstOrDefault();
+                }
+
+                if(nearest == null || nearest.Location.Distance(client.Game.Me.Location) > 50)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(0.1));
+                    return;
+                }
+
+                var distanceToNearest = nearest.Location.Distance(client.Game.Me.Location);
+
+                if (distanceToNearest < 5)
+                {
+                    await _attackService.TeleportToNearbySafeSpot(client, enemies.Select(e => e.Location).ToList(), nearest.Location, 10);
+                }
+                else if(moveTimer.Elapsed > TimeSpan.FromSeconds(3))
+                {
+                    var nearbyPlayer = client.Game.Players.Where(p => p.Id != client.Game.Me.Id).OrderBy(p => p.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
+                    var nearbyPortal = client.Game.GetEntityByCode(EntityCode.TownPortal).OrderBy(t => t.Location.Distance(client.Game.Me.Location)).First();
+                    var nearbyLocation = nearbyPlayer != null ? nearbyPlayer.Location : nearbyPortal.Location;
+                    await _attackService.TeleportToNearbySafeSpot(client, enemies.Select(e => e.Location).ToList(), nearbyLocation, 10);
+                    moveTimer.Restart();
+                }
+
+                if (client.Game.Me.HasSkill(Skill.FrostNova) && distanceToNearest < 10 && client.Game.WorldObjects.TryGetValue((nearest.Id, EntityType.NPC), out var monster) && !monster.Effects.Contains(EntityEffect.Cold))
+                {
+                    client.Game.UseRightHandSkillOnLocation(Skill.FrostNova, client.Game.Me.Location);
+                    await Task.Delay(TimeSpan.FromSeconds(0.1));
+                }
+
+                client.Game.UseRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
+                await Task.Delay(TimeSpan.FromSeconds(0.1));
+            });
+            return action;
+        }
+
+        private async Task<bool> KillBosses(Client client,
+                                CSManager csManager,
+                                CancellationTokenSource nextGameCancellation,
+                                Point killLocation,
+                                Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> action,
+                                uint oldTeleportId,
+                                Func<uint> getTeleportId)
+        {
             var stopWatch = new Stopwatch();
 
-            bool bFoundStormCaster = false;
-            var stormCasters = new List<WorldObject>();
+            bool bFoundBosses = false;
+            var enemies = new List<AliveMonster>();
+            var bosses = new List<AliveMonster>();
             do
             {
                 if (!stopWatch.IsRunning || stopWatch.Elapsed > TimeSpan.FromSeconds(0.5))
                 {
-                    stormCasters = client.Game.GetNPCsByCode(NPCCode.StormCaster)
-                    .Where(npc => npc.State != EntityState.Dead && npc.State != EntityState.Dieing && npc.Location.Distance(leftSealKillLocation) <= 25)
-                    .ToList();
+                    enemies = csManager.GetNearbyAliveMonsters(killLocation, 35.0);
+                    bosses = enemies.Where(e => e.MonsterEnchantments.Any() || e.NPCCode == NPCCode.Diablo).ToList();
                     if (stopWatch.IsRunning)
                     {
                         stopWatch.Restart();
@@ -613,35 +883,31 @@ namespace ConsoleBot.Bots.Types.CS
 
                 }
 
-                if (!stormCasters.Any())
+                if (bosses.Any())
                 {
-                    continue;
-                }
-
-                if (!bFoundStormCaster)
-                {
-                    bFoundStormCaster = true;
-                    stopWatch.Start();
-                }
-
-                var nearest = stormCasters.OrderBy(npc => npc.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
-                if (nearest.Location.Distance(client.Game.Me.Location) > 10)
-                {
-                    if (!await GeneralHelpers.TryWithTimeout(async (_) =>
+                    if (!bFoundBosses)
                     {
-                        return await client.Game.TeleportToLocationAsync(nearest.Location);
-                    }, TimeSpan.FromSeconds(2)))
-                    {
-                        continue;
+                        bFoundBosses = true;
+                        stopWatch.Start();
                     }
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(0.1));
-                client.Game.UseRightHandSkillOnLocation(Skill.Nova, client.Game.Me.Location);
+                await action.Invoke(csManager, enemies, bosses);
 
-            } while (!bFoundStormCaster || stormCasters.Any());
+            } while ((nextGameCancellation == null || !nextGameCancellation.IsCancellationRequested) && client.Game.IsInGame() && (!bFoundBosses || bosses.Any()) && oldTeleportId == getTeleportId());
 
-            return true;
+            if(client.Game.IsInGame())
+            {
+                await PickupItemsFromPickupList(client, csManager, 15);
+            }
+            
+            return client.Game.IsInGame();
+        }
+
+        void NewPlayerJoinGame(Client client, PlayerInGamePacket playerInGamePacket)
+        {
+            var relevantPlayer = client.Game.Players.Where(p => p.Id == playerInGamePacket.Id).FirstOrDefault();
+            client.Game.InvitePlayer(relevantPlayer);
         }
 
         void HandleEventMessage(Client client, EventNotifyPacket eventNotifyPacket)
@@ -650,6 +916,94 @@ namespace ConsoleBot.Bots.Types.CS
             {
                 var relevantPlayer = client.Game.Players.Where(p => p.Id == eventNotifyPacket.EntityId).FirstOrDefault();
                 client.Game.AcceptInvite(relevantPlayer);
+            }
+        }
+
+        private async Task MoveToLocation(Client client, Point location, CancellationToken? token = null)
+        {
+            var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+            var distance = client.Game.Me.Location.Distance(location);
+            if (distance > 15)
+            {
+                var path = await _pathingService.GetPathToLocation(client.Game, location, movementMode);
+                if (token.HasValue && token.Value.IsCancellationRequested)
+                {
+                    return;
+                }
+                await MovementHelpers.TakePathOfLocations(client.Game, path.ToList(), movementMode, token);
+            }
+            else
+            {
+                if (movementMode == MovementMode.Teleport)
+                {
+                    client.Game.TeleportToLocation(location);
+                }
+                else
+                {
+                    client.Game.MoveTo(location);
+                }
+            }
+        }
+
+        private async Task PickupNearbyRejuvenationsIfNeeded(Client client, CSManager csManager, int distance)
+        {
+            var totalRejuvanationPotions = client.Game.Inventory.Items.Count(i => i.Name == ItemName.RejuvenationPotion || i.Name == ItemName.FullRejuvenationPotion);
+            var pickitList = csManager.GetRejuvenationPotionPickupList(client, distance, (int)5 - totalRejuvanationPotions);
+            foreach (var item in pickitList)
+            {
+                Log.Information($"Client {client.Game.Me.Name} picking up {item.Name}");
+                await MoveToLocation(client, item.Location);
+                if (item.Ground)
+                {
+                    if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                    {
+                        client.Game.MoveTo(item.Location);
+                        client.Game.PickupItem(item);
+                        return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                        {
+                            await Task.Delay(50);
+                            return client.Game.Belt.FindItemById(item.Id) != null;
+                        }, TimeSpan.FromSeconds(0.2));
+                    }, TimeSpan.FromSeconds(3)))
+                    {
+                        csManager.PutRejuvenationOnPickitList(client, item);
+                    }
+                }
+            }
+        }
+
+        private async Task PickupItemsFromPickupList(Client client, CSManager csManager, double distance)
+        {
+            var pickitList = csManager.GetPickitList(client, distance);
+            foreach (var item in pickitList)
+            {
+                if (item.Ground)
+                {
+                    Log.Information($"Client {client.Game.Me.Name} picking up {item.Amount} {item.Name}");
+                    await MoveToLocation(client, item.Location);
+                    if (client.Game.Inventory.FindFreeSpace(item) != null && await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                    {
+                        client.Game.MoveTo(item.Location);
+                        client.Game.PickupItem(item);
+                        return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                        {
+                            await Task.Delay(50);
+                            if (!item.IsGold && client.Game.Inventory.FindItemById(item.Id) == null)
+                            {
+                                return false;
+                            }
+
+                            return true;
+                        }, TimeSpan.FromSeconds(0.2));
+                    }, TimeSpan.FromSeconds(3)))
+                    {
+                        InventoryHelpers.MoveInventoryItemsToCube(client.Game);
+                    }
+                    else
+                    {
+                        csManager.PutItemOnPickitList(client, item);
+                    }
+                }
             }
         }
     }

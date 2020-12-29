@@ -11,7 +11,6 @@ using D2NG.Navigation.Services.Pathing;
 using Serilog;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -87,7 +86,59 @@ namespace ConsoleBot.TownManagement
             return true;
         }
 
-        public bool CreateTownPortalToTown(Client client)
+        public async Task<bool> TakeTownPortalToArea(Client client, Player player, Area area)
+        {
+            var portal = client.Game.GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalArea == area && t.TownPortalOwnerId == player.Id);
+            if(portal == null)
+            {
+                return false;
+            }
+
+            var movementMode = GetMovementMode(client.Game);
+            var pathToPortal = await _pathingService.GetPathToLocation(client.Game, portal.Location, movementMode);
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToPortal, movementMode))
+            {
+                Log.Information($"Moving to {portal.Location} failed");
+                return false;
+            }
+
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                if (retryCount > 0 && retryCount % 5 == 0)
+                {
+                    client.Game.RequestUpdate(client.Game.Me.Id);
+                }
+
+                client.Game.InteractWithEntity(portal);
+                return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                {
+                    await Task.Delay(50);
+                    return client.Game.Area == area;
+                }, TimeSpan.FromSeconds(0.5));
+            }, TimeSpan.FromSeconds(10)))
+            {
+                return false;
+            }
+
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                if (retryCount > 0 && retryCount % 5 == 0)
+                {
+                    client.Game.RequestUpdate(client.Game.Me.Id);
+                }
+
+                await Task.Delay(100);
+
+                return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location);
+            }, TimeSpan.FromSeconds(10)))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool CreateTownPortal(Client client)
         {
             if (!GeneralHelpers.TryWithTimeout((retryCount) =>
             {
@@ -101,28 +152,36 @@ namespace ConsoleBot.TownManagement
             return true;
         }
 
-            public async Task<bool> TakeTownPortalToTown(Client client)
+        public async Task<bool> TakeTownPortalToTown(Client client)
         {
-            var existingTownPortals = client.Game.GetEntityByCode(EntityCode.TownPortal).ToHashSet();
-            if (!GeneralHelpers.TryWithTimeout((retryCount) =>
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
-                return client.Game.CreateTownPortal();
+                if (!GeneralHelpers.TryWithTimeout((_) =>
+                {
+                    return client.Game.CreateTownPortal();
+                }, TimeSpan.FromSeconds(1.0)))
+                {
+                    return false;
+                }
+
+                if (!await GeneralHelpers.TryWithTimeout(async (_) =>
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(0.1));
+                    return client.Game.GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalOwnerId == client.Game.Me.Id) != null;
+                }, TimeSpan.FromSeconds(0.5)))
+                {
+                    return false;
+                }
+
+                return true;
             }, TimeSpan.FromSeconds(3.5)))
             {
-                Log.Error("Failed to create town portal");
+                Log.Error("Failed to create or find town portal");
                 return false;
             }
 
-            var newTownPortals = client.Game.GetEntityByCode(EntityCode.TownPortal).Where(t => !existingTownPortals.Contains(t)).ToList();
-            if (!newTownPortals.Any())
-            {
-                Log.Error("No town portal found");
-                return false;
-            }
-
+            var townportal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
             var townArea = client.Game.Act.MapTownArea();
-
-            var townportal = newTownPortals.First();
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
                 client.Game.MoveTo(townportal);
@@ -159,6 +218,11 @@ namespace ConsoleBot.TownManagement
             var movementMode = GetMovementMode(game);
             game.CleanupCursorItem();
             InventoryHelpers.CleanupPotionsInBelt(game);
+
+            if(client.Game.Me.Class == CharacterClass.Paladin && client.Game.Me.HasSkill(Skill.Vigor))
+            {
+                client.Game.ChangeSkill(Skill.Vigor, Hand.Right);
+            }
 
             if (!await GeneralHelpers.PickupCorpseIfExists(client, _pathingService))
             {
@@ -207,16 +271,19 @@ namespace ConsoleBot.TownManagement
                 return false;
             }
 
-            var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, townArea, game.Me.Location, EntityCode.Stash, movementMode);
-            if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))
+            if(InventoryHelpers.HasAnyItemsToKeep(client.Game))
             {
-                Log.Warning($"{movementMode} failed at location {game.Me.Location}");
-            }
+                var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, townArea, game.Me.Location, EntityCode.Stash, movementMode);
+                if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))
+                {
+                    Log.Warning($"{movementMode} failed at location {game.Me.Location}");
+                }
 
-            var stashItemsResult = InventoryHelpers.StashItemsToKeep(game, _externalMessagingClient);
-            if (stashItemsResult != Enums.MoveItemResult.Succes)
-            {
-                Log.Warning($"Stashing items failed with result {stashItemsResult}");
+                var stashItemsResult = InventoryHelpers.StashItemsToKeep(game, _externalMessagingClient);
+                if (stashItemsResult != Enums.MoveItemResult.Succes)
+                {
+                    Log.Warning($"Stashing items failed with result {stashItemsResult}");
+                }
             }
 
             if (CubeHelpers.AnyGemsToTransmuteInStash(client.Game))

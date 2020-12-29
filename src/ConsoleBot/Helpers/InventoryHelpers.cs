@@ -164,6 +164,12 @@ namespace ConsoleBot.Helpers
             return moveItemResult;
         }
 
+        public static bool HasAnyItemsToKeep(Game game)
+        {
+            return game.Inventory.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)) ||
+            game.Cube.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i));
+        }
+
         public static MoveItemResult StashItemsToKeep(Game game, IExternalMessagingClient externalMessagingClient)
         {
             var itemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
@@ -191,7 +197,7 @@ namespace ConsoleBot.Helpers
             var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
             if (cube != null)
             {
-                if (!game.ActivateBufferItem(cube))
+                if (!game.ActivateCube(cube))
                 {
                     return false;
                 }
@@ -287,7 +293,7 @@ namespace ConsoleBot.Helpers
                 return MoveItemResult.Failed;
             }
 
-            if (!game.ActivateBufferItem(cube))
+            if (!game.ActivateCube(cube))
             {
                 Log.Error($"{game.Me.Name}: Opening cube for {item.Id} - {item.GetFullDescription()} failed with cursor {game.CursorItem?.Id}");
                 return MoveItemResult.Failed;
@@ -326,7 +332,7 @@ namespace ConsoleBot.Helpers
                 return MoveItemResult.Failed;
             }
 
-            if (!game.ActivateBufferItem(cube))
+            if (!game.ActivateCube(cube))
             {
                 Log.Error($"{game.Me.Name}: Opening cube for {item.Id} - {item.GetFullDescription()} failed with cursor {game.CursorItem?.Id}");
                 return MoveItemResult.Failed;
@@ -384,6 +390,36 @@ namespace ConsoleBot.Helpers
             return true;
         }
 
+        public static MoveItemResult MoveBeltItemToInventory(Game game, Item item)
+        {
+            Point location = game.Inventory.FindFreeSpace(item);
+            if (location == null)
+            {
+                return MoveItemResult.NoSpace;
+            }
+
+            game.RemoveItemFromBelt(item);
+            bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.Belt.FindItemById(item.Id) == null,
+                MoveItemTimeout);
+            if (!resultToBuffer)
+            {
+                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+                return MoveItemResult.Failed;
+            }
+
+            game.InsertItemIntoContainer(item, location, ItemContainer.Inventory);
+
+            if (!GeneralHelpers.TryWithTimeout(
+                (retryCount) => game.Inventory.FindItemById(item.Id) != null,
+               MoveItemTimeout))
+            {
+                Log.Error($"{game.Me.Name}: Inserting item {item.Id} - {item.Name} into Inventory failed");
+                return MoveItemResult.Failed;
+            }
+
+            return MoveItemResult.Succes;
+        }
+
         public static void CleanupPotionsInBelt(Game game)
         {
             var manaPotionsInWrongSlot = game.Belt.GetManaPotionsInSlots(new List<int>() { 0, 1 });
@@ -396,6 +432,12 @@ namespace ConsoleBot.Helpers
             foreach (var healthPotion in healthPotionsInWrongSlot)
             {
                 game.UseBeltItem(healthPotion);
+            }
+
+            var revPotions = game.Belt.GetRejuvenationPotions();
+            foreach(var revPotion in revPotions)
+            {
+                MoveBeltItemToInventory(game, revPotion);
             }
         }
     }

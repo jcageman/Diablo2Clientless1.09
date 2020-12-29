@@ -79,6 +79,12 @@ namespace D2NG.Core.D2GS.Act
             entity.TownPortalArea = packet.Area;
         }
 
+        internal void UpdateTownPortalOwner(PortalOwnerPacket packet)
+        {
+            var entity = WorldObjects[(packet.TeleportOurSideId, EntityType.Object)];
+            entity.TownPortalOwnerId = packet.OwnerId;
+        }
+
         internal void RemoveWorldObject(uint entityId, EntityType entityType)
         {
             WorldObjects.Remove((entityId, entityType), out var value);

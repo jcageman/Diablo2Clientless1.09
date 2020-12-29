@@ -90,7 +90,6 @@ namespace PacketSniffer
                 case InComingPacket.Recv7E:
                 case InComingPacket.AllyPartyInfo:
                 case InComingPacket.AssignMerc:
-                case InComingPacket.PortalOwner:
                 case InComingPacket.Recv86:
                 case InComingPacket.SpecialQuestEvent:
                 case InComingPacket.NPCWantInteract:
@@ -131,6 +130,10 @@ namespace PacketSniffer
                 case InComingPacket.PartyAutomapInfo:
                     var playerPartyInfoPacket = new PartyAutomapInfoPacket(eventArgs);
                     Log.Information($"PartyAutomapInfo -> ID: {playerPartyInfoPacket.Id} Location: {playerPartyInfoPacket.Location}");
+                    break;
+                case InComingPacket.PortalOwner:
+                    var portalOwnerPacket = new PortalOwnerPacket(eventArgs);
+                    Log.Information($"PortalOwner -> ID: {portalOwnerPacket.OwnerId} Name: {portalOwnerPacket.Name} TeleportOurSideId: {portalOwnerPacket.TeleportOurSideId} TeleportOtherSideId: {portalOwnerPacket.TeleportOtherSideId} with data {eventArgs.Raw.ToPrintString()}");
                     break;
                 case InComingPacket.AddEntityEffect:
                     var addEntityEffectPacket = new AddEntityEffectPacket(eventArgs);
@@ -194,6 +197,10 @@ namespace PacketSniffer
                     var reassignPlayerPacket = new ReassignPlayerPacket(eventArgs);
                     Log.Information($"ReassignPlayer -> UnitType: {reassignPlayerPacket.UnitType} UnitId: {reassignPlayerPacket.UnitId} Location: {reassignPlayerPacket.Location}");
                     break;
+                case InComingPacket.AssignPlayer:
+                    var assignPlayerPacket = new AssignPlayerPacket(eventArgs);
+                    Log.Information($"AssignPlayer -> Id: {assignPlayerPacket.Id} Name: {assignPlayerPacket.Name} Location: {assignPlayerPacket.Location}");
+                    break;
                 case InComingPacket.LifeManaUpdatePot:
                     var LifeManaUpdatePotPacket = new LifeManaPotUpdatePacket(eventArgs);
                     Log.Information($"LifeManaUpdatePot -> Life: {LifeManaUpdatePotPacket.Life} Mana: {LifeManaUpdatePotPacket.Mana} Location: {LifeManaUpdatePotPacket.Location}");
@@ -225,7 +232,6 @@ namespace PacketSniffer
                     break;
                 case InComingPacket.TownPortalState:
                 case InComingPacket.EntityMove:
-                case InComingPacket.AssignPlayer:
                 case InComingPacket.EventMessage:
                 case InComingPacket.QuestItemState:
                 case InComingPacket.WardenRequest:

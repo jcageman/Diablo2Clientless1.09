@@ -37,6 +37,11 @@ namespace D2NG.Core.D2GS.Items.Containers
             return item.Classification == ClassificationType.ManaPotion;
         }
 
+        private bool IsRejuvenationPotion(Item item)
+        {
+            return item.Classification == ClassificationType.RejuvenationPotion;
+        }
+
         public int NumOfHealthPotions()
         {
             return _items.Values.Where(i => IsHealthPotion(i)).Count();
@@ -65,6 +70,11 @@ namespace D2NG.Core.D2GS.Items.Containers
         public List<Item> GetManaPotionsInSlots(List<int> slots)
         {
             return _items.Values.Where(i => IsManaPotion(i) && slots.Contains(i.Location.X)).ToList();
+        }
+
+        public List<Item> GetRejuvenationPotions()
+        {
+            return _items.Values.Where(i => IsRejuvenationPotion(i)).ToList();
         }
 
         public List<Item> GetHealthPotionsInSlot(int slot)

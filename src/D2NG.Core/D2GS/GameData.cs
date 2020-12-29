@@ -348,7 +348,7 @@ namespace D2NG.Core.D2GS
                     Belt.Remove(item);
                     break;
                 case Action.ToCursor:
-                    CursorItem = packet.Item;
+                    CursorItem = item;
                     break;
                 case Action.UpdateStats:
                     UpdateItemStatsInContainer(item);

@@ -1,4 +1,5 @@
-﻿using ConsoleBot.Clients.ExternalMessagingClient;
+﻿using ConsoleBot.Attack;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.TownManagement;
 using D2NG.Core;
@@ -32,6 +33,7 @@ namespace ConsoleBot.Bots.Types.Cows
         private readonly IExternalMessagingClient _externalMessagingClient;
         private readonly IPathingService _pathingService;
         private readonly ITownManagementService _townManagementService;
+        private readonly IAttackService _attackService;
         private readonly CowConfiguration _cowconfig;
         private TaskCompletionSource<bool> NextGame = new TaskCompletionSource<bool>();
         private TaskCompletionSource<bool> CowPortalOpen = new TaskCompletionSource<bool>();
@@ -39,12 +41,16 @@ namespace ConsoleBot.Bots.Types.Cows
         private uint? BoClientPlayerId;
         private ConcurrentDictionary<string, bool> ShouldFollow = new ConcurrentDictionary<string, bool>();
         private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new ConcurrentDictionary<string, (Point, CancellationTokenSource)>();
-        public CowBot(IOptions<BotConfiguration> config, IOptions<CowConfiguration> cowconfig, IExternalMessagingClient externalMessagingClient, IPathingService pathingService, ITownManagementService townManagementService)
+        public CowBot(IOptions<BotConfiguration> config, IOptions<CowConfiguration> cowconfig,
+            IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
+            ITownManagementService townManagementService,
+            IAttackService attackService)
         {
             _config = config.Value;
             _externalMessagingClient = externalMessagingClient;
             _pathingService = pathingService;
             _townManagementService = townManagementService;
+            _attackService = attackService;
             _cowconfig = cowconfig.Value;
         }
 
@@ -240,7 +246,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 Log.Information($"Selected {string.Join(",", killingClients.Select(c => c.Game.Me.Name))} for cow manager");
                 var listeningClients = clients.Where(c => c.Game.Me.Class == CharacterClass.Sorceress && !killingClients.Contains(c)).ToList();
                 listeningClients.Add(boClient);
-                var cowManager = new CowManager(_pathingService, killingClients, listeningClients);
+                var cowManager = new CowManager(killingClients, listeningClients);
 
                 try
                 {
@@ -681,7 +687,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     var secondHellBovine = nearbyAliveCows.Skip(1).FirstOrDefault();
                     var distanceToNearest = nearestHellBovine.Location.Distance(client.Game.Me.Location);
                     var distanceSecondToNearest = secondHellBovine?.Location.Distance(client.Game.Me.Location);
-                    if (await cowManager.IsInLineOfSight(client, nearestHellBovine.Location))
+                    if (await _attackService.IsInLineOfSight(client, nearestHellBovine.Location))
                     {
                         if ((nearestHellBovine.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted) || (distanceSecondToNearest.HasValue && distanceSecondToNearest - distanceToNearest > 10))
                         && client.Game.WorldObjects.TryGetValue((nearestHellBovine.Id, EntityType.NPC), out var cowEntity))
@@ -911,41 +917,10 @@ namespace ConsoleBot.Bots.Types.Cows
             NextGame.TrySetResult(true);
         }
 
-        private static async Task TeleportToNearbySafeSpot(Client client, CowManager cowManager, Point toLocation, double minDistance = 0)
+        private async Task TeleportToNearbySafeSpot(Client client, CowManager cowManager, Point toLocation, double minDistance = 0)
         {
-            bool foundEmptySpot = false;
-            for(int i = 1; i < 5; ++i)
-            {
-                if (foundEmptySpot)
-                {
-                    break;
-                }
-
-                foreach (var (p1, p2) in new List<(short, short)> {
-                    (-5,0), (5, 0), (0, -5), (0, 5), (-5, 5), (-5, -5), (5, -5), (5, 5)})
-                {
-                    var x = (short)(p1 * i);
-                    var y = (short)(p2 * i);
-
-                    var distance = Math.Sqrt(Math.Pow(x, 2) + Math.Pow(y, 2));
-                    if (distance < minDistance)
-                    {
-                        continue;
-                    }
-
-                    var tryLocation = toLocation.Add(x, y);
-                    if (await cowManager.IsVisitable(client, tryLocation) && await cowManager.IsInLineOfSight(client, tryLocation, toLocation) && cowManager.GetNearbyAliveMonsters(tryLocation, 10.0, 5).Count() < 5)
-                    {
-                        Log.Information($"Client {client.Game.Me.Name} found empty spot to teleport to at {tryLocation}");
-                        if (!client.Game.IsInGame() || GeneralHelpers.TryWithTimeout((retryCount) => client.Game.TeleportToLocation(tryLocation), TimeSpan.FromSeconds(4)))
-                        {
-                            foundEmptySpot = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
+            var nearbyMonsters = cowManager.GetNearbyAliveMonsters(toLocation, 30.0, 100).Select(p => p.Location).ToList();
+            await _attackService.TeleportToNearbySafeSpot(client, nearbyMonsters, toLocation, minDistance);
         }
 
         async Task BasicIdleClient(Client client, CowManager cowManager)
@@ -1141,7 +1116,7 @@ namespace ConsoleBot.Bots.Types.Cows
             bool hasUsedPotion = false;
             if (shouldBo)
             {
-                CastAllShouts(client);
+                await ClassHelpers.CastAllShouts(client);
             }
             
             while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
@@ -1155,7 +1130,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
                 if (shouldBo)
                 {
-                    CastAllShouts(client);
+                    await ClassHelpers.CastAllShouts(client);
                 }
 
                 var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
@@ -1195,22 +1170,6 @@ namespace ConsoleBot.Bots.Types.Cows
             }
 
             Log.Information($"Stopped Barb Client {client.Game.Me.Name}, cowing manager is finished is: {cowManager.IsFinished()}");
-        }
-
-        private static void CastAllShouts(Client client)
-        {
-            if (client != null && client.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0) > 0)
-            {
-                var nearbyPlayers = client.Game.Players.Where(p => p.Location?.Distance(client.Game.Me.Location) < 10);
-                if (nearbyPlayers.Any(p => !p.Effects.Contains(EntityEffect.Battlecommand) || !p.Effects.Contains(EntityEffect.BattleOrders) || !p.Effects.Contains(EntityEffect.Shout)))
-                {
-                    client.Game.UseRightHandSkillOnLocation(Skill.BattleCommand, client.Game.Me.Location);
-                    Thread.Sleep(500);
-                    client.Game.UseRightHandSkillOnLocation(Skill.BattleOrders, client.Game.Me.Location);
-                    Thread.Sleep(500);
-                    client.Game.UseRightHandSkillOnLocation(Skill.Shout, client.Game.Me.Location);
-                }
-            }
         }
 
         async Task PalaFollowClient(Client client, CowManager cowManager)
@@ -1323,7 +1282,7 @@ namespace ConsoleBot.Bots.Types.Cows
             foreach (var (x,y) in new List<(short,short)>{ (-3, -3), (3, 3),(-5,0),(5,0),(0,5),(0,-5)})
             {
                 var newLocation = client.Game.Me.Location.Add(x, y);
-                if (await cowManager.IsInLineOfSight(client, newLocation))
+                if (await _attackService.IsInLineOfSight(client, newLocation))
                 {
                     await client.Game.MoveToAsync(newLocation);
                     break;

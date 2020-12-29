@@ -79,6 +79,7 @@ namespace D2NG.Core
             _gameServer.OnReceivedPacketEvent(InComingPacket.AssignNPC2, p => Data.Act.AddNPC(new AssignNpcPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AssignNPC1, p => Data.Act.AddNPC(new AssignNpcPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.TownPortalState, p => Data.Act.UpdateTownPortal(new TownPortalStatePacket(p)));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.PortalOwner, p => Data.Act.UpdateTownPortalOwner(new PortalOwnerPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AssignObject, p => Data.Act.AddWorldObject(new AssignObjectPacket(p).AsWorldObject()));
             _gameServer.OnReceivedPacketEvent(InComingPacket.RemoveObject, p => Data.RemoveObject(new RemoveObjectPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.PlayerInGame, p => Data.PlayerJoin(new PlayerInGamePacket(p)));
@@ -213,11 +214,31 @@ namespace D2NG.Core
             _gameServer.SendPacket(new RemoveItemFromContainerPacket(item));
         }
 
-        public bool ActivateBufferItem(Item item)
+        public void RemoveItemFromBelt(Item item)
         {
+            _gameServer.SendPacket(new RemoveItemFromBeltPacket(item));
+        }
+
+        public bool ActivateCube(Item item)
+        {
+            if (item.Name != ItemName.HoradricCube)
+            {
+                throw new InvalidOperationException($"incorrect item type '{item.Name}', expected HoradricCube");
+            }
             var buttonAction = _gameServer.GetResetEventOfType(InComingPacket.ButtonAction);
             _gameServer.SendPacket(new ActivateBufferItemPacket(Me, item));
             return buttonAction.WaitOne(2000);
+        }
+
+        public bool UsePotion(Item item)
+        {
+            if (item.Classification != ClassificationType.HealthPotion && item.Classification != ClassificationType.ManaPotion && item.Classification != ClassificationType.RejuvenationPotion)
+            {
+                throw new InvalidOperationException($"incorrect item type '{item.Name}', expected Potion");
+            }
+            var useStackableItem = _gameServer.GetResetEventOfType(InComingPacket.UseStackableItem);
+            _gameServer.SendPacket(new ActivateBufferItemPacket(Me, item));
+            return useStackableItem.WaitOne(200);
         }
 
         public bool UseRightHandSkillOnLocation(Skill skill, Point location)
@@ -268,6 +289,17 @@ namespace D2NG.Core
                 }
             }
 
+            return true;
+        }
+
+        public bool ShiftHoldLeftHandSkillOnLocation(Skill skill, Point location)
+        {
+            if (!ChangeSkill(skill, Hand.Left))
+            {
+                return false;
+            }
+
+            _gameServer.SendPacket(new ShiftLeftSkillHoldOnLocationPacket(location));
             return true;
         }
 
@@ -592,6 +624,20 @@ namespace D2NG.Core
             }
         }
 
+        public bool UseRejuvenationPotion()
+        {
+            var revpotion = Inventory.Items.FirstOrDefault(i => i.Classification == ClassificationType.RejuvenationPotion);
+            if (revpotion != null)
+            {
+                Log.Information($"{Me.Name} Using Rejuvenation potion with life at {Me.Life} out of {Me.MaxLife}");
+                return UsePotion(revpotion);
+            }
+            else
+            {
+                return false;
+            }
+        }
+
         public bool IsInTown()
         {
             return Area == Area.RogueEncampment || Area == Area.LutGholein || Area == Area.KurastDocks || Area == Area.ThePandemoniumFortress;
@@ -641,7 +687,11 @@ namespace D2NG.Core
 
                     if (Me.Life / (double)Me.MaxLife < 0.3 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(0.7))
                     {
-                        if (!UseHealthPotion())
+                        if(UseRejuvenationPotion())
+                        {
+                            continue;
+                        }
+                        else if (!UseHealthPotion())
                         {
                             Log.Information($"{Me.Name} Leaving game due out of potions");
                             LeaveGame();

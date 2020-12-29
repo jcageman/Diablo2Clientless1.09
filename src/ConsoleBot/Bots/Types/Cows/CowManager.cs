@@ -19,7 +19,6 @@ namespace ConsoleBot.Bots.Types.Cows
 {
     internal class CowManager
     {
-        private readonly IPathingService _pathingService;
         private readonly List<Client> _killingClients;
         private readonly ConcurrentDictionary<uint, AliveMonster> _aliveMonsters = new ConcurrentDictionary<uint, AliveMonster>();
         private readonly ConcurrentDictionary<uint, DeadMonster> _monstersAvailableForCorpseExplosion = new ConcurrentDictionary<uint, DeadMonster>();
@@ -29,9 +28,8 @@ namespace ConsoleBot.Bots.Types.Cows
         private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new ConcurrentDictionary<uint, Item>();
         private readonly ConcurrentDictionary<uint, Item> _pickitPotionsOnGround = new ConcurrentDictionary<uint, Item>();
         private bool IsActive = false;
-        public CowManager(IPathingService pathingService, List<Client> killingclients, List<Client> listeningClients)
+        public CowManager(List<Client> killingclients, List<Client> listeningClients)
         {
-            _pathingService = pathingService;
             _killingClients = killingclients;
 
             var allClients = new List<Client>();
@@ -48,79 +46,6 @@ namespace ConsoleBot.Bots.Types.Cows
                 client.OnReceivedPacketEvent(InComingPacket.NPCHit, p => { var packet = new NpcHitPacket(p); UpdateNPCLife(packet.EntityId, packet.LifePercentage); });
                 client.Game.OnWorldItemEvent(i => HandleItemDrop(client.Game, i));
             }
-        }
-
-
-        internal class Line
-        {
-            public Point StartPoint { get; set; }
-
-            public Point EndPoint { get; set; }
-        }
-
-        public static double DotProduct((double X, double Y)a, (double X, double Y) b)
-        {
-            return (a.X * b.X) + (a.Y * b.Y);
-        }
-
-        public static double MinimumDistanceToLineSegment(Point p,
-            Line line)
-        {
-            var v = line.StartPoint;
-            var w = line.EndPoint;
-
-            double lengthSquared = v.DistanceSquared(w);
-
-            if (lengthSquared == 0.0)
-                return p.Distance(v);
-
-            double t = Math.Max(0, Math.Min(1, DotProduct(p.Substract((v.X, v.Y)), w.Substract((v.X, v.Y))) / lengthSquared));
-
-            short dX = (short)(((double)w.X - v.X)*t);
-            short dY = (short)(((double)w.Y - v.Y)*t);
-            var projection = v;
-            projection = projection.Add(dX, dY);
-
-            return p.Distance(projection);
-        }
-
-        public async Task<bool> IsInLineOfSight(Client client,  Point toLocation)
-        {
-            return await IsInLineOfSight(client, client.Game.Me.Location, toLocation);
-        }
-
-        public async Task<bool> IsInLineOfSight(Client client, Point fromLocation, Point toLocation)
-        {
-            var directDistance = fromLocation.Distance(toLocation);
-            if(directDistance == 0)
-            {
-                return true;
-            }
-
-            var path = await _pathingService.GetPathToLocation(client.Game, toLocation, MovementMode.Walking);
-            if(path.Count == 0)
-            {
-                return true;
-            }
-
-            var line = new Line
-            {
-                StartPoint = fromLocation,
-                EndPoint = toLocation
-            };
-
-            var pointsOutside = false;
-            if (path.Count() > 1)
-            {
-                pointsOutside = ((double)path.Count(p => MinimumDistanceToLineSegment(p, line) >= 4.1)) / path.Count > 0.15;
-            }
-            return !pointsOutside;
-        }
-
-        public async Task<bool> IsVisitable(Client client, Point point)
-        {
-            var path = await _pathingService.GetPathToLocation(client.Game, point, MovementMode.Walking);
-            return path.Count != 0;
         }
 
         private Task HandleItemDrop(Game game, Item item)

@@ -236,13 +236,8 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            var defaultInventoryItems = new List<ItemName>() { ItemName.TomeOfTownPortal, ItemName.TomeofIdentify, ItemName.HoradricCube };
+            var defaultInventoryItems = new List<ItemName>() { ItemName.TomeOfTownPortal, ItemName.TomeofIdentify, ItemName.HoradricCube, ItemName.WirtsLeg, ItemName.RejuvenationPotion, ItemName.FullRejuvenationPotion };
             if (defaultInventoryItems.Contains(item.Name))
-            {
-                return false;
-            }
-
-            if (item.Name == ItemName.WirtsLeg)
             {
                 return false;
             }

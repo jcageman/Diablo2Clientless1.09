@@ -16,6 +16,8 @@ namespace D2NG.Core.D2GS.Objects
 
         public Area TownPortalArea { get; internal set; }
 
+        public uint TownPortalOwnerId { get; internal set; }
+
         public HashSet<EntityEffect> Effects { get; internal set; } = new HashSet<EntityEffect>();
 
         public HashSet<MonsterEnchantment> MonsterEnchantments { get; internal set; } = new HashSet<MonsterEnchantment>();

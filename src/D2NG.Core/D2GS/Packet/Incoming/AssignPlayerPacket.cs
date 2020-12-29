@@ -19,6 +19,11 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             Id = reader.ReadUInt32();
             Class = (CharacterClass)reader.ReadByte();
             Name = reader.ReadNullTerminatedString();
+            var count = Name.Length + 1;
+            while (count++ < 16)
+            {
+                reader.ReadByte();
+            }
             Location = new Point(reader.ReadUInt16(), reader.ReadUInt16());
         }
 
