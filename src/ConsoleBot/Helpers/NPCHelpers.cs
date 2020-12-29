@@ -15,7 +15,7 @@ namespace ConsoleBot.Helpers
     {
         public static WorldObject GetUniqueNPC(Game game, NPCCode npcCode)
         {
-            return game.GetNPCsByCode(npcCode).Single();
+            return game.GetNPCsByCode(npcCode).FirstOrDefault();
         }
 
         public static bool RepairItemsAndBuyArrows(Game game, WorldObject npc)

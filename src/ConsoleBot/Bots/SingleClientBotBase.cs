@@ -108,7 +108,6 @@ namespace ConsoleBot.Bots
                             {
                                 successiveFailures = 0;
                             }
-                            await Task.Delay(TimeSpan.FromSeconds(2));
                         }
                         else
                         {
@@ -119,6 +118,7 @@ namespace ConsoleBot.Bots
                         if (client.Game.IsInGame())
                         {
                             client.Game.LeaveGame();
+                            await Task.Delay(TimeSpan.FromSeconds(2));
                         }
 
                         if(!client.RejoinMCP())
