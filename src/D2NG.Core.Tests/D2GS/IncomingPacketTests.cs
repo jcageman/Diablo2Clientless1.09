@@ -31,7 +31,7 @@ namespace D2NG.Core.Tests.D2GS
             Assert.Equal(1U, packet.Id);
             Assert.Equal("nomancer", packet.Name);
             Assert.Equal(CharacterClass.Necromancer, packet.Class);
-            Assert.Equal(256, packet.Location.X);
+            Assert.Equal(0, packet.Location.X);
             Assert.Equal(0, packet.Location.Y);
         }
 
