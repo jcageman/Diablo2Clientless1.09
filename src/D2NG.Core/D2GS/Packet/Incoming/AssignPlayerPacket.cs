@@ -24,7 +24,9 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             {
                 reader.ReadByte();
             }
-            Location = new Point(reader.ReadUInt16(), reader.ReadUInt16());
+            var x = reader.ReadUInt16();
+            var y = reader.ReadUInt16();
+            Location = new Point(x, y);
         }
 
         public Point Location { get; }
