@@ -10,7 +10,9 @@
 This project builds with .NET Core 3.1 and can be built by running `dotnet build` on the command line from the root of the Solution.
 
 ## Functionality
-- Bots: Mephisto, Travincal, Cows (and it's easy to add new bots)
+Initially based on https://github.com/dkuwahara/D2NG, but now with a lot more features.
+
+- Bots: Mephisto, Travincal, Cows, Cs (and it's easy to add new bots)
 - Pathing module using https://github.com/jcageman/d2mapapi
 - Gambling, pickit, muling
 
