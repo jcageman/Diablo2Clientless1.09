@@ -1,4 +1,5 @@
-﻿using ConsoleBot.Bots;
+﻿using ConsoleBot.Attack;
+using ConsoleBot.Bots;
 using ConsoleBot.Bots.Types;
 using ConsoleBot.Bots.Types.Cows;
 using ConsoleBot.Clients.ExternalMessagingClient;
@@ -79,6 +80,7 @@ namespace ConsoleBot
             services.AddSingleton<IExternalMessagingClient, ExternalMessagingClient>();
             services.AddSingleton<IMuleService, MuleService>();
             services.AddSingleton<ITownManagementService, TownManagementService>();
+            services.AddSingleton<IAttackService, AttackService>();
             services.AddHttpClient();
             services.AddMemoryCache();
             services.RegisterBotServices(config);

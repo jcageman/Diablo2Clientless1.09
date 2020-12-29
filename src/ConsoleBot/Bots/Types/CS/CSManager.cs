@@ -1,9 +1,11 @@
 ﻿using D2NG.Core;
 using D2NG.Core.D2GS;
+using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
+using D2NG.Core.D2GS.Players;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -173,6 +175,31 @@ namespace ConsoleBot.Bots.Types.CS
             }
 
             return resultPickitList;
+        }
+
+        public bool CastCorpseExplosion(Client client)
+        {
+            if (client.Game.Me.Class != CharacterClass.Necromancer || !client.Game.Me.HasSkill(Skill.CorpseExplosion))
+            {
+                throw new InvalidOperationException();
+            }
+
+            var nearbyAliveMonsters = _aliveMonsters.Values.Where(c => c.Location.Distance(client.Game.Me.Location) < 20);
+            foreach (var nearbyMonster in nearbyAliveMonsters)
+            {
+                var firstMatch = _monstersAvailableForCorpseExplosion.Values.FirstOrDefault(c => c.Location.Distance(nearbyMonster.Location) < 10);
+                if (firstMatch != null)
+                {
+                    if (client.Game.WorldObjects.TryGetValue((firstMatch.Id, EntityType.NPC), out var monster))
+                    {
+                        bool result = client.Game.UseRightHandSkillOnEntity(Skill.CorpseExplosion, monster);
+                        _monstersAvailableForCorpseExplosion.TryRemove(monster.Id, out var _);
+                        return result;
+                    }
+                }
+            }
+
+            return false;
         }
     }
 }

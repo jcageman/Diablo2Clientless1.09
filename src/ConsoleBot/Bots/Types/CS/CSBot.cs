@@ -280,7 +280,10 @@ namespace ConsoleBot.Bots.Types.CS
                     else
                     {
                         await Task.Delay(100);
-                        await KillBosses(client, csManager, nextGameCancellation, client.Game.Me.Location, action, localTeleportId, getTeleportId);
+                        if(!await KillBosses(client, csManager, nextGameCancellation, client.Game.Me.Location, action, localTeleportId, getTeleportId))
+                        {
+                            return false;
+                        }
                     }
                 }
             }
@@ -433,10 +436,7 @@ namespace ConsoleBot.Bots.Types.CS
 
             var seal1 = client.Game.GetEntityByCode(EntityCode.RightSeal1).First();
             var seal2 = client.Game.GetEntityByCode(EntityCode.RightSeal2).First();
-            Log.Information($"{EntityCode.RightSeal1} at location {seal1.Location}");
-            Log.Information($"{EntityCode.RightSeal2} at location {seal2.Location}");
             var killLocation = seal1.Location.X < seal2.Location.X ? seal1.Location.Add(30, -10) : seal1.Location.Add(12, -38);
-            Log.Information($"Kill at location {killLocation}");
 
             if (!await GeneralHelpers.TryWithTimeout(async (_) =>
             {
@@ -516,10 +516,8 @@ namespace ConsoleBot.Bots.Types.CS
             }
 
             var topSeal = client.Game.GetEntityByCode(EntityCode.TopSeal).First();
-            Log.Information($"TopSeal at location {topSeal.Location}");
             var toLeftOfSealIsValid = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.ChaosSanctuary, topSeal.Location.Add(-20, 0));
             var killLocation = toLeftOfSealIsValid ? topSeal.Location.Add(-37, 31) : topSeal.Location.Add(0, 70);
-            Log.Information($"Kill at location {killLocation} with {toLeftOfSealIsValid}");
             var pathToKillingLocation = await _pathingService.GetPathToLocation(client.Game, killLocation, MovementMode.Teleport);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToKillingLocation, MovementMode.Teleport))
             {
@@ -580,11 +578,7 @@ namespace ConsoleBot.Bots.Types.CS
 
             var leftSeal1 = client.Game.GetEntityByCode(EntityCode.LeftSeal1).First();
             var leftSeal2 = client.Game.GetEntityByCode(EntityCode.LeftSeal2).First();
-            Log.Information($"LeftSeal1 at location {leftSeal1.Location}");
-            Log.Information($"LeftSeal2 at location {leftSeal2.Location}");
             var leftSealKillLocation = leftSeal1.Location.Y > leftSeal2.Location.Y ? leftSeal1.Location.Add(26, -21) : leftSeal1.Location.Add(20, 40);
-            Log.Information($"Kill at location {leftSealKillLocation}");
-
             if (!await GeneralHelpers.TryWithTimeout(async (_) =>
             {
                 return await client.Game.TeleportToLocationAsync(leftSealKillLocation);
@@ -659,6 +653,7 @@ namespace ConsoleBot.Bots.Types.CS
                 CharacterClass.Barbarian => GetBarbarianKillAction(client),
                 CharacterClass.Sorceress => GetSorceressKillAction(client),
                 CharacterClass.Paladin => GetPaladinKillAction(client),
+                CharacterClass.Necromancer => GetNecromancerKillAction(client),
                 _ => new Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task>((csManager, enemies, bosses) =>
 {
     return Task.CompletedTask;
@@ -719,11 +714,10 @@ namespace ConsoleBot.Bots.Types.CS
                 var wwDirection = client.Game.Me.Location.GetPointPastPointInSameDirection(nearest.Location, 6);
                 if (client.Game.Me.Location.Equals(nearest.Location) || !await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, client.Game.Area, wwDirection))
                 {
-                    Log.Warning($"Finding ww target location, are equals: {client.Game.Me.Location.Equals(nearest.Location)}");
                     var bestPathCount = int.MaxValue;
                     foreach (var (p1, p2) in new List<(short, short)> { (-6, 0), (6, 0), (0, -6), (0, 6) })
                     {
-                        var move = nearest.Location.Add(-6, 0);
+                        var move = nearest.Location.Add(p1, p2);
                         if(!await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, client.Game.Area, move))
                         {
                             continue;
@@ -774,7 +768,22 @@ namespace ConsoleBot.Bots.Types.CS
                     await PickupNearbyRejuvenationsIfNeeded(client, csManager, 10);
                 }
 
-                if (nearest == null || nearest.Location.Distance(client.Game.Me.Location) > 50)
+                if (nearest == null && enemies.Any())
+                {
+                    if (bhTimer.Elapsed > TimeSpan.FromSeconds(0.3))
+                    {
+                        client.Game.ShiftHoldLeftHandSkillOnLocation(Skill.BlessedHammer, client.Game.Me.Location);
+                        bhTimer.Restart();
+                    }
+                    return;
+                }
+
+                if (nearest == null)
+                {
+                    return;
+                }
+
+                if (nearest.Location.Distance(client.Game.Me.Location) > 50)
                 {
                     await Task.Delay(TimeSpan.FromSeconds(0.1));
                     return;
@@ -783,7 +792,6 @@ namespace ConsoleBot.Bots.Types.CS
                 if (nearest.Location.Distance(client.Game.Me.Location) > 15)
                 {
                     var goalLocation = client.Game.Me.Location.GetPointBeforePointInSameDirection(nearest.Location, 3);
-                    Log.Warning($"Walking to Nearest at {nearest.Location} towards {goalLocation} while at {client.Game.Me.Location}");
                     client.Game.ChangeSkill(Skill.Vigor, Hand.Right);
                     var pathNearest = await _pathingService.GetPathToLocation(client.Game, goalLocation, MovementMode.Walking);
                     if (!await MovementHelpers.TakePathOfLocations(client.Game, pathNearest, MovementMode.Walking))
@@ -857,6 +865,65 @@ namespace ConsoleBot.Bots.Types.CS
             return action;
         }
 
+        private Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> GetNecromancerKillAction(Client client)
+        {
+            var curseSkill = client.Game.Players.Any(c => c.Class == CharacterClass.Paladin) ? Skill.LifeTap : Skill.AmplifyDamage;
+            var curseTimer = new Stopwatch();
+            curseTimer.Start();
+            var ceTimer = new Stopwatch();
+            ceTimer.Start();
+            Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> action = async (csManager, enemies, bosses) =>
+            {
+                if (!client.Game.Me.Effects.Contains(EntityEffect.Bonearmor))
+                {
+                    client.Game.UseRightHandSkillOnLocation(Skill.BoneArmor, client.Game.Me.Location);
+                    await Task.Delay(100);
+                }
+
+                var nearest = bosses.FirstOrDefault();
+                if (nearest == null)
+                {
+                    await PickupItemsFromPickupList(client, csManager, 10);
+                    await PickupNearbyRejuvenationsIfNeeded(client, csManager, 10);
+                }
+
+                if(nearest == null)
+                {
+                    await Task.Delay(100);
+                    return;
+                }
+
+                if (nearest.Location.Distance(client.Game.Me.Location) > 50)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(0.1));
+                    return;
+                }
+
+                if (curseTimer.Elapsed > TimeSpan.FromSeconds(4))
+                {
+                    if(client.Game.Me.HasSkill(curseSkill))
+                    {
+                        client.Game.UseRightHandSkillOnLocation(curseSkill, nearest.Location);
+                    }
+                    else if(client.Game.Me.HasSkill(Skill.IronMaiden))
+                    {
+                        client.Game.UseRightHandSkillOnLocation(Skill.IronMaiden, nearest.Location);
+                    }
+                    
+                    curseTimer.Restart();
+                }
+
+                if (ceTimer.Elapsed > TimeSpan.FromSeconds(0.3))
+                {
+                    csManager.CastCorpseExplosion(client);
+                    ceTimer.Restart();
+                }
+
+                await Task.Delay(100);
+            };
+            return action;
+        }
+
         private async Task<bool> KillBosses(Client client,
                                 CSManager csManager,
                                 CancellationTokenSource nextGameCancellation,
@@ -866,12 +933,18 @@ namespace ConsoleBot.Bots.Types.CS
                                 Func<uint> getTeleportId)
         {
             var stopWatch = new Stopwatch();
-
+            var stepTimeWatch = new Stopwatch();
+            stepTimeWatch.Start();
             bool bFoundBosses = false;
             var enemies = new List<AliveMonster>();
             var bosses = new List<AliveMonster>();
             do
             {
+                if(stepTimeWatch.Elapsed > TimeSpan.FromSeconds(60))
+                {
+                    return false;
+                }
+
                 if (!stopWatch.IsRunning || stopWatch.Elapsed > TimeSpan.FromSeconds(0.5))
                 {
                     enemies = csManager.GetNearbyAliveMonsters(killLocation, 35.0);
