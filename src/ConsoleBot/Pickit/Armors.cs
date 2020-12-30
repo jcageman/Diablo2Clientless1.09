@@ -86,12 +86,13 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            /*
             if (item.Name == ItemName.QuiltedArmor && item.Quality == QualityType.Unique)
             {
                 return true;
             }
 
-            /*
+
             if (item.Name == ItemName.LeatherArmor && item.Quality == QualityType.Unique)
             {
                 return true;

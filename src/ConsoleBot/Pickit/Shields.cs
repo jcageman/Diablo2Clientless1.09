@@ -60,6 +60,16 @@ namespace ConsoleBot.Pickit
                 }
             }
 
+            if (item.Name == ItemName.GrimShield && item.GetValueOfStatType(StatType.PaladinSkills) >= 2 && item.GetTotalResistFrLrCr() > 50 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50)
+            {
+                return true;
+            }
+
+            if (item.Name == ItemName.BarbedShield && item.GetValueOfStatType(StatType.PaladinSkills) >= 2 && item.GetTotalResistFrLrCr() > 50)
+            {
+                return true;
+            }
+
             if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResistFrLrCr() > 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) > 30)
             {
                 return true;
