@@ -374,8 +374,9 @@ namespace ConsoleBot.TownManagement
             if (NPCHelpers.ShouldGoToRepairNPC(game))
             {
                 var repairNPC = NPCHelpers.GetRepairNPC(game.Act);
-                Log.Information($"Client {game.Me.Name} moving to Halbu for repair/arrows");
-                var pathRepairNPC = await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, repairNPC, movementMode);
+                Log.Information($"Client {game.Me.Name} moving to {repairNPC} for repair/arrows");
+                var pathRepairNPC = repairNPC == NPCCode.Hratli ? await _pathingService.GetPathToObject(game, EntityCode.Hratli, movementMode)
+                 : await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, repairNPC, movementMode);
                 if (pathRepairNPC.Count > 0 && await MovementHelpers.TakePathOfLocations(game, pathRepairNPC, movementMode))
                 {
                     var uniqueNPC = NPCHelpers.GetUniqueNPC(game, repairNPC);
