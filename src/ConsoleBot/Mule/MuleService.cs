@@ -80,6 +80,7 @@ namespace ConsoleBot.Mule
                     if (!muleClient.JoinGame(muleGameName, _botConfig.GamePassword))
                     {
                         Log.Error($"Fail to join game with {account.Username} with character {character}");
+                        await Task.Delay(TimeSpan.FromSeconds(5));
                         continue;
                     }
 
