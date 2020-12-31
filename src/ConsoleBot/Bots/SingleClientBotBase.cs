@@ -76,7 +76,8 @@ namespace ConsoleBot.Bots
 
                     if(NeedsMule)
                     {
-                        if(await _muleService.MuleItemsForClient(client))
+                        await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: needs mule, starting mule");
+                        if (await _muleService.MuleItemsForClient(client))
                         {
                             NeedsMule = false;
                             await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: finished mule");
@@ -117,9 +118,8 @@ namespace ConsoleBot.Bots
 
                         if (client.Game.IsInGame())
                         {
-                            NeedsMule = InventoryHelpers.HasAnyItemsToStash(client.Game);
                             client.Game.LeaveGame();
-                            await Task.Delay(TimeSpan.FromSeconds(2));
+                            await Task.Delay(TimeSpan.FromSeconds(3));
                         }
 
                         if(!client.RejoinMCP())

@@ -77,6 +77,12 @@ namespace ConsoleBot.Bots.Types.Mephisto
             };
 
             await _townManagementService.PerformTownTasks(client, townManagementOptions);
+            NeedsMule = client.Game.Inventory.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(client.Game, i) && Pickit.Pickit.CanTouchInventoryItem(client.Game, i))
+                            || client.Game.Cube.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(client.Game, i));
+            if(NeedsMule)
+            {
+                return true;
+            }
 
             Log.Information("Taking DuranceOfHateLevel2 Waypoint");
             if (!await _townManagementService.TakeWaypoint(client, Waypoint.DuranceOfHateLevel2))

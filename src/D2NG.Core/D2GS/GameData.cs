@@ -40,6 +40,12 @@ namespace D2NG.Core.D2GS
                     walkingSpeedIncreasedMultiplier += (13 + 4 * increasedSpeedSkill) / (double)100;
                 }
 
+                var vigorSkill = Me.Skills.GetValueOrDefault(Skill.Vigor, 0);
+                if (vigorSkill > 0)
+                {
+                    walkingSpeedIncreasedMultiplier += (13 + 2.5 * vigorSkill) / (double)100;
+                }
+
                 return walkingSpeedIncreasedMultiplier;
             });
         }
