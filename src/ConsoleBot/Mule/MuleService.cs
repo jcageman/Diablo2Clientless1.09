@@ -43,6 +43,8 @@ namespace ConsoleBot.Mule
                 return false;
             }
 
+            var failedToJoinCount = 0;
+
             foreach (var account in _muleConfig.Accounts)
             {
                 List<Item> muleItems = GetMuleItems(client, account);
@@ -81,6 +83,14 @@ namespace ConsoleBot.Mule
                     {
                         Log.Error($"Fail to join game with {account.Username} with character {character}");
                         await Task.Delay(TimeSpan.FromSeconds(5));
+                        failedToJoinCount++;
+                        if(failedToJoinCount > 5)
+                        {
+                            client.Game.LeaveGame();
+                            await Task.Delay(TimeSpan.FromSeconds(2));
+                            client.RejoinMCP();
+                            return false;
+                        }
                         continue;
                     }
 
@@ -133,11 +143,15 @@ namespace ConsoleBot.Mule
                         }
                     } while (moveItemResult == MoveItemResult.Succes);
 
-                    await Task.Delay(TimeSpan.FromSeconds(4));
+                    await Task.Delay(TimeSpan.FromSeconds(2));
                     muleClient.Game.LeaveGame();
+                    await Task.Delay(TimeSpan.FromSeconds(1));
                     muleClient.Disconnect();
                     if (moveItemResult == MoveItemResult.Failed)
                     {
+                        client.Game.LeaveGame();
+                        await Task.Delay(TimeSpan.FromSeconds(2));
+                        client.RejoinMCP();
                         return false;
                     }
                 }
@@ -146,7 +160,7 @@ namespace ConsoleBot.Mule
             var stashInventoryItems = client.Game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(client.Game, i) && Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
             InventoryHelpers.StashItemsAndGold(client.Game, stashInventoryItems, 0);
             client.Game.LeaveGame();
-
+            await Task.Delay(TimeSpan.FromSeconds(2));
             if (!client.RejoinMCP())
             {
                 return false;
