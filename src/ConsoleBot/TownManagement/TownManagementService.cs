@@ -271,7 +271,7 @@ namespace ConsoleBot.TownManagement
                 return false;
             }
 
-            if(InventoryHelpers.HasAnyItemsToKeep(client.Game))
+            if(InventoryHelpers.HasAnyItemsToStash(client.Game))
             {
                 var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, townArea, game.Me.Location, EntityCode.Stash, movementMode);
                 if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))
@@ -288,6 +288,11 @@ namespace ConsoleBot.TownManagement
 
             if (CubeHelpers.AnyGemsToTransmuteInStash(client.Game))
             {
+                var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, townArea, game.Me.Location, EntityCode.Stash, movementMode);
+                if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))
+                {
+                    Log.Warning($"{movementMode} failed at location {game.Me.Location}");
+                }
                 CubeHelpers.TransmuteGems(client.Game);
             }
 

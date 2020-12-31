@@ -630,6 +630,8 @@ namespace D2NG.Core
             if (revpotion != null)
             {
                 Log.Information($"{Me.Name} Using Rejuvenation potion with life at {Me.Life} out of {Me.MaxLife}");
+                LastUsedHealthPotionTime = DateTime.Now;
+                LastUsedManaPotionTime = DateTime.Now;
                 return UsePotion(revpotion);
             }
             else
@@ -687,11 +689,7 @@ namespace D2NG.Core
 
                     if (Me.Life / (double)Me.MaxLife < 0.3 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(0.7))
                     {
-                        if(UseRejuvenationPotion())
-                        {
-                            continue;
-                        }
-                        else if (!UseHealthPotion())
+                        if (!UseRejuvenationPotion() && !UseHealthPotion())
                         {
                             Log.Information($"{Me.Name} Leaving game due out of potions");
                             LeaveGame();

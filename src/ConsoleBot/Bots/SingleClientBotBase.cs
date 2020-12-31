@@ -117,7 +117,7 @@ namespace ConsoleBot.Bots
 
                         if (client.Game.IsInGame())
                         {
-                            NeedsMule = InventoryHelpers.HasAnyItemsToKeep(client.Game);
+                            NeedsMule = InventoryHelpers.HasAnyItemsToStash(client.Game);
                             client.Game.LeaveGame();
                             await Task.Delay(TimeSpan.FromSeconds(2));
                         }

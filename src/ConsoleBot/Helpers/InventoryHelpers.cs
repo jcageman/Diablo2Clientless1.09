@@ -164,22 +164,23 @@ namespace ConsoleBot.Helpers
             return moveItemResult;
         }
 
-        public static bool HasAnyItemsToKeep(Game game)
+        public static bool HasAnyItemsToStash(Game game)
         {
-            return game.Inventory.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)) ||
-            game.Cube.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i));
+            return game.Inventory.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i))
+                || game.Cube.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i))
+                || game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0) > 500000;
         }
 
         public static MoveItemResult StashItemsToKeep(Game game, IExternalMessagingClient externalMessagingClient)
         {
-            var itemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
-            itemsToKeep.AddRange(game.Cube.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i)));
-            var goldOnPerson = game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0);
-            if (itemsToKeep.Count == 0 && goldOnPerson < 200000)
+            if (!HasAnyItemsToStash(game))
             {
                 return MoveItemResult.Succes;
             }
 
+            var itemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
+            itemsToKeep.AddRange(game.Cube.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i)));
+            var goldOnPerson = game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0);
             foreach (var item in itemsToKeep)
             {
                 Log.Information($"{game.Me.Name}: Want to keep {item.GetFullDescription()}");
