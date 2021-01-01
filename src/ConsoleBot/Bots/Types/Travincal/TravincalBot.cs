@@ -257,7 +257,7 @@ namespace ConsoleBot.Bots.Types.Travincal
                     if(game.Me.Location.Distance(nearest.Location) > 5)
                     {
                         var closeTo = game.Me.Location.GetPointBeforePointInSameDirection(nearest.Location, 6);
-                        if(game.Me.Location.Distance(closeTo) > 3)
+                        if(game.Me.Location.Distance(closeTo) < 3)
                         {
                             closeTo = nearest.Location;
                         }
@@ -289,7 +289,7 @@ namespace ConsoleBot.Bots.Types.Travincal
                     var wwDistance = game.Me.Location.Distance(wwDirection);
                     //Log.Information($"player loc: {game.Me.Location}, nearest: {nearest.Location} ww destination: {wwDirection}  ");
                     game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
-                    Thread.Sleep((int)((wwDistance * 50 + 300)));
+                    await Task.Delay(TimeSpan.FromSeconds(0.3));
 
                 }
             } while (aliveMembers.Any());
