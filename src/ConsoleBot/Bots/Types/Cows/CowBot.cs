@@ -920,7 +920,7 @@ namespace ConsoleBot.Bots.Types.Cows
         private async Task TeleportToNearbySafeSpot(Client client, CowManager cowManager, Point toLocation, double minDistance = 0)
         {
             var nearbyMonsters = cowManager.GetNearbyAliveMonsters(toLocation, 30.0, 100).Select(p => p.Location).ToList();
-            await _attackService.TeleportToNearbySafeSpot(client, nearbyMonsters, toLocation, minDistance);
+            await _attackService.MoveToNearbySafeSpot(client, nearbyMonsters, toLocation, MovementMode.Teleport, minDistance);
         }
 
         async Task BasicIdleClient(Client client, CowManager cowManager)

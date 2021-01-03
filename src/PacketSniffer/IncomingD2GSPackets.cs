@@ -4,6 +4,7 @@ using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using Serilog;
 using System;
+using System.Linq;
 
 namespace PacketSniffer
 {
@@ -171,7 +172,7 @@ namespace PacketSniffer
                     break;
                 case InComingPacket.AssignNPC2:
                     var assignNpcPacket = new AssignNpcPacket(eventArgs);
-                    Log.Information($"AssignNPC2 -> ID: {assignNpcPacket.EntityId} Unique Code: {assignNpcPacket.UniqueCode} Location: {assignNpcPacket.Location} Enchantments: {string.Join(",", assignNpcPacket.MonsterEnchantments)} data {eventArgs.Raw.ToPrintString()}" );
+                    Log.Information($"AssignNPC2 -> ID: {assignNpcPacket.EntityId} Unique Code: {assignNpcPacket.UniqueCode} Boss: {assignNpcPacket.IsBoss} BossMinion: {assignNpcPacket.IsBossMinion} Champ: {assignNpcPacket.IsChampion} Location: {assignNpcPacket.Location} Enchantments: {string.Join(",", assignNpcPacket.MonsterEnchantments)} data {eventArgs.Raw.ToPrintString()}" );
                     break;
                 case InComingPacket.AssignNPC1:
                     var assignTownNpcPacket = new AssignNpcPacket(eventArgs);

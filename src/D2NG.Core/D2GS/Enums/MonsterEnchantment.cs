@@ -10,6 +10,7 @@
         FireEnchanted= 9,
         LightningEnchanted = 17,
         ColdEnchanted = 18,
+        IsSuperUnique = 22,
         ManaBurn = 25,
         Teleportation = 26,
         SpectralHit = 27,

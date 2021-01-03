@@ -1,5 +1,6 @@
 ﻿using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Exceptions;
+using D2NG.Core.D2GS.Helpers;
 using D2NG.Core.D2GS.Objects;
 using System.Collections.Generic;
 using System.IO;
@@ -11,7 +12,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
     {
         public AssignNpcPacket(D2gsPacket packet) : base(packet.Raw)
         {
-            var reader = new BinaryReader(new MemoryStream(packet.Raw), Encoding.ASCII);
+            var reader = new BitReader(packet.Raw);
             var id = (InComingPacket)reader.ReadByte();
             if (InComingPacket.AssignNPC2 != id && InComingPacket.AssignNPC1 != id)
             {
@@ -23,26 +24,37 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             LifePercentage = reader.ReadByte();
             if(id == InComingPacket.AssignNPC2)
             {
-                var byteArray = reader.ReadBytes(34);
-                for (var i = 0; i < 3; ++i)
+                reader.ReadByte(); // unknown
+                IsBoss = reader.ReadBit();
+                IsBossMinion = reader.ReadBit();
+                IsChampion = reader.ReadBit();
+                for (var i = 0; i < 5; ++i)
                 {
-                    var property = (MonsterEnchantment)byteArray[25 + i];
+                    reader.ReadBit(); // unknown
+                }
+
+                for (var i = 0; i < 23; ++i)
+                {
+                    reader.ReadByte(); // unknown
+                }
+
+                for (var i = 0; i < 9; ++i)
+                {
+                    var property = (MonsterEnchantment)reader.ReadByte();
                     if (property != MonsterEnchantment.None)
                     {
                         MonsterEnchantments.Add(property);
                     }
                 }
             }
-
-            
-            reader.Close();
         }
         public uint EntityId { get; }
         public NPCCode UniqueCode { get; }
         public Point Location { get; }
-
+        public bool IsBoss { get; } = false;
+        public bool IsBossMinion { get; } = false;
+        public bool IsChampion { get; } = false;
         public byte LifePercentage { get; }
-
         public HashSet<MonsterEnchantment> MonsterEnchantments { get; } = new HashSet<MonsterEnchantment>();
     }
 }

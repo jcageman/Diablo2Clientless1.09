@@ -4,6 +4,7 @@ using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.Pathing;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -98,16 +99,10 @@ namespace ConsoleBot.Attack
 
         }
 
-        public async Task TeleportToNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, double minDistance = 0)
+        private async Task<Point> FindNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, double minDistance = 0)
         {
-            bool foundEmptySpot = false;
             for (int i = 1; i < 5; ++i)
             {
-                if (foundEmptySpot)
-                {
-                    break;
-                }
-
                 foreach (var (p1, p2) in new List<(short, short)> {
                     (-5,0), (5, 0), (0, -5), (0, 5), (-5, 5), (-5, -5), (5, -5), (5, 5)})
                 {
@@ -123,14 +118,43 @@ namespace ConsoleBot.Attack
                     var tryLocation = toLocation.Add(x, y);
                     if (await IsVisitable(client, tryLocation) && await IsInLineOfSight(client, tryLocation, toLocation) && GetNearbyMonsters(enemies, tryLocation, 10.0).Count() < 2)
                     {
-                        if (!client.Game.IsInGame() || GeneralHelpers.TryWithTimeout((retryCount) => client.Game.TeleportToLocation(tryLocation), TimeSpan.FromSeconds(4)))
-                        {
-                            foundEmptySpot = true;
-                            break;
-                        }
+                        return tryLocation;
                     }
                 }
             }
+
+            return null;
+        }
+
+        public async Task<bool> MoveToNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, MovementMode movementMode, double minDistance = 0)
+        {
+            var spot = await FindNearbySafeSpot(client, enemies, toLocation, minDistance);
+            if(spot != null)
+            {
+                if(movementMode == MovementMode.Teleport)
+                {
+                    if (await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                    {
+                        return await client.Game.TeleportToLocationAsync(spot);
+                    }, TimeSpan.FromSeconds(4)))
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    var path = await _pathingService.GetPathToLocation(client.Game, spot, MovementMode.Walking);
+                    if (!await MovementHelpers.TakePathOfLocations(client.Game, path, MovementMode.Walking))
+                    {
+                        Log.Warning($"Walking to safe spot failed at {client.Game.Me.Location}");
+                        return false;
+                    }
+
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

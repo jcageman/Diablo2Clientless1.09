@@ -6,6 +6,7 @@ using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Players;
+using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -192,9 +193,12 @@ namespace ConsoleBot.Bots.Types.CS
                 {
                     if (client.Game.WorldObjects.TryGetValue((firstMatch.Id, EntityType.NPC), out var monster))
                     {
-                        bool result = client.Game.UseRightHandSkillOnEntity(Skill.CorpseExplosion, monster);
+                        if(!monster.Effects.Contains(EntityEffect.CorpseNoDraw))
+                        {
+                            return client.Game.UseRightHandSkillOnEntity(Skill.CorpseExplosion, monster);
+                        }
+                        
                         _monstersAvailableForCorpseExplosion.TryRemove(monster.Id, out var _);
-                        return result;
                     }
                 }
             }

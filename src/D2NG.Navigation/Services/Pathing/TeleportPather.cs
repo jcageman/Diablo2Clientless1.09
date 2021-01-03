@@ -15,7 +15,7 @@ namespace D2NG.Navigation.Services.Pathing
     public class TeleportPather
     {
         private static readonly short RangeInvalid = 10000;
-        private static readonly short TpRange = 35;
+        private static readonly short TpRange = 30;
         private static readonly short BlockRange = 2;
         private readonly short[,] m_distanceMatrix;
         private readonly int m_rows;

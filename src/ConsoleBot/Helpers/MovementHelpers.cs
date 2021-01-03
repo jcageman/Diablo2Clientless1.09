@@ -101,13 +101,19 @@ namespace ConsoleBot.Helpers
                     {
                         return true;
                     }
-                    return await game.TeleportToLocationAsync(point);
+                    if(!await game.TeleportToLocationAsync(point))
+                    {
+                        Log.Debug($"Teleport to {point} failing retrying at location: {game.Me.Location}");
+                        return false;
+                    }
+                    return true;
                 }, TimeSpan.FromSeconds(4)))
                 {
                     if (token.HasValue && token.Value.IsCancellationRequested)
                     {
                         return true;
                     }
+                    Log.Warning($"Teleport failed at location: {game.Me.Location}");
                     return false;
                 }
 

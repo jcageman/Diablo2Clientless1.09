@@ -286,7 +286,6 @@ namespace ConsoleBot.Bots.Types.Travincal
                         }
                     }
 
-                    var wwDistance = game.Me.Location.Distance(wwDirection);
                     //Log.Information($"player loc: {game.Me.Location}, nearest: {nearest.Location} ww destination: {wwDirection}  ");
                     game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
                     await Task.Delay(TimeSpan.FromSeconds(0.3));

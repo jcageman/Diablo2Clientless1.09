@@ -9,7 +9,11 @@ namespace ConsoleBot.Pickit
         static HashSet<ItemName> perfectGems = new HashSet<ItemName> { ItemName.PerfectAmethyst, ItemName.PerfectDiamond, ItemName.PerfectEmerald, ItemName.PerfectRuby, ItemName.PerfectSapphire, ItemName.PerfectSkull, ItemName.PerfectTopaz };
         public static bool ShouldPickupItem(Item item)
         {
-            
+            if (item.Classification == ClassificationType.Essence)
+            {
+                return true;
+            }
+
             if (item.Classification == ClassificationType.Gem
                             && (flawlessGems.Contains(item.Name) || perfectGems.Contains(item.Name)))
             {
