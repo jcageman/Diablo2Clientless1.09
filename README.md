@@ -44,6 +44,8 @@ The above `config.json` should look as follows:
 }
 ```
 
+The realm ip address can be retrieved with a tool like https://www.wireshark.org/. Start filtering on tcp port 6112 (in wireshark the filter would be `tcp.port == 6112` as filter). You should receive packets and as soon as you enter the login screen. The source or destination address of the packets is the ip address you need to fill in for the bot.realm parameter. Source/Destination can be your own ip or the ip of the diablo 2 server, so double check the ip you enter is not your own by using something like https://www.whatismyip.com/
+
 The above `muleconfig.json` should look as follows:
 ```
 {
