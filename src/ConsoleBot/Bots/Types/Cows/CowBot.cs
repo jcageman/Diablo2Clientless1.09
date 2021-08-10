@@ -321,6 +321,16 @@ namespace ConsoleBot.Bots.Types.Cows
                     return false;
                 }
             }
+            else
+            {
+                var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+                var pathBack = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.RogueEncampment, client.Game.Me.Location, initialLocation, movementMode);
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBack, movementMode))
+                {
+                    Log.Warning($"Client {client.Game.Me.Name} {movementMode} back failed at {client.Game.Me.Location}");
+                    return false;
+                }
+            }
 
             return true;
         }
@@ -570,7 +580,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
         async Task GetTaskForClient(Client client, CowManager cowManager, Client boClient)
         {
-            if(!await MoveToCowLevel(client, cowManager))
+            if(!await MoveToCowLevel(client))
             {
                 Log.Information($"{client.Game.Me.Name}, couldn't move to the cow level, next game");
                 NextGame.TrySetResult(true);
@@ -873,16 +883,12 @@ namespace ConsoleBot.Bots.Types.Cows
                     continue;
                 }
 
-                var anyNearbyCows = cowManager.GetNearbyAliveMonsters(client, 20, 1).Any();
-                if (!anyNearbyCows)
-                {
-                    executeStaticField.Stop();
-                    executeNova.Stop();
-                    await PickupItemsFromPickupList(client, cowManager, 30);
-                    await PickupNearbyPotionsIfNeeded(client, cowManager, 30);
+                executeStaticField.Stop();
+                executeNova.Stop();
+                await PickupItemsFromPickupList(client, cowManager, 30);
+                await PickupNearbyPotionsIfNeeded(client, cowManager, 30);
 
-                    SetShouldFollowLead(client, false);
-                }
+                SetShouldFollowLead(client, false);
 
                 currentCluster = cowManager.GetNextCluster(client, currentCluster);
                 if (currentCluster == null)
@@ -1241,7 +1247,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }
         }
 
-        private async Task<bool> MoveToCowLevel(Client client, CowManager cowManager)
+        private async Task<bool> MoveToCowLevel(Client client)
         {
             var cowPortal = client.Game.GetEntityByCode(EntityCode.RedTownPortal).Where(t => t.TownPortalArea == Area.CowLevel).First();
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
