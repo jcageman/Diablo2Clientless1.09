@@ -34,7 +34,7 @@ namespace ConsoleBot.TownManagement
             var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, movementMode);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
             {
-                Log.Information($"Walking to {client.Game.Act} waypoint failed");
+                Log.Information($"{movementMode} to {client.Game.Act} waypoint failed");
                 return false;
             }
 
@@ -104,6 +104,7 @@ namespace ConsoleBot.TownManagement
 
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
+                await client.Game.MoveToAsync(portal);
                 if (retryCount > 0 && retryCount % 5 == 0)
                 {
                     client.Game.RequestUpdate(client.Game.Me.Id);
@@ -212,8 +213,9 @@ namespace ConsoleBot.TownManagement
             return true;
         }
 
-        public async Task<bool> PerformTownTasks(Client client, TownManagementOptions options)
+        public async Task<TownTaskResult> PerformTownTasks(Client client, TownManagementOptions options)
         {
+            var result = new TownTaskResult { ShouldMule = false, Succes = false };
             var game = client.Game;
             var movementMode = GetMovementMode(game);
             game.CleanupCursorItem();
@@ -227,7 +229,7 @@ namespace ConsoleBot.TownManagement
             if (!await GeneralHelpers.PickupCorpseIfExists(client, _pathingService))
             {
                 Log.Error($"{client.Game.Me.Name} failed to pickup corpse");
-                return false;
+                return result;
             }
 
             if (client.Game.Act != options.Act)
@@ -237,20 +239,19 @@ namespace ConsoleBot.TownManagement
                 if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
                 {
                     Log.Warning($"Teleporting to {client.Game.Act} waypoint failed");
-                    return false;
+                    return result;
                 }
 
                 var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).Single();
                 Log.Information($"Taking waypoint to {targetTownArea}");
                 if (!GeneralHelpers.TryWithTimeout((_) =>
                 {
-
                     client.Game.TakeWaypoint(townWaypoint, options.Act.MapTownWayPoint());
                     return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == targetTownArea, TimeSpan.FromSeconds(2));
                 }, TimeSpan.FromSeconds(5)))
                 {
                     Log.Information($"Moving to {options.Act} failed");
-                    return false;
+                    return result;
                 }
             }
 
@@ -258,20 +259,25 @@ namespace ConsoleBot.TownManagement
 
             if (!await IdentifyItems(game, movementMode))
             {
-                return false;
+                return result;
             }
 
             if (!await RefreshAndSellItems(game, movementMode, options))
             {
-                return false;
+                return result;
             }
 
             if (!await RepairItems(game, movementMode))
             {
-                return false;
+                return result;
             }
 
-            if(InventoryHelpers.HasAnyItemsToStash(client.Game))
+            if (options.ResurrectMerc && !await ResurrectMerc(game, movementMode))
+            {
+                return result;
+            }
+
+            if (InventoryHelpers.HasAnyItemsToStash(client.Game))
             {
                 var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, townArea, game.Me.Location, EntityCode.Stash, movementMode);
                 if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))
@@ -283,6 +289,11 @@ namespace ConsoleBot.TownManagement
                 if (stashItemsResult != Enums.MoveItemResult.Succes)
                 {
                     Log.Warning($"Stashing items failed with result {stashItemsResult}");
+                }
+
+                if(stashItemsResult == Enums.MoveItemResult.NoSpace)
+                {
+                    result.ShouldMule = true;
                 }
             }
 
@@ -298,10 +309,11 @@ namespace ConsoleBot.TownManagement
 
             if (!await GambleItems(client, movementMode))
             {
-                return false;
+                return result;
             }
 
-            return true;
+            result.Succes = true;
+            return result;
         }
 
         private static MovementMode GetMovementMode(Game game)
@@ -348,10 +360,20 @@ namespace ConsoleBot.TownManagement
             {
                 var sellNpc = NPCHelpers.GetSellNPC(game.Act);
                 Log.Information($"Client {game.Me.Name} moving to {sellNpc} for refresh and selling {sellItemCount} items");
-                var pathSellNPC = await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, sellNpc, movementMode);
+                var uniqueNPC = NPCHelpers.GetUniqueNPC(game, sellNpc);
+                List<Point> pathSellNPC;
+                if (uniqueNPC != null)
+                {
+                    pathSellNPC = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, uniqueNPC.Location, movementMode);
+                }
+                else
+                {
+                    pathSellNPC = await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, sellNpc, movementMode);
+                }
+                
                 if (pathSellNPC.Count > 0 && await MovementHelpers.TakePathOfLocations(game, pathSellNPC, movementMode))
                 {
-                    var uniqueNPC = NPCHelpers.GetUniqueNPC(game, sellNpc);
+                    uniqueNPC = NPCHelpers.GetUniqueNPC(game, sellNpc);
                     if (uniqueNPC == null)
                     {
                         Log.Warning($"Client {game.Me.Name} Did not find {sellNpc} at {game.Me.Location}");
@@ -374,14 +396,56 @@ namespace ConsoleBot.TownManagement
             return true;
         }
 
+        private async Task<bool> ResurrectMerc(Game game, MovementMode movementMode)
+        {
+            if (game.Me.MercId == null && game.ClientCharacter.IsExpansion && game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 50.000)
+            {
+                var mercNpc = NPCHelpers.GetMercNPCForAct(game.Act);
+                Log.Information($"Client {game.Me.Name} moving to {mercNpc} for resurrecting merc");
+                List<Point> pathRepairNPC = await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, mercNpc, movementMode);
+                if (pathRepairNPC.Count > 0 && await MovementHelpers.TakePathOfLocations(game, pathRepairNPC, movementMode))
+                {
+                    var uniqueNPC = NPCHelpers.GetUniqueNPC(game, mercNpc);
+                    if (uniqueNPC == null)
+                    {
+                        Log.Warning($"Client {game.Me.Name} Did not find {mercNpc} at {game.Me.Location}");
+                        return false;
+                    }
+
+                    if (!NPCHelpers.ResurrectMerc(game, uniqueNPC))
+                    {
+                        Log.Warning($"Client {game.Me.Name} Selling items and refreshing potions to {mercNpc} failed at {game.Me.Location}");
+                    }
+                }
+                else
+                {
+                    Log.Warning($"Client {game.Me.Name} {movementMode} to {mercNpc} failed at {game.Me.Location}");
+                }
+            }
+
+            return true;
+        }
+
         private async Task<bool> RepairItems(Game game, MovementMode movementMode)
         {
             if (NPCHelpers.ShouldGoToRepairNPC(game))
             {
                 var repairNPC = NPCHelpers.GetRepairNPC(game.Act);
                 Log.Information($"Client {game.Me.Name} moving to {repairNPC} for repair/arrows");
-                var pathRepairNPC = repairNPC == NPCCode.Hratli ? await _pathingService.GetPathToObject(game, EntityCode.Hratli, movementMode)
-                 : await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, repairNPC, movementMode);
+                List<Point> pathRepairNPC;
+                if(repairNPC == NPCCode.Hratli)
+                {
+                    pathRepairNPC = await _pathingService.GetPathToObject(game, EntityCode.Hratli, movementMode);
+                }
+                else if(repairNPC == NPCCode.Larzuk)
+                {
+                    pathRepairNPC = await _pathingService.GetPathToLocation(game, new Point(5143, 5038), movementMode);
+                }
+                else
+                {
+                    pathRepairNPC = await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, repairNPC, movementMode);
+                }  
+
                 if (pathRepairNPC.Count > 0 && await MovementHelpers.TakePathOfLocations(game, pathRepairNPC, movementMode))
                 {
                     var uniqueNPC = NPCHelpers.GetUniqueNPC(game, repairNPC);
@@ -412,7 +476,16 @@ namespace ConsoleBot.TownManagement
             {
                 var gambleNPC = NPCHelpers.GetGambleNPC(client.Game.Act);
                 Log.Information($"Gambling items at {gambleNPC}");
-                var pathToGamble = await _pathingService.GetPathToNPC(client.Game, gambleNPC, movementMode);
+                List<Point> pathToGamble;
+                if (gambleNPC == NPCCode.Anya)
+                {
+                    pathToGamble = await _pathingService.GetPathToLocation(client.Game, new Point(5108, 5114), MovementMode.Teleport); 
+                }
+                else
+                {
+                    pathToGamble = await _pathingService.GetPathToNPC(client.Game, gambleNPC, movementMode);
+                }
+                
                 if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToGamble, movementMode))
                 {
                     Log.Warning($"{movementMode} to {gambleNPC} failed at {client.Game.Me.Location}");

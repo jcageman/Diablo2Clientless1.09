@@ -72,11 +72,10 @@ namespace ConsoleBot.Bots.Types.Travincal
                 Act = Act.Act4
             };
 
-            await _townManagementService.PerformTownTasks(client, townManagementOptions);
-            NeedsMule = client.Game.Inventory.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(client.Game, i) && Pickit.Pickit.CanTouchInventoryItem(client.Game, i))
-                            || client.Game.Cube.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(client.Game, i));
-            if (NeedsMule)
+            var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
+            if (townTaskResult.ShouldMule)
             {
+                NeedsMule = true;
                 return true;
             }
 
@@ -144,7 +143,7 @@ namespace ConsoleBot.Bots.Types.Travincal
         {
             var pickupItems = game.Items.Where(i =>
             {
-                return i.Ground && game.Me.Location.Distance(i.Location) < distance && Pickit.Pickit.ShouldPickupItem(game, i);
+                return i.Ground && game.Me.Location.Distance(i.Location) < distance && Pickit.Pickit.ShouldPickupItem(game, i, true);
             }).OrderBy(n => game.Me.Location.Distance(n.Location));
 
             foreach (var item in pickupItems)

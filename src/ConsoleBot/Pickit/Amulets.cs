@@ -5,12 +5,53 @@ namespace ConsoleBot.Pickit
 {
     public static class Amulets
     {
-        public static bool ShouldPickupItem(Item item)
+        public static bool ShouldPickupItemClassic(Item item)
         {
             return item.Quality == QualityType.Rare;
         }
 
-        public static bool ShouldKeepItem(Item item)
+        public static bool ShouldPickupItemExpansion(Item item)
+        {
+            return item.Quality == QualityType.Rare || item.Quality == QualityType.Unique || item.Quality == QualityType.Crafted;
+        }
+
+        public static bool ShouldKeepItemExpansion(Item item)
+        {
+            if(item.Quality == QualityType.Unique)
+            {
+                // Cats eye
+                if(item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20 && item.GetValueOfStatType(StatType.FasterRunWalk) >= 30)
+                {
+                    return true;
+                }
+
+                // Atma's Scarab
+                if (item.GetValueOfStatType(StatType.PoisonResistance) >= 75)
+                {
+                    return true;
+                }
+
+                // Highlord's Wrath
+                if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20 && item.GetValueOfStatType(StatType.AmazonSkills) == 1)
+                {
+                    return true;
+                }
+
+                // Mara's Kaleidescope
+                if (item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 20 && item.GetValueOfStatType(StatType.AmazonSkills) == 2)
+                {
+                    return true;
+                }
+            }
+
+            if (item.GetValueToSkillTab(SkillTab.BarbarianWarcries) >= 3)
+            {
+                return true;
+            }
+
+            return ShouldKeepItemClassic(item);
+        }
+            public static bool ShouldKeepItemClassic(Item item)
         {
             var toCasterSkills = item.GetValueOfStatType(StatType.SorceressSkills);
             toCasterSkills += item.GetValueOfStatType(StatType.NecromancerSkills);

@@ -52,7 +52,7 @@ namespace D2NG.Core.DataManager
                     var statType = name == "Unused" ? propertiesMap[name + " " + saveBits] : propertiesMap[name];
                     var i = new ItemPropertyEntry(name, statType, saveBits, saveParamBits, saveAdd);
                     ItemProperties.Add(i);
-                    ItemPropertiesByStatType.Add(i.StatType, i);
+                    ItemPropertiesByStatType.TryAdd(i.StatType, i);
                 }
                 catch (Exception e)
                 {
@@ -266,12 +266,12 @@ namespace D2NG.Core.DataManager
             propertiesNameToTypeMap["Unused 185"] = StatType.Unused185;
             propertiesNameToTypeMap["Unused 186"] = StatType.Unused186;
             propertiesNameToTypeMap["Unused 187"] = StatType.Unused187;
-            propertiesNameToTypeMap["Skill Tab"] = StatType.SkillTab;
-            propertiesNameToTypeMap["Unused 189"] = StatType.Unused189;
-            propertiesNameToTypeMap["Unused 190"] = StatType.Unused190;
-            propertiesNameToTypeMap["Unused 191"] = StatType.Unused191;
-            propertiesNameToTypeMap["Unused 192"] = StatType.Unused192;
-            propertiesNameToTypeMap["Unused 193"] = StatType.Unused193;
+            propertiesNameToTypeMap["Skill Tab1"] = StatType.SkillTab1;
+            propertiesNameToTypeMap["Skill Tab2"] = StatType.SkillTab2;
+            propertiesNameToTypeMap["Skill Tab3"] = StatType.SkillTab3;
+            propertiesNameToTypeMap["Skill Tab4"] = StatType.SkillTab4;
+            propertiesNameToTypeMap["Skill Tab5"] = StatType.SkillTab5;
+            propertiesNameToTypeMap["Skill Tab6"] = StatType.SkillTab6;
             propertiesNameToTypeMap["Socket Count"] = StatType.SocketCount;
             propertiesNameToTypeMap["Skill On Striking"] = StatType.SkillOnStriking;
             propertiesNameToTypeMap["Skill On Kill"] = StatType.SkillOnKill;
@@ -279,9 +279,9 @@ namespace D2NG.Core.DataManager
             propertiesNameToTypeMap["Skill On Hit"] = StatType.SkillOnHit;
             propertiesNameToTypeMap["Skill On Level Up"] = StatType.SkillOnLevelUp;
             propertiesNameToTypeMap["Unused 200"] = StatType.Unused200;
-            propertiesNameToTypeMap["Skill When Struck"] = StatType.SkillWhenStruck;
-            propertiesNameToTypeMap["Unused 202"] = StatType.Unused202;
-            propertiesNameToTypeMap["Unused 203"] = StatType.Unused203;
+            propertiesNameToTypeMap["Skill When Struck1"] = StatType.SkillWhenStruck1;
+            propertiesNameToTypeMap["Skill When Struck2"] = StatType.SkillWhenStruck2;
+            propertiesNameToTypeMap["Skill When Struck3"] = StatType.SkillWhenStruck3;
             propertiesNameToTypeMap["Charged"] = StatType.Charged;
             propertiesNameToTypeMap["Unused 204"] = StatType.Unused204;
             propertiesNameToTypeMap["Unused 205"] = StatType.Unused205;

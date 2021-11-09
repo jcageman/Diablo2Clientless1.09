@@ -5,7 +5,7 @@ namespace ConsoleBot.Pickit
 {
     public static class Gloves
     {
-        public static bool ShouldPickupItem(Item item)
+        public static bool ShouldPickupItemClassic(Item item)
         {
             if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
             {
@@ -15,7 +15,53 @@ namespace ConsoleBot.Pickit
             return false;
         }
 
-        public static bool ShouldKeepItem(Item item)
+        public static bool ShouldPickupItemExpansion(Item item)
+        {
+            if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool ShouldKeepItemExpansion(Item item)
+        {
+            if (item.Quality == QualityType.Unique)
+            {
+                switch (item.Name)
+#pragma warning disable CS1522 // Empty switch block
+                {
+#pragma warning restore CS1522 // Empty switch block
+                              //case ItemName.LightGauntlets:
+                              //    return true;
+                              //case ItemName.DemonhideGloves:
+                              //    return item.Ethereal;
+                }
+            }
+
+            if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
+                && item.GetValueToSkillTab(SkillTab.AmazonBowAndCrossbowSkills) + item.GetValueToSkillTab(SkillTab.AmazonJavelinAndSpearSkills) == 2)
+            {
+                return true;
+            }
+
+            if (item.GetValueToSkillTab(SkillTab.AmazonJavelinAndSpearSkills) == 2 && item.GetTotalResistFrLrCr() >= 30)
+            {
+                return true;
+            }
+
+            if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
+                && item.GetTotalResistFrLrCr() >= 30
+                && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 3)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool ShouldKeepItemClassic(Item item)
         {
             if (item.Name == ItemName.WarGauntlets
                 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50

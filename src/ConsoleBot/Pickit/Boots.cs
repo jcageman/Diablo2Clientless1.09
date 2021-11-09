@@ -8,7 +8,7 @@ namespace ConsoleBot.Pickit
     {
         private static readonly HashSet<ItemName> casterBoots = new HashSet<ItemName> {
             ItemName.Boots, ItemName.HeavyBoots, ItemName.ChainBoots, ItemName.LightPlatedBoots, ItemName.DemonhideBoots, ItemName.SharkskinBoots };
-        public static bool ShouldPickupItem(Item item)
+        public static bool ShouldPickupItemClassic(Item item)
         {
             if (item.Quality == QualityType.Rare)
             {
@@ -18,7 +18,36 @@ namespace ConsoleBot.Pickit
             return false;
         }
 
-        public static bool ShouldKeepItem(Item item)
+        public static bool ShouldPickupItemExpansion(Item item)
+        {
+            if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool ShouldKeepItemExpansion(Item item)
+        {
+            if (item.Quality == QualityType.Unique)
+            {
+                switch (item.Name)
+                {
+                    //case ItemName.DemonhideBoots:
+                    //case ItemName.SharkskinBoots:
+                    case ItemName.BattleBoots:
+                    //case ItemName.MeshBoots:
+                        return true;
+                    case ItemName.WarBoots:
+                        return item.Ethereal;
+                }
+            }
+
+            return ShouldKeepItemClassic(item);
+        }
+
+        public static bool ShouldKeepItemClassic(Item item)
         {
             if (item.GetValueOfStatType(StatType.FasterRunWalk) >= 30
                 && item.GetTotalResistFrLrCr() >= 70

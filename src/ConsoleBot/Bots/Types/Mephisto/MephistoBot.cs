@@ -73,14 +73,14 @@ namespace ConsoleBot.Bots.Types.Mephisto
 
             var townManagementOptions = new TownManagementOptions()
             {
-                Act = Act.Act3
+                Act = Act.Act3,
+                ResurrectMerc = false
             };
 
-            await _townManagementService.PerformTownTasks(client, townManagementOptions);
-            NeedsMule = client.Game.Inventory.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(client.Game, i) && Pickit.Pickit.CanTouchInventoryItem(client.Game, i))
-                            || client.Game.Cube.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(client.Game, i));
-            if(NeedsMule)
+            var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
+            if (townTaskResult.ShouldMule)
             {
+                NeedsMule = true;
                 return true;
             }
 
@@ -89,6 +89,11 @@ namespace ConsoleBot.Bots.Types.Mephisto
             {
                 Log.Information("Taking DuranceOfHateLevel2 waypoint failed");
                 return false;
+            }
+
+            if (!client.Game.Me.Effects.Contains(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
+            {
+                client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
             }
 
             var path2 = await _pathingService.GetPathFromWaypointToArea(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel2, Waypoint.DuranceOfHateLevel2, Area.DuranceOfHateLevel3, MovementMode.Teleport);
@@ -147,7 +152,7 @@ namespace ConsoleBot.Bots.Types.Mephisto
                         return true;
                     }
 
-                    if (mephisto.Location.Distance(client.Game.Me.Location) < 30)
+                    if (mephisto.Location.Distance(client.Game.Me.Location) < 30 && (!client.Game.ClientCharacter.IsExpansion || mephisto.LifePercentage > 50))
                     {
                         client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
                     }
@@ -160,7 +165,7 @@ namespace ConsoleBot.Bots.Types.Mephisto
 
                     return mephisto.LifePercentage < 30;
                 },
-                TimeSpan.FromSeconds(30)))
+                TimeSpan.FromSeconds(50)))
             {
                 Log.Warning($"Killing Mephisto failed at location {client.Game.Me.Location}");
                 return false;
@@ -177,7 +182,7 @@ namespace ConsoleBot.Bots.Types.Mephisto
 
                 return GeneralHelpers.TryWithTimeout((_) => mephisto.State == EntityState.Dead,
                     TimeSpan.FromSeconds(0.7));
-            }, TimeSpan.FromSeconds(30)))
+            }, TimeSpan.FromSeconds(50)))
             {
                 Log.Warning($"Killing Mephisto failed at location {client.Game.Me.Location}");
                 return false;
@@ -194,7 +199,7 @@ namespace ConsoleBot.Bots.Types.Mephisto
 
         private bool PickupNearbyItems(Client client)
         {
-            var pickupItems = client.Game.Items.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(client.Game, i)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
+            var pickupItems = client.Game.Items.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
             Log.Information($"Killed Mephisto, picking up {pickupItems.Count()} items ");
             foreach (var item in pickupItems)
             {

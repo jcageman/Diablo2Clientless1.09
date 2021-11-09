@@ -18,7 +18,7 @@ namespace D2NG.Core.Tests.D2GS
             string str = "655553e25d58010209000000006e6f6d616e63657200aa6f4b0000004c";
             var gamehash = str.Substring(2, 8);
             var gametoken = str.Substring(10, 4);
-            var packet = new GameLogonPacket(BinaryPrimitives.ReverseEndianness(Convert.ToUInt32(gamehash, 16)), BinaryPrimitives.ReverseEndianness(Convert.ToUInt16(gametoken, 16)), new Character("nomancer", "8980ffffffffff09ffffffffff03ffffffffffffffffffffff0180808080ffffff00".HexStringToByteString()));
+            var packet = new GameLogonPacket(BinaryPrimitives.ReverseEndianness(Convert.ToUInt32(gamehash, 16)), BinaryPrimitives.ReverseEndianness(Convert.ToUInt16(gametoken, 16)), new Character("nomancer", "8980ffffffffff09ffffffffff03ffffffffffffffffffffff0180808080ffffff00".StringToByteArray()));
             var expected = str.StringToByteArray();
             Assert.Equal(29, packet.Raw.Length);
             Assert.Equal(expected, packet.Raw);

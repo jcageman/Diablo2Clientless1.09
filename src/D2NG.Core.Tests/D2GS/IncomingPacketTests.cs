@@ -84,7 +84,7 @@ namespace D2NG.Core.Tests.D2GS
             var packet = new AssignNpcPacket(new D2gsPacket(bytes));
             Assert.Equal(NPCCode.VileHunter, packet.UniqueCode);
             Assert.Equal(new Point(7959, 8313), packet.Location);
-            Assert.Equal(51, packet.LifePercentage);
+            Assert.Equal(39.84375, packet.LifePercentage);
             Assert.Equal(new HashSet<MonsterEnchantment> { MonsterEnchantment.ExtraFast, MonsterEnchantment.LightningEnchanted, MonsterEnchantment.Teleportation }, packet.MonsterEnchantments);
         }
 
@@ -98,6 +98,26 @@ namespace D2NG.Core.Tests.D2GS
             Assert.Empty(packet.MonsterEnchantments);
         }
 
+        [Fact]
+        public void AssignMerc()
+        {
+            var bytes = new byte[] { 0x81, 0x07, 0x52, 0x01, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x8D, 0x51, 0x11, 0x48, 0x03, 0x04, 0x00, 0x00 };
+            var packet = new AssignMercPacket(new D2gsPacket(bytes));
+            Assert.Equal(1u, packet.PlayerEntityId);
+            Assert.Equal(1u, packet.MercEntityId);
+        }
 
+        [Fact]
+        public void NPCStopPacket()
+        {
+            var bytes = new byte[] { 0x6D, 0x95, 0x01, 0x00, 0x00, 0x18, 0x62, 0xE7, 0x16, 0x80 };
+            var packet = new NPCStopPacket(new D2gsPacket(bytes));
+            Assert.Equal(405u, packet.EntityId);
+            Assert.Equal(25112, packet.Location.X);
+            Assert.Equal(5863, packet.Location.Y);
+            Assert.Equal(100, packet.LifePercentage);
+        }
+
+        
      }
 }

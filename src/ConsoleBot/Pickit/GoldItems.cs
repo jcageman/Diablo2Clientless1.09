@@ -36,16 +36,16 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            //Exceptional armors are worth it
+            //Exceptional & elite armors are worth it
             if (item.Classification == ClassificationType.Armor
-                && item.Type.StartsWith("x"))
+                && (item.Type.StartsWith("x") || item.Type.StartsWith("u")))
             {
                 return true;
             }
 
             //Valuable shields
             var valuableShieldTypes = new HashSet<string> {
-                "xit", "xow", "xts", "xsh", "xpk"};
+                "xit", "xow", "xts", "xsh", "xpk", "uit", "uow", "uts", "ush", "upk"};
             if (item.Quality == QualityType.Magical
                 && item.Classification == ClassificationType.Shield
                 && valuableShieldTypes.Contains(item.Type))
@@ -55,7 +55,7 @@ namespace ConsoleBot.Pickit
 
             //Valuable Gloves
             var valuableGloveTypes = new HashSet<string> {
-                "xtg", "xhg"};
+                "xtg", "xhg", "utg", "uhg"};
             if (item.Quality == QualityType.Magical
                 && item.Classification == ClassificationType.Gloves
                 && valuableGloveTypes.Contains(item.Type))

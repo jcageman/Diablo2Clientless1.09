@@ -9,7 +9,7 @@ namespace D2NG.Core.D2GS.Packet.Outgoing
             base(
                 BuildPacket(
                     (byte)OutGoingPacket.IdentifyItems,
-                    BitConverter.GetBytes((uint)entity.Id)
+                    BitConverter.GetBytes(entity.Id)
                 )
             )
         {

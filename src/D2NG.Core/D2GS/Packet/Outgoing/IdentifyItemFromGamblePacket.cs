@@ -9,7 +9,7 @@ namespace D2NG.Core.D2GS.Packet.Outgoing
             base(
                 BuildPacket(
                     (byte)OutGoingPacket.IdentifyFromGamble,
-                    BitConverter.GetBytes((uint)item.Id)
+                    BitConverter.GetBytes(item.Id)
                 )
             )
         {

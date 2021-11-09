@@ -11,7 +11,7 @@ namespace D2NG.Core.D2GS.Packet.Outgoing
                 BuildPacket(
                     (byte)OutGoingPacket.MakeEntityMove,
                     BitConverter.GetBytes((uint)0x01),
-                    BitConverter.GetBytes((uint)entity.Id),
+                    BitConverter.GetBytes(entity.Id),
                     BitConverter.GetBytes((uint)self.Location.X),
                     BitConverter.GetBytes((uint)self.Location.Y)
                 )

@@ -19,7 +19,7 @@ namespace PacketSniffer
 
             if (!Enum.IsDefined(typeof(Mcp), bytes[2]))
             {
-                Log.Information($"Send unknown MCP packet of type: 0x{(byte)bytes[0],2:X2} with data {bytes.ToPrintString()}");
+                Log.Information($"Send unknown MCP packet of type: 0x{bytes[0],2:X2} with data {bytes.ToPrintString()}");
                 return;
             }
 

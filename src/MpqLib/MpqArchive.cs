@@ -180,7 +180,7 @@ namespace MpqLib
 
             foreach (char c in Input)
             {
-                int val = (int)char.ToUpper(c);
+                int val = char.ToUpper(c);
                 seed1 = sStormBuffer[Offset + val] ^ (seed1 + seed2);
                 seed2 = (uint)val + seed1 + seed2 + (seed2 << 5) + 3;
             }

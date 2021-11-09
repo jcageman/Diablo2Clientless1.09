@@ -6,12 +6,33 @@ namespace ConsoleBot.Pickit
 {
     public static class Rings
     {
-        public static bool ShouldPickupItem(Item item)
+        public static bool ShouldPickupItemClassic(Item item)
         {
             return true;
         }
 
-        public static bool ShouldKeepItem(Item item)
+        public static bool ShouldPickupItemExpansion(Item item)
+        {
+            return true;
+        }
+
+        public static bool ShouldKeepItemExpansion(Item item)
+        {
+            if (item.Quality == QualityType.Unique
+            && item.GetValueOfStatType(StatType.AllSkills) == 1)
+            {
+                return true;
+            }
+
+            if (item.Quality == QualityType.Unique && item.GetValueOfStatType(StatType.CannotBeFrozen) > 0)
+            {
+                return true;
+            }
+
+            return ShouldKeepItemClassic(item);
+        }
+
+            public static bool ShouldKeepItemClassic(Item item)
         {
             if (item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) > 37)
             {

@@ -10,8 +10,8 @@ namespace D2NG.Core.D2GS.Packet.Outgoing
             base(
                 BuildPacket(
                     (byte)OutGoingPacket.SellItem,
-                    BitConverter.GetBytes((uint)entity.Id),
-                    BitConverter.GetBytes((uint)item.Id),
+                    BitConverter.GetBytes(entity.Id),
+                    BitConverter.GetBytes(item.Id),
                     BitConverter.GetBytes((uint)0x00),
                     BitConverter.GetBytes((uint)0x00)
                 )

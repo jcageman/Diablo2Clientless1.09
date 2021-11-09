@@ -44,7 +44,7 @@ namespace ConsoleBot.Bots.Types.CS
                 return Task.CompletedTask;
             }
 
-            if (Pickit.Pickit.ShouldPickupItem(game, item))
+            if (Pickit.Pickit.ShouldPickupItem(game, item, false))
             {
                 _pickitItemsOnGround.TryAdd(item.Id, item);
             }
@@ -57,7 +57,7 @@ namespace ConsoleBot.Bots.Types.CS
             return Task.CompletedTask;
         }
 
-        private void UpdateNPCLife(uint entityId, byte lifePercentage)
+        private void UpdateNPCLife(uint entityId, double lifePercentage)
         {
             if (_aliveMonsters.TryGetValue(entityId, out var monster))
             {
@@ -130,7 +130,7 @@ namespace ConsoleBot.Bots.Types.CS
 
         public void PutItemOnPickitList(Client client, Item item)
         {
-            if (Pickit.Pickit.ShouldPickupItem(client.Game, item) && (client.Game.Items.FirstOrDefault(i => i.Id == item.Id)?.Ground ?? false))
+            if (Pickit.Pickit.ShouldPickupItem(client.Game, item, false) && (client.Game.Items.FirstOrDefault(i => i.Id == item.Id)?.Ground ?? false))
             {
                 _pickitItemsOnGround.TryAdd(item.Id, item);
             }

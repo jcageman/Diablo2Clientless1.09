@@ -17,6 +17,25 @@ namespace ConsoleBot.Pickit
                 return false;
             }
 
+            if (item.Name == ItemName.LacqueredPlate
+                //|| item.Name == ItemName.MeshBelt
+                || (item.Name == ItemName.Amulet && (!item.IsIdentified || item.GetValueOfStatType(StatType.SorceressSkills) == 2)))
+            {
+                return true;
+            }
+
+            /*
+            if (item.Name == ItemName.BrambleMitts)
+            {
+                return true;
+            }
+            // trangouls gloves
+            if (item.Name == ItemName.HeavyBracers)
+            {
+                return true;
+            }
+            */
+
             // Death's
             /*
             if (item.Name == "Sash" || item.Name == "Leather Gloves")

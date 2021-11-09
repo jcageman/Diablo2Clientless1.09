@@ -44,7 +44,7 @@ namespace D2NG.Core.D2GS
                 }
                 else
                 {
-                    Log.Warning($"Received unknown D2GS packet of type: 0x{(byte)eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
+                    Log.Warning($"Received unknown D2GS packet of type: 0x{eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
                 }
             };
 
@@ -58,7 +58,7 @@ namespace D2NG.Core.D2GS
                 }
                 else
                 {
-                    Log.Warning($"Send unknown D2GS packet of type: 0x{(byte)eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
+                    Log.Warning($"Send unknown D2GS packet of type: 0x{eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
                 }
             };
         }

@@ -1,6 +1,7 @@
 ﻿using ConsoleBot.Bots.Types.Cows;
 using ConsoleBot.Bots.Types.CS;
 using ConsoleBot.Bots.Types.Mephisto;
+using ConsoleBot.Bots.Types.Pindle;
 using ConsoleBot.Bots.Types.Travincal;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,7 @@ namespace ConsoleBot.Bots.Types
             services.AddSingleton<IBotInstance, TestBot>();
             services.AddSingleton<IBotInstance, CowBot>();
             services.AddSingleton<IBotInstance, CSBot>();
+            services.AddSingleton<IBotInstance, PindleBot>();
             services.AddSingleton<IBotFactory, BotFactory>();
             services.AddOptions<CowConfiguration>()
                 .Bind(config.GetSection("bot").GetSection("cows"));
@@ -25,6 +27,8 @@ namespace ConsoleBot.Bots.Types
                 .Bind(config.GetSection("bot").GetSection("travincal"));
             services.AddOptions<CsConfiguration>()
                 .Bind(config.GetSection("bot").GetSection("cs"));
+            services.AddOptions<PindleConfiguration>()
+                .Bind(config.GetSection("bot").GetSection("pindle"));
         }
     }
 }

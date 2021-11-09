@@ -7,7 +7,7 @@ namespace D2NG.Core.D2GS.Items.Containers
 {
     public class Belt : Container
     {
-        public Belt() : base(4, 1)
+        public Belt() : base(4, 4)
         {
         }
 
@@ -22,7 +22,10 @@ namespace D2NG.Core.D2GS.Items.Containers
             {
                 for (int x = 0; x < Width; x++)
                 {
-                    Buffer[y,x] = oldBuffer[y,x];
+                    if(Height > y)
+                    {
+                        Buffer[y, x] = oldBuffer[y, x];
+                    }
                 }
             }
         }

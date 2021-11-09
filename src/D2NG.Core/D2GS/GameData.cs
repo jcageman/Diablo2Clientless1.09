@@ -28,7 +28,7 @@ namespace D2NG.Core.D2GS
             _walkingSpeedMultiplier = new Lazy<double>(() =>
             {
                 var walkingSpeedIncreasedMultiplier = 1.0;
-                var speedItems = this.Items.Where(i => i.Value.Action == Action.Equip && i.Value.PlayerId == Me?.Id).Select(i => i.Value.GetValueOfStatType(StatType.FasterRunWalk));
+                var speedItems = this.Items.Where(i => i.Value.Action == Action.Equip && i.Value.EntityType == EntityType.Player && i.Value.PlayerId == Me?.Id).Select(i => i.Value.GetValueOfStatType(StatType.FasterRunWalk));
                 if(speedItems.Any())
                 {
                     walkingSpeedIncreasedMultiplier += speedItems.Aggregate((agg, frw) => agg + frw) / (double)100;
@@ -43,7 +43,7 @@ namespace D2NG.Core.D2GS
                 var vigorSkill = Me.Skills.GetValueOrDefault(Skill.Vigor, 0);
                 if (vigorSkill > 0)
                 {
-                    walkingSpeedIncreasedMultiplier += (13 + 2.5 * vigorSkill) / (double)100;
+                    walkingSpeedIncreasedMultiplier += (13 + 2.5 * vigorSkill) / 100;
                 }
 
                 return walkingSpeedIncreasedMultiplier;
@@ -113,6 +113,20 @@ namespace D2NG.Core.D2GS
             if (player == null)
             {
                 Players.Add(new Player(packet));
+            }
+        }
+
+        internal void AssignMerc(AssignMercPacket packet)
+        {
+            var player = Players.Where(p => p.Id == packet.PlayerEntityId).FirstOrDefault();
+            if (player != null)
+            {
+                player.MercId = packet.MercEntityId;
+            }
+
+            if (packet.PlayerEntityId == Me.Id)
+            {
+                Me.MercId = packet.MercEntityId;
             }
         }
 
@@ -244,19 +258,22 @@ namespace D2NG.Core.D2GS
             }
         }
 
-        internal void ReassignPlayer(uint unitId, Point location)
+        internal void ReassignPlayer(EntityType entityType, uint unitId, Point location)
         {
-            if (unitId == Me.Id)
+            if(entityType == EntityType.Player)
             {
-                Me.Location = location;
-            }
-
-            foreach (var player in Players)
-            {
-                if (unitId == player.Id)
+                if (unitId == Me.Id)
                 {
-                    player.Location = location;
-                    break;
+                    Me.Location = location;
+                }
+
+                foreach (var player in Players)
+                {
+                    if (unitId == player.Id)
+                    {
+                        player.Location = location;
+                        break;
+                    }
                 }
             }
         }
@@ -330,13 +347,13 @@ namespace D2NG.Core.D2GS
             switch (item.Action)
             {
                 case Action.Equip:
-                    if (item.PlayerId == Me?.Id && item.Classification == ClassificationType.Belt)
+                    if (item.EntityType == EntityType.Player && item.PlayerId == Me?.Id && item.Classification == ClassificationType.Belt)
                     {
                         Belt.UpdateBeltRows(item.BeltRows);
                     }
                     break;
                 case Action.Unequip:
-                    if (item.PlayerId == Me?.Id && item.Classification == ClassificationType.Belt)
+                    if (item.EntityType == EntityType.Player && item.PlayerId == Me?.Id && item.Classification == ClassificationType.Belt)
                     {
                         Belt.UpdateBeltRows(1);
                     }
@@ -358,6 +375,12 @@ namespace D2NG.Core.D2GS
                     break;
                 case Action.UpdateStats:
                     UpdateItemStatsInContainer(item);
+                    break;
+                case Action.DropToGround:
+                    if (CursorItem?.Id == item.Id)
+                    {
+                        CursorItem = null;
+                    }
                     break;
                 default:
                     // Do nothing because we don't know

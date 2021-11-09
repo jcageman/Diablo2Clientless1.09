@@ -1,4 +1,5 @@
 ﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
 using System.Collections.Generic;
 
@@ -14,6 +15,7 @@ namespace D2NG.Core.D2GS.Items
             Properties = new Dictionary<StatType, ItemProperty>();
         }
 
+        public EntityType EntityType { get; set; }
         public uint PlayerId { get; set; }
 
         public byte Unknown2 { get; set; }
@@ -211,9 +213,72 @@ namespace D2NG.Core.D2GS.Items
             return result;
         }
 
+        public bool HasSkillTab()
+        {
+            return Properties.GetValueOrDefault(StatType.SkillTab1)?.Value > 0
+                || Properties.GetValueOrDefault(StatType.SkillTab2)?.Value > 0
+                || Properties.GetValueOrDefault(StatType.SkillTab3)?.Value > 0
+                || Properties.GetValueOrDefault(StatType.SkillTab4)?.Value > 0
+                || Properties.GetValueOrDefault(StatType.SkillTab5)?.Value > 0
+                || Properties.GetValueOrDefault(StatType.SkillTab6)?.Value > 0;
+        }
+
+        public int TotalToSkillTabs()
+        {
+            return Properties.GetValueOrDefault(StatType.SkillTab1)?.Value  ?? 0
+                + Properties.GetValueOrDefault(StatType.SkillTab2)?.Value ?? 0
+                + Properties.GetValueOrDefault(StatType.SkillTab3)?.Value ?? 0
+                + Properties.GetValueOrDefault(StatType.SkillTab4)?.Value ?? 0
+                + Properties.GetValueOrDefault(StatType.SkillTab5)?.Value ?? 0
+                + Properties.GetValueOrDefault(StatType.SkillTab6)?.Value ?? 0;
+        }
+
+        public int GetValueToSkillTab(SkillTab skillTab)
+        {
+            var result = 0;
+            var value1 = Properties.GetValueOrDefault(StatType.SkillTab1);
+            if (value1 != null && value1.SkillTab == skillTab)
+            {
+                result += value1.Value;
+            }
+
+            var value2 = Properties.GetValueOrDefault(StatType.SkillTab2);
+            if (value2 != null && value2.SkillTab == skillTab)
+            {
+                result += value2.Value;
+            }
+
+            var value3 = Properties.GetValueOrDefault(StatType.SkillTab3);
+            if (value3 != null && value3.SkillTab == skillTab)
+            {
+                result += value3.Value;
+            }
+
+            var value4 = Properties.GetValueOrDefault(StatType.SkillTab4);
+            if (value4 != null && value4.SkillTab == skillTab)
+            {
+                result += value4.Value;
+            }
+
+            var value5 = Properties.GetValueOrDefault(StatType.SkillTab5);
+            if (value5 != null && value5.SkillTab == skillTab)
+            {
+                result += value5.Value;
+            }
+
+            var value6 = Properties.GetValueOrDefault(StatType.SkillTab6);
+            if (value6 != null && value6.SkillTab == skillTab)
+            {
+                result += value6.Value;
+            }
+
+            return result;
+        }
+
         public string GetFullDescription()
         {
-            string fullDescription = $"{Name} ({Level}): \r\n";
+            string etherealText = Ethereal ? "ethereal " : string.Empty;
+            string fullDescription = $"{Name} ({Level}) - {etherealText}{Quality}: \r\n";
             foreach (var property in Properties)
             {
                 switch(property.Key)
@@ -231,6 +296,18 @@ namespace D2NG.Core.D2GS.Items
                     case StatType.MinimumLightningDamage:
                         var maximumDamageValue = property.Value.MaximumValue > 0 ? $" - {property.Value.MaximumValue}" : "";
                         fullDescription += $"\t{property.Key} : {property.Value.Value}{maximumDamageValue} \r\n";
+                        break;
+                    case StatType.SkillTab1:
+                        fullDescription += $"\t{property.Value.SkillTab} : {property.Value.Value} \r\n";
+                        break;
+                    case StatType.SkillOnHit:
+                    case StatType.SkillWhenStruck1:
+                    case StatType.SkillOnStriking:
+                    case StatType.SkillOnLevelUp:
+                        fullDescription += $"\t{property.Key} : with skill {property.Value.Skill} level {property.Value.SkillLevel} chance {property.Value.SkillChance}% \r\n";
+                        break;
+                    case StatType.Charged:
+                        fullDescription += $"\t{property.Key} : with skill {property.Value.Skill} level {property.Value.SkillLevel} with {property.Value.MaximumCharges} charges \r\n";
                         break;
                     default:
                         fullDescription += $"\t{property.Key} : {property.Value.Value} \r\n";

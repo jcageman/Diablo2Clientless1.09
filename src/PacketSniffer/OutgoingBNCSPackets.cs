@@ -18,7 +18,7 @@ namespace PacketSniffer
 
             if (!Enum.IsDefined(typeof(Sid), bytes[1]))
             {
-                Log.Information($"Send unknown BNCS packet of type: 0x{(byte)bytes[0],2:X2} with data {bytes.ToPrintString()}");
+                Log.Information($"Send unknown BNCS packet of type: 0x{bytes[0],2:X2} with data {bytes.ToPrintString()}");
                 return;
             }
 

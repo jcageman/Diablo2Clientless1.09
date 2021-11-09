@@ -12,7 +12,7 @@ namespace PacketSniffer
         {
             if (!Enum.IsDefined(typeof(Mcp), eventArgs.Type))
             {
-                Log.Information($"Received unknown MCP packet of type: 0x{(byte)eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
+                Log.Information($"Received unknown MCP packet of type: 0x{eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
                 return;
             }
 

@@ -132,13 +132,20 @@ namespace D2NG.Core
             }
             catch
             {
-                D2gs.Disconnect();
+                if(D2gs.IsConnected())
+                {
+                    D2gs.Disconnect();
+                }
+                
                 return false;
             }
 
             if (!D2gs.GameLogon(packet.GameHash, packet.GameToken, _character))
             {
-                D2gs.Disconnect();
+                if (D2gs.IsConnected())
+                {
+                    D2gs.Disconnect();
+                }
                 return false;
             }
             Bncs.NotifyJoin(name, password);
@@ -177,6 +184,7 @@ namespace D2NG.Core
 
             if(!Bncs.IsConnected())
             {
+                Log.Warning("RealmLogin failed, bncs is not connected");
                 return false;
             }
 

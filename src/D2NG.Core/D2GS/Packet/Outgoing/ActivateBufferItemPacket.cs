@@ -10,7 +10,7 @@ namespace D2NG.Core.D2GS.Packet.Outgoing
             base(
                 BuildPacket(
                     (byte)OutGoingPacket.ActivateBufferItem,
-                    BitConverter.GetBytes((uint)item.Id),
+                    BitConverter.GetBytes(item.Id),
                     BitConverter.GetBytes((uint)self.Location.X),
                     BitConverter.GetBytes((uint)self.Location.Y)
                 )

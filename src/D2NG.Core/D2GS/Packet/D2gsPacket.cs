@@ -15,7 +15,7 @@ namespace D2NG.Core.D2GS.Packet
         {
             var packet = new List<byte>
             {
-                (byte)command,
+                command,
             };
             packet.AddRange(args.SelectMany(a => a));
             return packet.ToArray();

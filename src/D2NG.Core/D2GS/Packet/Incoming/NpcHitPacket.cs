@@ -12,7 +12,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
         public EntityType EntityType { get; }
         public EntityState EntityState { get; }
 
-        public byte LifePercentage { get; }
+        public double LifePercentage { get; }
 
         public NpcHitPacket(D2gsPacket packet) : base(packet.Raw)
         {
@@ -27,7 +27,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             EntityId = reader.ReadUInt32();
             EntityState = (EntityState)reader.ReadByte();
             reader.ReadByte();
-            LifePercentage = reader.ReadByte();
+            LifePercentage = reader.ReadByte() / 1.28;
         }
     }
 }

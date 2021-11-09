@@ -7,6 +7,8 @@ using System.Linq;
 using System.Text;
 using Action = D2NG.Core.D2GS.Items.Action;
 using D2NG.Core.D2GS.Helpers;
+using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Objects;
 
 namespace D2NG.Core.D2GS.Packet.Incoming
 {
@@ -28,7 +30,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             item.Id = reader.ReadUInt32();
             if (packet == 0x9d)
             {
-                _ = reader.ReadByte();
+                item.EntityType = (EntityType)reader.ReadByte();
                 item.PlayerId = reader.ReadUInt32();
             }
         }
@@ -299,8 +301,10 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             {
                 item.MaximumDurability = (byte)reader.Read(8);
                 item.IsIndestructible = item.MaximumDurability == 0 ? true : false;
-
-                item.Durability = (byte)reader.Read(8);
+                if(!item.IsIndestructible)
+                {
+                    item.Durability = (byte)reader.Read(8);
+                }
             }
             if (item.HasSockets)
             {
@@ -411,11 +415,34 @@ namespace D2NG.Core.D2GS.Packet.Incoming
                     case StatType.SingleSkill2:
                     case StatType.SingleSkill3:
                     case StatType.SingleSkill4:
-                        {
-                            itemProperty.Skill = (Skill)reader.Read(propertyData.SaveParamBits);
-                            itemProperty.Value = reader.Read(propertyData.SaveBits);
-                            return true;
-                        }
+                        itemProperty.Skill = (Skill)reader.Read(propertyData.SaveParamBits);
+                        itemProperty.Value = reader.Read(propertyData.SaveBits);
+                        return true;
+                    case StatType.SkillTab1:
+                    case StatType.SkillTab2:
+                    case StatType.SkillTab3:
+                    case StatType.SkillTab4:
+                    case StatType.SkillTab5:
+                    case StatType.SkillTab6:
+                        itemProperty.SkillTab = (SkillTab)reader.Read(5);
+                        itemProperty.Value = reader.Read(5);
+                        return true;
+                    case StatType.SkillOnHit:
+                    case StatType.SkillWhenStruck1:
+                    case StatType.SkillWhenStruck2:
+                    case StatType.SkillWhenStruck3:
+                    case StatType.SkillOnStriking:
+                    case StatType.SkillOnLevelUp:
+                        itemProperty.Skill = (Skill)reader.Read(9);
+                        itemProperty.SkillLevel = reader.Read(5);
+                        itemProperty.SkillChance = reader.Read(7);
+                        return true;
+                    case StatType.Charged:
+                        itemProperty.Skill = (Skill)reader.Read(9);
+                        itemProperty.SkillLevel = reader.Read(5);
+                        itemProperty.Charges = reader.Read(8);
+                        itemProperty.MaximumCharges = reader.Read(8);
+                        return true;
                 }
             }
 

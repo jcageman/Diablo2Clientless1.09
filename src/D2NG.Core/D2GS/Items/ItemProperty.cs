@@ -19,7 +19,7 @@ namespace D2NG.Core.D2GS.Items
 
         public int SkillChance { get; set; }
 
-        public int SkillTab { get; set; }
+        public SkillTab SkillTab { get; set; }
 
         public int Charges { get; set; }
 

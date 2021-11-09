@@ -196,7 +196,7 @@ Kurast Shield|pad|Paladin Shield|2|4|0|0|0
 Zakarum Shield|pae|Paladin Shield|2|4|0|0|0
 Vortex Shield|paf|Paladin Shield|2|2|0|0|0
 Minion Skull|neb|Necromancer Shrunken Head|2|2|0|0|0
-Hellspawn Skull|neg|Necromancer Shrunken Head|2|2|0|0|0
+Hellspawn Skull|nec|Necromancer Shrunken Head|2|2|0|0|0
 Overseer Skull|ned|Necromancer Shrunken Head|2|2|0|0|0
 Succubus Skull|nee|Necromancer Shrunken Head|2|2|0|0|0
 Bloodlord Skull|nef|Necromancer Shrunken Head|2|2|0|0|0
@@ -658,3 +658,4 @@ Essence Of Pain|eop|Essence|1|1|0|0|0
 Essence Of Suffering|eos|Essence|1|1|0|0|0
 Essence Of Anguish|eoa|Essence|1|1|0|0|0
 Token Of Absolution|toa|Token|1|1|0|0|0
+Standard of Heroes|soh|Token|1|1|0|0|0

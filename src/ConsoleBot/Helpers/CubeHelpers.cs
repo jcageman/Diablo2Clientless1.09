@@ -33,6 +33,8 @@ namespace ConsoleBot.Helpers
             TransmuteFlawlessWithName(game, ItemName.FlawlessRuby);
             TransmuteFlawlessWithName(game, ItemName.FlawlessEmerald);
             TransmuteFlawlessWithName(game, ItemName.FlawlessAmethyst);
+            TransmuteFlawlessWithName(game, ItemName.FlawlessTopaz);
+            TransmuteFlawlessWithName(game, ItemName.FlawlessSapphire);
         }
 
         private static void TransmuteFlawlessWithName(Game game, ItemName flawlessName)
@@ -160,7 +162,7 @@ namespace ConsoleBot.Helpers
                 return;
             }
 
-            var inventoryItemsToKeep = game.Inventory.Items.Where(i => Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i))
+            var inventoryItemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i))
                                                            .ToList();
             foreach (var item in inventoryItemsToKeep)
             {

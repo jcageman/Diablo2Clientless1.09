@@ -3,8 +3,6 @@ using D2NG.Core.D2GS.Exceptions;
 using D2NG.Core.D2GS.Helpers;
 using D2NG.Core.D2GS.Objects;
 using System.Collections.Generic;
-using System.IO;
-using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming
 {
@@ -21,8 +19,8 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             EntityId = reader.ReadUInt32();
             UniqueCode = (NPCCode)reader.ReadUInt16();
             Location = new Point(reader.ReadUInt16(), reader.ReadUInt16());
-            LifePercentage = reader.ReadByte();
-            if(id == InComingPacket.AssignNPC2)
+            LifePercentage = reader.ReadByte() / 1.28;
+            if (id == InComingPacket.AssignNPC2)
             {
                 reader.ReadByte(); // unknown
                 IsBoss = reader.ReadBit();
@@ -54,7 +52,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
         public bool IsBoss { get; } = false;
         public bool IsBossMinion { get; } = false;
         public bool IsChampion { get; } = false;
-        public byte LifePercentage { get; }
+        public double LifePercentage { get; }
         public HashSet<MonsterEnchantment> MonsterEnchantments { get; } = new HashSet<MonsterEnchantment>();
     }
 }

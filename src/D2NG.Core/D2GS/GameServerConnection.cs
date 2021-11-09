@@ -183,13 +183,13 @@ namespace D2NG.Core.D2GS
                 case 0xaa:
                     if (size >= 7)
                     {
-                        return (byte)input[6];
+                        return input[6];
                     }
                     break;
                 case 0xac:
                     if (size >= 13)
                     {
-                        return (byte)input[12];
+                        return input[12];
                     }
                     break;
                 case 0xae:

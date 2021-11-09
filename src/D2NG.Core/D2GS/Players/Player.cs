@@ -10,8 +10,8 @@ namespace D2NG.Core.D2GS.Players
         public string Name { get; }
         public uint Id { get; }
         public CharacterClass Class { get; }
-
         public uint? CorpseId { get; set; }
+        public uint? MercId { get; set; }
 
         public HashSet<EntityEffect> Effects { get; internal set; } = new HashSet<EntityEffect>();
 

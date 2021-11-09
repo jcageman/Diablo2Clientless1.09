@@ -11,7 +11,7 @@ namespace D2NG.Core.D2GS.Packet.Outgoing
                     (byte)OutGoingPacket.EntityAction,
                     BitConverter.GetBytes((uint)actionType),
                     BitConverter.GetBytes(entity.Id),
-                    BitConverter.GetBytes((uint)0x00)
+                    BitConverter.GetBytes((uint)(actionType == TownFolkActionType.RefreshGamble ? 0x01 : 0x00))
                 )
             )
         {

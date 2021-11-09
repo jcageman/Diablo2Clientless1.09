@@ -12,7 +12,7 @@ namespace D2NG.Core.D2GS.Objects
         public EntityState State { get; internal set; }
         public byte InteractionType { get; }
 
-        public byte LifePercentage { get; internal set; } = 100;
+        public double LifePercentage { get; internal set; } = 100;
 
         public Area TownPortalArea { get; internal set; }
 

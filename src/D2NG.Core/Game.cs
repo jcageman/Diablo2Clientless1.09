@@ -59,8 +59,8 @@ namespace D2NG.Core
             _gameServer.OnReceivedPacketEvent(InComingPacket.NPCHit, p => Data.Act.UpdateNPCOnHit(new NpcHitPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.EntityMove, p => Data.EntityMove(new EntityMovePacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AssignPlayer, p => Data.PlayerAssign(new AssignPlayerPacket(p)));
-            _gameServer.OnReceivedPacketEvent(InComingPacket.ReassignPlayer, p => { var packet = new ReassignPlayerPacket(p);  Data.ReassignPlayer(packet.UnitId, packet.Location); });
-            _gameServer.OnReceivedPacketEvent(InComingPacket.PartyAutomapInfo, p => { var packet = new PartyAutomapInfoPacket(p); Data.ReassignPlayer(packet.Id, packet.Location); });
+            _gameServer.OnReceivedPacketEvent(InComingPacket.ReassignPlayer, p => { var packet = new ReassignPlayerPacket(p);  Data.ReassignPlayer(packet.UnitType, packet.UnitId, packet.Location); });
+            _gameServer.OnReceivedPacketEvent(InComingPacket.PartyAutomapInfo, p => { var packet = new PartyAutomapInfoPacket(p); Data.ReassignPlayer(EntityType.Player, packet.Id, packet.Location); });
             _gameServer.OnReceivedPacketEvent(InComingPacket.AddExperienceByte, p => Data.AddExperience(new AddExpPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AddExperienceWord, p => Data.AddExperience(new AddExpPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AddExperienceDword, p => Data.AddExperience(new AddExpPacket(p)));
@@ -107,6 +107,7 @@ namespace D2NG.Core
             _gameServer.OnReceivedPacketEvent(InComingPacket.UpdateEntityEffects, p => Data.UpdateEntityEffects(new UpdateEntityEffectsPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.CorpseAssign, p => Data.PlayerCorpseAssign(new CorpseAssignPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.PlayerStop, p => Data.PlayerStop(new PlayerStopPacket(p)));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.AssignMerc, p => Data.AssignMerc(new AssignMercPacket(p)));
         }
 
         public void OnWorldItemEvent(Func<Item, Task> handler)
@@ -143,7 +144,7 @@ namespace D2NG.Core
 
         public bool TakeWaypoint(WorldObject worldObject, Waypoint waypoint)
         {
-            if (!EntityConstants.WayPointEntityCodes.Contains((EntityCode)worldObject.Code))
+            if (!EntityConstants.WayPointEntityCodes.Contains(worldObject.Code))
             {
                 throw new InvalidOperationException($"cannot take waypoint using worldObject which does belong to one of the waypoint entity codes, but has code { worldObject.Code} ");
             }
@@ -173,6 +174,8 @@ namespace D2NG.Core
         public List<Item> Items { get => Data.Items.Values.ToList(); }
 
         public Act Act { get => Data.Act.Act; }
+
+        public Character ClientCharacter { get => Data.ClientCharacter; }
 
         public Area Area { get => Data.Act.Area; }
 
@@ -478,6 +481,20 @@ namespace D2NG.Core
         public void TerminateEntityChat(Entity entity)
         {
             _gameServer.SendPacket(new TerminateEntityChatPacket(entity));
+            RemoveNPCItems();
+        }
+
+        public void TownFolkAction(Entity entity, TownFolkActionType actionType)
+        {
+            if(actionType == TownFolkActionType.RefreshGamble)
+            {
+                RemoveNPCItems();
+            }
+            _gameServer.SendPacket(new EntityActionPacket(entity, actionType));
+        }
+
+        private void RemoveNPCItems()
+        {
             var npcContainerTypes = new HashSet<ContainerType>() { ContainerType.ArmorTab, ContainerType.MiscTab, ContainerType.WeaponTab, ContainerType.WeaponTab2 };
             var npcItems = Data.Items.Where((p) => npcContainerTypes.Contains(p.Value.Container));
             foreach (var npcItem in npcItems)
@@ -486,16 +503,18 @@ namespace D2NG.Core
             }
         }
 
-        public void TownFolkAction(Entity entity, TownFolkActionType actionType)
-        {
-            _gameServer.SendPacket(new EntityActionPacket(entity, actionType));
-        }
-
         public void IdentifyItems(Entity entity)
         {
             var nPCTransactionPacket = _gameServer.GetResetEventOfType(InComingPacket.NPCTransaction);
             _gameServer.SendPacket(new IdentifyItemsPacket(entity));
             nPCTransactionPacket.WaitOne(200);
+        }
+
+        public void ResurrectMerc(Entity entity)
+        {
+            var assignMercPacket = _gameServer.GetResetEventOfType(InComingPacket.AssignMerc);
+            _gameServer.SendPacket(new ResurrectMercPacket(entity));
+            assignMercPacket.WaitOne(200);
         }
 
         public void RepairItems(Entity entity)
@@ -514,6 +533,11 @@ namespace D2NG.Core
         {
             _gameServer.SendPacket(new PickupItemFromGroundPacket(item));
             Thread.Sleep(50);
+        }
+
+        public void DropItem(Item item)
+        {
+            _gameServer.SendPacket(new DropItemPacket(item));
         }
 
         public void UseBeltItem(Item item)
@@ -697,7 +721,7 @@ namespace D2NG.Core
                         }
                     }
 
-                    if (Me.Mana < 40 && Me.MaxMana > 100 && DateTime.Now.Subtract(LastUsedManaPotionTime) > TimeSpan.FromSeconds(3))
+                    if (Me.Mana < 40 && (Me.Attributes[D2GS.Players.Attribute.Level] > 40 || Me.MaxMana > 50) && DateTime.Now.Subtract(LastUsedManaPotionTime) > TimeSpan.FromSeconds(3))
                     {
                         if (!UseManaPotion())
                         {

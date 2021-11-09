@@ -187,10 +187,12 @@ namespace ConsoleBot.Bots.Types.CS
 
                 var townManagementOptions = new TownManagementOptions()
                 {
-                    Act = Act.Act4
+                    Act = Act.Act4,
+                    ResurrectMerc = false
                 };
 
-                if (!await _townManagementService.PerformTownTasks(c.Item2, townManagementOptions))
+                var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
+                if (!townTaskResult.Succes)
                 {
                     return false;
                 }
@@ -1033,7 +1035,7 @@ namespace ConsoleBot.Bots.Types.CS
         private async Task PickupNearbyRejuvenationsIfNeeded(Client client, CSManager csManager, int distance)
         {
             var totalRejuvanationPotions = client.Game.Inventory.Items.Count(i => i.Name == ItemName.RejuvenationPotion || i.Name == ItemName.FullRejuvenationPotion);
-            var pickitList = csManager.GetRejuvenationPotionPickupList(client, distance, (int)5 - totalRejuvanationPotions);
+            var pickitList = csManager.GetRejuvenationPotionPickupList(client, distance, 5 - totalRejuvanationPotions);
             foreach (var item in pickitList)
             {
                 Log.Information($"Client {client.Game.Me.Name} picking up {item.Name}");

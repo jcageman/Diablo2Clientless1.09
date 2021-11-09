@@ -27,9 +27,16 @@ namespace D2NG.Core.MCP.Packet
             Characters = new List<Character>();
             for (int x = 0; x < totalReturned; x++)
             {
+                var characterName = reader.ReadNullTerminatedString();
+                var stats = new List<byte>();
+                while(reader.PeekChar() != 0)
+                {
+                    stats.Add(reader.ReadByte());
+                }
+                reader.ReadByte();
                 Characters.Add(new Character(
-                    reader.ReadNullTerminatedString(),
-                    reader.ReadNullTerminatedString()
+                    characterName,
+                    stats.ToArray()
                     ));
             }
         }

@@ -7,12 +7,17 @@ namespace ConsoleBot.Pickit
     public static class Armors
     {
         private static readonly HashSet<ItemName> casterArmors = new HashSet<ItemName> {
-            ItemName.QuiltedArmor, ItemName.LeatherArmor, ItemName.HardLeatherArmor, ItemName.StuddedLeather, ItemName.RingMail, ItemName.ScaleMail,ItemName.ChainMail, ItemName.BreastPlate, ItemName.SplintMail, ItemName.LightPlate,
-            ItemName.GhostArmor, ItemName.SerpentskinArmor, ItemName.DemonhideArmor, ItemName.TrellisedArmor, ItemName.LinkedMail, ItemName.MagePlate };
+            ItemName.QuiltedArmor, ItemName.LeatherArmor, ItemName.HardLeatherArmor, ItemName.StuddedLeather, ItemName.RingMail, ItemName.ScaleMail,
+            ItemName.ChainMail, ItemName.BreastPlate, ItemName.SplintMail, ItemName.LightPlate, ItemName.GhostArmor, ItemName.SerpentskinArmor,
+            ItemName.DemonhideArmor, ItemName.TrellisedArmor, ItemName.LinkedMail, ItemName.MagePlate };
 
         private static readonly HashSet<ItemName> defArmors = new HashSet<ItemName> {
             ItemName.OrnatePlate, ItemName.ChaosArmor, ItemName.EmbossedPlate, ItemName.SharktoothArmor, ItemName.TemplarCoat, ItemName.MagePlate, ItemName.RussetArmor};
-        public static bool ShouldPickupItem(Item item)
+
+        private static readonly HashSet<ItemName> eliteArmors = new HashSet<ItemName> {
+            ItemName.DuskShroud, ItemName.Wyrmhide, ItemName.ScarabHusk, ItemName.WireFleece, ItemName.DiamondMail, ItemName.ArchonPlate, ItemName.KrakenShell, 
+            ItemName.HellforgePlate, ItemName.LacqueredPlate, ItemName.ShadowPlate,ItemName.SacredArmor};
+        public static bool ShouldPickupItemClassic(Item item)
         {
             if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
             {
@@ -22,7 +27,51 @@ namespace ConsoleBot.Pickit
             return false;
         }
 
-        public static bool ShouldKeepItem(Item item)
+        public static bool ShouldPickupItemExpansion(Item item)
+        {
+            if (item.Quality == QualityType.Unique)
+            {
+                return true;
+            }
+
+            if (item.Quality == QualityType.Magical && item.Sockets == 4)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool ShouldKeepItemExpansion(Item item)
+        {
+            if(item.Quality == QualityType.Unique)
+            {
+                switch(item.Name)
+                {
+                    case ItemName.SerpentskinArmor:
+                        return item.GetValueOfStatType(StatType.ColdResistance) >= 34 && !item.Ethereal;
+                    //case ItemName.Cuirass:
+                    case ItemName.MeshArmor:
+                        return item.Ethereal;
+                    case ItemName.RussetArmor:
+                    //case ItemName.MagePlate:
+                    //case ItemName.TemplarCoat:
+                    //case ItemName.ChaosArmor:
+                    case ItemName.WireFleece:
+                    case ItemName.BalrogSkin:
+                        return true;
+                }
+            }
+
+            if (item.Quality == QualityType.Magical && item.Sockets == 4 && item.GetValueOfStatType(StatType.Life) >= 80)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool ShouldKeepItemClassic(Item item)
         {
             if (item.Name == ItemName.OrnatePlate
                 && item.Quality == QualityType.Rare

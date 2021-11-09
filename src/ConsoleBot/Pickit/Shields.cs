@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Enums;
+﻿using D2NG.Core;
+using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using System.Collections.Generic;
 
@@ -7,7 +8,24 @@ namespace ConsoleBot.Pickit
     public static class Shields
     {
         static HashSet<ItemName> DesirableShields = new HashSet<ItemName> { ItemName.BoneShield, ItemName.GrimShield, ItemName.SpikedShield, ItemName.BarbedShield };
-        public static bool ShouldPickupItem(Item item)
+
+        public static bool ShouldPickupItemExpansion(Item item)
+        {
+            if (item.Quality == QualityType.Unique)
+            {
+                switch (item.Name)
+                {
+                    case ItemName.Monarch:
+                    case ItemName.GrimShield:
+                    case ItemName.GildedShield:
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static bool ShouldPickupItemClassic(Item item)
         {
             /*
             if(item.Quality == QualityType.Unique && item.Name == "Gothic Shield")
@@ -23,7 +41,26 @@ namespace ConsoleBot.Pickit
             return item.Quality == QualityType.Rare;
         }
 
-        public static bool ShouldKeepItem(Item item)
+        public static bool ShouldKeepItemExpansion(Item item)
+        {
+            if (item.Quality == QualityType.Unique)
+            {
+                switch (item.Name)
+                {
+                    case ItemName.GrimShield:
+                        return item.GetValueOfStatType(StatType.AllSkills) > 0;
+                    case ItemName.Monarch:
+                    case ItemName.GildedShield:
+                    case ItemName.Luna:
+                    case ItemName.Defender:
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static bool ShouldKeepItemClassic(Item item)
         {
             /*
             if (item.Quality == QualityType.Unique && item.Name == "Bone Shield")

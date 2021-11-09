@@ -15,7 +15,7 @@ namespace PacketSniffer
                 return;
             }
 
-            var incomingPacketType = (Sid)eventArgs.Type;
+            var incomingPacketType = eventArgs.Type;
             switch (incomingPacketType)
             {
                 case Sid.NULL:

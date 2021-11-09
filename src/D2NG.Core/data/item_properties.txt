@@ -186,22 +186,22 @@ Unused|184|0|0
 Unused|185|0|0
 Unused|186|0|0
 Unused|187|0|0
-Skill Tab|3|16|0
-Unused|189|0|0
-Unused|190|0|0
-Unused|191|0|0
-Unused|192|0|0
-Unused|193|0|0
+Skill Tab1|3|16|0
+Skill Tab2|3|16|0
+Skill Tab3|3|16|0
+Skill Tab4|3|16|0
+Skill Tab5|3|16|0
+Skill Tab6|3|16|0
 Socket Count|4|0|0
 Skill On Striking|7|16|0
 Skill On Kill|7|16|0
 Skill On Death|7|16|0
 Skill On Hit|7|16|0
 Skill On Level Up|7|16|0
-Unused|200|0|0
-Skill When Struck|7|16|0
-Unused|202|0|0
-Unused|203|0|0
+Skill On Level Up|7|16|0
+Skill When Struck1|7|16|0
+Skill When Struck2|7|16|0
+Skill When Struck3|7|16|0
 Charged|16|16|0
 Unused|204|0|0
 Unused|205|0|0
@@ -250,8 +250,8 @@ Open Wounds Per Level|6|0|0
 Kick Damage Per Level|6|0|0
 Deadly Strike Per Level|6|0|0
 Find Gems Per Level|0|0|0
-Repairs Durability|6|0|0
-Replenishes Quantity|6|0|0
+Repairs Durability|5|0|0
+Replenishes Quantity|5|0|0
 Increased Stack Size|8|0|0
 Find Item|0|0|0
 Slash Damage|0|0|0

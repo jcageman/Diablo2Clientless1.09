@@ -95,11 +95,11 @@ namespace ConsoleBot.Attack
 
         private List<Point> GetNearbyMonsters(List<Point> enemies, Point location, double distance)
         {
-            return enemies.Where(p => p.Distance(location) < distance).OrderBy(p => p.Distance(location)).ToList();
+            return enemies.Where(p => p.Distance(location) < distance).ToList();
 
         }
 
-        private async Task<Point> FindNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, double minDistance = 0)
+        private async Task<Point> FindNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, double minDistance = 0, double maxdistance = 30)
         {
             for (int i = 1; i < 5; ++i)
             {
@@ -110,13 +110,13 @@ namespace ConsoleBot.Attack
                     var y = (short)(p2 * i);
 
                     var distance = Math.Sqrt(Math.Pow(x, 2) + Math.Pow(y, 2));
-                    if (distance < minDistance)
+                    if (distance < minDistance || distance > maxdistance)
                     {
                         continue;
                     }
 
                     var tryLocation = toLocation.Add(x, y);
-                    if (await IsVisitable(client, tryLocation) && await IsInLineOfSight(client, tryLocation, toLocation) && GetNearbyMonsters(enemies, tryLocation, 10.0).Count() < 2)
+                    if (await IsVisitable(client, tryLocation) && await IsInLineOfSight(client, tryLocation, toLocation) && GetNearbyMonsters(enemies, tryLocation, 5.0).Count() < 2)
                     {
                         return tryLocation;
                     }
@@ -126,9 +126,9 @@ namespace ConsoleBot.Attack
             return null;
         }
 
-        public async Task<bool> MoveToNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, MovementMode movementMode, double minDistance = 0)
+        public async Task<bool> MoveToNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, MovementMode movementMode, double minDistance = 0, double maxDistance = 30)
         {
-            var spot = await FindNearbySafeSpot(client, enemies, toLocation, minDistance);
+            var spot = await FindNearbySafeSpot(client, enemies, toLocation, minDistance, maxDistance);
             if(spot != null)
             {
                 if(movementMode == MovementMode.Teleport)

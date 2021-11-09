@@ -2,7 +2,7 @@
 {
     public class Inventory : Container
     {
-        public Inventory() : base(10, 4)
+        public Inventory() : base(10, 8)
         {
         }
     }

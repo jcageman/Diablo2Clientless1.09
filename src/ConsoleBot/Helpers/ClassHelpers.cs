@@ -1,5 +1,6 @@
 ﻿using D2NG.Core;
 using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
 using System;
 using System.Collections.Generic;
@@ -53,6 +54,11 @@ namespace ConsoleBot.Helpers
             return !p.Effects.Contains(EntityEffect.Battlecommand)
                                             || !p.Effects.Contains(EntityEffect.BattleOrders)
                                             || !p.Effects.Contains(EntityEffect.Shout);
+        }
+
+        public static bool CanStaticEntity(Client client, double LifePercentage)
+        {
+            return !client.Game.ClientCharacter.IsExpansion || LifePercentage > 60;
         }
     }
 }

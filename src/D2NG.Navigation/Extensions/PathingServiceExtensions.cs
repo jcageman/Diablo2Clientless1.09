@@ -37,15 +37,15 @@ namespace D2NG.Navigation.Extensions
             switch (game.Act)
             {
                 case Act.Act1:
-                    return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, EntityCode.WaypointAct1, movementMode);
+                    return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, Area.RogueEncampment, game.Me.Location, EntityCode.WaypointAct1, movementMode);
                 case Act.Act2:
-                    return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, EntityCode.WaypointAct2, movementMode);
+                    return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, Area.LutGholein, game.Me.Location, EntityCode.WaypointAct2, movementMode);
                 case Act.Act3:
-                    return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, EntityCode.WaypointAct3, movementMode);
+                    return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, Area.KurastDocks, game.Me.Location, EntityCode.WaypointAct3, movementMode);
                 case Act.Act4:
-                    return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, EntityCode.WaypointAct4, movementMode);
+                    return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, Area.ThePandemoniumFortress, game.Me.Location, EntityCode.WaypointAct4, movementMode);
                 case Act.Act5:
-                    return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, EntityCode.WaypointAct5, movementMode);
+                    return await pathingService.GetPathToObject(game.MapId, Difficulty.Normal, Area.Harrogath, game.Me.Location, EntityCode.WaypointAct5, movementMode);
             }
 
             throw new InvalidOperationException("WalkToTownWayPoint executed an invalid operation");

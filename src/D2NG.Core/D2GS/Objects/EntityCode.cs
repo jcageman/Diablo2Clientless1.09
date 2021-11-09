@@ -24,7 +24,7 @@
         LeftSeal2 = 396,
         WaypointAct4 = 398,
         CompellingOrb = 404,
-        WaypointAct5 = 496,
+        WaypointAct5 = 429,
         WaypointAct5Glacial = 511,
         WaypointAct5Baal = 494,
         Stash = 267

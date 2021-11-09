@@ -246,7 +246,13 @@ namespace ConsoleBot.Mule
 
         private static bool IsMuleItem(Client client, Item item)
         {
-            if (item.Name == ItemName.FlawlessSkull)
+            if (item.Name == ItemName.FlawlessSkull
+                || item.Name == ItemName.FlawlessAmethyst
+                || item.Name == ItemName.FlawlessDiamond
+                || item.Name == ItemName.FlawlessEmerald
+                || item.Name == ItemName.FlawlessRuby
+                || item.Name == ItemName.FlawlessSapphire
+                || item.Name == ItemName.FlawlessTopaz)
             {
                 return false;
             }
@@ -254,12 +260,6 @@ namespace ConsoleBot.Mule
             var rightContainer = item.Container == ContainerType.Stash || item.Container == ContainerType.Stash2 || item.Container == ContainerType.Inventory;
 
             return rightContainer && item.IsIdentified && Pickit.Pickit.CanTouchInventoryItem(client.Game, item);
-        }
-
-        private static bool IsSojOrPs(Item i)
-        {
-            return (i.Classification == ClassificationType.Ring && i.Quality == QualityType.Unique
-            && i.GetValueOfStatType(StatType.AllSkills) == 1) || (i.Name == ItemName.PerfectSkull);
         }
 
         private async Task<MoveItemResult> TradeInventoryItems(Client client, Client muleClient, List<Item> tradeItems)

@@ -10,7 +10,7 @@ namespace D2NG.Core.D2GS.Packet.Outgoing
                 BuildPacket(
                     (byte)OutGoingPacket.InitiateEntityChat,
                     BitConverter.GetBytes((uint)0x01),
-                    BitConverter.GetBytes((uint)entity.Id)
+                    BitConverter.GetBytes(entity.Id)
                 )
             )
         {

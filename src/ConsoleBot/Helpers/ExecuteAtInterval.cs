@@ -24,6 +24,11 @@ namespace ConsoleBot.Helpers
             _timer.Start();
         }
 
+        public bool IsRunning()
+        {
+            return _timer.Enabled;
+        }
+
         public void Stop()
         {
             _timer.Stop();

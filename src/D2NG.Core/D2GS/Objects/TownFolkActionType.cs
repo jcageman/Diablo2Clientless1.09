@@ -4,6 +4,7 @@
     {
         Quest = 0x00,
         Trade = 0x01,
-        Gamble = 0x02
+        Gamble = 0x02,
+        RefreshGamble = 0x04,
     }
 }

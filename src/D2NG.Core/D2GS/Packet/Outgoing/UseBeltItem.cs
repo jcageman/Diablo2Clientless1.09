@@ -9,7 +9,7 @@ namespace D2NG.Core.D2GS.Packet.Outgoing
             base(
                 BuildPacket(
                     (byte)OutGoingPacket.UseBeltItem,
-                    BitConverter.GetBytes((uint)item.Id),
+                    BitConverter.GetBytes(item.Id),
                     BitConverter.GetBytes((uint)0x00),
                     BitConverter.GetBytes((uint)0x00)
                 )

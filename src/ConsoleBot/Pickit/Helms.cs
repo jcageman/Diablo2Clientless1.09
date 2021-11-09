@@ -1,5 +1,6 @@
 ﻿using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
+using D2NG.Core.D2GS.Players;
 using System.Collections.Generic;
 
 namespace ConsoleBot.Pickit
@@ -9,7 +10,40 @@ namespace ConsoleBot.Pickit
         private static readonly HashSet<ItemName> desirableHelms = new HashSet<ItemName> {
             ItemName.Cap, ItemName.SkullCap, ItemName.GreatHelm, ItemName.Crown, ItemName.Mask, ItemName.BoneHelm,
             ItemName.WarHat, ItemName.DeathMask, ItemName.GrimHelm };
-        public static bool ShouldPickupItem(Item item)
+        public static bool ShouldPickupItemExpansion(Item item)
+        {
+            if (item.Quality == QualityType.Unique)
+            {
+                switch (item.Name)
+                {
+                    //case ItemName.SlayerGuard:
+                    //case ItemName.TotemicMask:
+                    //case ItemName.WarHat:
+                    //case ItemName.WingedHelm:
+                    case ItemName.DeathMask:
+                        return item.Ethereal;
+                    case ItemName.GrandCrown:
+                    case ItemName.GrimHelm:
+                        return true;
+                    case ItemName.Shako:
+                        return !item.Ethereal;
+                }
+            }
+
+            if (item.Classification == ClassificationType.BarbarianHelm && (item.Quality == QualityType.Magical || item.Quality == QualityType.Rare))
+            {
+                return true;
+            }
+
+            if (item.Classification == ClassificationType.Circlet && (item.Quality == QualityType.Magical || item.Quality == QualityType.Rare))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool ShouldPickupItemClassic(Item item)
         {
             if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
             {
@@ -19,7 +53,54 @@ namespace ConsoleBot.Pickit
             return false;
         }
 
-        public static bool ShouldKeepItem(Item item)
+        public static bool ShouldKeepItemExpansion(Item item)
+        {
+            if (item.Quality == QualityType.Unique)
+            {
+                switch (item.Name)
+                {
+                    //case ItemName.SlayerGuard:
+                    //case ItemName.TotemicMask:
+                    //case ItemName.WarHat:
+                    //case ItemName.WingedHelm:
+                    case ItemName.DeathMask:
+                        return item.Ethereal;
+                    case ItemName.GrandCrown:
+                    case ItemName.GrimHelm:
+                        return true;
+                    case ItemName.Shako:
+                        return !item.Ethereal;
+                }
+            }
+
+            var toCasterSkills = item.GetValueOfStatType(StatType.SorceressSkills);
+            toCasterSkills += item.GetValueOfStatType(StatType.NecromancerSkills);
+            toCasterSkills += item.GetValueOfStatType(StatType.PaladinSkills);
+            toCasterSkills += item.GetValueOfStatType(StatType.DruidSkills);
+
+            if (item.Quality == QualityType.Rare
+               && toCasterSkills + item.TotalToSkillTabs() >= 2 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 45)
+            {
+                return true;
+            }
+
+            if (item.GetValueOfStatType(StatType.BarbarianSkills) + item.GetValueToSkillTab(SkillTab.BarbarianWarcries) + item.GetValueToSkill(Skill.BattleOrders) >= 5)
+            {
+                return true;
+            }
+
+            if (item.Classification == ClassificationType.Circlet
+                && item.Quality == QualityType.Magical
+                && item.GetValueOfStatType(StatType.FasterCastRate) >= 20
+                && item.TotalToSkillTabs() >= 3)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool ShouldKeepItemClassic(Item item)
         {
             if (item.Name == ItemName.GrimHelm
                 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50

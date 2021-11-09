@@ -41,13 +41,6 @@ namespace D2NG.Navigation.Extensions
             }
         }
 
-        private static void DisconnectNodeFromNodeAtLocation(this Grid grid, INode fromNode, int i, int j)
-        {
-            var toGridPosition = new GridPosition(i, j);
-            var toNode = grid.GetNode(toGridPosition);
-            fromNode.DisconnectFromNode(toNode);
-        }
-
         public static bool IsMovable(int value)
         {
             return value == 0 || value == 16;
@@ -100,7 +93,7 @@ namespace D2NG.Navigation.Extensions
             {
                 for (var j = 0; j < rows; j++)
                 {
-                    nodes[i, j] = new Node(new Position((float)i * DistanceBetweenCells, (float)j * DistanceBetweenCells));
+                    nodes[i, j] = new Node(new Position(i * DistanceBetweenCells, j * DistanceBetweenCells));
                 }
             }
 
@@ -192,6 +185,12 @@ namespace D2NG.Navigation.Extensions
         {
             var point = areaMap.LevelOrigin;
             return new Point((ushort)(point.X + position.X / DistanceBetweenCells), (ushort)(point.Y + position.Y / DistanceBetweenCells));
+        }
+
+        public static Point MapToPoint(this AreaMap areaMap, int x, int y)
+        {
+            var point = areaMap.LevelOrigin;
+            return new Point((ushort)(point.X + x), (ushort)(point.Y + y));
         }
     }
 }

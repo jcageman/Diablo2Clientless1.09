@@ -11,7 +11,7 @@ namespace D2NG.Core.D2GS.Packet.Outgoing
                 BuildPacket(
                     (byte)OutGoingPacket.InvitePlayer,
                     new byte[] { (byte)requestType },
-                    BitConverter.GetBytes((uint)player.Id)
+                    BitConverter.GetBytes(player.Id)
                 )
             )
         {

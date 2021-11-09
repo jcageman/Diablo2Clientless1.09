@@ -100,124 +100,127 @@ namespace ConsoleBot.Helpers
                 return false;
             }
 
-            while (game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 200000)
+            bool result = GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                bool result = GeneralHelpers.TryWithTimeout((retryCount) =>
+                if (game.Me.Location.Distance(npc.Location) < 5)
                 {
-                    if (game.Me.Location.Distance(npc.Location) < 5)
+                    return game.InteractWithNPC(npc);
+                }
+                else
+                {
+                    if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
                     {
-                        return game.InteractWithNPC(npc);
+                        game.TeleportToLocation(npc.Location);
                     }
                     else
                     {
-                        if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
-                        {
-                            game.TeleportToLocation(npc.Location);
-                        }
-                        else
-                        {
-                            game.MoveTo(npc);
-                        }
+                        game.MoveTo(npc);
                     }
-                    return false;
-                }, TimeSpan.FromSeconds(3));
-
-                if (!result)
-                {
-                    Log.Debug("Interacting with npc for gamble failed");
-                    break;
                 }
+                return false;
+            }, TimeSpan.FromSeconds(3));
 
-                Thread.Sleep(50);
-                game.InitiateEntityChat(npc);
+            if (!result)
+            {
+                Log.Debug("Interacting with npc for gamble failed");
+                return false;
+            }
 
-                var oldItems = game.Items.Where(i => i.Container == ContainerType.ArmorTab).Select(i => i.Id).ToHashSet();
-
-                game.TownFolkAction(npc, TownFolkActionType.Gamble);
-
-                var itemsResult = GeneralHelpers.TryWithTimeout((retryCount) =>
+            Thread.Sleep(50);
+            game.InitiateEntityChat(npc);
+            game.TownFolkAction(npc, TownFolkActionType.Gamble);
+            var oldItems = game.Items.Where(i => i.Container == ContainerType.ArmorTab).Select(i => i.Id).ToHashSet();
+            while (game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 200000)
+            {
+                if(!GeneralHelpers.TryWithTimeout((retryCount) =>
                 {
                     var newItems = game.Items.Where(i => i.Container == ContainerType.ArmorTab).Select(i => i.Id).ToHashSet();
                     return newItems.Except(oldItems).Any();
-                }, TimeSpan.FromSeconds(1));
-
-                if (!itemsResult)
+                }, TimeSpan.FromSeconds(1)))
                 {
                     Log.Debug("Waiting for items failed");
-                    continue;
+                    return false;
                 }
 
                 Thread.Sleep(10);
                 Log.Debug("Trying to find gamble items and sell previous onces");
+                bool inventoryFull = GambleCurrentItemsAtNpc(game, npc);
 
-                var inventoryItemsToSell = game.Inventory.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
-                foreach (Item item in inventoryItemsToSell)
-                {
-                    if (item.Quality == QualityType.Rare)
-                    {
-                        Log.Information($"Selling item {item.GetFullDescription()}");
-                    }
-
-                    game.SellItem(npc, item);
-                }
-
-                var inventoryFull = false;
-
-                foreach (var gambleItem in game.Items.Where(i => i.Container == ContainerType.ArmorTab && Pickit.Pickit.ShouldGamble(game.Me, i)))
-                {
-                    if (game.Inventory.FindFreeSpace(gambleItem) == null)
-                    {
-                        Log.Information($"Inventory full, not gambling anymore");
-                        inventoryFull = true;
-                        break;
-                    }
-
-                    Log.Debug($"Gambling item {gambleItem.GetFullDescription()}");
-
-                    var oldUnidentifiedItems = game.Inventory.Items.Where(i => !i.IsIdentified).ToHashSet();
-
-                    game.GambleItem(npc, gambleItem);
-                    var identifiedItems = new HashSet<uint>();
-                    bool identifyResult = GeneralHelpers.TryWithTimeout((retryCount) =>
-                    {
-                        var newUnidentifiedItems = game.Inventory.Items.Where(i => !i.IsIdentified).ToHashSet();
-                        var deltaItems = newUnidentifiedItems.Except(oldUnidentifiedItems).ToList();
-                        if (deltaItems.Count > 0)
-                        {
-                            var gambledItem = deltaItems.First();
-                            if (!identifiedItems.Contains(gambledItem.Id))
-                            {
-                                identifiedItems.Add(gambledItem.Id);
-                                game.IdentifyGambleItem(gambledItem);
-                            }
-                        }
-
-                        if (game.Inventory.Items.Any(i => i.IsIdentified && identifiedItems.Contains(i.Id)))
-                        {
-                            return true;
-                        }
-
-                        return false;
-                    }, TimeSpan.FromSeconds(2));
-
-                    if (!identifyResult)
-                    {
-                        Log.Debug($"Identify item {gambleItem.GetFullDescription()} for gamble failed");
-                        break;
-                    }
-                }
-
-                Thread.Sleep(50);
-                game.TerminateEntityChat(npc);
-                Thread.Sleep(50);
-
+                oldItems = game.Items.Where(i => i.Container == ContainerType.ArmorTab).Select(i => i.Id).ToHashSet();
+                game.TownFolkAction(npc, TownFolkActionType.RefreshGamble);
                 if (inventoryFull)
                 {
                     break;
                 }
             }
 
+            Thread.Sleep(50);
+            game.TerminateEntityChat(npc);
+            Thread.Sleep(50);
+
             return true;
+        }
+
+        private static bool GambleCurrentItemsAtNpc(Game game, Entity npc)
+        {
+            var inventoryItemsToSell = game.Inventory.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
+            foreach (Item item in inventoryItemsToSell)
+            {
+                if (item.Quality == QualityType.Rare)
+                {
+                    Log.Information($"Selling item {item.GetFullDescription()}");
+                }
+
+                game.SellItem(npc, item);
+            }
+
+            var inventoryFull = false;
+
+            foreach (var gambleItem in game.Items.Where(i => i.Container == ContainerType.ArmorTab && Pickit.Pickit.ShouldGamble(game.Me, i)))
+            {
+                if (game.Inventory.FindFreeSpace(gambleItem) == null)
+                {
+                    Log.Information($"Inventory full, not gambling anymore");
+                    inventoryFull = true;
+                    break;
+                }
+
+                Log.Debug($"Gambling item {gambleItem.GetFullDescription()}");
+
+                var oldUnidentifiedItems = game.Inventory.Items.Where(i => !i.IsIdentified).ToHashSet();
+
+                game.GambleItem(npc, gambleItem);
+                var identifiedItems = new HashSet<uint>();
+                bool identifyResult = GeneralHelpers.TryWithTimeout((retryCount) =>
+                {
+                    var newUnidentifiedItems = game.Inventory.Items.Where(i => !i.IsIdentified).ToHashSet();
+                    var deltaItems = newUnidentifiedItems.Except(oldUnidentifiedItems).ToList();
+                    if (deltaItems.Count > 0)
+                    {
+                        var gambledItem = deltaItems.First();
+                        if (!identifiedItems.Contains(gambledItem.Id))
+                        {
+                            identifiedItems.Add(gambledItem.Id);
+                            game.IdentifyGambleItem(gambledItem);
+                        }
+                    }
+
+                    if (game.Inventory.Items.Any(i => i.IsIdentified && identifiedItems.Contains(i.Id)))
+                    {
+                        return true;
+                    }
+
+                    return false;
+                }, TimeSpan.FromSeconds(2));
+
+                if (!identifyResult)
+                {
+                    Log.Debug($"Identify item {gambleItem.GetFullDescription()} for gamble failed");
+                    break;
+                }
+            }
+
+            return inventoryFull;
         }
 
         public static NPCCode GetDeckardCainForAct(D2NG.Core.D2GS.Act.Act act)
@@ -233,6 +236,19 @@ namespace ConsoleBot.Helpers
             };
         }
 
+        public static NPCCode GetMercNPCForAct(D2NG.Core.D2GS.Act.Act act)
+        {
+            return act switch
+            {
+                D2NG.Core.D2GS.Act.Act.Act1 => NPCCode.Kashya,
+                D2NG.Core.D2GS.Act.Act.Act2 => NPCCode.Greiz,
+                D2NG.Core.D2GS.Act.Act.Act3 => NPCCode.Asheara,
+                D2NG.Core.D2GS.Act.Act.Act4 => NPCCode.TyraelAct4,
+                D2NG.Core.D2GS.Act.Act.Act5 => NPCCode.QualKehk,
+                _ => throw new InvalidEnumArgumentException(nameof(act)),
+            };
+        }
+
         public static NPCCode GetSellNPC(D2NG.Core.D2GS.Act.Act act)
         {
             return act switch
@@ -241,7 +257,7 @@ namespace ConsoleBot.Helpers
                 D2NG.Core.D2GS.Act.Act.Act2 => NPCCode.Drognan,
                 D2NG.Core.D2GS.Act.Act.Act3 => NPCCode.Ormus,
                 D2NG.Core.D2GS.Act.Act.Act4 => NPCCode.JamellaAct4,
-                D2NG.Core.D2GS.Act.Act.Act5 => NPCCode.Larzuk,
+                D2NG.Core.D2GS.Act.Act.Act5 => NPCCode.Malah,
                 _ => throw new InvalidEnumArgumentException(nameof(act)),
             };
         }
@@ -254,7 +270,7 @@ namespace ConsoleBot.Helpers
                 D2NG.Core.D2GS.Act.Act.Act2 => NPCCode.Elzix,
                 D2NG.Core.D2GS.Act.Act.Act3 => NPCCode.Alkor,
                 D2NG.Core.D2GS.Act.Act.Act4 => NPCCode.JamellaAct4,
-                D2NG.Core.D2GS.Act.Act.Act5 => NPCCode.Nihlathak,
+                D2NG.Core.D2GS.Act.Act.Act5 => NPCCode.Anya,
                 _ => throw new InvalidEnumArgumentException(nameof(act)),
             };
         }
@@ -328,6 +344,46 @@ namespace ConsoleBot.Helpers
             game.IdentifyItems(deckardCain);
             Thread.Sleep(50);
             game.TerminateEntityChat(deckardCain);
+            Thread.Sleep(50);
+            return true;
+        }
+
+        public static bool ResurrectMerc(Game game, WorldObject npc)
+        {
+            var result2 = GeneralHelpers.TryWithTimeout((retryCount) =>
+            {
+                if (game.Me.Location.Distance(npc.Location) > 2)
+                {
+                    if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
+                    {
+                        game.TeleportToLocation(npc.Location);
+                    }
+                    else
+                    {
+                        game.MoveTo(npc);
+                    }
+                }
+
+                if (game.Me.Location.Distance(npc.Location) < 5)
+                {
+                    Thread.Sleep(100);
+                    return game.InteractWithNPC(npc);
+                }
+                return false;
+            }, TimeSpan.FromSeconds(4));
+
+            if (!result2)
+            {
+                Log.Error($"Failed to interact with MercOwner at location {npc.Location} while at location {game.Me.Location}");
+                return false;
+            }
+
+            Thread.Sleep(50);
+            game.InitiateEntityChat(npc);
+            Thread.Sleep(50);
+            game.ResurrectMerc(npc);
+            Thread.Sleep(50);
+            game.TerminateEntityChat(npc);
             Thread.Sleep(50);
             return true;
         }

@@ -9,9 +9,8 @@ namespace D2NG.Core.D2GS.Packet.Incoming
     {
         public uint EntityId { get; }
         public EntityState EntityState { get; }
-
         public Point Location { get; }
-        public byte LifePercentage { get; }
+        public double LifePercentage { get; }
 
         public NpcStatePacket(D2gsPacket packet) : base(packet.Raw)
         {
@@ -27,7 +26,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             var x = reader.ReadUInt16();
             var y = reader.ReadUInt16();
             Location = new Point(x, y);
-            LifePercentage = reader.ReadByte();
+            LifePercentage = reader.ReadByte() / 1.28;
         }
     }
 }
