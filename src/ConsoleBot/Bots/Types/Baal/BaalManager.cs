@@ -15,20 +15,18 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace ConsoleBot.Bots.Types.Cows
+namespace ConsoleBot.Bots.Types.Baal
 {
-    internal class CowManager
+    internal class BaalManager
     {
         private readonly List<Client> _killingClients;
         private readonly IMapApiService mapApiService;
         private readonly ConcurrentDictionary<uint, AliveMonster> _aliveMonsters = new ConcurrentDictionary<uint, AliveMonster>();
-        private readonly ConcurrentDictionary<Point, Point> _usedClusters = new ConcurrentDictionary<Point, Point>();
-        private readonly ConcurrentDictionary<Point, Point> _busyClusters = new ConcurrentDictionary<Point, Point>();
-        private readonly ConcurrentDictionary<Point, Point> _cowClusters = new ConcurrentDictionary<Point, Point>();
         private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new ConcurrentDictionary<uint, Item>();
         private readonly ConcurrentDictionary<uint, Item> _pickitPotionsOnGround = new ConcurrentDictionary<uint, Item>();
-        private bool IsActive = false;
-        public CowManager(List<Client> killingclients, List<Client> listeningClients, IMapApiService mapApiService)
+        private Point LeftTopThroneRoom;
+        private Point RightBottomThroneRoom;
+        public BaalManager(List<Client> killingclients, List<Client> listeningClients, IMapApiService mapApiService)
         {
             _killingClients = killingclients;
             this.mapApiService = mapApiService;
@@ -48,77 +46,13 @@ namespace ConsoleBot.Bots.Types.Cows
             }
         }
 
-        public async Task<List<Point>> GetPossibleStartingLocations(Game game)
+        public async Task Initialize()
         {
-            var result = new List<Point>();
-            var areaMap = await mapApiService.GetArea(game.MapId, Difficulty.Normal, D2NG.Core.D2GS.Act.Area.CowLevel);
-            var cowKing = areaMap.Npcs[(int)NPCCode.CowKing][0];
-            var rows = areaMap.Map.GetLength(0);
-            for (var i = 0; i < rows; i += rows / 5)
-            {
-                var edge1 = GetNearestLocationToEdge(areaMap.Map[i], true);
-                if(edge1.HasValue)
-                {
-                    var option1 = areaMap.MapToPoint(i, edge1.Value);
-                    if (option1.Distance(cowKing) > 150)
-                    {
-                        result.Add(option1);
-                    }
-                }
-
-                var edge2 = GetNearestLocationToEdge(areaMap.Map[i], false);
-                if(edge2.HasValue)
-                {
-                    var option2 = areaMap.MapToPoint(i, edge2.Value);
-                    if (option2.Distance(cowKing) > 150)
-                    {
-                        result.Add(option2);
-                    }
-                }
-            }
-
-            return result.OrderBy(p => p.X).ThenBy(p => p.Y).ToList();
-        }
-
-        private int? GetNearestLocationToEdge(int[] locations, bool leftToRight)
-        {
-            var startX = leftToRight ? 0 : locations.Length - 1;
-            int x = startX;
-            int count = 0;
-            while (true)
-            {
-                if (AreaMapExtensions.IsMovable(locations[x]))
-                {
-                    count++;
-                    if(count > 5)
-                    {
-                        return x;
-                    }
-                }
-                else
-                {
-                    count = 0;
-                }
-
-                if(leftToRight)
-                {
-                    x++;
-                    if(x >= locations.Length)
-                    {
-                        break;
-                    }
-                }
-                else
-                {
-                    x--;
-                    if (x < 0)
-                    {
-                        break;
-                    }
-                }
-            }
-
-            return null;
+            var mapId = _killingClients.First().Game.MapId;
+            var areaMap = await mapApiService.GetArea(mapId, Difficulty.Normal, D2NG.Core.D2GS.Act.Area.ThroneOfDestruction);
+            var baalPortal = areaMap.Objects[(int)EntityCode.BaalPortal][0];
+            LeftTopThroneRoom = baalPortal.Add(-35, -20);
+            RightBottomThroneRoom = baalPortal.Add(35, 90);
         }
 
         private Task HandleItemDrop(Game game, Item item)
@@ -153,9 +87,9 @@ namespace ConsoleBot.Bots.Types.Cows
             }
             else
             {
-                if(_aliveMonsters.TryGetValue(entityId, out var cow))
+                if(_aliveMonsters.TryGetValue(entityId, out var monster))
                 {
-                    cow.LifePercentage = lifePercentage;
+                    monster.LifePercentage = lifePercentage;
                 }
                 
             }
@@ -163,37 +97,49 @@ namespace ConsoleBot.Bots.Types.Cows
 
         private void HandleNPCMove(uint entityId, Point location, double? lifePercentage = null)
         {
-            if (_aliveMonsters.TryGetValue(entityId, out var cow))
+            if (_aliveMonsters.TryGetValue(entityId, out var monster))
             {
-                cow.Location = location;
+                monster.Location = location;
                 if(lifePercentage.HasValue)
                 {
-                    cow.LifePercentage = lifePercentage.Value;
+                    monster.LifePercentage = lifePercentage.Value;
                 }
             }
         }
 
         private void HandleAssignNPC(AssignNpcPacket packet)
         {
-            if (packet.UniqueCode == NPCCode.HellBovine)
+            if(packet.UniqueCode == NPCCode.Guard
+                || packet.UniqueCode == NPCCode.BaalThrone
+                || packet.UniqueCode == NPCCode.BaalTentacle1
+                || packet.UniqueCode == NPCCode.BaalTentacle2
+                || packet.UniqueCode == NPCCode.BaalTentacle3
+                || packet.UniqueCode == NPCCode.BaalTentacle4
+                || packet.UniqueCode == NPCCode.BaalTentacle5)
             {
-                _aliveMonsters.AddOrUpdate(packet.EntityId, (newCowId => new AliveMonster
-                {
-                    Id = packet.EntityId,
-                    Location = packet.Location,
-                    NPCCode = packet.UniqueCode,
-                    MonsterEnchantments = packet.MonsterEnchantments
-                }), (existingCowId, existingCow) => existingCow);
+                return;
+            }
 
-                var usedCluster = _usedClusters.Values.FirstOrDefault(cluster => packet.Location.Distance(cluster) < 30);
-                if(usedCluster == null && _usedClusters.TryAdd(packet.Location, packet.Location))
+            if(packet.UniqueCode != NPCCode.Baal)
+            {
+                if (packet.Location.X < LeftTopThroneRoom.X || packet.Location.X > RightBottomThroneRoom.X)
                 {
-                    Log.Information($"Adding new cluster at {packet.Location}");
-                    _cowClusters.TryAdd(packet.Location, packet.Location);
+                    return;
+                }
 
-                    IsActive = true;
+                if (packet.Location.Y < LeftTopThroneRoom.Y || packet.Location.Y > RightBottomThroneRoom.Y)
+                {
+                    return;
                 }
             }
+
+            _aliveMonsters.AddOrUpdate(packet.EntityId, (newMonsterId => new AliveMonster
+            {
+                Id = packet.EntityId,
+                Location = packet.Location,
+                NPCCode = packet.UniqueCode,
+                MonsterEnchantments = packet.MonsterEnchantments
+            }), (existingMonsterId, existingMonster) => existingMonster);
         }
 
         private void HandleNPCStateChange(NpcStatePacket packet)
@@ -206,56 +152,21 @@ namespace ConsoleBot.Bots.Types.Cows
             }
             else
             {
-                if (_aliveMonsters.TryGetValue(packet.EntityId, out var cow))
+                if (_aliveMonsters.TryGetValue(packet.EntityId, out var monster))
                 {
-                    cow.LifePercentage = packet.LifePercentage;
+                    monster.LifePercentage = packet.LifePercentage;
                 }
             }
         }
      
-        public List<AliveMonster> GetNearbyAliveMonsters(Client client, double distance, int numberOfCows)
+        public List<AliveMonster> GetNearbyAliveMonsters(Client client, double distance, int numberOfMonsters)
         {
-            return GetNearbyAliveMonsters(client.Game.Me.Location, distance, numberOfCows);
+            return GetNearbyAliveMonsters(client.Game.Me.Location, distance, numberOfMonsters);
         }
 
         public List<AliveMonster> GetNearbyAliveMonsters(Point location, double distance, int numberOfMonsters)
         {
             return _aliveMonsters.Values.Where(c => c.Location.Distance(location) < distance).OrderBy(c => c.Location.Distance(location)).Take(numberOfMonsters).ToList();
-        }
-
-        public void GiveUpCluster(Point cluster)
-        {
-            _cowClusters.TryAdd(cluster, cluster);
-        }
-
-        public Point GetNextCluster(Client client, Point previousCluster)
-        {
-            if(previousCluster != null)
-            {
-                _busyClusters.Remove(previousCluster, out var _);
-            }
-
-            var orderedByDistance = _cowClusters.Keys.OrderBy(p => client.Game.Me.Location.Distance(p));
-            foreach(var cluster in orderedByDistance)
-            {
-                if(_cowClusters.TryRemove(cluster, out var removedCluster))
-                {
-                    _busyClusters.TryAdd(removedCluster, removedCluster);
-                    return removedCluster;
-                }
-            }
-
-            return _busyClusters.Values.FirstOrDefault();
-        }
-
-        public bool IsFinished()
-        {
-            if(_killingClients.All(c => !c.Game.IsInGame()))
-            {
-                return true;
-            }
-
-            return IsActive && !_busyClusters.Values.Any() && _cowClusters.IsEmpty;
         }
 
         public void PutItemOnPickitList(Client client, Item item)

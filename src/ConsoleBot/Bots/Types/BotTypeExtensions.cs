@@ -1,4 +1,5 @@
-﻿using ConsoleBot.Bots.Types.Cows;
+﻿using ConsoleBot.Bots.Types.Baal;
+using ConsoleBot.Bots.Types.Cows;
 using ConsoleBot.Bots.Types.CS;
 using ConsoleBot.Bots.Types.Mephisto;
 using ConsoleBot.Bots.Types.Pindle;
@@ -18,6 +19,7 @@ namespace ConsoleBot.Bots.Types
             services.AddSingleton<IBotInstance, CowBot>();
             services.AddSingleton<IBotInstance, CSBot>();
             services.AddSingleton<IBotInstance, PindleBot>();
+            services.AddSingleton<IBotInstance, BaalBot>();
             services.AddSingleton<IBotFactory, BotFactory>();
             services.AddOptions<CowConfiguration>()
                 .Bind(config.GetSection("bot").GetSection("cows"));
@@ -29,6 +31,8 @@ namespace ConsoleBot.Bots.Types
                 .Bind(config.GetSection("bot").GetSection("cs"));
             services.AddOptions<PindleConfiguration>()
                 .Bind(config.GetSection("bot").GetSection("pindle"));
+            services.AddOptions<BaalConfiguration>()
+                .Bind(config.GetSection("bot").GetSection("baal"));
         }
     }
 }

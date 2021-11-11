@@ -337,7 +337,7 @@ namespace ConsoleBot.Bots.Types.Travincal
                 return false;
             }
 
-            return game.UseHealthPotion();
+            return game.UseHealthPotions();
         }
     }
 }

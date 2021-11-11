@@ -12,6 +12,11 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItemExpansion(Item item)
         {
+            if (item.Level >= 95)
+            {
+                return true;
+            }
+
             if (item.GetValueOfStatType(StatType.FasterRunWalk) >= 5
                 && item.Properties.Count > 1)
             {

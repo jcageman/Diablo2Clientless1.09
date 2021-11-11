@@ -104,6 +104,12 @@ namespace ConsoleBot.TownManagement
 
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
+                portal = client.Game.GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalArea == area && t.TownPortalOwnerId == player.Id);
+                if (portal == null)
+                {
+                    return false;
+                }
+
                 await client.Game.MoveToAsync(portal);
                 if (retryCount > 0 && retryCount % 5 == 0)
                 {

@@ -27,9 +27,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 
-namespace ConsoleBot.Bots.Types.Cows
+namespace ConsoleBot.Bots.Types.Baal
 {
-    public class CowBot : IBotInstance
+    public class BaalBot : IBotInstance
     {
         private readonly BotConfiguration _config;
         private readonly IExternalMessagingClient _externalMessagingClient;
@@ -38,15 +38,16 @@ namespace ConsoleBot.Bots.Types.Cows
         private readonly IAttackService _attackService;
         private readonly IMapApiService _mapApiService;
         private readonly IMuleService _muleService;
-        private readonly CowConfiguration _cowconfig;
+        private readonly BaalConfiguration _baalConfig;
         private TaskCompletionSource<bool> NextGame = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        private TaskCompletionSource<bool> CowPortalOpen = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private TaskCompletionSource<bool> BaalPortalOpen = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         private ConcurrentDictionary<string, ManualResetEvent> PlayersInGame = new ConcurrentDictionary<string, ManualResetEvent>();
         private uint? BoClientPlayerId;
+        private uint? PortalClientPlayerId;
         private ConcurrentDictionary<string, bool> ShouldFollow = new ConcurrentDictionary<string, bool>();
         private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new ConcurrentDictionary<string, (Point, CancellationTokenSource)>();
         private HashSet<string> ClientsNeedingMule = new HashSet<string>();
-        public CowBot(IOptions<BotConfiguration> config, IOptions<CowConfiguration> cowconfig,
+        public BaalBot(IOptions<BotConfiguration> config, IOptions<BaalConfiguration> baalconfig,
             IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
             ITownManagementService townManagementService,
             IAttackService attackService,
@@ -61,19 +62,19 @@ namespace ConsoleBot.Bots.Types.Cows
             _attackService = attackService;
             _mapApiService = mapApiService;
             _muleService = muleService;
-            _cowconfig = cowconfig.Value;
+            _baalConfig = baalconfig.Value;
         }
 
         public string GetName()
         {
-            return "cows";
+            return "baal";
         }
 
         public async Task Run()
         {
-            _cowconfig.Validate();
+            _baalConfig.Validate();
             var clients = new List<Client>();
-            foreach (var account in _cowconfig.Accounts)
+            foreach (var account in _baalConfig.Accounts)
             {
                 var client = new Client();
                 client.OnReceivedPacketEvent(InComingPacket.EventMessage, (packet) => HandleEventMessage(client, new EventNotifyPacket(packet)));
@@ -84,7 +85,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 client.OnReceivedPacketEvent(InComingPacket.EntityMove, async (packet) =>
                 {
                     var entityMovePacket = new EntityMovePacket(packet);
-                    if (entityMovePacket.UnitType == EntityType.Player && entityMovePacket.UnitId == BoClientPlayerId && ShouldFollowLeadClient(client))
+                    if (entityMovePacket.UnitType == EntityType.Player && entityMovePacket.UnitId == PortalClientPlayerId && ShouldFollowLeadClient(client))
                     {
                         await FollowToLocation(client, entityMovePacket.MoveToLocation);
                     }
@@ -93,7 +94,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 client.OnReceivedPacketEvent(InComingPacket.ReassignPlayer, async (packet) =>
                 {
                     var reassignPlayerPacket = new ReassignPlayerPacket(packet);
-                    if (reassignPlayerPacket.UnitType == EntityType.Player && reassignPlayerPacket.UnitId == BoClientPlayerId && ShouldFollowLeadClient(client))
+                    if (reassignPlayerPacket.UnitType == EntityType.Player && reassignPlayerPacket.UnitId == PortalClientPlayerId && ShouldFollowLeadClient(client))
                     {
                         await FollowToLocation(client, reassignPlayerPacket.Location);
                     }
@@ -101,7 +102,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 client.OnReceivedPacketEvent(InComingPacket.PartyAutomapInfo, async (packet) =>
                 {
                     var partyAutomapInfoPacket = new PartyAutomapInfoPacket(packet);
-                    if (partyAutomapInfoPacket.Id == BoClientPlayerId && ShouldFollowLeadClient(client))
+                    if (partyAutomapInfoPacket.Id == PortalClientPlayerId && ShouldFollowLeadClient(client))
                     {
                         await FollowToLocation(client, partyAutomapInfoPacket.Location);
                     }
@@ -141,16 +142,16 @@ namespace ConsoleBot.Bots.Types.Cows
                     task.Value.Item2.Cancel();
                 }
 
-                CowPortalOpen = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                BaalPortalOpen = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 NextGame = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 BoClientPlayerId = null;
-
+                PortalClientPlayerId = null;
                 Log.Information($"Joining next game");
 
                 try
                 {
                     var leaveAndRejoinTasks = clients.Select(async (client, index) => {
-                        var account = _cowconfig.Accounts[index];
+                        var account = _baalConfig.Accounts[index];
                         return await LeaveGameAndRejoinMCPWithRetry(client, account);
                     }).ToList();
                     var rejoinResults = await Task.WhenAll(leaveAndRejoinTasks);
@@ -175,7 +176,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     }
                     ClientsNeedingMule.Clear();
 
-                    var result = await RealmConnectHelpers.CreateGameWithRetry(gameCount, firstFiller, _config, _cowconfig.Accounts.First());
+                    var result = await RealmConnectHelpers.CreateGameWithRetry(gameCount, firstFiller, _config, _baalConfig.Accounts.First());
                     gameCount = result.Item2;
                     if (!result.Item1)
                     {
@@ -199,7 +200,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     var rand = new Random();
                     for (int i = 0; i < clients.Count(); i++)
                     {
-                        var account = _cowconfig.Accounts[i];
+                        var account = _baalConfig.Accounts[i];
                         var client = clients[i];
                         Thread.Sleep(TimeSpan.FromSeconds(1 + i * 0.7));
                         if (firstFiller != client && !await RealmConnectHelpers.JoinGameWithRetry(gameCount, client, _config, account))
@@ -209,7 +210,7 @@ namespace ConsoleBot.Bots.Types.Cows
                             break;
                         }
 
-                       townTasks.Add(PrepareForCowsTasks(client));
+                       townTasks.Add(PrepareForBaalsTasks(client));
                     }
 
                     var townResults = await Task.WhenAll(townTasks);
@@ -270,23 +271,25 @@ namespace ConsoleBot.Bots.Types.Cows
                 }
 
                 BoClientPlayerId = boClient.Game.Me.Id;
-
-                Log.Information($"Waiting for cow portal to open");
-                await CowPortalOpen.Task;
-                Log.Information($"Cow portal open, moving to cow level");
+                var portalClient = clients.First(c => _baalConfig.PortalCharacterName.Equals(c.Game.Me.Name, StringComparison.InvariantCultureIgnoreCase));
+                PortalClientPlayerId = portalClient.Game.Me.Id;
+                Log.Information($"Waiting for baal portal to open");
+                await BaalPortalOpen.Task;
+                Log.Information($"Baal portal open, moving to throne room");
 
                 var killingClients = clients.Where(c => c.Game.Me.Class == CharacterClass.Sorceress && c.Game.Me.HasSkill(Skill.Nova)).ToList();
-                Log.Information($"Selected {string.Join(",", killingClients.Select(c => c.Game.Me.Name))} for cow manager");
+                Log.Information($"Selected {string.Join(",", killingClients.Select(c => c.Game.Me.Name))} for baal manager");
                 var listeningClients = clients.Where(c => c.Game.Me.Class == CharacterClass.Sorceress && !killingClients.Contains(c)).ToList();
                 listeningClients.Add(boClient);
-                var cowManager = new CowManager(killingClients, listeningClients, _mapApiService);
+                var baalManager = new BaalManager(killingClients, listeningClients, _mapApiService);
+                await baalManager.Initialize();
 
                 try
                 {
                     var clientTasks = new List<Task<bool>>();
                     foreach(var client in clients)
                     {
-                        clientTasks.Add(RunCows(client, cowManager));
+                        clientTasks.Add(RunBaals(client, baalManager));
                     }
                     
                     await Task.WhenAll(clientTasks);
@@ -301,7 +304,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }
         }
 
-        private async Task<bool> PrepareForCowsTasks(Client client)
+        private async Task<bool> PrepareForBaalsTasks(Client client)
         {
             var timer = new Stopwatch();
             timer.Start();
@@ -325,14 +328,12 @@ namespace ConsoleBot.Bots.Types.Cows
                 return false;
             }
 
-            var initialLocation = client.Game.Me.Location;
-
             var townManagementOptions = new TownManagementOptions()
             {
-                Act = Act.Act1,
+                Act = Act.Act5,
             };
 
-            var isPortalCharacter = _cowconfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.InvariantCultureIgnoreCase);
+            var isPortalCharacter = _baalConfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.InvariantCultureIgnoreCase);
             if (isPortalCharacter)
             {
                 var tomesOfTp = client.Game.Inventory.Items.Count(i => i.Name == ItemName.TomeOfTownPortal);
@@ -357,15 +358,16 @@ namespace ConsoleBot.Bots.Types.Cows
 
             if(isPortalCharacter)
             {
-                if(!await CreateCowLevel(client))
+                if(!await CreateThroneRoomTp(client))
                 {
                     return false;
                 }
             }
             else
             {
+                var tpLocation = new Point(5100, 5025);
                 var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
-                var pathBack = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.RogueEncampment, client.Game.Me.Location, initialLocation, movementMode);
+                var pathBack = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.Harrogath, client.Game.Me.Location, tpLocation, movementMode);
                 if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBack, movementMode))
                 {
                     Log.Warning($"Client {client.Game.Me.Name} {movementMode} back failed at {client.Game.Me.Location}");
@@ -388,63 +390,153 @@ namespace ConsoleBot.Bots.Types.Cows
             }
         }
 
-        private async Task<bool> RunCows(Client client, CowManager cowManager)
-        {
-            var isPortalCharacter = _cowconfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.InvariantCultureIgnoreCase);
-            if (isPortalCharacter)
-            {
-                if (!await ArrangeBoAtCata2(client))
-                {
-                    NextGame.TrySetResult(true);
-                    return false;
-                }
-
-                if(!await ArrangeStartingPosition(client, cowManager))
-                {
-                    NextGame.TrySetResult(true);
-                    return false;
-                }
-
-                Log.Information($"Client {client.Game.Me.Name} arranged start position");
-            }
-            else
-            {
-                var portalPlayer = client.Game.Players.Single(p => _cowconfig.PortalCharacterName.Equals(p.Name, StringComparison.InvariantCultureIgnoreCase));
-                if (!await GetBoAtCata2(client, portalPlayer))
-                {
-                    NextGame.TrySetResult(true);
-                    return false;
-                }
-
-                if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                {
-                    return await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.CowLevel);
-                }, TimeSpan.FromSeconds(30)))
-                {
-                    Log.Warning($"Client {client.Game.Me.Name} stopped waiting for cow level to start");
-                    NextGame.TrySetResult(true);
-                    return false;
-                }
-
-                await Task.Delay(TimeSpan.FromSeconds(5));
-            }
-
-            await GetTaskForClient(client, cowManager);
-            return true;
-        }
-
-        private async Task<bool> GetBoAtCata2(Client client, Player portalPlayer)
+        private async Task<bool> RunBaals(Client client, BaalManager baalManager)
         {
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
-                await Task.Delay(TimeSpan.FromSeconds(0.5));
-                return await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.CatacombsLevel2);
-            }, TimeSpan.FromSeconds(20)))
+                return await _townManagementService.TakeTownPortalToArea(client, client.Game.Players.First(p => p.Id == PortalClientPlayerId), Area.ThroneOfDestruction);
+            }, TimeSpan.FromSeconds(30)))
             {
-                Log.Warning($"Client {client.Game.Me.Name} taking portal to cata2 failed");
+                Log.Warning($"Client {client.Game.Me.Name} stopped waiting throne run to start");
+                NextGame.TrySetResult(true);
                 return false;
             }
 
+            if (client.Game.Me.Id == PortalClientPlayerId && !_townManagementService.CreateTownPortal(client))
+            {
+                NextGame.TrySetResult(true);
+                return false;
+            }
+
+            if (!await SetupBo(client))
+            {
+                NextGame.TrySetResult(true);
+                return false;
+            }
+
+            await GetTaskForWave(client, baalManager);
+
+            if(client.Game.Me.Id == PortalClientPlayerId)
+            {
+                if (!await CreateBaalPortal(client, baalManager))
+                {
+                    NextGame.TrySetResult(true);
+                    return false;
+                }
+                Log.Information($"Client {client.Game.Me.Name} created baal portal");
+            }
+            else
+            {
+                if (!await _townManagementService.TakeTownPortalToTown(client))
+                {
+                    NextGame.TrySetResult(true);
+                    return false;
+                }
+            }
+
+            await GetTaskForBaal(client, baalManager);
+            return true;
+        }
+
+        private async Task<bool> CreateBaalPortal(Client client, BaalManager baalManager)
+        {
+            var baalPortal = client.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                await Task.Delay(100);
+                baalPortal = client.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
+                if(baalPortal == null)
+                {
+                    return false;
+                }
+                var pathBaalPortal = await _pathingService.GetPathToLocation(client.Game, baalPortal.Location, MovementMode.Teleport);
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBaalPortal, MovementMode.Teleport))
+                {
+                    Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} to {EntityCode.BaalPortal} failed at {client.Game.Me.Location}");
+                }
+
+                return true;
+            }, TimeSpan.FromSeconds(10)))
+            {
+                Log.Warning($"Client {client.Game.Me.Name} finding and moving to {EntityCode.BaalPortal} failed at {client.Game.Me.Location}");
+                return false;
+            }
+
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                await client.Game.MoveToAsync(baalPortal);
+
+                if (retryCount > 0 && retryCount % 5 == 0)
+                {
+                    client.Game.RequestUpdate(client.Game.Me.Id);
+                }
+
+                client.Game.InteractWithEntity(baalPortal);
+                return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                {
+                    await Task.Delay(50);
+                    return client.Game.Area == Area.TheWorldStoneChamber;
+                }, TimeSpan.FromSeconds(0.5));
+            }, TimeSpan.FromSeconds(10)))
+            {
+                return false;
+            }
+
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                if (retryCount > 0 && retryCount % 5 == 0)
+                {
+                    client.Game.RequestUpdate(client.Game.Me.Id);
+                }
+
+                await Task.Delay(100);
+
+                return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.TheWorldStoneChamber, client.Game.Me.Location);
+            }, TimeSpan.FromSeconds(10)))
+            {
+                return false;
+            }
+
+            var pathBaal = await _pathingService.GetPathToNPC(client.Game, NPCCode.Baal, MovementMode.Teleport);
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBaal, MovementMode.Teleport))
+            {
+                Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} to {NPCCode.Baal} failed at {client.Game.Me.Location}");
+            }
+
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                var baal = baalManager.GetNearbyAliveMonsters(client, 200, 1).FirstOrDefault();
+                if(baal == null)
+                {
+                    return false;
+                }
+                if(baal.Location.Distance(client.Game.Me.Location) > 10)
+                {
+                    pathBaal = await _pathingService.GetPathToLocation(client.Game, baal.Location, MovementMode.Teleport);
+                    if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBaal, MovementMode.Teleport))
+                    {
+                        Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} to {NPCCode.Baal} failed at {client.Game.Me.Location}");
+                        return false;
+                    }
+                }
+
+                return true;
+            }, TimeSpan.FromSeconds(10)))
+            {
+                Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} close to {NPCCode.Baal} failed at {client.Game.Me.Location}");
+                return false;
+            }
+
+            if (!_townManagementService.CreateTownPortal(client))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private async Task<bool> SetupBo(Client client)
+        {
             if (client.Game.Me.Id == BoClientPlayerId)
             {
                 await GeneralHelpers.TryWithTimeout(async (retryCount) =>
@@ -473,320 +565,114 @@ namespace ConsoleBot.Bots.Types.Cows
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(0.1));
-                    return !ClassHelpers.AnyPlayerIsMissingShouts(client);
+                    return !ClassHelpers.IsMissingShouts(client.Game.Me);
                 }, TimeSpan.FromSeconds(15));
-            }
-
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                await Task.Delay(TimeSpan.FromSeconds(0.5));
-                return await _townManagementService.TakeTownPortalToTown(client);
-            }, TimeSpan.FromSeconds(20)))
-            {
-                Log.Warning($"Client {client.Game.Me.Name} taking portal to town failed");
-                return false;
             }
 
             return true;
         }
 
-        private async Task<bool> ArrangeStartingPosition(Client client, CowManager cowManager)
+        private async Task<bool> CreateThroneRoomTp(Client client)
         {
-            if (!await MoveToCowLevel(client))
+            var game = client.Game;
+            if (!await _townManagementService.TakeWaypoint(client, Waypoint.TheWorldStoneKeepLevel2))
             {
-                Log.Information($"{client.Game.Me.Name}, couldn't move to the cow level, next game");
-                NextGame.TrySetResult(true);
+                Log.Information($"Taking {client.Game.Act} waypoint failed");
                 return false;
             }
 
-            var startLocations = await cowManager.GetPossibleStartingLocations(client.Game);
-            foreach (var location in startLocations)
+            var pathToWorldStone3 = await _pathingService.GetPathFromWaypointToArea(client.Game.MapId, Difficulty.Normal, Area.TheWorldStoneKeepLevel2, Waypoint.TheWorldStoneKeepLevel2, Area.TheWorldStoneKeepLevel3, MovementMode.Teleport);
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToWorldStone3, MovementMode.Teleport))
             {
-                Log.Information($"Client {client.Game.Me.Name} starting location {location}");
+                Log.Error($"Teleporting to {Area.TheWorldStoneKeepLevel3}  failed");
+                return false;
+            }
 
-                var teleportPath = await _pathingService.GetPathToLocation(client.Game, location, MovementMode.Teleport);
-                if (teleportPath.Count > 0)
+            var warp1 = client.Game.GetNearestWarp();
+            if (warp1 == null || warp1.Location.Distance(client.Game.Me.Location) > 20)
+            {
+                Log.Warning($"Warp not close enough at location {warp1?.Location} while at location {client.Game.Me.Location}");
+                return false;
+            }
+
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) => {
+                if (warp1.Location.Distance(client.Game.Me.Location) > 5 && !await game.TeleportToLocationAsync(warp1.Location))
                 {
-                    Log.Information($"Client {client.Game.Me.Name} teleporting to starting location {location}");
-                    await MovementHelpers.TakePathOfLocations(client.Game, teleportPath.ToList(), MovementMode.Teleport);
-                    var nearbyAliveCows = cowManager.GetNearbyAliveMonsters(client, 35.0, 100);
-                    if (!nearbyAliveCows.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)))
-                    {
-                        if (!_townManagementService.CreateTownPortal(client))
-                        {
-                            continue;
-                        }
-                        return true;
-                    }
+                    Log.Debug($"Teleport to {warp1.Location} failing retrying at location: {game.Me.Location}");
+                    return false;
                 }
-            }
 
-            return false;
-        }
-
-        private async Task<bool> ArrangeBoAtCata2(Client client)
-        {
-            Log.Information($"Client {client.Game.Me.Name} taking waypoint to {Waypoint.CatacombsLevel2}");
-            if (!await _townManagementService.TakeWaypoint(client, Waypoint.CatacombsLevel2))
+                return client.Game.TakeWarp(warp1) && client.Game.Area == Area.TheWorldStoneKeepLevel3;
+            }, TimeSpan.FromSeconds(4)))
             {
+                Log.Warning($"Teleport failed at location: {game.Me.Location}");
                 return false;
             }
 
-            Log.Information($"Client {client.Game.Me.Name} creating town portal at {Waypoint.CatacombsLevel2}");
-            if (!_townManagementService.CreateTownPortal(client))
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
+                client.Game.RequestUpdate(client.Game.Me.Id);
+                var isValidPoint = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.TheWorldStoneKeepLevel3, client.Game.Me.Location);
+                return isValidPoint;
+            }, TimeSpan.FromSeconds(3.5)))
+            {
+                Log.Error("Checking whether moved to area failed");
                 return false;
             }
 
-            Log.Information($"Client {client.Game.Me.Name} waiting for bo on all players at {Waypoint.CatacombsLevel2}");
-            await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            var pathToThroneRoom = await _pathingService.GetPathToArea(client.Game, Area.ThroneOfDestruction, MovementMode.Teleport);
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToThroneRoom, MovementMode.Teleport))
             {
-                await Task.Delay(TimeSpan.FromSeconds(0.1));
-                return !ClassHelpers.AnyPlayerIsMissingShouts(client);
-            }, TimeSpan.FromSeconds(15));
+                Log.Error($"Teleporting to {Area.ThroneOfDestruction}  failed");
+                return false;
+            }
 
-            Log.Information($"Client {client.Game.Me.Name} waiting for bo done at {Waypoint.CatacombsLevel2}");
+            var warp2 = client.Game.GetNearestWarp();
+            if (warp2 == null || warp2.Location.Distance(client.Game.Me.Location) > 20)
+            {
+                Log.Warning($"Warp not close enough at location {warp2?.Location} while at location {client.Game.Me.Location}");
+                return false;
+            }
+
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) => {
+                if (warp2.Location.Distance(client.Game.Me.Location) > 5 && !await game.TeleportToLocationAsync(warp2.Location))
+                {
+                    Log.Debug($"Teleport to {warp2.Location} failing retrying at location: {game.Me.Location}");
+                    return false;
+                }
+
+                return client.Game.TakeWarp(warp2) && client.Game.Area == Area.ThroneOfDestruction;
+            }, TimeSpan.FromSeconds(4)))
+            {
+                Log.Warning($"Teleport failed at location: {game.Me.Location}");
+                return false;
+            }
+
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                client.Game.RequestUpdate(client.Game.Me.Id);
+                var isValidPoint = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.ThroneOfDestruction, client.Game.Me.Location);
+                return isValidPoint;
+            }, TimeSpan.FromSeconds(3.5)))
+            {
+                Log.Error("Checking whether moved to area failed");
+                return false;
+            }
+
+            var pathToThrone = await _pathingService.GetPathToObjectWithOffset(client.Game, EntityCode.BaalPortal, 27, 65, MovementMode.Teleport);
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToThrone, MovementMode.Teleport))
+            {
+                Log.Error($"Teleporting to {Area.ThroneOfDestruction} starting location failed");
+                return false;
+            }
 
             if (!await _townManagementService.TakeTownPortalToTown(client))
             {
                 return false;
             }
-            Log.Information($"Client {client.Game.Me.Name} back to town");
-            return true;
-        }
 
-        private async Task<bool> CreateCowLevel(Client client)
-        {
-            var game = client.Game;
-            var movementMode = game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
-            if (!game.Inventory.Items.Any(i => i.Name == ItemName.WirtsLeg))
-            {
-                if (!await GetWirtsLeg(client))
-                {
-                    return false;
-                }
-            }
+            Log.Information("Got to starting location");
 
-            var wirtsleg = game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg);
-            if (wirtsleg == null)
-            {
-                Log.Error($"Wirts leg not found");
-                return false;
-            }
-
-            var tomesOfTp = game.Inventory.Items.Where(i => i.Name == ItemName.TomeOfTownPortal);
-            if (tomesOfTp.Count() < 2)
-            {
-                Log.Error($"Not enough tomes of town portal found");
-                return false;
-            }
-
-            var lowestQuantity = tomesOfTp.OrderBy(i => i.Amount).First();
-            var droppedItems = new List<Item>();
-            if (game.Cube.Items.Any())
-            {
-                if(!InventoryHelpers.MoveCubeItemsToInventory(game))
-                {
-                    Log.Warning($"Couldn't move all items out of cube, dropping cube items for now");
-                    foreach (var item in game.Cube.Items)
-                    {
-                        if (InventoryHelpers.DropItemFromCube(game, item) != MoveItemResult.Succes)
-                        {
-                            Log.Error($"Failed to drop item out of cube");
-                            return false;
-                        }
-                        droppedItems.Add(item);
-                    }
-                }
-            }
-
-            var freeSpaceTownPortal = game.Cube.FindFreeSpace(lowestQuantity);
-            if (game.Cube.Items.Any() || freeSpaceTownPortal == null)
-            {
-                Log.Error($"Something wrong with cube for transmute town portal");
-                return false;
-            }
-
-            if (InventoryHelpers.PutInventoryItemInCube(game, lowestQuantity, freeSpaceTownPortal) != Enums.MoveItemResult.Succes)
-            {
-                Log.Error($"Moving tome of town portal to cube failed");
-                return false;
-            }
-
-            var freeSpaceLeg = game.Cube.FindFreeSpace(wirtsleg);
-            if (freeSpaceLeg == null)
-            {
-                Log.Error($"No space found for leg, which is weird");
-                return false;
-            }
-
-            if (InventoryHelpers.PutInventoryItemInCube(game, wirtsleg, freeSpaceLeg) != Enums.MoveItemResult.Succes)
-            {
-                Log.Error($"Moving wirts leg to cube failed");
-                return false;
-            }
-
-            if (!InventoryHelpers.TransmuteItemsInCube(game, false))
-            {
-                Log.Error($"Transmuting leg and tome failed");
-                return false;
-            }
-
-            foreach(var droppedItem in droppedItems)
-            {
-                if (!GeneralHelpers.TryWithTimeout((retryCount =>
-                {
-                    client.Game.PickupItem(droppedItem);
-                    if (!GeneralHelpers.TryWithTimeout((retryCount =>
-                    {
-                        if (client.Game.Inventory.FindItemById(droppedItem.Id) == null)
-                        {
-                            return false;
-                        }
-
-                        return true;
-                    }), TimeSpan.FromSeconds(0.5)))
-                    {
-                        return false;
-                    }
-
-                    return true;
-                }), TimeSpan.FromSeconds(3)))
-                {
-                    Log.Warning($"Picking up item {droppedItem.GetFullDescription()} at location {droppedItem.Location} from location {client.Game.Me.Location} failed");
-                }
-            }
-
-            return true;
-        }
-
-        private async Task<bool> GetWirtsLeg(Client client)
-        {
-            var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, MovementMode.Teleport))
-            {
-                Log.Information($"Teleporting to {client.Game.Act} waypoint failed");
-                return false;
-            }
-
-            var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).Single();
-            Log.Information("Taking waypoint to StonyFields");
-            if (!GeneralHelpers.TryWithTimeout((_) =>
-            {
-                client.Game.TakeWaypoint(townWaypoint, Waypoint.StonyFields);
-                return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == Waypoint.StonyFields.ToArea(), TimeSpan.FromSeconds(2));
-            }, TimeSpan.FromSeconds(5)))
-            {
-                Log.Error($"Taking waypoint to to {Waypoint.StonyFields} waypoint failed");
-                return false;
-            }
-            var pathToPortal = await _pathingService.GetPathToObject(client.Game, EntityCode.TristamPortal, MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToPortal, MovementMode.Teleport))
-            {
-                Log.Error($"Teleporting to {EntityCode.TristamPortal}  failed");
-                return false;
-            }
-
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                if (client.Game.Area == Area.Tristram)
-                {
-                    return true;
-                }
-
-                var tristamPortal = client.Game.GetEntityByCode(EntityCode.RedTownPortal).FirstOrDefault(t => t.TownPortalArea == Area.Tristram);
-                if (tristamPortal == null)
-                {
-                    return false;
-                }
-                await client.Game.MoveToAsync(tristamPortal);
-
-                client.Game.InteractWithEntity(tristamPortal);
-                if (!GeneralHelpers.TryWithTimeout((retryCount) =>
-                {
-                    return client.Game.Area == Area.Tristram;
-                }, TimeSpan.FromSeconds(0.2)))
-                {
-                    client.Game.UseRightHandSkillOnLocation(Skill.Nova, client.Game.Me.Location);
-                    return false;
-                }
-
-                return true;
-
-            }, TimeSpan.FromSeconds(15)))
-            {
-                Log.Error($"Moving to Tristam failed");
-                return false;
-            }
-
-            client.Game.RequestUpdate(client.Game.Me.Id);
-
-            Log.Information("Arrived in Tristam, teleporting to leg");
-
-            var pathToLeg = await _pathingService.GetPathToObject(client.Game, EntityCode.WirtsBody, MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToLeg, MovementMode.Teleport))
-            {
-                Log.Error($"Teleporting to leg failed");
-                return false;
-            }
-
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                if (retryCount % 4 == 0)
-                {
-                    if (client.Game.Me.HasSkill(Skill.Nova))
-                    {
-                        client.Game.UseRightHandSkillOnLocation(Skill.Nova, client.Game.Me.Location);
-                    }
-                    else if (client.Game.Me.HasSkill(Skill.FrozenOrb))
-                    {
-                        client.Game.UseRightHandSkillOnLocation(Skill.FrozenOrb, client.Game.Me.Location);
-                    }
-                }
-                var wirtsBody = client.Game.GetEntityByCode(EntityCode.WirtsBody).FirstOrDefault();
-                if (wirtsBody == null)
-                {
-                    return false;
-                }
-
-                var wirtsLegItem = client.Game.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg && i.Ground);
-                if (client.Game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg) != null)
-                {
-                    return true;
-                }
-
-
-
-                if (wirtsLegItem == null)
-                {
-                    client.Game.MoveTo(wirtsBody);
-                    await Task.Delay(100);
-                    client.Game.InteractWithEntity(wirtsBody);
-                    return false;
-                }
-
-                
-                if(client.Game.Inventory.FindFreeSpace(wirtsLegItem) == null)
-                {
-                    InventoryHelpers.MoveInventoryItemsToCube(client.Game);
-                }
-
-                client.Game.PickupItem(wirtsLegItem);
-
-
-                return client.Game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg) != null;
-            }, TimeSpan.FromSeconds(15)))
-            {
-                Log.Error($"Getting leg failed, while it's at location: {client.Game.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg)?.Location} and i'm at location {client.Game.Me.Location}");
-                return false;
-            }
-            
-            if(!await _townManagementService.TakeTownPortalToTown(client))
-            {
-                return false;
-            }
-
-            Log.Information("Got leg and in town again");
             return true;
         }
 
@@ -822,11 +708,11 @@ namespace ConsoleBot.Bots.Types.Cows
             ShouldFollow[client.Game.Me.Name.ToLower()] = follow;
         }
 
-        async Task GetTaskForClient(Client client, CowManager cowManager)
+        async Task GetTaskForWave(Client client, BaalManager baalManager)
         {
-            if(client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] < 50 && !client.Game.Me.HasSkill(Skill.Teleport))
+            if (client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] < 50 && !client.Game.Me.HasSkill(Skill.Teleport))
             {
-                await BasicIdleClient(client, cowManager);
+                await BasicIdleClient(client, baalManager);
                 return;
             }
 
@@ -839,46 +725,102 @@ namespace ConsoleBot.Bots.Types.Cows
             };
             using var executeRefresh = new ExecuteAtInterval(refreshHandler, TimeSpan.FromSeconds(30));
             executeRefresh.Start();
-            
+
             switch (client.Game.Me.Class)
             {
                 case CharacterClass.Amazon:
-                    await BasicFollowClient(client, cowManager);
+                    await BasicIdleClient(client, baalManager);
 
                     break;
                 case CharacterClass.Sorceress:
                     if (client.Game.Me.HasSkill(Skill.StaticField))
                     {
-                        await StaticSorcClient(client, cowManager);
+                        await StaticSorcClient(client, baalManager);
                     }
                     else
                     {
-                        await BasicFollowClient(client, cowManager);
+                        await BasicIdleClient(client, baalManager);
                     }
                     break;
                 case CharacterClass.Necromancer:
-                    await BasicFollowClient(client, cowManager);
+                    await BasicIdleClient(client, baalManager);
                     break;
                 case CharacterClass.Paladin:
-                    await BasicFollowClient(client, cowManager);
+                    await BasicFollowClient(client, baalManager);
                     break;
                 case CharacterClass.Barbarian:
                     bool shouldBo = client.Game.Me.Id == BoClientPlayerId;
-                    await BarbClient(client, cowManager, shouldBo);
+                    await BarbClient(client, baalManager, shouldBo);
                     break;
                 case CharacterClass.Druid:
                 case CharacterClass.Assassin:
-                    await BasicFollowClient(client, cowManager);
+                    await BasicIdleClient(client, baalManager);
+                    break;
+            }
+        }
+
+        async Task GetTaskForBaal(Client client, BaalManager baalManager)
+        {
+            ElapsedEventHandler refreshHandler = (sender, args) =>
+            {
+                if (client.Game.IsInGame() && client.Game.Me != null)
+                {
+                    client.Game.RequestUpdate(client.Game.Me.Id);
+                }
+            };
+            using var executeRefresh = new ExecuteAtInterval(refreshHandler, TimeSpan.FromSeconds(30));
+            executeRefresh.Start();
+            
+            switch (client.Game.Me.Class)
+            {
+                case CharacterClass.Sorceress:
+                    if (client.Game.Me.HasSkill(Skill.StaticField))
+                    {
+                        if (client.Game.Area != Area.TheWorldStoneChamber && !await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                        {
+                            await Task.Delay(100);
+                            return await _townManagementService.TakeTownPortalToArea(client, client.Game.Players.First(p => p.Id == PortalClientPlayerId), Area.TheWorldStoneChamber);
+                        }, TimeSpan.FromSeconds(30)))
+                        {
+                            Log.Warning($"Client {client.Game.Me.Name} stopped waiting for baal portal");
+                            NextGame.TrySetResult(true);
+                        }
+
+                        await StaticSorcClient(client, baalManager);
+                        NextGame.TrySetResult(true);
+                    }
+                    else
+                    {
+                        await NextGame.Task;
+                    }
+                    break;
+                case CharacterClass.Paladin:
+                    if (client.Game.Area != Area.TheWorldStoneChamber && !await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                    {
+                        await Task.Delay(100);
+                        return await _townManagementService.TakeTownPortalToArea(client, client.Game.Players.First(p => p.Id == PortalClientPlayerId), Area.TheWorldStoneChamber);
+                    }, TimeSpan.FromSeconds(30)))
+                    {
+                        Log.Warning($"Client {client.Game.Me.Name} stopped waiting for baal portal");
+                        NextGame.TrySetResult(true);
+                    }
+                    await BasicFollowClient(client, baalManager);
+                    break;
+                default:
+                    await NextGame.Task;
                     break;
             }
 
-            if(client.Game.IsInGame())
+            await Task.Delay(1000);
+            await PickupItemsFromPickupList(client, baalManager, 100);
+
+            if (client.Game.IsInGame())
             {
                 client.Game.LeaveGame();
             }
         }
 
-        async Task StaticSorcClient(Client client, CowManager cowManager)
+        async Task StaticSorcClient(Client client, BaalManager baalManager)
         {
             Log.Information($"Starting Sorc Client {client.Game.Me.Name}");
             ElapsedEventHandler staticFieldAction = (sender, args) =>
@@ -894,38 +836,33 @@ namespace ConsoleBot.Bots.Types.Cows
 
             using var executeNova = new ExecuteAtInterval(novaAction, TimeSpan.FromSeconds(0.2));
 
-            var clusterStopWatch = new Stopwatch();
-
             bool hasUsedPotion = false;
 
-            var random = new Random();
+            var runStopWatch = new Stopwatch();
+            runStopWatch.Start();
 
-            Point currentCluster = null;
-            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.5)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+            var random = new Random();
+            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.5)), NextGame.Task) && client.Game.IsInGame())
             {
-                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-                var cowsNearLead = leadPlayer != null ? cowManager.GetNearbyAliveMonsters(leadPlayer.Location, 20.0, 10) : new List<AliveMonster>();
-                if (leadPlayer != null && leadPlayer.Location != currentCluster && cowsNearLead.Any() && leadPlayer.Location.Distance(client.Game.Me.Location) > 20)
+                if (runStopWatch.Elapsed > TimeSpan.FromSeconds(50))
                 {
-                    if(cowsNearLead.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)))
-                    {
-                        Log.Information($"{client.Game.Me.Name}, lightning enhanced cow nearby, next game");
-                        NextGame.SetResult(true);
-                    }
+                    Log.Warning($"Client {client.Game.Me.Name} waiting too long going next game");
+                    NextGame.TrySetResult(true);
+                    break;
+                }
+
+                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
+                var monstersNearLead = leadPlayer != null ? baalManager.GetNearbyAliveMonsters(leadPlayer.Location, 20.0, 10) : new List<AliveMonster>();
+                if (leadPlayer != null && monstersNearLead.Any() && leadPlayer.Location.Distance(client.Game.Me.Location) > 20)
+                {
                     Log.Information($"{client.Game.Me.Name}, lead client in danger, moving to lead client");
-                    if(currentCluster != null)
-                    {
-                        cowManager.GiveUpCluster(currentCluster);
-                    }
-                    
-                    currentCluster = cowsNearLead.FirstOrDefault().Location;
                     executeStaticField.Stop();
                     executeNova.Stop();
 
-                    var teleportPath = await _pathingService.GetPathToLocation(client.Game, currentCluster, MovementMode.Teleport);
+                    var teleportPath = await _pathingService.GetPathToLocation(client.Game, monstersNearLead.First().Location, MovementMode.Teleport);
                     if (teleportPath.Count > 0)
                     {
-                        Log.Information($"Client {client.Game.Me.Name} teleporting nearby cluster {currentCluster}");
+                        Log.Information($"Client {client.Game.Me.Name} teleporting at {monstersNearLead.First().Location}");
                         await MovementHelpers.TakePathOfLocations(client.Game, teleportPath.ToList(), MovementMode.Teleport);
                     }
                 }
@@ -954,8 +891,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
                 if(!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
                 {
-                    client.Game.UseHealthPotions();
-                    client.Game.UseHealthPotions();
+                    client.Game.UseHealthPotions(2);
                     hasUsedPotion = true;
                 }
 
@@ -969,40 +905,31 @@ namespace ConsoleBot.Bots.Types.Cows
                     client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
                 }
 
-                var nearbyAliveCows = cowManager.GetNearbyAliveMonsters(client, 30.0, 10);
-                if (((double)client.Game.Me.Life) / client.Game.Me.MaxLife <= 0.5 && nearbyAliveCows.Any())
+                var nearbyAliveBaals = baalManager.GetNearbyAliveMonsters(client, 400.0, 10);
+                if (((double)client.Game.Me.Life) / client.Game.Me.MaxLife <= 0.5 && nearbyAliveBaals.Any())
                 {
                     executeStaticField.Stop();
                     executeNova.Stop();
-                    if(!await TeleportToNearbySafeSpot(client, cowManager, client.Game.Me.Location, 15.0))
+                    if(!await TeleportToNearbySafeSpot(client, baalManager, client.Game.Me.Location, 15.0))
                     {
                         Log.Information($"Teleporting to nearby safespot {client.Game.Me.Name}");
                         continue;
                     }
                 }
 
-                var lightningEnhancedCows = nearbyAliveCows.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted));
-                if (clusterStopWatch.Elapsed > TimeSpan.FromSeconds(40) && currentCluster != null && leadPlayer?.Location != currentCluster)
+                if (nearbyAliveBaals.Count > 0)
                 {
-                    Log.Information($"Taking too much time on cluster, skipping current cluster and moving to next cluster {client.Game.Me.Name}");
-                    clusterStopWatch.Restart();
-                }
-                else if (lightningEnhancedCows && leadPlayer?.Location != currentCluster)
-                {
-                    Log.Information($"Lightning enhanced cow nearby, giving up current cluster and moving to next cluster {client.Game.Me.Name}");
-                }
-                else if (nearbyAliveCows.Count > 4)
-                {
-                    var nearestAlive = nearbyAliveCows.FirstOrDefault();
+                    runStopWatch.Restart();
+                    var nearestAlive = nearbyAliveBaals.FirstOrDefault();
                     var distanceToNearest = nearestAlive.Location.Distance(client.Game.Me.Location);
 
                     if (client.Game.Me.Location.Distance(nearestAlive.Location) > 5
                         && ( !ClassHelpers.CanStaticEntity(client, nearestAlive.LifePercentage)
-                        || client.Game.WorldObjects.TryGetValue((nearestAlive.Id, EntityType.NPC), out var cow) && cow.Effects.Contains(EntityEffect.Cold)))
+                        || client.Game.WorldObjects.TryGetValue((nearestAlive.Id, EntityType.NPC), out var monster) && monster.Effects.Contains(EntityEffect.Cold)))
                     {
                         executeStaticField.Stop();
                         executeNova.Stop();
-                        Log.Information($"teleporting nearby due to low life frozen cows with {client.Game.Me.Name} with distance {client.Game.Me.Location.Distance(nearestAlive.Location)}");
+                        Log.Information($"teleporting nearby due to low life frozen monsters with {client.Game.Me.Name} with distance {client.Game.Me.Location.Distance(nearestAlive.Location)}");
                         await client.Game.TeleportToLocationAsync(nearestAlive.Location);
                     }
 
@@ -1074,59 +1001,56 @@ namespace ConsoleBot.Bots.Types.Cows
 
                 executeStaticField.Stop();
                 executeNova.Stop();
-                await PickupItemsFromPickupList(client, cowManager, 100);
-                await PickupNearbyPotionsIfNeeded(client, cowManager, 30);
+                await PickupItemsFromPickupList(client, baalManager, 100);
+                await PickupNearbyPotionsIfNeeded(client, baalManager, 30);
 
-                SetShouldFollowLead(client, false);
-
-                currentCluster = cowManager.GetNextCluster(client, currentCluster);
-                if (currentCluster == null)
+                var baalThrone = client.Game.GetNPCsByCode(NPCCode.BaalThrone).FirstOrDefault();
+                var baalPortal = client.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
+                if (baalThrone == null)
                 {
-                    Log.Information($"No cluster found for {client.Game.Me.Name}");
-                    continue;
+                    Log.Information($"Waves done, moving on {client.Game.Me.Name}");
+                    break;
                 }
-
-                clusterStopWatch.Restart();
-                Log.Information($"Client {client.Game.Me.Name} obtained next cluster at {currentCluster}");
-
-                executeStaticField.Stop();
-                executeNova.Stop();
-
-                var clusterPath = await _pathingService.GetPathToLocation(client.Game, currentCluster, MovementMode.Teleport);
-                if (clusterPath.Count > 0)
+                else if(baalPortal != null && client.Game.Me.Location.Distance(baalPortal.Location.Add(0, 30)) > 5)
                 {
-                    Log.Information($"Client {client.Game.Me.Name} teleporting nearby cluster {currentCluster}");
-                    if (clusterPath.Count > 1)
+                    executeStaticField.Stop();
+                    executeNova.Stop();
+                    var pathToThrone = await _pathingService.GetPathToObjectWithOffset(client.Game, EntityCode.BaalPortal, 0, 30, MovementMode.Teleport);
+                    if (pathToThrone.Count > 0)
                     {
-                        await MovementHelpers.TakePathOfLocations(client.Game, clusterPath.SkipLast(1).ToList(), MovementMode.Teleport);
-                        await TeleportToNearbySafeSpot(client, cowManager, clusterPath.Last(), 15.0);
+                        Log.Information($"Client {client.Game.Me.Name} teleporting nearby {EntityCode.BaalPortal}");
+                        await MovementHelpers.TakePathOfLocations(client.Game, pathToThrone.ToList(), MovementMode.Teleport);
                     }
+                }
+                else
+                {
+                    executeStaticField.Start();
+                    executeNova.Stop();
                 }
             }
 
-            Log.Information($"Stopped Sorc Client {client.Game.Me.Name}, cowing manager is finished is: {cowManager.IsFinished()}");
+            Log.Information($"Finished with Sorc Client {client.Game.Me.Name}");
             executeStaticField.Stop();
             executeNova.Stop();
-            NextGame.TrySetResult(true);
         }
 
-        private async Task<bool> TeleportToNearbySafeSpot(Client client, CowManager cowManager, Point toLocation, double minDistance = 0, double maxDistance = 30)
+        private async Task<bool> TeleportToNearbySafeSpot(Client client, BaalManager baalManager, Point toLocation, double minDistance = 0, double maxDistance = 30)
         {
-            var nearbyMonsters = cowManager.GetNearbyAliveMonsters(toLocation, 30.0, 100).Select(p => p.Location).ToList();
+            var nearbyMonsters = baalManager.GetNearbyAliveMonsters(toLocation, 30.0, 100).Select(p => p.Location).ToList();
             return await _attackService.MoveToNearbySafeSpot(client, nearbyMonsters, toLocation, MovementMode.Teleport, minDistance, maxDistance);
         }
 
-        async Task BasicIdleClient(Client client, CowManager cowManager)
+        async Task BasicIdleClient(Client client, BaalManager baalManager)
         {
             Log.Information($"Starting Basic idle Client {client.Game.Me.Name}");
-            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(2)), NextGame.Task) && client.Game.IsInGame())
             {
             }
 
             Log.Information($"Stopped Idle Client {client.Game.Me.Name}");
         }
 
-        async Task BasicFollowClient(Client client, CowManager cowManager)
+        async Task BasicFollowClient(Client client, BaalManager baalManager)
         {
             SetShouldFollowLead(client, true);
 
@@ -1135,24 +1059,24 @@ namespace ConsoleBot.Bots.Types.Cows
                 client.Game.UseRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
             };
             using var executeStaticField = new ExecuteAtInterval(staticFieldAction, TimeSpan.FromSeconds(0.2));
-
+            bool flipflop = true;
+            client.Game.ChangeSkill(Skill.Conviction, Hand.Right);
             var timer = new Stopwatch();
             timer.Start();
             bool hasUsedPotion = false;
             var random = new Random();
-            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame())
             {
                 if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
                 {
-                    client.Game.UseHealthPotions();
-                    client.Game.UseHealthPotions();
+                    client.Game.UseHealthPotions(2);
                     hasUsedPotion = true;
                 }
 
                 if(client.Game.Me.HasSkill(Skill.FrozenOrb))
                 {
                     executeStaticField.Stop();
-                    var nearest = cowManager.GetNearbyAliveMonsters(client, 20.0, 1).FirstOrDefault();
+                    var nearest = baalManager.GetNearbyAliveMonsters(client, 20.0, 1).FirstOrDefault();
                     if(nearest != null)
                     {
                         client.Game.UseRightHandSkillOnLocation(Skill.FrozenOrb, nearest.Location);
@@ -1161,7 +1085,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
                 if (client.Game.Me.HasSkill(Skill.StaticField))
                 {
-                    var nearest = cowManager.GetNearbyAliveMonsters(client, 20.0, 1).FirstOrDefault();
+                    var nearest = baalManager.GetNearbyAliveMonsters(client, 20.0, 1).FirstOrDefault();
                     if (nearest != null && nearest.LifePercentage > 60)
                     {
                         client.Game.UseRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
@@ -1173,6 +1097,20 @@ namespace ConsoleBot.Bots.Types.Cows
                     }
                 }
 
+                var nearbyMonsters = baalManager.GetNearbyAliveMonsters(client, 20, 1);
+                if (client.Game.Me.HasSkill(Skill.Conviction)
+                    && !nearbyMonsters.Any(m => client.Game.WorldObjects.TryGetValue((m.Id, EntityType.NPC), out var monster) && monster.Effects.Contains(EntityEffect.Conviction)))
+                {
+                    client.Game.ChangeSkill(Skill.Conviction, Hand.Right);
+                }
+                else if (timer.Elapsed > TimeSpan.FromSeconds(4) && client.Game.Me.HasSkill(Skill.Conviction) && client.Game.Me.HasSkill(Skill.Fanaticism))
+                {
+                    client.Game.ChangeSkill(flipflop ? Skill.Fanaticism : Skill.Conviction, Hand.Right);
+                    timer.Reset();
+                    timer.Start();
+                    flipflop = !flipflop;
+                }
+
                 if (!client.Game.Me.Effects.Contains(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.ShiverArmor, client.Game.Me.Location);
@@ -1181,6 +1119,12 @@ namespace ConsoleBot.Bots.Types.Cows
                 if (!client.Game.Me.Effects.Contains(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
+                }
+
+                if (!client.Game.Me.Effects.Contains(EntityEffect.Holyshield) && client.Game.Me.HasSkill(Skill.HolyShield))
+                {
+                    client.Game.UseRightHandSkillOnLocation(Skill.HolyShield, client.Game.Me.Location);
+                    client.Game.ChangeSkill(Skill.Conviction, Hand.Right);
                 }
 
                 if (timer.Elapsed > TimeSpan.FromSeconds(5) && client.Game.Me.HasSkill(Skill.Teleport))
@@ -1194,29 +1138,35 @@ namespace ConsoleBot.Bots.Types.Cows
                     }
                 }
 
-                if (!cowManager.GetNearbyAliveMonsters(client, 20, 1).Any())
+                if (!baalManager.GetNearbyAliveMonsters(client, 200, 1).Any())
                 {
-                    await PickupItemsFromPickupList(client, cowManager, 25);
-                    await PickupNearbyPotionsIfNeeded(client, cowManager, 15);
+                    await PickupItemsFromPickupList(client, baalManager, 25);
+                    await PickupNearbyPotionsIfNeeded(client, baalManager, 15);
                     SetShouldFollowLead(client, true);
+                    var baalThrone = client.Game.GetNPCsByCode(NPCCode.BaalThrone).FirstOrDefault();
+                    if (baalThrone == null)
+                    {
+                        SetShouldFollowLead(client, false);
+                        break;
+                    }
                 }
             }
         }
 
-        private async Task PickupNearbyPotionsIfNeeded(Client client, CowManager cowManager, int distance)
+        private async Task PickupNearbyPotionsIfNeeded(Client client, BaalManager baalManager, int distance)
         {
             var missingHealthPotions = client.Game.Belt.Height * 2 - client.Game.Belt.GetHealthPotionsInSlots(new List<int>() { 0, 1 }).Count;
             var missingManaPotions = client.Game.Belt.Height * 2 - client.Game.Belt.GetManaPotionsInSlots(new List<int>() { 2, 3 }).Count;
             var missingRevPotions = Math.Max(6 - client.Game.Inventory.Items.Count(i => i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion), 0);
             //Log.Information($"Client {client.Game.Me.Name} missing {missingHealthPotions} healthpotions and missing {missingManaPotions} mana");
-            var pickitList = cowManager.GetNearbyPotions(client, new HashSet<ItemName> { ItemName.SuperHealingPotion }, (int)missingHealthPotions, distance);
-            pickitList.AddRange(cowManager.GetNearbyPotions(client, new HashSet<ItemName> { ItemName.SuperManaPotion }, (int)missingManaPotions, distance));
-            pickitList.AddRange(cowManager.GetNearbyPotions(client, new HashSet<ItemName> { ItemName.RejuvenationPotion, ItemName.FullRejuvenationPotion }, missingRevPotions, distance));
+            var pickitList = baalManager.GetNearbyPotions(client, new HashSet<ItemName> { ItemName.SuperHealingPotion }, (int)missingHealthPotions, distance);
+            pickitList.AddRange(baalManager.GetNearbyPotions(client, new HashSet<ItemName> { ItemName.SuperManaPotion }, (int)missingManaPotions, distance));
+            pickitList.AddRange(baalManager.GetNearbyPotions(client, new HashSet<ItemName> { ItemName.RejuvenationPotion, ItemName.FullRejuvenationPotion }, missingRevPotions, distance));
             foreach (var item in pickitList)
             {
-                if(cowManager.GetNearbyAliveMonsters(client, 10, 1).Any())
+                if(baalManager.GetNearbyAliveMonsters(client, 10, 1).Any())
                 {
-                    Log.Information($"Client {client.Game.Me.Name} not picking up {item.Name} due to nearby cows");
+                    Log.Information($"Client {client.Game.Me.Name} not picking up {item.Name} due to nearby monsters");
                     continue;
                 }
                 Log.Information($"Client {client.Game.Me.Name} picking up {item.Name}");
@@ -1235,7 +1185,7 @@ namespace ConsoleBot.Bots.Types.Cows
                         }, TimeSpan.FromSeconds(0.2));
                     }, TimeSpan.FromSeconds(3)))
                     {
-                        cowManager.PutPotionOnPickitList(client, item);
+                        baalManager.PutPotionOnPickitList(client, item);
                     }
                 }
             }
@@ -1243,9 +1193,9 @@ namespace ConsoleBot.Bots.Types.Cows
             //Log.Information($"Client {client.Game.Me.Name} got {client.Game.Belt.NumOfHealthPotions()} healthpotions and {client.Game.Belt.NumOfManaPotions()} mana");
         }
 
-        private async Task PickupItemsFromPickupList(Client client, CowManager cowManager, double distance)
+        private async Task PickupItemsFromPickupList(Client client, BaalManager baalManager, double distance)
         {
-            var pickitList = cowManager.GetPickitList(client, distance);
+            var pickitList = baalManager.GetPickitList(client, distance);
             foreach (var item in pickitList)
             {
                 if (item.Ground)
@@ -1276,19 +1226,19 @@ namespace ConsoleBot.Bots.Types.Cows
                         else
                         {
                             Log.Warning($"Client {client.Game.Me.Name} failed picking up {item.Amount} {item.Name}");
-                            cowManager.PutItemOnPickitList(client, item);
+                            baalManager.PutItemOnPickitList(client, item);
                         }
                     }
                     else
                     {
                         Log.Warning($"Client {client.Game.Me.Name} no space for {item.Amount} {item.Name}");
-                        cowManager.PutItemOnPickitList(client, item);
+                        baalManager.PutItemOnPickitList(client, item);
                     }
                 }
             }
         }
 
-        async Task BarbClient(Client client, CowManager cowManager, bool shouldBo)
+        async Task BarbClient(Client client, BaalManager baalManager, bool shouldBo)
         {
             Log.Information($"Starting BoBarb Client {client.Game.Me.Name}");
             bool hasUsedPotion = false;
@@ -1297,12 +1247,11 @@ namespace ConsoleBot.Bots.Types.Cows
                 await ClassHelpers.CastAllShouts(client);
             }
             
-            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame())
             {
                 if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
                 {
-                    client.Game.UseHealthPotions();
-                    client.Game.UseHealthPotions();
+                    client.Game.UseHealthPotions(2);
                     hasUsedPotion = true;
                 }
 
@@ -1310,18 +1259,20 @@ namespace ConsoleBot.Bots.Types.Cows
                 {
                     await ClassHelpers.CastAllShouts(client);
                 }
-
-                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-                if (leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) > 25)
+                else
                 {
-                    continue;
+                    var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
+                    if (leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) > 25)
+                    {
+                        continue;
+                    }
                 }
 
-                var nearbyMonsters = cowManager.GetNearbyAliveMonsters(client, 20, 1);
+                var nearbyMonsters = baalManager.GetNearbyAliveMonsters(client, 20, 1);
                 if(!nearbyMonsters.Any())
                 {
-                    await PickupItemsFromPickupList(client, cowManager, 15);
-                    await PickupNearbyPotionsIfNeeded(client, cowManager, 15);
+                    await PickupItemsFromPickupList(client, baalManager, 15);
+                    await PickupNearbyPotionsIfNeeded(client, baalManager, 15);
                 }
                 else if(client.Game.Me.HasSkill(Skill.Whirlwind))
                 {
@@ -1342,12 +1293,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 }                    
             }
 
-            if(shouldBo)
-            {
-                NextGame.TrySetResult(true);
-            }
-
-            Log.Information($"Stopped Barb Client {client.Game.Me.Name}, cowing manager is finished is: {cowManager.IsFinished()}");
+            Log.Information($"Stopped Barb Client {client.Game.Me.Name}");
         }
 
         private async Task MoveToLocation(Client client, Point location, CancellationToken? token = null)
@@ -1376,69 +1322,11 @@ namespace ConsoleBot.Bots.Types.Cows
             }
         }
 
-        private async Task<bool> MoveToCowLevel(Client client)
-        {
-            var cowPortal = client.Game.GetEntityByCode(EntityCode.RedTownPortal).Where(t => t.TownPortalArea == Area.CowLevel).First();
-            var pathBack = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.RogueEncampment, client.Game.Me.Location, cowPortal.Location, MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBack, MovementMode.Teleport))
-            {
-                Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} to {EntityCode.RedTownPortal} failed at {client.Game.Me.Location}");
-                return false;
-            }
-
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                await client.Game.MoveToAsync(cowPortal);
-                
-                if(retryCount > 0 && retryCount % 5 == 0)
-                {
-                    client.Game.RequestUpdate(client.Game.Me.Id);
-                }
-
-                client.Game.InteractWithEntity(cowPortal);
-                return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                {
-                    await Task.Delay(50);
-                    return client.Game.Area == Area.CowLevel;
-                }, TimeSpan.FromSeconds(0.5));
-            }, TimeSpan.FromSeconds(10)))
-            {
-                return false;
-            }
-            client.Game.RequestUpdate(client.Game.Me.Id);
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                if (retryCount > 0 && retryCount % 5 == 0)
-                {
-                    client.Game.RequestUpdate(client.Game.Me.Id);
-                }
-
-                await Task.Delay(100);
-
-                return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.CowLevel, client.Game.Me.Location);
-            }, TimeSpan.FromSeconds(10)))
-            {
-                return false;
-            }
-
-            foreach (var (x,y) in new List<(short,short)>{ (-3, -3), (3, 3),(-5,0),(5,0),(0,5),(0,-5)})
-            {
-                var newLocation = client.Game.Me.Location.Add(x, y);
-                if (await _attackService.IsInLineOfSight(client, newLocation))
-                {
-                    await client.Game.MoveToAsync(newLocation);
-                    break;
-                }
-            }
-
-            return true;
-        }
-
-        private async Task<bool> LeaveGameAndRejoinMCPWithRetry(Client client, AccountCharacter cowAccount)
+        private async Task<bool> LeaveGameAndRejoinMCPWithRetry(Client client, AccountCharacter account)
         {
             if (!client.Chat.IsConnected())
             {
-                if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, cowAccount, 10))
+                if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, account, 10))
                 {
                     return false;
                 }
@@ -1452,8 +1340,8 @@ namespace ConsoleBot.Bots.Types.Cows
 
             if (!client.RejoinMCP())
             {
-                Log.Warning($"Disconnecting client {cowAccount.Username} since reconnecting to MCP failed, reconnecting to realm");
-                return await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, cowAccount, 10);
+                Log.Warning($"Disconnecting client {account.Username} since reconnecting to MCP failed, reconnecting to realm");
+                return await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, account, 10);
             }
 
             return true;
@@ -1484,9 +1372,9 @@ namespace ConsoleBot.Bots.Types.Cows
 
         void TownPortalState(TownPortalStatePacket townPortalStatePacket)
         {
-            if (townPortalStatePacket.Area == Area.CowLevel)
+            if (townPortalStatePacket.Area == Area.ThroneOfDestruction)
             {
-                CowPortalOpen.TrySetResult(true);
+                BaalPortalOpen.TrySetResult(true);
             }
         }
     }

@@ -32,6 +32,11 @@ namespace D2NG.Navigation.Extensions
             return await pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, toLocation, movementMode);
         }
 
+        public static async Task<List<Point>> GetPathToArea(this IPathingService pathingService, Game game, Area toArea, MovementMode movementMode)
+        {
+            return await pathingService.GetPathToArea(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, toArea, movementMode);
+        }
+
         public static async Task<List<Point>> ToTownWayPoint(this IPathingService pathingService, Game game, MovementMode movementMode)
         {
             switch (game.Act)

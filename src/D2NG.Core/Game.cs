@@ -632,20 +632,20 @@ namespace D2NG.Core
             }
         }
 
-        public bool UseHealthPotion()
+        public bool UseHealthPotions(int amount = 1)
         {
-            var healthpotion = Belt.FirstOrDefaultHealthPotion();
-            if (healthpotion != null)
+            var healthPotions = Belt.TakeHealthPotions(amount);
+            if(healthPotions.Count > 0)
             {
-                Log.Information($"{Me.Name} Using health potion with health at {Me.Life} out of {Me.MaxLife}");
+                Log.Information($"{Me.Name} Using {healthPotions.Count} health potions with health at {Me.Life} out of {Me.MaxLife}");
+            }
+            
+            foreach (var healthPotion in healthPotions)
+            {
                 LastUsedHealthPotionTime = DateTime.Now;
-                UseBeltItem(healthpotion);
-                return true;
+                UseBeltItem(healthPotion);
             }
-            else
-            {
-                return false;
-            }
+            return healthPotions.Count > 0;
         }
 
         public bool UseRejuvenationPotion()
@@ -703,17 +703,23 @@ namespace D2NG.Core
 
                     if (Me.Life / (double)Me.MaxLife < 0.9 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(10))
                     {
-                        UseHealthPotion();
+                        if(!UseHealthPotions())
+                        {
+                            UseRejuvenationPotion();
+                        }
                     }
 
                     if (Me.Life / (double)Me.MaxLife < 0.7 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(2))
                     {
-                        UseHealthPotion();
+                        if (!UseHealthPotions())
+                        {
+                            UseRejuvenationPotion();
+                        }
                     }
 
                     if (Me.Life / (double)Me.MaxLife < 0.3 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(0.7))
                     {
-                        if (!UseRejuvenationPotion() && !UseHealthPotion())
+                        if (!UseRejuvenationPotion() && !UseHealthPotions())
                         {
                             Log.Information($"{Me.Name} Leaving game due out of potions");
                             LeaveGame();

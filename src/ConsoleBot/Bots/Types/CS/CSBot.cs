@@ -399,7 +399,7 @@ namespace ConsoleBot.Bots.Types.CS
                 return false;
             }
 
-            client.Game.UseHealthPotion();
+            client.Game.UseHealthPotions();
 
             return true;
         }

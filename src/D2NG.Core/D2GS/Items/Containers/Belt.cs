@@ -50,9 +50,9 @@ namespace D2NG.Core.D2GS.Items.Containers
             return _items.Values.Where(i => IsHealthPotion(i)).Count();
         }
 
-        public Item FirstOrDefaultHealthPotion()
+        public List<Item> TakeHealthPotions(int amount)
         {
-            return _items.Values.FirstOrDefault(i => IsHealthPotion(i));
+            return _items.Values.Where(i => IsHealthPotion(i)).Take(amount).ToList();
         }
 
         public int NumOfManaPotions()

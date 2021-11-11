@@ -15,6 +15,7 @@
         WaypointAct3Durance = 324,
         WaypointAct4Levels = 238,
         DiabloStar = 255,
+        Stash = 267,
         WirtsBody = 268,
         Hratli = 379,
         RightSeal1 = 392,
@@ -27,6 +28,7 @@
         WaypointAct5 = 429,
         WaypointAct5Glacial = 511,
         WaypointAct5Baal = 494,
-        Stash = 267
+        BaalPortal = 563
+
     }
 }

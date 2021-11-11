@@ -227,12 +227,12 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-
-*/
             if (item.Name == ItemName.Cap)
             {
                 return true;
             }
+*/
+
 
             if (item.Name == ItemName.LongWarBow)
             {
