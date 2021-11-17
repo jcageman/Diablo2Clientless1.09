@@ -16,12 +16,16 @@ namespace D2NG.Core.D2GS.Act
         private readonly ConcurrentDictionary<Act, List<Tile>> _tiles = new ConcurrentDictionary<Act, List<Tile>>();
         private readonly ConcurrentDictionary<Act, ConcurrentDictionary<(uint, EntityType), WorldObject>> _worldObjects
             = new ConcurrentDictionary<Act, ConcurrentDictionary<(uint, EntityType), WorldObject>>();
+        private readonly ConcurrentDictionary<Act, ConcurrentDictionary<EntityCode, List<WorldObject>>> _worldObjectsByEntityCode
+            = new ConcurrentDictionary<Act, ConcurrentDictionary<EntityCode, List<WorldObject>>>();
 
         private readonly ConcurrentDictionary<Act, ConcurrentDictionary<uint, List<WarpData>>> _warps = new ConcurrentDictionary<Act, ConcurrentDictionary<uint, List<WarpData>>>();
 
         public List<Tile> Tiles { get => _tiles.GetOrAdd(Act, new List<Tile>()); }
 
         public ConcurrentDictionary<(uint, EntityType), WorldObject> WorldObjects { get => _worldObjects.GetOrAdd(Act, new ConcurrentDictionary<(uint, EntityType), WorldObject>()); }
+
+        public ConcurrentDictionary<EntityCode, List<WorldObject>> WorldObjectsByEntityCode { get => _worldObjectsByEntityCode.GetOrAdd(Act, new ConcurrentDictionary<EntityCode, List<WorldObject>>()); }
 
         public ConcurrentDictionary<uint, List<WarpData>> Warps { get => _warps.GetOrAdd(Act, new ConcurrentDictionary<uint, List<WarpData>>()); }
 
@@ -88,11 +92,20 @@ namespace D2NG.Core.D2GS.Act
         internal void RemoveWorldObject(uint entityId, EntityType entityType)
         {
             WorldObjects.Remove((entityId, entityType), out var value);
+            if(value != null)
+            {
+                WorldObjectsByEntityCode.AddOrUpdate(
+    value.Code,
+    (newCode => new List<WorldObject> { }),
+    (existingCode, existingObjects) => { existingObjects.RemoveAll(o => o.Id == value.Id && o.Type == value.Type); return existingObjects; });
+            }
+
         }
 
         internal void AddWorldObject(WorldObject obj)
         {
             WorldObjects[(obj.Id, obj.Type)] = obj;
+            WorldObjectsByEntityCode.AddOrUpdate(obj.Code, (newCode => new List<WorldObject> { obj }), (existingCode, existingObjects) => {existingObjects.Add(obj); return existingObjects; });
         }
 
         internal void AddWarp(AssignLevelWarpPacket packet)

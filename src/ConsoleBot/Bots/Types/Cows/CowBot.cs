@@ -423,6 +423,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
                 if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
+                    await Task.Delay(TimeSpan.FromSeconds(0.2));
                     return await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.CowLevel);
                 }, TimeSpan.FromSeconds(30)))
                 {
@@ -430,6 +431,8 @@ namespace ConsoleBot.Bots.Types.Cows
                     NextGame.TrySetResult(true);
                     return false;
                 }
+
+                Log.Information($"Client {client.Game.Me.Name} ín cow level");
             }
 
             await GetTaskForClient(client, cowManager);

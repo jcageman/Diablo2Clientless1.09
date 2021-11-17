@@ -197,8 +197,13 @@ namespace ConsoleBot.TownManagement
                 return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
                     await Task.Delay(50);
+                    if(retryCount % 5 == 0)
+                    {
+                        client.Game.RequestUpdate(client.Game.Me.Id);
+                    }
+                    
                     return client.Game.Area == townArea;
-                }, TimeSpan.FromSeconds(1));
+                }, TimeSpan.FromSeconds(0.5));
             }, TimeSpan.FromSeconds(3.5)))
             {
                 Log.Error("Moving to town failed");
@@ -420,7 +425,7 @@ namespace ConsoleBot.TownManagement
 
                     if (!NPCHelpers.ResurrectMerc(game, uniqueNPC))
                     {
-                        Log.Warning($"Client {game.Me.Name} Selling items and refreshing potions to {mercNpc} failed at {game.Me.Location}");
+                        Log.Warning($"Client {game.Me.Name} Resurrecting merc at {mercNpc} failed at {game.Me.Location}");
                     }
                 }
                 else

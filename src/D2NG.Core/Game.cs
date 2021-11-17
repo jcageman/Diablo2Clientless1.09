@@ -169,7 +169,7 @@ namespace D2NG.Core
         }
         public Self Me { get => Data.Me; }
 
-        public List<Player> Players { get => Data.Players; }
+        public List<Player> Players { get => Data.Players.ToList(); }
 
         public List<Item> Items { get => Data.Items.Values.ToList(); }
 
@@ -199,7 +199,12 @@ namespace D2NG.Core
 
         public List<WorldObject> GetEntityByCode(EntityCode entityCode)
         {
-            return WorldObjects.Values.Where(o => o.Code == entityCode).ToList();
+            if(Data.Act.WorldObjectsByEntityCode.TryGetValue(entityCode, out var entities))
+            {
+                return entities.ToList();
+            }
+
+            return new List<WorldObject>();
         }
 
         public List<WorldObject> GetNPCsByCode(NPCCode npcCode)
