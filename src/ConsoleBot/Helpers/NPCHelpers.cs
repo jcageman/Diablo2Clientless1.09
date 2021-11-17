@@ -68,6 +68,8 @@ namespace ConsoleBot.Helpers
                 }
             }
 
+            BuyMagicItemsAtMerchant(game, npc);
+
             Thread.Sleep(50);
             game.TerminateEntityChat(npc);
             Thread.Sleep(50);
@@ -473,6 +475,13 @@ namespace ConsoleBot.Helpers
                 game.BuyItem(npc, scrollOfTownPortal, true);
             }
 
+            var tomeOfIdentify = game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeofIdentify);
+            var scrollOfIdentify = game.Items.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Name == ItemName.ScrollofIdentify);
+            if (tomeOfIdentify != null && scrollOfIdentify != null && tomeOfIdentify.Amount < 100)
+            {
+                game.BuyItem(npc, scrollOfIdentify, true);
+            }
+
             var numberOfHealthPotions = game.Belt.NumOfHealthPotions();
             while (numberOfHealthPotions < game.Belt.Height * 2)
             {
@@ -499,11 +508,26 @@ namespace ConsoleBot.Helpers
                 }
             }
 
+            BuyMagicItemsAtMerchant(game, npc);
+
             Thread.Sleep(50);
             game.TerminateEntityChat(npc);
             Thread.Sleep(50);
             game.TerminateEntityChat(npc);
             return true;
+        }
+
+        private static void BuyMagicItemsAtMerchant(Game game, WorldObject npc)
+        {
+            var merchantItemsToBuy = game.Items.Where(i => i.Container == ContainerType.ArmorTab && Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
+            if (merchantItemsToBuy.Count > 0)
+            {
+                foreach (Item item in merchantItemsToBuy)
+                {
+                    Log.Information($"Buying item {item.GetFullDescription()} from {npc.NPCCode}");
+                    game.BuyItem(npc, item, false);
+                }
+            }
         }
     }
 }

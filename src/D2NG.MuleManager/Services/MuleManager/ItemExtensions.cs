@@ -18,6 +18,9 @@ namespace D2NG.MuleManager.Services.MuleManager
                 ItemName = item.Name.ToString(),
                 QualityType = item.Quality.ToString(),
                 ClassificationType = item.Classification.ToString(),
+                Ethereal = item.Ethereal,
+                Level = item.Level,
+                Sockets = item.Sockets,
                 Stats = item.Properties.ToDictionary(k => k.MapToStatKey(), v => v.Value.Value)
             };
         }
@@ -31,6 +34,12 @@ namespace D2NG.MuleManager.Services.MuleManager
                 case StatType.SingleSkill3:
                 case StatType.SingleSkill4:
                     return statTypeAndProperty.Value.Skill.ToString();
+                case StatType.SkillTab1:
+                case StatType.SkillTab2:
+                case StatType.SkillTab3:
+                case StatType.SkillTab4:
+                case StatType.SkillTab5:
+                    return statTypeAndProperty.Value.SkillTab.ToString();
                 default:
                     return statTypeAndProperty.Key.ToString();
             }

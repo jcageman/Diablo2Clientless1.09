@@ -230,6 +230,8 @@ namespace ConsoleBot.Bots.Types.Travincal
         private async Task<bool> KillCouncilMembers(Game game)
         {
             var startTime = DateTime.Now;
+            var lastBattlyCry = DateTime.MinValue;
+            var lastWarCry = DateTime.MinValue;
             List<WorldObject> aliveMembers;
             do
             {
@@ -268,27 +270,47 @@ namespace ConsoleBot.Bots.Types.Travincal
                         }
                     }
 
-                    var wwDirection = game.Me.Location.GetPointPastPointInSameDirection(nearest.Location, 6);
-                    if (game.Me.Location.Equals(nearest.Location))
+                    if(game.Me.HasSkill(Skill.Whirlwind))
                     {
-                        var pathLeft = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearest.Location.Add(-6, 0), MovementMode.Walking);
-                        var pathRight = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearest.Location.Add(6, 0), MovementMode.Walking);
-                        if (pathLeft.Count < pathRight.Count)
+                        var wwDirection = game.Me.Location.GetPointPastPointInSameDirection(nearest.Location, 6);
+                        if (game.Me.Location.Equals(nearest.Location))
                         {
-                            Log.Debug($"same location, wwing to left");
-                            wwDirection = new Point((ushort)(game.Me.Location.X - 6), game.Me.Location.Y);
+                            var pathLeft = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearest.Location.Add(-6, 0), MovementMode.Walking);
+                            var pathRight = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearest.Location.Add(6, 0), MovementMode.Walking);
+                            if (pathLeft.Count < pathRight.Count)
+                            {
+                                Log.Debug($"same location, wwing to left");
+                                wwDirection = new Point((ushort)(game.Me.Location.X - 6), game.Me.Location.Y);
+                            }
+                            else
+                            {
+                                Log.Debug($"same location, wwing to right");
+                                wwDirection = new Point((ushort)(game.Me.Location.X + 6), game.Me.Location.Y);
+                            }
                         }
-                        else
+
+                        //Log.Information($"player loc: {game.Me.Location}, nearest: {nearest.Location} ww destination: {wwDirection}  ");
+                        game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
+                        await Task.Delay(TimeSpan.FromSeconds(0.3));
+                    }
+                    else
+                    {
+                        if (game.Me.HasSkill(Skill.BattleCry) && DateTime.Now.Subtract(lastBattlyCry) > TimeSpan.FromSeconds(20))
                         {
-                            Log.Debug($"same location, wwing to right");
-                            wwDirection = new Point((ushort)(game.Me.Location.X + 6), game.Me.Location.Y);
+                            game.UseRightHandSkillOnLocation(Skill.BattleCry, game.Me.Location);
+                            lastBattlyCry = DateTime.Now;
+                        }
+                        else if (game.Me.HasSkill(Skill.WarCry) && DateTime.Now.Subtract(lastWarCry) > TimeSpan.FromSeconds(3))
+                        {
+                            game.UseRightHandSkillOnLocation(Skill.WarCry, game.Me.Location);
+                            lastWarCry = DateTime.Now;
+                        }
+                        else if(game.Me.Location.Distance(nearest.Location) < 5)
+                        {
+                            game.LeftHandSkillHoldOnEntity(Skill.Berserk, nearest);
+                            await Task.Delay(TimeSpan.FromSeconds(0.3));
                         }
                     }
-
-                    //Log.Information($"player loc: {game.Me.Location}, nearest: {nearest.Location} ww destination: {wwDirection}  ");
-                    game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
-                    await Task.Delay(TimeSpan.FromSeconds(0.3));
-
                 }
             } while (aliveMembers.Any());
 

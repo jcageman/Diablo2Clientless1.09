@@ -416,6 +416,11 @@ namespace ConsoleBot.Bots.Types.Cows
                     return false;
                 }
 
+                if (client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] <= 80)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(10));
+                }
+
                 if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
                     return await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.CowLevel);
@@ -425,8 +430,6 @@ namespace ConsoleBot.Bots.Types.Cows
                     NextGame.TrySetResult(true);
                     return false;
                 }
-
-                await Task.Delay(TimeSpan.FromSeconds(5));
             }
 
             await GetTaskForClient(client, cowManager);
@@ -949,6 +952,12 @@ namespace ConsoleBot.Bots.Types.Cows
                         }
                     }
 
+                    if (clusterStopWatch.Elapsed > TimeSpan.FromSeconds(60))
+                    {
+                        Log.Information($"Lost bo on client {client.Game.Me.Name} and receiving new bo took too long");
+                        break;
+                    }
+
                     continue;
                 }
 
@@ -1251,6 +1260,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 if (item.Ground)
                 {
                     SetShouldFollowLead(client, false);
+                    InventoryHelpers.IdentifyItems(client.Game);
                     if (client.Game.Inventory.FindFreeSpace(item) != null)
                     {
                         Log.Information($"Client {client.Game.Me.Name} picking up {item.Amount} {item.Name}");
@@ -1271,6 +1281,7 @@ namespace ConsoleBot.Bots.Types.Cows
                             }, TimeSpan.FromSeconds(0.3));
                         }, TimeSpan.FromSeconds(3)))
                         {
+                            
                             InventoryHelpers.MoveInventoryItemsToCube(client.Game);
                         }
                         else
@@ -1347,7 +1358,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 NextGame.TrySetResult(true);
             }
 
-            Log.Information($"Stopped Barb Client {client.Game.Me.Name}, cowing manager is finished is: {cowManager.IsFinished()}");
+            Log.Information($"Stopped Barb Client {client.Game.Me?.Name}, cowing manager is finished is: {cowManager.IsFinished()}");
         }
 
         private async Task MoveToLocation(Client client, Point location, CancellationToken? token = null)

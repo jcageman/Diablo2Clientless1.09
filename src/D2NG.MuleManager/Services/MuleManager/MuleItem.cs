@@ -11,6 +11,9 @@ namespace D2NG.MuleManager.Services.MuleManager
         public string ItemName { get; set; }
         public string QualityType { get; set; }
         public string ClassificationType { get; set; }
+        public bool Ethereal { get; set; }
+        public uint Level { get; set; }
+        public uint Sockets { get; set; }
 
         public Dictionary<string, int> Stats { get; set; }
     }

@@ -11,12 +11,16 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItemExpansion(Item item)
         {
-            if (item.HasSkillTab())
+            if (item.HasSkillTab() && item.GetTotalLifeFromStats(D2NG.Core.D2GS.Enums.CharacterClass.Barbarian) >= 30)
             {
                 return true;
             }
 
-            /*
+            if (item.Level >= 91)
+            {
+                return true;
+            }
+
             if (item.GetValueToSkillTab(SkillTab.SorceressLightningSpells) > 0
                 || item.GetValueToSkillTab(SkillTab.SorceressFireSpells) > 0
                 || item.GetValueToSkillTab(SkillTab.SorceressColdSpells) > 0
@@ -27,7 +31,7 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-            */
+
             if (item.GetValueOfStatType(StatType.AttackRating) >= 40
             && item.GetValueOfStatType(StatType.MaximumDamage) >= 7)
             {
@@ -40,7 +44,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.GetTotalLifeFromStats(D2NG.Core.D2GS.Enums.CharacterClass.Sorceress) >= 40)
+            if (item.GetTotalLifeFromStats(D2NG.Core.D2GS.Enums.CharacterClass.Sorceress) >= 50)
             {
                 return true;
             }

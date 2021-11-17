@@ -15,16 +15,17 @@ namespace ConsoleBot.Pickit
 
         private static readonly HashSet<ItemName> desirableBows = new HashSet<ItemName> { ItemName.DoubleBow, ItemName.RuneBow };
 
-        private static readonly HashSet<ItemName> eliteWeapons = new HashSet<ItemName> { ItemName.PhaseBlade, ItemName.ConquestSword, ItemName.CrypticSword, ItemName.MythicalSword,
-            ItemName.ChampionSword, ItemName.ColossusSword, ItemName.ColossusBlade,
-            ItemName.GhostSpear, ItemName.WarPike, ItemName.ColossusVoulge, ItemName.Thresher, ItemName.CrypticAxe, ItemName.GreatPoleaxe, ItemName.GiantThresher };
+        private static readonly HashSet<ItemName> eliteSwords = new HashSet<ItemName> { ItemName.PhaseBlade, ItemName.ConquestSword, ItemName.CrypticSword, ItemName.MythicalSword,
+            ItemName.ChampionSword, ItemName.ColossusSword, ItemName.ColossusBlade};
+
+        private static readonly HashSet<ItemName> eliteMercWeapons = new HashSet<ItemName> { ItemName.GhostSpear, ItemName.WarPike, ItemName.ColossusVoulge, ItemName.Thresher, ItemName.CrypticAxe, ItemName.GreatPoleaxe, ItemName.GiantThresher };
 
 
-        private static readonly HashSet<ItemName> boWeapons = new HashSet<ItemName> { ItemName.CrystalSword, ItemName.Dagger, ItemName.ShortSpear, ItemName.Glaive, ItemName.ThrowingSpear, ItemName.ThrowingKnife, ItemName.ThrowingAxe, ItemName.ThrowingKnife, ItemName.BalancedKnife };
+        private static readonly HashSet<ItemName> boWeapons = new HashSet<ItemName> { ItemName.CrystalSword, ItemName.Dagger, ItemName.ShortSpear, ItemName.ThrowingSpear, ItemName.ThrowingKnife, ItemName.ThrowingAxe, ItemName.ThrowingKnife, ItemName.BalancedKnife };
 
         public static bool ShouldPickupItemExpansion(Item item)
         {
-            if ((item.Quality == QualityType.Magical || item.Quality == QualityType.Rare) && eliteWeapons.Contains(item.Name))
+            if ((item.Quality == QualityType.Magical || item.Quality == QualityType.Rare) && eliteSwords.Contains(item.Name))
             {
                 return true;
             }
@@ -39,12 +40,12 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if ((item.Quality == QualityType.Normal || item.Quality == QualityType.Superior) && item.Ethereal && eliteWeapons.Contains(item.Name))
+            if ((item.Quality == QualityType.Normal || item.Quality == QualityType.Superior) && item.Ethereal && item.Sockets == 3 && eliteSwords.Contains(item.Name))
             {
                 return true;
             }
 
-            if ((item.Quality == QualityType.Normal || item.Quality == QualityType.Superior) && item.Sockets >= 5 && eliteWeapons.Contains(item.Name))
+            if ((item.Quality == QualityType.Normal || item.Quality == QualityType.Superior) && item.Sockets >= 5 && eliteSwords.Contains(item.Name))
             {
                 return true;
             }
@@ -60,7 +61,7 @@ namespace ConsoleBot.Pickit
                     case ItemName.ColossusCrossbow:
                     //case ItemName.BoneKnife:
                     case ItemName.LegendaryMallet:
-                    case ItemName.ThunderMaul:
+                    //case ItemName.ThunderMaul:
                     case ItemName.ColossusBlade:
                         return true;
                     case ItemName.CeremonialJavelin:
@@ -95,11 +96,13 @@ namespace ConsoleBot.Pickit
                     //case ItemName.Tulwar:
                     //case ItemName.Dagger:
                     case ItemName.HydraBow:
+                        return true;
                     case ItemName.Ballista:
+                        return item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 190;
                     case ItemName.ColossusCrossbow:
                     //case ItemName.BoneKnife:
                     case ItemName.LegendaryMallet:
-                    case ItemName.ThunderMaul:
+                    //case ItemName.ThunderMaul:
                     case ItemName.ColossusBlade:
                         return true;
                     case ItemName.CeremonialJavelin:
@@ -108,36 +111,36 @@ namespace ConsoleBot.Pickit
                 }
             }
 
-            /*if((item.Name == ItemName.ColossusBlade || item.Name == ItemName.ColossusSword) && item.Quality == QualityType.Magical)
+            if((item.Name == ItemName.ColossusBlade ) && item.Quality == QualityType.Magical)
             {
                 return true;
             }
-            */
+            
             if (item.Quality == QualityType.Rare
                 && item.Ethereal
-                && eliteWeapons.Contains(item.Name)
+                && eliteSwords.Contains(item.Name)
                 && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 150
                 && item.GetValueOfStatType(StatType.RepairsDurability) > 0)
             {
                 return true;
             }
 
-            if (item.Quality == QualityType.Magical && item.Ethereal && eliteWeapons.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 200)
+            if (item.Quality == QualityType.Magical && eliteSwords.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 260)
             {
                 return true;
             }
 
-            if ((item.Quality == QualityType.Normal || item.Quality == QualityType.Superior) && item.Ethereal && eliteWeapons.Contains(item.Name))
+            if (item.Quality == QualityType.Magical && item.Ethereal && eliteMercWeapons.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 200)
             {
                 return true;
             }
 
-            if (item.Ethereal && eliteWeapons.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 150)
+            if ((item.Quality == QualityType.Normal || item.Quality == QualityType.Superior) && item.Ethereal && item.Sockets == 3 && eliteMercWeapons.Contains(item.Name))
             {
                 return true;
             }
 
-            if (item.Quality == QualityType.Magical && eliteWeapons.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 200)
+            if (item.Ethereal && eliteMercWeapons.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 250)
             {
                 return true;
             }

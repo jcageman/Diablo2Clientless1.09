@@ -14,8 +14,10 @@ namespace ConsoleBot.Pickit
         private static readonly HashSet<ItemName> defArmors = new HashSet<ItemName> {
             ItemName.OrnatePlate, ItemName.ChaosArmor, ItemName.EmbossedPlate, ItemName.SharktoothArmor, ItemName.TemplarCoat, ItemName.MagePlate, ItemName.RussetArmor};
 
-        private static readonly HashSet<ItemName> eliteArmors = new HashSet<ItemName> {
-            ItemName.DuskShroud, ItemName.Wyrmhide, ItemName.ScarabHusk, ItemName.WireFleece, ItemName.DiamondMail, ItemName.ArchonPlate, ItemName.KrakenShell, 
+        private static readonly HashSet<ItemName> socketedLightArmors = new HashSet<ItemName> {
+            ItemName.QuiltedArmor, ItemName.LeatherArmor, ItemName.HardLeatherArmor, ItemName.StuddedLeather, ItemName.RingMail, ItemName.LightPlate,
+            ItemName.GhostArmor, ItemName.SerpentskinArmor, ItemName.DemonhideArmor, ItemName.TrellisedArmor, ItemName.LinkedMail, ItemName.MagePlate,
+            ItemName.DuskShroud, ItemName.Wyrmhide, ItemName.ScarabHusk, ItemName.WireFleece, ItemName.DiamondMail, ItemName.ArchonPlate, ItemName.KrakenShell,
             ItemName.HellforgePlate, ItemName.LacqueredPlate, ItemName.ShadowPlate,ItemName.SacredArmor};
         public static bool ShouldPickupItemClassic(Item item)
         {
@@ -34,7 +36,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Quality == QualityType.Magical && item.Sockets == 4)
+            if (item.Quality == QualityType.Magical && socketedLightArmors.Contains(item.Name))
             {
                 return true;
             }
@@ -49,7 +51,7 @@ namespace ConsoleBot.Pickit
                 switch(item.Name)
                 {
                     case ItemName.SerpentskinArmor:
-                        return item.GetValueOfStatType(StatType.ColdResistance) >= 34 && !item.Ethereal;
+                        return item.GetValueOfStatType(StatType.ColdResistance) >= 34 && item.GetValueOfStatType(StatType.AllSkills) > 0 && !item.Ethereal;
                     //case ItemName.Cuirass:
                     case ItemName.MeshArmor:
                         return item.Ethereal;
@@ -63,7 +65,7 @@ namespace ConsoleBot.Pickit
                 }
             }
 
-            if (item.Quality == QualityType.Magical && item.Sockets == 4 && item.GetValueOfStatType(StatType.Life) >= 80)
+            if (item.Quality == QualityType.Magical && socketedLightArmors.Contains(item.Name) && item.Sockets == 4 && item.GetValueOfStatType(StatType.Life) >= 80)
             {
                 return true;
             }

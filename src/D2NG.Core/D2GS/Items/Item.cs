@@ -11,7 +11,7 @@ namespace D2NG.Core.D2GS.Items
         {
             Prefixes = new List<uint>();
             Suffixes = new List<uint>();
-            Sockets = uint.MaxValue;
+            Sockets = 0;
             Properties = new Dictionary<StatType, ItemProperty>();
         }
 

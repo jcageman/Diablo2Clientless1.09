@@ -16,8 +16,8 @@ namespace ConsoleBot.Pickit
                 switch (item.Name)
                 {
                     case ItemName.Monarch:
-                    case ItemName.GrimShield:
-                    case ItemName.GildedShield:
+                    //case ItemName.GrimShield:
+                    //case ItemName.GildedShield:
                         return true;
                 }
             }
@@ -47,12 +47,10 @@ namespace ConsoleBot.Pickit
             {
                 switch (item.Name)
                 {
-                    case ItemName.GrimShield:
-                        return item.GetValueOfStatType(StatType.AllSkills) > 0;
+                    //case ItemName.GrimShield:
+                    //    return item.GetValueOfStatType(StatType.AllSkills) > 0;
                     case ItemName.Monarch:
-                    case ItemName.GildedShield:
-                    case ItemName.Luna:
-                    case ItemName.Defender:
+                    //case ItemName.GildedShield:
                         return true;
                 }
             }

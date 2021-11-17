@@ -233,6 +233,17 @@ namespace D2NG.Core
             return buttonAction.WaitOne(2000);
         }
 
+        public bool ActivateTomeOfIdentify(Item item)
+        {
+            if (item.Name != ItemName.TomeofIdentify)
+            {
+                throw new InvalidOperationException($"incorrect item type '{item.Name}', expected TomeofIdentify");
+            }
+            var stackableItem = _gameServer.GetResetEventOfType(InComingPacket.UseStackableItem);
+            _gameServer.SendPacket(new ActivateBufferItemPacket(Me, item));
+            return stackableItem.WaitOne(2000);
+        }
+
         public bool UsePotion(Item item)
         {
             if (item.Classification != ClassificationType.HealthPotion && item.Classification != ClassificationType.ManaPotion && item.Classification != ClassificationType.RejuvenationPotion)
@@ -252,6 +263,17 @@ namespace D2NG.Core
             }
 
             _gameServer.SendPacket(new RightSkillOnLocationPacket(location));
+            return true;
+        }
+
+        public bool LeftHandSkillHoldOnEntity(Skill skill, Entity entity)
+        {
+            if (!ChangeSkill(skill, Hand.Left))
+            {
+                return false;
+            }
+
+            _gameServer.SendPacket(new LeftSkillHoldOnUnitPacket(entity));
             return true;
         }
 
@@ -508,6 +530,13 @@ namespace D2NG.Core
             var nPCTransactionPacket = _gameServer.GetResetEventOfType(InComingPacket.NPCTransaction);
             _gameServer.SendPacket(new IdentifyItemsPacket(entity));
             nPCTransactionPacket.WaitOne(200);
+        }
+
+        public void IdentifyItem(Item bookOfIdentify, Item itemToIdentify)
+        {
+            var updateItemStats = _gameServer.GetResetEventOfType(InComingPacket.UpdateItemStats);
+            _gameServer.SendPacket(new IdentifyItemPacket(bookOfIdentify, itemToIdentify));
+            updateItemStats.WaitOne(200);
         }
 
         public void ResurrectMerc(Entity entity)

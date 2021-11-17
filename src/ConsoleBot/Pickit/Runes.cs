@@ -6,6 +6,8 @@ namespace ConsoleBot.Pickit
     public static class Runes
     {
         private static readonly HashSet<ItemName> wantedRunes = new HashSet<ItemName> {
+            ItemName.SolRune,
+            ItemName.NefRune,
             ItemName.LemRune,
             ItemName.PulRune,
             ItemName.UmRune,

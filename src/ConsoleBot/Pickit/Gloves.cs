@@ -40,20 +40,21 @@ namespace ConsoleBot.Pickit
                 }
             }
 
+            /*
             if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
                 && item.GetValueToSkillTab(SkillTab.AmazonBowAndCrossbowSkills) + item.GetValueToSkillTab(SkillTab.AmazonJavelinAndSpearSkills) == 2)
             {
                 return true;
             }
-
+            */
             if (item.GetValueToSkillTab(SkillTab.AmazonJavelinAndSpearSkills) == 2 && item.GetTotalResistFrLrCr() >= 30)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
-                && item.GetTotalResistFrLrCr() >= 30
-                && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 3)
+                && item.Properties.TryGetValue(StatType.SkillOnHit, out var skillOnHit)
+                && skillOnHit.Skill == D2NG.Core.D2GS.Players.Skill.AmplifyDamage)
             {
                 return true;
             }

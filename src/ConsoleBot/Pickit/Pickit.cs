@@ -111,6 +111,11 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            if (item.IsGold && item.Amount > 5000)
+            {
+                return true;
+            }
+
             if (item.IsIdentified)
             {
                 return ShouldKeepItem(isExpansion, characterClass, item);
@@ -121,10 +126,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Classification == ClassificationType.Gold && item.Amount > 5000)
-            {
-                return true;
-            }
+
 
             if (item.Name == ItemName.EssenceOfAnguish || item.Name == ItemName.EssenceOfPain || item.Name == ItemName.EssenceOfSuffering || item.Name == ItemName.StandardofHeroes)
             {
@@ -232,7 +234,6 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 */
-
 
             if (item.Name == ItemName.LongWarBow)
             {

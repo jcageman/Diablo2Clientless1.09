@@ -37,11 +37,21 @@
                         <option value=@template>@template</option>
                     }
                 </select> <br />Or Classification: <select @onchange=@UpdateClassificationType>
-                @foreach (var template in Enum.GetValues(typeof(ClassificationType)))
-                {
-                    <option value=@template>@template</option>
-                }
+                    @foreach (var template in Enum.GetValues(typeof(ClassificationType)))
+                    {
+                        <option value=@template>@template</option>
+                    }
+                </select> <br />Sockets: <select @onchange=@UpdateNumberOfSockets>
+                    }
+                    <option>0</option>
+                    <option>1</option>
+                    <option>2</option>
+                    <option>3</option>
+                    <option>4</option>
+                    <option>5</option>
                 </select>
+                <br />Ethereal:
+                <input type="checkbox" @onchange="@UpdateEthereal" />
             </th>
             <th>
                 Filter 1<select @onchange=@UpdateStatType>
@@ -73,7 +83,7 @@
             <tr>
                 <td>@item.AccountName - @item.CharacterName</td>
                 <td>@item.QualityType</td>
-                <td>@item.ItemName</td>
+                <td>@((MarkupString)$"{@item.ItemName} (ilvl {item.Level}) ({item.Sockets}s)")</td>
                 <td>@((MarkupString)string.Join("<br />", item.Stats.Select(k => $"{k.Key} : {k.Value}")))</td>
             </tr>
         }
@@ -82,61 +92,77 @@
 
 @code {
 
-    List<string> itemTypes = new List<string>() { "Inferior", "Normal", "Superior", "Magical", "Set", "Rare", "Unique", "Crafted" };
-    string selectedQualityType;
-    string selectedClassificationType;
-    string selectedItemName;
-    string selectedStatType1;
-    string selectedStatType2;
-    string selectedOrderByStatType;
+        List<string> itemTypes = new List<string>() { "Inferior", "Normal", "Superior", "Magical", "Set", "Rare", "Unique", "Crafted" };
+        string selectedQualityType;
+        string selectedClassificationType;
+        string selectedItemName;
+        string selectedStatType1;
+        string selectedStatType2;
+        string selectedOrderByStatType;
+        int? selectedNumberOfSockets;
+        bool selectEthereal = false;
 
-    void UpdateQualityType(ChangeEventArgs e)
-    {
-        selectedQualityType = e.Value.ToString();
-        UpdateFilteredItems();
-    }
+        void UpdateQualityType(ChangeEventArgs e)
+        {
+            selectedQualityType = e.Value.ToString();
+            UpdateFilteredItems();
+        }
 
-    void UpdateItemName(ChangeEventArgs e)
-    {
-        selectedItemName = e.Value.ToString();
-        selectedClassificationType = null;
-        UpdateFilteredItems();
-    }
+        void UpdateItemName(ChangeEventArgs e)
+        {
+            selectedItemName = e.Value.ToString();
+            selectedClassificationType = null;
+            UpdateFilteredItems();
+        }
 
-    void UpdateClassificationType(ChangeEventArgs e)
-    {
-        selectedItemName = null;
-        selectedClassificationType = e.Value.ToString();
-        UpdateFilteredItems();
-    }
+        void UpdateClassificationType(ChangeEventArgs e)
+        {
+            selectedItemName = null;
+            selectedClassificationType = e.Value.ToString();
+            UpdateFilteredItems();
+        }
 
-    void UpdateStatType(ChangeEventArgs e)
-    {
-        selectedStatType1 = e.Value.ToString();
-        UpdateFilteredItems();
-    }
+        void UpdateNumberOfSockets(ChangeEventArgs e)
+        {
+            selectedNumberOfSockets = int.Parse(e.Value.ToString());
+            UpdateFilteredItems();
+        }
 
-    void UpdateStatType2(ChangeEventArgs e)
-    {
-        selectedStatType2 = e.Value.ToString();
-        UpdateFilteredItems();
-    }
+        void UpdateEthereal(ChangeEventArgs e)
+        {
+            selectEthereal = (bool)e.Value;
+            UpdateFilteredItems();
+        }
 
-    void OrderByStatType(ChangeEventArgs e)
-    {
-        selectedOrderByStatType = e.Value.ToString();
-        UpdateFilteredItems();
-    }
+        void UpdateStatType(ChangeEventArgs e)
+        {
+            selectedStatType1 = e.Value.ToString();
+            UpdateFilteredItems();
+        }
 
-    void UpdateFilteredItems()
-    {
-        filteredMuleItems = muleItems.Where(i =>
-        (selectedQualityType == null || i.QualityType.ToString() == selectedQualityType)
-        && (selectedClassificationType == null || i.ClassificationType.ToString() == selectedClassificationType)
-        && (selectedItemName == null || i.ItemName.ToString() == selectedItemName)
-        && (selectedStatType1 == null || i.Stats.ContainsKey(selectedStatType1))
-        && (selectedStatType2 == null || i.Stats.ContainsKey(selectedStatType2))).OrderByDescending(i => selectedOrderByStatType != null ? i.Stats.GetValueOrDefault(selectedOrderByStatType, 0) : 0).ToList();
-    }
+        void UpdateStatType2(ChangeEventArgs e)
+        {
+            selectedStatType2 = e.Value.ToString();
+            UpdateFilteredItems();
+        }
+
+        void OrderByStatType(ChangeEventArgs e)
+        {
+            selectedOrderByStatType = e.Value.ToString();
+            UpdateFilteredItems();
+        }
+
+        void UpdateFilteredItems()
+        {
+            filteredMuleItems = muleItems.Where(i =>
+            (selectedQualityType == null || i.QualityType.ToString() == selectedQualityType)
+            && (selectedClassificationType == null || i.ClassificationType.ToString() == selectedClassificationType)
+            && (selectedItemName == null || i.ItemName.ToString() == selectedItemName)
+            && (selectedNumberOfSockets == null || i.Sockets == selectedNumberOfSockets)
+            && i.Ethereal == selectEthereal
+            && (selectedStatType1 == null || i.Stats.ContainsKey(selectedStatType1))
+            && (selectedStatType2 == null || i.Stats.ContainsKey(selectedStatType2))).OrderByDescending(i => selectedOrderByStatType != null ? i.Stats.GetValueOrDefault(selectedOrderByStatType, 0) : 0).ToList();
+        }
 
     private MuleItem[] muleItems = new MuleItem[0];
 
@@ -161,6 +187,9 @@
         public string CharacterName { get; set; }
         public string ItemName { get; set; }
         public string QualityType { get; set; }
+        public bool Ethereal { get; set; }
+        public uint Sockets { get; set; }
+        public uint Level { get; set; }
         public string ClassificationType { get; set; }
         public Dictionary<string, int> Stats { get; set; }
     }

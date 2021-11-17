@@ -416,6 +416,97 @@ namespace ConsoleBot.Helpers
             }
         }
 
+        public static void IdentifyItems(Game game)
+        {
+            var tomeOfIdentify = game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeofIdentify);
+            if(tomeOfIdentify == null)
+            {
+                return;
+            }
+
+            IdentifyMagicItems(game, tomeOfIdentify, game.Inventory.Items);
+
+            var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
+            if (cube == null)
+            {
+                Log.Error($"{game.Me.Name}: Cube not found");
+                return;
+            }
+
+            if (!game.ActivateCube(cube))
+            {
+                Log.Error($"{game.Me.Name}: Opening cube failed with cursor {game.CursorItem?.Id}");
+                return;
+            }
+
+            IdentifyMagicItems(game, tomeOfIdentify, game.Cube.Items);
+            Task.Delay(50);
+
+            foreach (var item in game.Inventory.Items)
+            {
+                if (CanDropItemToSaveSpace(game, item))
+                {
+                    Log.Information($"{game.Me.Name}: Dropping magic inventory item {item.GetFullDescription()}");
+                    game.RemoveItemFromContainer(item);
+                    bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
+                    if (!resultToBuffer)
+                    {
+                        Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+                        continue;
+                    }
+                    game.DropItem(item);
+                }
+            }
+
+            foreach (var item in game.Cube.Items)
+            {
+                if (!CanDropItemToSaveSpace(game, item))
+                {
+                    continue;
+                }
+
+                Log.Information($"{game.Me.Name}: Dropping magic cube item {item.GetFullDescription()}");
+                Point location = game.Inventory.FindFreeSpace(item);
+                if (location == null)
+                {
+                    continue;
+                }
+
+                game.RemoveItemFromContainer(item);
+
+                bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
+                if (!resultToBuffer)
+                {
+                    Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+                    continue;
+                }
+
+                game.DropItem(item);
+            }
+            game.ClickButton(ClickType.CloseHoradricCube);
+        }
+
+        private static bool CanDropItemToSaveSpace(Game game, Item item)
+        {
+            return item.Quality == QualityType.Magical
+                && item.IsIdentified
+                && !Pickit.Pickit.ShouldKeepItem(game, item)
+                && Pickit.Pickit.CanTouchInventoryItem(game, item);
+        }
+
+        private static void IdentifyMagicItems(Game game, Item tomeOfIdentify, List<Item> items)
+        {
+            foreach (var item in items)
+            {
+                if (item.Quality == QualityType.Magical && Pickit.Pickit.CanTouchInventoryItem(game, item) && !item.IsIdentified)
+                {
+                    Log.Information($"{game.Me.Name}: Identifying magic item {item.Id} - {item.Name}");
+                    game.ActivateTomeOfIdentify(tomeOfIdentify);
+                    game.IdentifyItem(tomeOfIdentify, item);
+                }
+            }
+        }
+
         public static bool MoveCubeItemsToInventory(Game game)
         {
             foreach (var item in game.Cube.Items)
