@@ -101,7 +101,7 @@ namespace ConsoleBot.TownManagement
                 Log.Information($"Moving to {portal.Location} failed");
                 return false;
             }
-
+            var previousArea = client.Game.Area;
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
                 portal = client.Game.GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalArea == area && t.TownPortalOwnerId == player.Id);
@@ -120,7 +120,7 @@ namespace ConsoleBot.TownManagement
                 return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
                     await Task.Delay(50);
-                    return client.Game.Area == area;
+                    return client.Game.Area != previousArea;
                 }, TimeSpan.FromSeconds(0.5));
             }, TimeSpan.FromSeconds(10)))
             {
@@ -133,10 +133,12 @@ namespace ConsoleBot.TownManagement
                 {
                     client.Game.RequestUpdate(client.Game.Me.Id);
                 }
+                else
+                {
+                    await Task.Delay(100);
+                }
 
-                await Task.Delay(100);
-
-                return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location);
+                return !await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, previousArea, client.Game.Me.Location);
             }, TimeSpan.FromSeconds(10)))
             {
                 return false;
@@ -187,8 +189,8 @@ namespace ConsoleBot.TownManagement
                 return false;
             }
 
+            var previousArea = client.Game.Area;
             var townportal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
-            var townArea = client.Game.Act.MapTownArea();
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
                 client.Game.MoveTo(townportal);
@@ -202,19 +204,26 @@ namespace ConsoleBot.TownManagement
                         client.Game.RequestUpdate(client.Game.Me.Id);
                     }
                     
-                    return client.Game.Area == townArea;
+                    return client.Game.Area != previousArea;
                 }, TimeSpan.FromSeconds(0.5));
             }, TimeSpan.FromSeconds(3.5)))
             {
-                Log.Error("Moving to town failed");
+                Log.Error($"Moving to town failed with area {client.Game.Area}");
                 return false;
             }
 
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
-                client.Game.RequestUpdate(client.Game.Me.Id);
-                var isValidPoint = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, townArea, client.Game.Me.Location);
-                return isValidPoint;
+                if (retryCount > 0 && retryCount % 5 == 0)
+                {
+                    client.Game.RequestUpdate(client.Game.Me.Id);
+                }
+                else
+                {
+                    await Task.Delay(100);
+                }
+
+                return !await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, previousArea, client.Game.Me.Location);
             }, TimeSpan.FromSeconds(3.5)))
             {
                 Log.Error("Checking whether in town failed");

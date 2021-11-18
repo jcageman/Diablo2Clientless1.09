@@ -44,6 +44,10 @@ namespace ConsoleBot.Helpers
                 Stopwatch sw = new Stopwatch();
                 sw.Start();
                 success = await action(retryCount);
+                if (!success)
+                {
+                    await Task.Delay(20);
+                }
                 sw.Stop();
                 elapsed += sw.Elapsed;
                 retryCount++;

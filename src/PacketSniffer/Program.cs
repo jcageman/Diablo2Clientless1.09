@@ -6,24 +6,21 @@ using Serilog;
 using Serilog.Events;
 using SharpPcap;
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 
 namespace PacketSniffer
 {
     class Program
     {
-        public static GameServerConnection gameServerConnection = new GameServerConnection();
+        public static ConcurrentDictionary<int, GameServerConnection> gameServerConnections = new ConcurrentDictionary<int, GameServerConnection>();
 
         public static BncsConnection bncsConnection = new BncsConnection();
 
         public static McpConnection mcpConnection = new McpConnection();
         static void Main(string[] args)
         {
-            gameServerConnection._stream = new SnifferNetworkStream(new byte[] { });
-            gameServerConnection.PacketReceived += (obj, eventArgs) =>
-            {
-                IncomingD2GSPackets.HandleIncomingPacket(eventArgs);
-            };
             bncsConnection._stream = new SnifferNetworkStream(new byte[] { });
             bncsConnection.PacketReceived += (obj, eventArgs) =>
             {
@@ -112,6 +109,17 @@ namespace PacketSniffer
                 var bytes = tcpPacket.PayloadData;
                 if (tcpPacket.SourcePort == 4000)
                 {
+                    if(!gameServerConnections.TryGetValue(tcpPacket.DestinationPort, out var gameServerConnection))
+                    {
+                        gameServerConnection = new GameServerConnection();
+                        gameServerConnection._stream = new SnifferNetworkStream(new byte[] { });
+                        gameServerConnection.PacketReceived += (obj, eventArgs) =>
+                        {
+                            IncomingD2GSPackets.HandleIncomingPacket(eventArgs);
+                        };
+                        gameServerConnections.TryAdd(tcpPacket.DestinationPort, gameServerConnection);
+                    }
+
                     if (bytes.Length == 2 && bytes[0] == 0xA7 && bytes[1] == 0x01)
                     {
                         Log.Debug($"D2GS Initial packet received: {bytes.ByteArrayToString()}");

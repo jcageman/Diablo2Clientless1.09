@@ -296,6 +296,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     Log.Error($"Failed one or more tasks with exception {e}");
                 }
 
+                await Task.Delay(TimeSpan.FromSeconds(3));
                 Log.Information($"Going to next game");
                 gameCount++;
             }
@@ -545,8 +546,15 @@ namespace ConsoleBot.Bots.Types.Cows
             }
 
             Log.Information($"Client {client.Game.Me.Name} waiting for bo on all players at {Waypoint.CatacombsLevel2}");
+            var random = new Random();
             await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
+                var boPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
+                if (boPlayer != null)
+                {
+                    var randomPointNear = boPlayer.Location.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5));
+                    await client.Game.MoveToAsync(randomPointNear);
+                }
                 await Task.Delay(TimeSpan.FromSeconds(0.1));
                 return !ClassHelpers.AnyPlayerIsMissingShouts(client);
             }, TimeSpan.FromSeconds(15));
