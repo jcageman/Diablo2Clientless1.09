@@ -184,7 +184,7 @@ namespace ConsoleBot.Helpers
             foreach (var item in itemsToKeep)
             {
                 Log.Information($"{game.Me.Name}: Want to keep {item.GetFullDescription()}");
-                if (!(item.Name == ItemName.Ring && item.Quality == QualityType.Unique) && item.Classification != ClassificationType.Gem)
+                if (Pickit.Pickit.SendItemToKeepToExternalClient(item))
                 {
                     externalMessagingClient.SendMessage($"{game.Me.Name}: Want to keep {item.GetFullDescription()}");
                 }

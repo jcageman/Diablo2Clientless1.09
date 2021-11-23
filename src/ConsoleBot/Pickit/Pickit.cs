@@ -275,5 +275,47 @@ namespace ConsoleBot.Pickit
 
             return true;
         }
+
+        public static bool SendItemToKeepToExternalClient(Item item)
+        {
+            if(item.Name == ItemName.Ring && item.Quality == QualityType.Unique)
+            {
+                return false;
+            }
+
+            if(item.Classification == ClassificationType.Gem)
+            {
+                return false;
+            }
+
+            if (item.Name == ItemName.SolRune || item.Name == ItemName.NefRune)
+            {
+                return false;
+            }
+
+            // Crafting blood gloves material
+            if (item.Quality == QualityType.Magical
+                && (item.Name == ItemName.HeavyGloves || item.Name == ItemName.SharkskinGloves || item.Name == ItemName.VampireboneGloves))
+            {
+                return false;
+            }
+
+            if (item.Classification == ClassificationType.Jewel && item.Quality == QualityType.Magical)
+            {
+                if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 15 && item.GetValueOfStatType(StatType.EnhancedDamage) >= 10)
+                {
+                    return true;
+                }
+
+                if (item.GetValueOfStatType(StatType.EnhancedDamage) >= 30)
+                {
+                    return true;
+                }
+
+                return false;
+            }
+
+            return true;
+        }
     }
 }

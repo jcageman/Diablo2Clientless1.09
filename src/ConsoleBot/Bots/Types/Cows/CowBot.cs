@@ -1246,12 +1246,15 @@ namespace ConsoleBot.Bots.Types.Cows
                 }
                 Log.Information($"Client {client.Game.Me.Name} picking up {item.Name}");
                 SetShouldFollowLead(client, false);
-                await MoveToLocation(client, item.Location);
+                ;
                 if (item.Ground)
                 {
                     if(!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                     {
-                        client.Game.MoveTo(item.Location);
+                        if(!await MoveToLocation(client, item.Location))
+                        {
+                            return false;
+                        }
                         client.Game.PickupItem(item);
                         return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                         {
@@ -1273,22 +1276,25 @@ namespace ConsoleBot.Bots.Types.Cows
             var pickitList = cowManager.GetPickitList(client, distance);
             foreach (var pickItem in pickitList)
             {
-                var item = client.Game.Items.FirstOrDefault(i => i.Id == pickItem.Id);
-                if (item.Ground)
+                var item = client.Game.FindItemById(pickItem.Id);
+                if (item != null && item.Ground)
                 {
                     SetShouldFollowLead(client, false);
                     InventoryHelpers.IdentifyItems(client.Game);
                     if (client.Game.Inventory.FindFreeSpace(item) != null)
                     {
-                        Log.Information($"Client {client.Game.Me.Name} picking up {item.Amount} {item.Name}");
-                        await MoveToLocation(client, item.Location);
-                        if (GeneralHelpers.TryWithTimeout((retryCount) =>
+                        Log.Information($"Client {client.Game.Me.Name} picking up {item.Amount} {item.Name} ({item.Id})");
+                        if (await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                         {
-                            client.Game.MoveTo(item.Location);
-                            client.Game.PickupItem(item);
-                            return GeneralHelpers.TryWithTimeout((retryCount) =>
+                            if(!(await MoveToLocation(client, item.Location)))
                             {
-                                Thread.Sleep(50);
+                                return false;
+                            }
+                            await Task.Delay(100);
+                            client.Game.PickupItem(item);
+                            return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                            {
+                                await Task.Delay(50);
                                 if (!item.IsGold && client.Game.Inventory.FindItemById(item.Id) == null)
                                 {
                                     return false;
@@ -1298,18 +1304,17 @@ namespace ConsoleBot.Bots.Types.Cows
                             }, TimeSpan.FromSeconds(0.3));
                         }, TimeSpan.FromSeconds(3)))
                         {
-                            
                             InventoryHelpers.MoveInventoryItemsToCube(client.Game);
                         }
                         else
                         {
-                            Log.Warning($"Client {client.Game.Me.Name} failed picking up {item.Amount} {item.Name}");
+                            Log.Warning($"Client {client.Game.Me.Name} failed picking up {item.Amount} {item.Name} ({item.Id})");
                             cowManager.PutItemOnPickitList(client, item);
                         }
                     }
                     else
                     {
-                        Log.Warning($"Client {client.Game.Me.Name} no space for {item.Amount} {item.Name}");
+                        Log.Warning($"Client {client.Game.Me.Name} no space for {item.Amount} {item.Name} ({item.Id})");
                         cowManager.PutItemOnPickitList(client, item);
                     }
                 }
@@ -1378,7 +1383,7 @@ namespace ConsoleBot.Bots.Types.Cows
             Log.Information($"Stopped Barb Client {client.Game.Me?.Name}, cowing manager is finished is: {cowManager.IsFinished()}");
         }
 
-        private async Task MoveToLocation(Client client, Point location, CancellationToken? token = null)
+        private async Task<bool> MoveToLocation(Client client, Point location, CancellationToken? token = null)
         {
             var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
             var distance = client.Game.Me.Location.Distance(location);
@@ -1387,19 +1392,19 @@ namespace ConsoleBot.Bots.Types.Cows
                 var path = await _pathingService.GetPathToLocation(client.Game, location, movementMode);
                 if(token.HasValue && token.Value.IsCancellationRequested)
                 {
-                    return;
+                    return true;
                 }
-                await MovementHelpers.TakePathOfLocations(client.Game, path.ToList(), movementMode, token);
+                return await MovementHelpers.TakePathOfLocations(client.Game, path.ToList(), movementMode, token);
             }
             else
             {
                 if(movementMode == MovementMode.Teleport)
                 {
-                    client.Game.TeleportToLocation(location);
+                    return client.Game.TeleportToLocation(location);
                 }
                 else
                 {
-                    client.Game.MoveTo(location);
+                    return client.Game.MoveTo(location);
                 }
             }
         }
