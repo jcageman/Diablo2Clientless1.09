@@ -79,6 +79,7 @@ namespace ConsoleBot.Pickit
             toCasterSkills += item.GetValueOfStatType(StatType.DruidSkills);
 
             if (item.Quality == QualityType.Rare
+                && item.GetValueOfStatType(StatType.FasterCastRate) >= 20
                && toCasterSkills + item.TotalToSkillTabs() >= 2 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 45)
             {
                 return true;

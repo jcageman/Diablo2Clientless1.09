@@ -1266,8 +1266,9 @@ namespace ConsoleBot.Bots.Types.Cows
         private async Task PickupItemsFromPickupList(Client client, CowManager cowManager, double distance)
         {
             var pickitList = cowManager.GetPickitList(client, distance);
-            foreach (var item in pickitList)
+            foreach (var pickItem in pickitList)
             {
+                var item = client.Game.Items.FirstOrDefault(i => i.Id == pickItem.Id);
                 if (item.Ground)
                 {
                     SetShouldFollowLead(client, false);

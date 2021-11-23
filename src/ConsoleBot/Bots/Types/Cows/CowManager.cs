@@ -305,11 +305,6 @@ namespace ConsoleBot.Bots.Types.Cows
             var listItems = _pickitItemsOnGround.Values.Where(i => client.Game.Me.Location.Distance(i.Location) < distance).ToList();
             foreach(var tryItem in listItems)
             {
-                if(resultPickitList.Count > 2)
-                {
-                    break;
-                }
-
                 if(_pickitItemsOnGround.TryRemove(tryItem.Id, out var item))
                 {
                     resultPickitList.Add(item);
