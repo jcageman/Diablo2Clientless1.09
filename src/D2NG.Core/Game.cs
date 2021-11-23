@@ -700,7 +700,12 @@ namespace D2NG.Core
 
         public bool IsInTown()
         {
-            return Area == Area.RogueEncampment || Area == Area.LutGholein || Area == Area.KurastDocks || Area == Area.ThePandemoniumFortress;
+            return Area == Area.RogueEncampment || Area == Area.LutGholein || Area == Area.KurastDocks || Area == Area.ThePandemoniumFortress || Area == Area.Harrogath;
+        }
+
+        public Item FindItemById(uint itemId)
+        {
+            return Data.Items.GetValueOrDefault(itemId);
         }
 
         private void ChickenAndLifeManaThread()
