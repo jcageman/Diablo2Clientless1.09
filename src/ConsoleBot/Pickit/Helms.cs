@@ -16,13 +16,16 @@ namespace ConsoleBot.Pickit
             {
                 switch (item.Name)
                 {
-                    //case ItemName.SlayerGuard:
+                    case ItemName.SlayerGuard:
+                        return !item.Ethereal && item.GetValueToSkillTab(SkillTab.BarbarianCombatSkills) == 1;
                     //case ItemName.TotemicMask:
                     //case ItemName.WarHat:
-                    //case ItemName.WingedHelm:
+                    case ItemName.WingedHelm:
+                        return item.GetValueOfStatType(StatType.FasterCastRate) >= 30;
                     case ItemName.DeathMask:
                         return item.Ethereal;
                     case ItemName.GrandCrown:
+                        return item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 11 && item.GetValueOfStatType(StatType.ExtraGold) >= 95;
                     case ItemName.GrimHelm:
                         return true;
                     case ItemName.Shako:

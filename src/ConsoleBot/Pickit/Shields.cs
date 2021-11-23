@@ -19,6 +19,8 @@ namespace ConsoleBot.Pickit
                     //case ItemName.GrimShield:
                     //case ItemName.GildedShield:
                         return true;
+                    case ItemName.Aegis:
+                            return item.GetValueOfStatType(StatType.ColdResistance) >= 60;
                 }
             }
 
