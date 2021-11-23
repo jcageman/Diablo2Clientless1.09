@@ -1203,21 +1203,20 @@ namespace ConsoleBot.Bots.Types.Cows
                     client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
                 }
 
+                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
+                if (leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) > 10)
+                {
+                    await FollowToLocation(client, leadPlayer.Location);
+                }
+
                 if (timer.Elapsed > TimeSpan.FromSeconds(5) && client.Game.Me.HasSkill(Skill.Teleport))
                 {
-                    var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
                     if(leadPlayer != null)
                     {
                         var randomPointNear = leadPlayer.Location.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5));
                         await client.Game.TeleportToLocationAsync(randomPointNear);
                         timer.Restart();
                     }
-                }
-
-                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-                if (leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) > 10)
-                {
-                    await FollowToLocation(client, leadPlayer.Location);
                 }
 
                 if (!cowManager.GetNearbyAliveMonsters(client, 20, 1).Any())
