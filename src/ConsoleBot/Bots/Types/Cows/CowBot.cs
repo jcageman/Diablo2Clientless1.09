@@ -275,7 +275,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 await CowPortalOpen.Task;
                 Log.Information($"Cow portal open, moving to cow level");
 
-                var killingClients = clients.Where(c => c.Game.Me.Class == CharacterClass.Sorceress && c.Game.Me.HasSkill(Skill.Nova)).ToList();
+                var killingClients = clients.Where(c => c.Game.Me.Class == CharacterClass.Sorceress && c.Game.Me.Skills.GetValueOrDefault(Skill.Nova) >= 20).ToList();
                 Log.Information($"Selected {string.Join(",", killingClients.Select(c => c.Game.Me.Name))} for cow manager");
                 var listeningClients = clients.Where(c => c.Game.Me.Class == CharacterClass.Sorceress && !killingClients.Contains(c)).ToList();
                 listeningClients.Add(boClient);
@@ -861,7 +861,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
                     break;
                 case CharacterClass.Sorceress:
-                    if (client.Game.Me.HasSkill(Skill.StaticField))
+                    if (client.Game.Me.HasSkill(Skill.StaticField) && client.Game.Me.Skills.GetValueOrDefault(Skill.Nova) >= 20)
                     {
                         await StaticSorcClient(client, cowManager);
                     }
@@ -1212,6 +1212,12 @@ namespace ConsoleBot.Bots.Types.Cows
                         await client.Game.TeleportToLocationAsync(randomPointNear);
                         timer.Restart();
                     }
+                }
+
+                var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
+                if (leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) > 10)
+                {
+                    await FollowToLocation(client, leadPlayer.Location);
                 }
 
                 if (!cowManager.GetNearbyAliveMonsters(client, 20, 1).Any())
