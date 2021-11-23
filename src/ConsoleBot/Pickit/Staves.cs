@@ -29,10 +29,12 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItemExpansion(Item item)
         {
+            /*
             if(item.Name == ItemName.SwirlingCrystal && item.Quality == QualityType.Unique && !item.Ethereal && item.GetValueOfStatType(StatType.SorceressSkills) >= 3)
             {
                 return true;
             }
+            */
 
             if (item.Classification == ClassificationType.SorceressOrb
             && item.GetValueToSkillTab(SkillTab.SorceressLightningSpells)
