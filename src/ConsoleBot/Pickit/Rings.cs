@@ -13,7 +13,7 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldPickupItemExpansion(Item item)
         {
-            return true;
+            return item.Quality != QualityType.Magical;
         }
 
         public static bool ShouldKeepItemExpansion(Item item)
