@@ -66,7 +66,14 @@ namespace ConsoleBot.TownManagement
                     
                 }
                 client.Game.TakeWaypoint(townWaypoint, waypoint);
-                return GeneralHelpers.TryWithTimeout((retryCount) => client.Game.Area == waypoint.ToArea(), TimeSpan.FromSeconds(2));
+                return GeneralHelpers.TryWithTimeout((retryCount) => {
+                    if(retryCount % 5 == 0 && client.Game.Area != waypoint.ToArea())
+                    {
+                        client.Game.RequestUpdate(client.Game.Me.Id);
+                    }
+                    return client.Game.Area == waypoint.ToArea();
+                }
+                , TimeSpan.FromSeconds(2));
             }, TimeSpan.FromSeconds(5)))
             {
                 return false;
@@ -199,16 +206,16 @@ namespace ConsoleBot.TownManagement
                 return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
                     await Task.Delay(50);
-                    if(retryCount % 5 == 0)
+                    if(retryCount > 0 && retryCount % 5 == 0)
                     {
                         client.Game.RequestUpdate(client.Game.Me.Id);
                     }
                     
                     return client.Game.Area != previousArea;
                 }, TimeSpan.FromSeconds(0.5));
-            }, TimeSpan.FromSeconds(3.5)))
+            }, TimeSpan.FromSeconds(5.0)))
             {
-                Log.Error($"Moving to town failed with area {client.Game.Area}");
+                Log.Error($"Client {client.Game.Me.Name} Moving to town failed with area {client.Game.Area}");
                 return false;
             }
 
@@ -226,7 +233,7 @@ namespace ConsoleBot.TownManagement
                 return !await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, previousArea, client.Game.Me.Location);
             }, TimeSpan.FromSeconds(3.5)))
             {
-                Log.Error("Checking whether in town failed");
+                Log.Error($"Client {client.Game.Me.Name} Checking whether in town failed");
                 return false;
             }
 
