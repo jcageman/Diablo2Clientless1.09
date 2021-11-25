@@ -22,6 +22,15 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            /*
+            // Crafting blood gloves material
+            if(item.Quality == QualityType.Magical
+                && (item.Name == ItemName.HeavyGloves || item.Name == ItemName.SharkskinGloves || item.Name == ItemName.VampireboneGloves))
+            {
+                return true;
+            }
+            */
+
             return false;
         }
 
@@ -39,6 +48,15 @@ namespace ConsoleBot.Pickit
                               //    return item.Ethereal;
                 }
             }
+
+            /*
+            // Crafting blood gloves material
+            if(item.Quality == QualityType.Magical
+                && (item.Name == ItemName.HeavyGloves || item.Name == ItemName.SharkskinGloves || item.Name == ItemName.VampireboneGloves))
+            {
+                return true;
+            }
+            */
 
             /*
             if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
