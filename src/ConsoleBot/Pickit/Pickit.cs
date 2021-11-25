@@ -242,6 +242,10 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 */
+            if (item.Name == ItemName.SplintMail)
+            {
+                return true;
+            }
 
             if (item.Name == ItemName.LongWarBow)
             {
