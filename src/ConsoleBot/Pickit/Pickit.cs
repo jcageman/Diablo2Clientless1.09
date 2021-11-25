@@ -128,7 +128,11 @@ namespace ConsoleBot.Pickit
 
 
 
-            if (item.Name == ItemName.EssenceOfAnguish || item.Name == ItemName.EssenceOfPain || item.Name == ItemName.EssenceOfSuffering || item.Name == ItemName.StandardofHeroes)
+            if (item.Name == ItemName.EssenceOfAnguish
+                || item.Name == ItemName.EssenceOfPain
+                || item.Name == ItemName.EssenceOfSuffering
+                || item.Name == ItemName.StandardofHeroes
+                || item.Name == ItemName.TokenOfAbsolution)
             {
                 return true;
             }
@@ -162,7 +166,11 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Name == ItemName.EssenceOfAnguish || item.Name == ItemName.EssenceOfPain || item.Name == ItemName.EssenceOfSuffering || item.Name == ItemName.StandardofHeroes)
+            if (item.Name == ItemName.EssenceOfAnguish
+                || item.Name == ItemName.EssenceOfPain
+                || item.Name == ItemName.EssenceOfSuffering
+                || item.Name == ItemName.StandardofHeroes
+                || item.Name == ItemName.TokenOfAbsolution)
             {
                 return true;
             }

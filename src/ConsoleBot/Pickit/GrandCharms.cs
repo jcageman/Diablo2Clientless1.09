@@ -27,7 +27,8 @@ namespace ConsoleBot.Pickit
                 || item.GetValueToSkillTab(SkillTab.AmazonJavelinAndSpearSkills) > 0
                 || item.GetValueToSkillTab(SkillTab.PaladinCombatSkills) > 0
                 || item.GetValueToSkillTab(SkillTab.PaladinOffensiveAuras) > 0
-                || item.GetValueToSkillTab(SkillTab.NecromancerPoisonAndBoneSpells) > 0)
+                || item.GetValueToSkillTab(SkillTab.NecromancerPoisonAndBoneSpells) > 0
+                || item.GetValueToSkillTab(SkillTab.BarbarianWarcries) > 0)
             {
                 return true;
             }

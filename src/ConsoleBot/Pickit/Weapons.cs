@@ -110,6 +110,8 @@ namespace ConsoleBot.Pickit
                     case ItemName.CeremonialJavelin:
                     case ItemName.Yari:
                         return item.Ethereal;
+                    case ItemName.WarFork:
+                        return true;
                 }
             }
 
