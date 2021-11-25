@@ -18,10 +18,14 @@ namespace ConsoleBot.Pickit
                     case ItemName.Monarch:
                     //case ItemName.GrimShield:
                     //case ItemName.GildedShield:
-                        return true;
                     case ItemName.Aegis:
-                            return item.GetValueOfStatType(StatType.ColdResistance) >= 60;
+                            return !item.Ethereal;
                 }
+            }
+
+            if (item.Name == ItemName.Monarch && item.Quality == QualityType.Magical)
+            {
+                return true;
             }
 
             return false;
@@ -45,6 +49,11 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItemExpansion(Item item)
         {
+            if(item.Name == ItemName.Monarch && item.Quality == QualityType.Magical && item.Sockets == 4 && item.GetValueOfStatType(StatType.IncreasedBlocking) > 0)
+            {
+                return true;
+            }
+
             if (item.Quality == QualityType.Unique)
             {
                 switch (item.Name)
@@ -53,7 +62,9 @@ namespace ConsoleBot.Pickit
                     //    return item.GetValueOfStatType(StatType.AllSkills) > 0;
                     case ItemName.Monarch:
                     //case ItemName.GildedShield:
-                        return true;
+                        return !item.Ethereal;
+                    case ItemName.Aegis:
+                        return item.GetValueOfStatType(StatType.ColdResistance) >= 60;
                 }
             }
 

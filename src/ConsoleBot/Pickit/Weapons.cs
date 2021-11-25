@@ -64,11 +64,10 @@ namespace ConsoleBot.Pickit
                     //case ItemName.ThunderMaul:
                     case ItemName.ColossusBlade:
                         return true;
-                    case ItemName.CeremonialJavelin:
+                    //case ItemName.CeremonialJavelin:
+                    case ItemName.WarFork:
                     case ItemName.Yari:
                         return item.Ethereal;
-                    case ItemName.WarFork:
-                        return true;
                 }
             }
 
@@ -109,9 +108,8 @@ namespace ConsoleBot.Pickit
                         return true;
                     case ItemName.CeremonialJavelin:
                     case ItemName.Yari:
-                        return item.Ethereal;
                     case ItemName.WarFork:
-                        return true;
+                        return item.Ethereal;
                 }
             }
 

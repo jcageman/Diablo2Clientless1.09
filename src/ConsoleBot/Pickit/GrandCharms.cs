@@ -16,10 +16,10 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Level >= 91)
+            /*if (item.Level >= 91)
             {
                 return true;
-            }
+            }*/
 
             if (item.GetValueToSkillTab(SkillTab.SorceressLightningSpells) > 0
                 || item.GetValueToSkillTab(SkillTab.SorceressFireSpells) > 0
