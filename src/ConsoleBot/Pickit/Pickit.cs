@@ -312,21 +312,6 @@ namespace ConsoleBot.Pickit
                 return false;
             }
 
-            if (item.Classification == ClassificationType.Jewel && item.Quality == QualityType.Magical)
-            {
-                if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 15 && item.GetValueOfStatType(StatType.EnhancedDamage) >= 10)
-                {
-                    return true;
-                }
-
-                if (item.GetValueOfStatType(StatType.EnhancedDamage) >= 30)
-                {
-                    return true;
-                }
-
-                return false;
-            }
-
             return true;
         }
     }
