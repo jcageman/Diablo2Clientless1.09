@@ -305,5 +305,18 @@ namespace D2NG.Core.Tests.D2GS
             Assert.Equal(ItemName.HellspawnSkull, packet.Item.Name);
             Assert.Equal(QualityType.Rare, packet.Item.Quality);
         }
+
+        [Fact]
+        public void RazorTail()
+        {
+            var bytes = new byte[] { 0x9C, 0x04, 0x2C, 0x10, 0xB9, 0x06, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x64, 0x00, 0x8A, 0xA8, 0x67, 0x27, 0x06, 0x02, 0xED, 0x31, 0x0F, 0x2F, 0x38, 0x34, 0xB8, 0x43, 0x04, 0xBC, 0x38, 0x85, 0x3E, 0x64, 0x00, 0x01, 0x92, 0x05, 0x05, 0x06, 0x05, 0x28, 0xC5, 0x7F };
+            var packet = new ParseItemPacket(new D2gsPacket(bytes));
+            Assert.Equal(ItemName.SharkskinBelt, packet.Item.Name);
+            Assert.Equal(QualityType.Unique, packet.Item.Quality);
+            Assert.Equal(8, packet.Item.Properties.Count);
+            Assert.Equal(8, packet.Item.Properties[StatType.ThornsPerLevel].PerLevel);
+            Assert.Equal(33, packet.Item.Properties[StatType.PiercingAttack].Value);
+            Assert.Equal(15, packet.Item.Properties[StatType.Dexterity].Value);
+        }
     }
 }

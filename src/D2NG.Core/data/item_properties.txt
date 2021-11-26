@@ -236,7 +236,7 @@ Cold Absorption Per Level|6|0|0
 Fire Absorption Per Level|6|0|0
 Lightning Absorption Per Level|6|0|0
 Poison Absorption Per Level|6|0|0
-Thorns Per Level|5|0|0
+Thorns Per Level|6|0|0
 Extra Gold Per Level|6|0|0
 Better Chance Of Getting Magic Item Per Level|6|0|0
 Stamina Regeneration Per Level|6|0|0

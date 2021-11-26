@@ -57,11 +57,16 @@ namespace ConsoleBot.Pickit
             toCasterSkills += item.GetValueOfStatType(StatType.NecromancerSkills);
             toCasterSkills += item.GetValueOfStatType(StatType.PaladinSkills);
             toCasterSkills += item.GetValueOfStatType(StatType.DruidSkills);
+            toCasterSkills += item.GetValueToSkillTab(SkillTab.SorceressLightningSpells);
+            toCasterSkills += item.GetValueToSkillTab(SkillTab.SorceressColdSpells);
 
             var toMeleeSkills = item.GetValueOfStatType(StatType.BarbarianSkills);
             toMeleeSkills += item.GetValueOfStatType(StatType.AmazonSkills);
             toMeleeSkills += item.GetValueOfStatType(StatType.AssassinSkills);
             toMeleeSkills += item.GetValueOfStatType(StatType.DruidSkills);
+            toMeleeSkills += item.GetValueToSkillTab(SkillTab.AssasinTraps);
+            toMeleeSkills += item.GetValueToSkillTab(SkillTab.DruidElemental);
+            toMeleeSkills += item.GetValueToSkillTab(SkillTab.BarbarianCombatSkills);
 
             if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
             {
@@ -83,12 +88,12 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (toCasterSkills == 2 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 30)
+            if (toCasterSkills >= 2 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 30)
             {
                 return true;
             }
 
-            if (toCasterSkills == 2 && item.GetTotalResistFrLrCr() >= 45 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 70)
+            if (toCasterSkills >= 2 && item.GetTotalResistFrLrCr() >= 45 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 70)
             {
                 return true;
             }
