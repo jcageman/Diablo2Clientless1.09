@@ -11,7 +11,7 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItemExpansion(Item item)
         {
-            if (item.GetValueOfStatType(StatType.EnhancedDamage) >= 30)
+            if (item.GetValueOfStatType(StatType.EnhancedMaximumDamage) + item.GetValueOfStatType(StatType.EnhancedDamage) >= 30)
             {
                 return true;
             }
@@ -36,7 +36,12 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 15 && item.GetValueOfStatType(StatType.EnhancedDamage) >= 10)
+            if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 15 && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) + item.GetValueOfStatType(StatType.EnhancedDamage) > 0)
+            {
+                return true;
+            }
+
+            if(item.Quality == QualityType.Magical)
             {
                 return true;
             }

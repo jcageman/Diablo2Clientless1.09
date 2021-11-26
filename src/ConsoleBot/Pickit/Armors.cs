@@ -56,6 +56,7 @@ namespace ConsoleBot.Pickit
                     case ItemName.MeshArmor:
                         return item.Ethereal;
                     case ItemName.RussetArmor:
+                        return item.Ethereal || item.GetValueOfStatType(StatType.Vitality) > 0;
                     //case ItemName.MagePlate:
                     //case ItemName.TemplarCoat:
                     //case ItemName.ChaosArmor:
@@ -65,7 +66,7 @@ namespace ConsoleBot.Pickit
                 }
             }
 
-            if (item.Quality == QualityType.Magical && socketedLightArmors.Contains(item.Name) && item.Sockets == 4 && item.GetValueOfStatType(StatType.Life) >= 80)
+            if (item.Quality == QualityType.Magical && socketedLightArmors.Contains(item.Name) && item.Sockets == 4 && item.GetValueOfStatType(StatType.Life) >= 40)
             {
                 return true;
             }
