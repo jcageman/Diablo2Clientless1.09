@@ -1,4 +1,5 @@
-﻿using D2NG.Core.D2GS.Objects;
+﻿using D2NG.Core.D2GS.Items;
+using D2NG.Core.D2GS.Objects;
 using System;
 
 namespace D2NG.Core.D2GS.Packet.Outgoing
@@ -13,6 +14,17 @@ namespace D2NG.Core.D2GS.Packet.Outgoing
                     BitConverter.GetBytes(entity.Id)
                 )
             )
+        {
+        }
+
+        public RunToEntityPacket(Item item) :
+    base(
+        BuildPacket(
+            (byte)OutGoingPacket.RunToUnit,
+            BitConverter.GetBytes((uint)EntityType.Item),
+            BitConverter.GetBytes(item.Id)
+        )
+    )
         {
         }
     }

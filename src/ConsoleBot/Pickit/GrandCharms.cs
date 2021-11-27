@@ -16,10 +16,10 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            /*if (item.Level >= 91)
+            if (item.Level >= 91)
             {
                 return true;
-            }*/
+            }
 
             if (item.GetValueToSkillTab(SkillTab.SorceressLightningSpells) > 0
                 || item.GetValueToSkillTab(SkillTab.SorceressFireSpells) > 0
@@ -45,18 +45,17 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.GetTotalLifeFromStats(D2NG.Core.D2GS.Enums.CharacterClass.Sorceress) >= 50)
+            if (item.GetTotalLifeFromStats(D2NG.Core.D2GS.Enums.CharacterClass.Sorceress) >= 60)
             {
                 return true;
             }
 
-            if (item.GetTotalLifeFromStats(D2NG.Core.D2GS.Enums.CharacterClass.Sorceress) >= 20 && (
-                    item.GetValueOfStatType(StatType.FasterHitRecovery) >= 12 || item.GetTotalResistFrLrCr() >= 30) )
+            if (item.GetTotalLifeFromStats(D2NG.Core.D2GS.Enums.CharacterClass.Sorceress) >= 20 && item.GetTotalResistFrLrCr() >= 40)
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.ExtraGold) >= 30)
+            if (item.GetValueOfStatType(StatType.ExtraGold) >= 38 || (item.GetValueOfStatType(StatType.ExtraGold) > 30 && item.Properties.Count > 1))
             {
                 return true;
             }

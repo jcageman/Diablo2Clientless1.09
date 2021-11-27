@@ -240,6 +240,32 @@ namespace ConsoleBot.TownManagement
             return true;
         }
 
+        public async Task<bool> SwitchAct(Client client, Act act)
+        {
+            var targetTownArea = WayPointHelpers.MapTownArea(act);
+            var movementMode = GetMovementMode(client.Game);
+            var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, movementMode);
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
+            {
+                Log.Warning($"Teleporting to {client.Game.Act} waypoint failed");
+                return false;
+            }
+
+            var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).Single();
+            Log.Information($"Taking waypoint to {targetTownArea}");
+            if (!GeneralHelpers.TryWithTimeout((_) =>
+            {
+                client.Game.TakeWaypoint(townWaypoint, act.MapTownWayPoint());
+                return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == targetTownArea, TimeSpan.FromSeconds(2));
+            }, TimeSpan.FromSeconds(5)))
+            {
+                Log.Information($"Moving to {act} failed");
+                return false;
+            }
+
+            return true;
+        }
+
         public async Task<TownTaskResult> PerformTownTasks(Client client, TownManagementOptions options)
         {
             var result = new TownTaskResult { ShouldMule = false, Succes = false };
@@ -261,23 +287,8 @@ namespace ConsoleBot.TownManagement
 
             if (client.Game.Act != options.Act)
             {
-                var targetTownArea = WayPointHelpers.MapTownArea(options.Act);
-                var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, movementMode);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
+                if(!await SwitchAct(client, options.Act))
                 {
-                    Log.Warning($"Teleporting to {client.Game.Act} waypoint failed");
-                    return result;
-                }
-
-                var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).Single();
-                Log.Information($"Taking waypoint to {targetTownArea}");
-                if (!GeneralHelpers.TryWithTimeout((_) =>
-                {
-                    client.Game.TakeWaypoint(townWaypoint, options.Act.MapTownWayPoint());
-                    return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == targetTownArea, TimeSpan.FromSeconds(2));
-                }, TimeSpan.FromSeconds(5)))
-                {
-                    Log.Information($"Moving to {options.Act} failed");
                     return result;
                 }
             }
@@ -382,7 +393,7 @@ namespace ConsoleBot.TownManagement
 
         private async Task<bool> RefreshAndSellItems(Game game, MovementMode movementMode, TownManagementOptions options)
         {
-            var sellItemCount = game.Inventory.Items.Count(i => !Pickit.Pickit.ShouldKeepItem(game, i)) + game.Cube.Items.Count(i => !Pickit.Pickit.ShouldKeepItem(game, i));
+            var sellItemCount = game.Inventory.Items.Count(i => Pickit.Pickit.CanTouchInventoryItem(game, i) && !Pickit.Pickit.ShouldKeepItem(game, i)) + game.Cube.Items.Count(i => !Pickit.Pickit.ShouldKeepItem(game, i));
             if (NPCHelpers.ShouldRefreshCharacterAtNPC(game) || sellItemCount > 5 || options.ItemsToBuy?.Count > 0)
             {
                 var sellNpc = NPCHelpers.GetSellNPC(game.Act);

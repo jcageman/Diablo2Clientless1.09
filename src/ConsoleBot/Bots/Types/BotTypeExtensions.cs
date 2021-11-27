@@ -20,6 +20,7 @@ namespace ConsoleBot.Bots.Types
             services.AddSingleton<IBotInstance, CSBot>();
             services.AddSingleton<IBotInstance, PindleBot>();
             services.AddSingleton<IBotInstance, BaalBot>();
+            services.AddSingleton<IBotInstance, CubeBot>();
             services.AddSingleton<IBotFactory, BotFactory>();
             services.AddOptions<CowConfiguration>()
                 .Bind(config.GetSection("bot").GetSection("cows"));
@@ -33,6 +34,8 @@ namespace ConsoleBot.Bots.Types
                 .Bind(config.GetSection("bot").GetSection("pindle"));
             services.AddOptions<BaalConfiguration>()
                 .Bind(config.GetSection("bot").GetSection("baal"));
+            services.AddOptions<CubeConfiguration>()
+                .Bind(config.GetSection("bot").GetSection("cube"));
         }
     }
 }

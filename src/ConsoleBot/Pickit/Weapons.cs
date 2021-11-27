@@ -40,12 +40,22 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if ((item.Quality == QualityType.Normal || item.Quality == QualityType.Superior) && item.Ethereal && item.Sockets == 3 && eliteSwords.Contains(item.Name))
+            if (item.Quality == QualityType.Superior && item.Sockets == 3 && eliteSwords.Contains(item.Name))
             {
                 return true;
             }
 
             if ((item.Quality == QualityType.Normal || item.Quality == QualityType.Superior) && item.Sockets >= 5 && eliteSwords.Contains(item.Name))
+            {
+                return true;
+            }
+
+            if ((item.Quality == QualityType.Normal || item.Quality == QualityType.Superior) && item.Ethereal && item.Sockets == 3 && eliteMercWeapons.Contains(item.Name))
+            {
+                return true;
+            }
+
+            if (item.Ethereal && eliteMercWeapons.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 250)
             {
                 return true;
             }
@@ -123,6 +133,11 @@ namespace ConsoleBot.Pickit
                 && eliteSwords.Contains(item.Name)
                 && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 150
                 && item.GetValueOfStatType(StatType.RepairsDurability) > 0)
+            {
+                return true;
+            }
+
+            if ((item.Quality == QualityType.Normal || item.Quality == QualityType.Superior) && item.Ethereal && item.Sockets == 3 && eliteSwords.Contains(item.Name))
             {
                 return true;
             }

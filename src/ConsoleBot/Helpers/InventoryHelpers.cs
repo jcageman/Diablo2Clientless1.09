@@ -279,6 +279,29 @@ namespace ConsoleBot.Helpers
             return MoveItemResult.Succes;
         }
 
+        public static MoveItemResult DropItemFromInventory(Game game, Item item)
+        {
+            game.RemoveItemFromContainer(item);
+
+            bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
+            if (!resultToBuffer)
+            {
+                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+                return MoveItemResult.Failed;
+            }
+
+            game.DropItem(item);
+
+            bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null, MoveItemTimeout);
+            if (!resultMove)
+            {
+                Log.Error($"{game.Me.Name}: Dropping item {item.Id} - {item.Name} failed");
+                return MoveItemResult.Failed;
+            }
+
+            return MoveItemResult.Succes;
+        }
+
         public static MoveItemResult DropItemFromCube(Game game, Item item)
         {
             var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
@@ -293,6 +316,7 @@ namespace ConsoleBot.Helpers
                 Log.Error($"{game.Me.Name}: Opening cube for {item.Id} - {item.GetFullDescription()} failed with cursor {game.CursorItem?.Id}");
                 return MoveItemResult.Failed;
             }
+
             game.RemoveItemFromContainer(item);
 
             bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
@@ -303,17 +327,19 @@ namespace ConsoleBot.Helpers
                 return MoveItemResult.Failed;
             }
 
+            game.ClickButton(ClickType.CloseHoradricCube);
+            Thread.Sleep(50);
+            game.ClickButton(ClickType.CloseHoradricCube);
+            Thread.Sleep(50);
             game.DropItem(item);
 
             bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null, MoveItemTimeout);
             if (!resultMove)
             {
                 Log.Error($"{game.Me.Name}: Dropping item {item.Id} - {item.Name} failed");
-                game.ClickButton(ClickType.CloseHoradricCube);
                 return MoveItemResult.Failed;
             }
 
-            game.ClickButton(ClickType.CloseHoradricCube);
             return MoveItemResult.Succes;
         }
 

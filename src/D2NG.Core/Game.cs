@@ -450,6 +450,24 @@ namespace D2NG.Core
             return true;
         }
 
+        public async Task<bool> MoveToAsync(Item item)
+        {
+            if(!item.Ground)
+            {
+                return false;
+            }
+
+            var distance = Me.Location.Distance(item.Location);
+            if (distance > 20)
+            {
+                return false;
+            }
+            _gameServer.SendPacket(new RunToEntityPacket(item));
+            await Task.Delay((int)(distance * 80 / Data.WalkingSpeedMultiplier));
+            Me.Location = item.Location;
+            return true;
+        }
+
         public bool MoveTo(Entity entity)
         {
             return MoveTo(entity.Location);

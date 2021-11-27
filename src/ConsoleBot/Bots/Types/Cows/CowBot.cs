@@ -648,8 +648,9 @@ namespace ConsoleBot.Bots.Types.Cows
 
             foreach(var droppedItem in droppedItems)
             {
-                if (!GeneralHelpers.TryWithTimeout((retryCount =>
+                if (!await GeneralHelpers.TryWithTimeout((async retryCount =>
                 {
+                    await client.Game.MoveToAsync(droppedItem);
                     client.Game.PickupItem(droppedItem);
                     if (!GeneralHelpers.TryWithTimeout((retryCount =>
                     {
@@ -1276,21 +1277,27 @@ namespace ConsoleBot.Bots.Types.Cows
             var pickitList = cowManager.GetPickitList(client, distance);
             foreach (var pickItem in pickitList)
             {
-                var item = client.Game.FindItemById(pickItem.Id);
-                if (item != null && item.Ground)
+                if (pickItem.Ground)
                 {
                     SetShouldFollowLead(client, false);
                     InventoryHelpers.IdentifyItems(client.Game);
-                    if (client.Game.Inventory.FindFreeSpace(item) != null)
+                    if (client.Game.Inventory.FindFreeSpace(pickItem) != null)
                     {
-                        Log.Information($"Client {client.Game.Me.Name} picking up {item.Amount} {item.Name} ({item.Id})");
+                        Log.Information($"Client {client.Game.Me.Name} picking up {pickItem.Amount} {pickItem.Name} ({pickItem.Id})");
                         if (await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                         {
-                            if(!(await MoveToLocation(client, item.Location)))
+                            if(!(await MoveToLocation(client, pickItem.Location)))
                             {
                                 return false;
                             }
-                            await Task.Delay(100);
+
+                            var item = client.Game.FindItemById(pickItem.Id);
+                            if(item == null || !item.Ground)
+                            {
+                                return true;
+                            }
+
+                            await client.Game.MoveToAsync(item);
                             client.Game.PickupItem(item);
                             return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                             {
@@ -1308,14 +1315,14 @@ namespace ConsoleBot.Bots.Types.Cows
                         }
                         else
                         {
-                            Log.Warning($"Client {client.Game.Me.Name} failed picking up {item.Amount} {item.Name} ({item.Id})");
-                            cowManager.PutItemOnPickitList(client, item);
+                            Log.Warning($"Client {client.Game.Me.Name} failed picking up {pickItem.Amount} {pickItem.Name} ({pickItem.Id})");
+                            cowManager.PutItemOnPickitList(client, pickItem);
                         }
                     }
                     else
                     {
-                        Log.Warning($"Client {client.Game.Me.Name} no space for {item.Amount} {item.Name} ({item.Id})");
-                        cowManager.PutItemOnPickitList(client, item);
+                        Log.Warning($"Client {client.Game.Me.Name} no space for {pickItem.Amount} {pickItem.Name} ({pickItem.Id})");
+                        cowManager.PutItemOnPickitList(client, pickItem);
                     }
                 }
             }

@@ -10,6 +10,7 @@ namespace ConsoleBot.TownManagement
     {
         bool CreateTownPortal(Client client);
         Task<TownTaskResult> PerformTownTasks(Client client, TownManagementOptions options);
+        Task<bool> SwitchAct(Client client, Act act);
         Task<bool> TakeTownPortalToArea(Client client, Player player, Area area);
         Task<bool> TakeTownPortalToTown(Client client);
         Task<bool> TakeWaypoint(Client client, Waypoint waypoint);
