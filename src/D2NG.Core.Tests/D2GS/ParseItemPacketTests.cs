@@ -287,8 +287,8 @@ namespace D2NG.Core.Tests.D2GS
             var packet = new ParseItemPacket(new D2gsPacket(bytes));
             Assert.Equal(ItemName.TombWand, packet.Item.Name);
             Assert.Equal(QualityType.Unique, packet.Item.Quality);
-            Assert.Equal(SkillTab.NecromancerCurses, packet.Item.Properties[StatType.SkillTab1].SkillTab);
-            Assert.Equal(SkillTab.NecromancerSummoningSpells, packet.Item.Properties[StatType.SkillTab2].SkillTab);
+            Assert.Equal(SkillTab.NecromancerSummoningSpells, packet.Item.Properties[StatType.SkillTab1].SkillTab);
+            Assert.Equal(SkillTab.NecromancerPoisonAndBoneSpells, packet.Item.Properties[StatType.SkillTab2].SkillTab);
             Assert.Equal(Skill.Terror, packet.Item.Properties[StatType.SingleSkill1].Skill);
             Assert.Equal(Skill.RaiseSkeletalMage, packet.Item.Properties[StatType.SingleSkill2].Skill);
             Assert.Equal(Skill.SkeletonMastery, packet.Item.Properties[StatType.SingleSkill3].Skill);
