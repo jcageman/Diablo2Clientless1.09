@@ -2,7 +2,6 @@
 using ConsoleBot.Bots.Types;
 using ConsoleBot.Exceptions;
 using D2NG.Core;
-using D2NG.Core.D2GS.Enums;
 using Serilog;
 using System;
 using System.Linq;
@@ -23,7 +22,7 @@ namespace ConsoleBot.Helpers
             {
                 try
                 {
-                    client.Disconnect();
+                    await client.Disconnect();
                     if (ConnectToRealm(client, botConfiguration, accountCharacter))
                     {
                         return true;
@@ -82,7 +81,7 @@ namespace ConsoleBot.Helpers
                 bool createGame = false;
                 try
                 {
-                    createGame = client.CreateGame(botConfiguration.Difficulty, $"{botConfiguration.GameNamePrefix}{newGameCount}", botConfiguration.GamePassword, botConfiguration.GameDescriptions[0]);
+                    createGame = await client.CreateGame(botConfiguration.Difficulty, $"{botConfiguration.GameNamePrefix}{newGameCount}", botConfiguration.GamePassword, botConfiguration.GameDescriptions[0]);
                 }
                 catch
                 {
@@ -109,7 +108,7 @@ namespace ConsoleBot.Helpers
                 bool joinGame = false;
                 try
                 {
-                    joinGame = client.JoinGame($"{botConfiguration.GameNamePrefix}{gameCount}", botConfiguration.GamePassword);
+                    joinGame = await client.JoinGame($"{botConfiguration.GameNamePrefix}{gameCount}", botConfiguration.GamePassword);
                 }
                 catch
                 {

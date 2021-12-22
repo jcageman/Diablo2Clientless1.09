@@ -9,6 +9,7 @@ using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace D2NG.Core
 {
@@ -60,14 +61,14 @@ namespace D2NG.Core
         /// <returns>A list of Characters associated with the account</returns>
         public List<Character> Login(string username, string password)
         {
-            if(!Bncs.Login(username, password))
+            if (!Bncs.Login(username, password))
             {
                 Log.Warning($"Logged failed as {username}");
                 return null;
             }
             Log.Information($"Logged in as {username}");
             _userName = username;
-            if(!RealmLogon())
+            if (!RealmLogon())
             {
                 return null;
             }
@@ -93,16 +94,16 @@ namespace D2NG.Core
         /// <param name="difficulty">One of Normal, Nightmare or Hell</param>
         /// <param name="name">Name of the game to be created</param>
         /// <param name="password">Password used to protect the game</param>
-        public bool CreateGame(Difficulty difficulty, string name, string password, string description)
+        public async Task<bool> CreateGame(Difficulty difficulty, string name, string password, string description)
         {
             Log.Information($"Creating {difficulty} game: {name}");
-            if(!Mcp.CreateGame(difficulty, name, password, description))
+            if (!Mcp.CreateGame(difficulty, name, password, description))
             {
                 Log.Warning($"Creating {difficulty} game: {name} failed");
                 return false;
             }
             Log.Debug($"Game {name} with {password} created");
-            return JoinGame(name, password);
+            return await JoinGame(name, password);
         }
 
         /// <summary>
@@ -110,11 +111,11 @@ namespace D2NG.Core
         /// </summary>
         /// <param name="name">Name of the game being joined</param>
         /// <param name="password">Password used to protect the game</param>
-        public bool JoinGame(string name, string password)
+        public async Task<bool> JoinGame(string name, string password)
         {
             Log.Information($"Joining game: {name} with {LoggedInUserName()}");
             var packet = Mcp.JoinGame(name, password);
-            if(packet == null)
+            if (packet == null)
             {
                 return false;
             }
@@ -132,11 +133,11 @@ namespace D2NG.Core
             }
             catch
             {
-                if(D2gs.IsConnected())
+                if (D2gs.IsConnected())
                 {
-                    D2gs.Disconnect();
+                    await D2gs.Disconnect();
                 }
-                
+
                 return false;
             }
 
@@ -144,7 +145,7 @@ namespace D2NG.Core
             {
                 if (D2gs.IsConnected())
                 {
-                    D2gs.Disconnect();
+                    await D2gs.Disconnect();
                 }
                 return false;
             }
@@ -154,7 +155,7 @@ namespace D2NG.Core
 
         public bool RejoinMCP()
         {
-            if(Mcp.IsConnected())
+            if (Mcp.IsConnected())
             {
                 return true;
             }
@@ -182,7 +183,7 @@ namespace D2NG.Core
                 return false;
             }
 
-            if(!Bncs.IsConnected())
+            if (!Bncs.IsConnected())
             {
                 Log.Warning("RealmLogin failed, bncs is not connected");
                 return false;
@@ -197,7 +198,7 @@ namespace D2NG.Core
 
             Log.Debug($"Connecting to {packet.McpIp}:{packet.McpPort}");
             Mcp.Connect(packet.McpIp, packet.McpPort);
-            if(!Mcp.Logon(packet.McpCookie, packet.McpStatus, packet.McpChunk, packet.McpUniqueName))
+            if (!Mcp.Logon(packet.McpCookie, packet.McpStatus, packet.McpChunk, packet.McpUniqueName))
             {
                 Log.Warning("RealmLogin Connecting failed");
                 return false;
@@ -206,12 +207,13 @@ namespace D2NG.Core
             return true;
         }
 
-        public void Disconnect() {
-            if(Bncs.IsConnected())
+        public async Task Disconnect()
+        {
+            if (Bncs.IsConnected())
             {
                 Bncs.Disconnect();
             }
-            
+
             if (Mcp.IsConnected())
             {
                 Mcp.Disconnect();
@@ -219,9 +221,9 @@ namespace D2NG.Core
 
             if (D2gs.IsConnected())
             {
-                D2gs.Disconnect();
+                await D2gs.Disconnect();
             }
-        } 
+        }
 
         public string LoggedInUserName()
         {

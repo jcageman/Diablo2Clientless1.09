@@ -43,10 +43,10 @@ namespace D2NG.MuleManager.Services.MuleManager
                     return false;
                 }
 
-                foreach(var character in characters)
+                foreach (var character in characters)
                 {
                     client.SelectCharacter(character);
-                    if (!client.CreateGame(Core.D2GS.Enums.Difficulty.Normal, "m" + gameCount++, "mulemanager", "gs2"))
+                    if (!await client.CreateGame(Core.D2GS.Enums.Difficulty.Normal, "m" + gameCount++, "mulemanager", "gs2"))
                     {
                         return false;
                     }
@@ -57,7 +57,7 @@ namespace D2NG.MuleManager.Services.MuleManager
                     if (!stashes.Any())
                     {
                         Log.Error($"{client.Game.Me.Name}: No stash found");
-                        if (!ReconnectClient(client, account))
+                        if (!await ReconnectClient(client, account))
                         {
                             return false;
                         }
@@ -76,7 +76,7 @@ namespace D2NG.MuleManager.Services.MuleManager
                     if (!client.Game.OpenStash(stash))
                     {
                         Log.Error($"{client.Game.Me.Name}: Open stash failed");
-                        if (!ReconnectClient(client, account))
+                        if (!await ReconnectClient(client, account))
                         {
                             return false;
                         }
@@ -95,29 +95,29 @@ namespace D2NG.MuleManager.Services.MuleManager
                     var itemsToUpdate = itemsOnAccount.Where(i => i.Classification != ClassificationType.Scroll).Select(i => i.MapToMuleItem(account, character)).ToList();
 
                     await _muleManagerRepository.UpdateCharacter(account, character, itemsToUpdate);
-                    if(!ReconnectClient(client, account))
+                    if (!await ReconnectClient(client, account))
                     {
                         return false;
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(2));
                 }
-                client.Disconnect();
+                await client.Disconnect();
             }
 
             return true;
         }
 
-        private bool ReconnectClient(Client client, MuleManagerAccount account)
+        private async Task<bool> ReconnectClient(Client client, MuleManagerAccount account)
         {
-            if(client.Game.IsInGame())
+            if (client.Game.IsInGame())
             {
-                client.Game.LeaveGame();
+                await client.Game.LeaveGame();
             }
 
             if (!client.RejoinMCP())
             {
-                client.Disconnect();
+                await client.Disconnect();
                 if (!client.Connect(
                     _configuration.Realm,
                     _configuration.KeyOwner,

@@ -25,9 +25,9 @@ namespace D2NG.Core
 
         private GameData Data { get; set; }
 
-        private Thread pingThread, chickenThread;
+        private Task ping, chicken;
 
-        private DateTime lastPing, lastPong, lastTeleport;
+        private DateTime lastTeleport;
 
         private DateTime LastUsedHealthPotionTime = DateTime.Now;
 
@@ -47,7 +47,7 @@ namespace D2NG.Core
                 if (IsInGame())
                 {
                     Log.Information($"{Data?.Me?.Name}: Game loading..., About to drop, leaving game");
-                    LeaveGame();
+                    LeaveGame().Wait();
                 }
             }
             );
@@ -59,7 +59,7 @@ namespace D2NG.Core
             _gameServer.OnReceivedPacketEvent(InComingPacket.NPCHit, p => Data.Act.UpdateNPCOnHit(new NpcHitPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.EntityMove, p => Data.EntityMove(new EntityMovePacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AssignPlayer, p => Data.PlayerAssign(new AssignPlayerPacket(p)));
-            _gameServer.OnReceivedPacketEvent(InComingPacket.ReassignPlayer, p => { var packet = new ReassignPlayerPacket(p);  Data.ReassignPlayer(packet.UnitType, packet.UnitId, packet.Location); });
+            _gameServer.OnReceivedPacketEvent(InComingPacket.ReassignPlayer, p => { var packet = new ReassignPlayerPacket(p); Data.ReassignPlayer(packet.UnitType, packet.UnitId, packet.Location); });
             _gameServer.OnReceivedPacketEvent(InComingPacket.PartyAutomapInfo, p => { var packet = new PartyAutomapInfoPacket(p); Data.ReassignPlayer(EntityType.Player, packet.Id, packet.Location); });
             _gameServer.OnReceivedPacketEvent(InComingPacket.AddExperienceByte, p => Data.AddExperience(new AddExpPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AddExperienceWord, p => Data.AddExperience(new AddExpPacket(p)));
@@ -86,7 +86,6 @@ namespace D2NG.Core
             _gameServer.OnReceivedPacketEvent(InComingPacket.PlayerLeftGame, p => Data.PlayerLeave(new PlayerLeftGamePacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.BaseSkillLevels, p => Data.SetSkills(new BaseSkillLevelsPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.LifeManaUpdatePot, p => Data.UpdateSelf(new LifeManaPotUpdatePacket(p)));
-            _gameServer.OnReceivedPacketEvent(InComingPacket.Pong, _ => { lastPong = DateTime.Now; });
             _gameServer.OnReceivedPacketEvent(InComingPacket.LifeManaUpdate, p => Data.UpdateSelf(new LifeManaUpdatePacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.WorldItemAction, p =>
                 {
@@ -117,13 +116,8 @@ namespace D2NG.Core
         private void Initialize(GameFlags packet)
         {
             Data = new GameData(packet, selectedCharacter);
-            lastPing = DateTime.Now;
-            lastPong = DateTime.Now;
-            _gameServer.Ping();
-            chickenThread = new Thread(ChickenAndLifeManaThread) { Name = "GameClient Chicken Thread", IsBackground = true };
-            chickenThread.Start();
-            pingThread = new Thread(PingThread) { Name = "GameClient Ping Thread", IsBackground = true };
-            pingThread.Start();
+            chicken = Task.Run(ChickenAndLifeMana);
+            ping = Task.Run(Ping);
         }
 
         public void SelectCharacter(Character character)
@@ -136,10 +130,12 @@ namespace D2NG.Core
             return _gameServer.IsInGame();
         }
 
-        public void LeaveGame()
+        public async Task LeaveGame()
         {
             Log.Information("Leaving game");
-            _gameServer.LeaveGame();
+            await _gameServer.LeaveGame();
+            await chicken;
+            await ping;
         }
 
         public bool TakeWaypoint(WorldObject worldObject, Waypoint waypoint)
@@ -154,14 +150,14 @@ namespace D2NG.Core
             _gameServer.SendPacket(new InteractWithEntityPacket(worldObject));
             waypointMenuEvent.WaitOne(2000);
 
-            if (Data.Me.LastSelectedWaypointId == 0)
-            {
-                return false;
-            }
-
             if (!Data.Me.AllowedWaypoints.Contains(waypoint))
             {
                 throw new InvalidOperationException($"cannot take waypoint {waypoint}, since character does not have it yet. List of available waypoints: {Data.Me.AllowedWaypoints}");
+            }
+
+            if (Data.Me.LastSelectedWaypointId == 0)
+            {
+                return false;
             }
 
             _gameServer.SendPacket(new TakeWaypointPacket(Data.Me.LastSelectedWaypointId, waypoint));
@@ -199,7 +195,7 @@ namespace D2NG.Core
 
         public List<WorldObject> GetEntityByCode(EntityCode entityCode)
         {
-            if(Data.Act.WorldObjectsByEntityCode.TryGetValue(entityCode, out var entities))
+            if (Data.Act.WorldObjectsByEntityCode.TryGetValue(entityCode, out var entities))
             {
                 return entities.ToList();
             }
@@ -335,7 +331,7 @@ namespace D2NG.Core
 
         public bool RepeatRightHandSkillOnLocation(Skill skill, Point location)
         {
-            if(!ChangeSkill(skill, Hand.Right))
+            if (!ChangeSkill(skill, Hand.Right))
             {
                 return false;
             }
@@ -430,7 +426,7 @@ namespace D2NG.Core
         public async Task<bool> MoveToAsync(Point location)
         {
             var distance = Me.Location.Distance(location);
-            if(distance > 20)
+            if (distance > 20)
             {
                 return false;
             }
@@ -452,7 +448,7 @@ namespace D2NG.Core
 
         public async Task<bool> MoveToAsync(Item item)
         {
-            if(!item.Ground)
+            if (!item.Ground)
             {
                 return false;
             }
@@ -531,7 +527,7 @@ namespace D2NG.Core
 
         public void TownFolkAction(Entity entity, TownFolkActionType actionType)
         {
-            if(actionType == TownFolkActionType.RefreshGamble)
+            if (actionType == TownFolkActionType.RefreshGamble)
             {
                 RemoveNPCItems();
             }
@@ -643,25 +639,16 @@ namespace D2NG.Core
         {
             _gameServer.SendPacket(new PartyRequestPacket(PartyRequestType.AcceptInvite, player));
         }
-        private void PingThread()
+        private async Task Ping()
         {
             try
             {
                 while (IsInGame())
                 {
-                    if (lastPong - lastPing > TimeSpan.FromSeconds(30))
-                    {
-                        Log.Error($"Connecting seems to have dropped, stopping ping");
-                        // assume the connection dropped
-                        return;
-                    }
-                    if (IsInGame() && (DateTime.Now - lastPing >= TimeSpan.FromSeconds(5)))
-                    {
-                        _gameServer.Ping();
-                        lastPing = DateTime.Now;
-                    }
-
-                    Thread.Sleep(50);
+                    _gameServer.Ping();
+                    var pongPacket = _gameServer.GetResetEventOfType(InComingPacket.Pong);
+                    await pongPacket.AsTask(TimeSpan.FromMilliseconds(1000));
+                    await Task.Delay(TimeSpan.FromSeconds(5));
                 }
             }
             catch (Exception)
@@ -687,11 +674,11 @@ namespace D2NG.Core
         public bool UseHealthPotions(int amount = 1)
         {
             var healthPotions = Belt.TakeHealthPotions(amount);
-            if(healthPotions.Count > 0)
+            if (healthPotions.Count > 0)
             {
                 Log.Information($"{Me.Name} Using {healthPotions.Count} health potions with health at {Me.Life} out of {Me.MaxLife}");
             }
-            
+
             foreach (var healthPotion in healthPotions)
             {
                 LastUsedHealthPotionTime = DateTime.Now;
@@ -726,7 +713,7 @@ namespace D2NG.Core
             return Data.Items.GetValueOrDefault(itemId);
         }
 
-        private void ChickenAndLifeManaThread()
+        private async Task ChickenAndLifeMana()
         {
             try
             {
@@ -734,33 +721,33 @@ namespace D2NG.Core
                 {
                     if (Me == null || Area == Area.None)
                     {
-                        Thread.Sleep(50);
+                        await Task.Delay(50);
                         continue;
                     }
 
                     if (IsInTown())
                     {
-                        Thread.Sleep(50);
+                        await Task.Delay(50);
                         continue;
                     }
 
                     if (Me.Effects.Contains(EntityEffect.Playerbody))
                     {
                         Log.Information($"Leaving game since {Me.Name} has died");
-                        LeaveGame();
+                        await LeaveGame();
                         break;
                     }
 
                     if (Me.Life / (double)Me.MaxLife < 0.1 || (Me.Life < 200 && Me.MaxLife > 600))
                     {
                         Log.Information($"{Me.Name} Leaving game due to life being {Me.Life} of max {Me.MaxLife}");
-                        LeaveGame();
+                        await LeaveGame();
                         break;
                     }
 
                     if (Me.Life / (double)Me.MaxLife < 0.9 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(10))
                     {
-                        if(!UseHealthPotions())
+                        if (!UseHealthPotions())
                         {
                             UseRejuvenationPotion();
                         }
@@ -779,7 +766,7 @@ namespace D2NG.Core
                         if (!UseRejuvenationPotion() && !UseHealthPotions())
                         {
                             Log.Information($"{Me.Name} Leaving game due out of potions");
-                            LeaveGame();
+                            await LeaveGame();
                             break;
                         }
                     }
@@ -789,12 +776,12 @@ namespace D2NG.Core
                         if (!UseManaPotion())
                         {
                             Log.Information($"{Me.Name} Leaving game due out of potions");
-                            LeaveGame();
+                            await LeaveGame();
                             break;
                         }
                     }
 
-                    Thread.Sleep(50);
+                    await Task.Delay(50);
                 }
             }
             catch (Exception)

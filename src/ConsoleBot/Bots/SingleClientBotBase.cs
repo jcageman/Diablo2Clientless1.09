@@ -1,7 +1,5 @@
-﻿using ConsoleBot.Bots;
-using ConsoleBot.Bots.Types;
+﻿using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
-using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using D2NG.Core;
@@ -9,7 +7,6 @@ using Serilog;
 using System;
 using System.Linq;
 using System.Net.Http;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace ConsoleBot.Bots
@@ -52,7 +49,7 @@ namespace ConsoleBot.Bots
                 int gameDescriptionIndex = 0;
                 while (true)
                 {
-                    if(successiveFailures > 0 && successiveFailures % 10 == 0)
+                    if (successiveFailures > 0 && successiveFailures % 10 == 0)
                     {
                         gameDescriptionIndex++;
                         if (gameDescriptionIndex == _config.GameDescriptions?.Count)
@@ -69,12 +66,12 @@ namespace ConsoleBot.Bots
                         }
                     }
 
-                    if(gameCount >= 100)
+                    if (gameCount >= 100)
                     {
                         gameCount = 1;
                     }
 
-                    if(NeedsMule)
+                    if (NeedsMule)
                     {
                         await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: needs mule, starting mule");
                         if (await _muleService.MuleItemsForClient(client))
@@ -99,9 +96,9 @@ namespace ConsoleBot.Bots
                     {
                         gameCount++;
                         totalCount++;
-                        if (client.CreateGame(_config.Difficulty, $"{_config.GameNamePrefix}{gameCount}", _config.GamePassword, _config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)))
+                        if (await client.CreateGame(_config.Difficulty, $"{_config.GameNamePrefix}{gameCount}", _config.GamePassword, _config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)))
                         {
-                            if(!await RunSingleGame(client))
+                            if (!await RunSingleGame(client))
                             {
                                 successiveFailures += 1;
                             }
@@ -118,11 +115,10 @@ namespace ConsoleBot.Bots
 
                         if (client.Game.IsInGame())
                         {
-                            client.Game.LeaveGame();
-                            await Task.Delay(TimeSpan.FromSeconds(3));
+                            await client.Game.LeaveGame();
                         }
 
-                        if(!client.RejoinMCP())
+                        if (!client.RejoinMCP())
                         {
                             var reconnectMessage = $"Reconnecting to MCP failed, reconnecting to realm instead";
                             Log.Warning(reconnectMessage);
@@ -132,7 +128,7 @@ namespace ConsoleBot.Bots
                             }
                         }
                     }
-                    catch(HttpRequestException)
+                    catch (HttpRequestException)
                     {
                         await _externalMessagingClient.SendMessage($"{client.LoggedInUserName() } Received http exception, map server is probably down, restarting bot");
                         return;
@@ -140,7 +136,7 @@ namespace ConsoleBot.Bots
                     catch (Exception e)
                     {
                         gameDescriptionIndex++;
-                        if(gameDescriptionIndex == _config.GameDescriptions?.Count)
+                        if (gameDescriptionIndex == _config.GameDescriptions?.Count)
                         {
                             gameDescriptionIndex = 0;
                         }
@@ -164,12 +160,12 @@ namespace ConsoleBot.Bots
             }
             finally
             {
-                if(client.Game.IsInGame())
+                if (client.Game.IsInGame())
                 {
-                    client.Game.LeaveGame();
+                    await client.Game.LeaveGame();
                 }
 
-                client.Disconnect();
+                await client.Disconnect();
             }
         }
     }

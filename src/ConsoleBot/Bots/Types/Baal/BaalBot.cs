@@ -1,6 +1,5 @@
 ﻿using ConsoleBot.Attack;
 using ConsoleBot.Clients.ExternalMessagingClient;
-using ConsoleBot.Enums;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using ConsoleBot.TownManagement;
@@ -81,7 +80,7 @@ namespace ConsoleBot.Bots.Types.Baal
                 _externalMessagingClient.RegisterClient(client);
                 PlayersInGame.TryAdd(account.Character.ToLower(), new ManualResetEvent(false));
                 ShouldFollow.TryAdd(account.Character.ToLower(), false);
-                FollowTasks.TryAdd(account.Character.ToLower(), (null,new CancellationTokenSource()));
+                FollowTasks.TryAdd(account.Character.ToLower(), (null, new CancellationTokenSource()));
                 client.OnReceivedPacketEvent(InComingPacket.EntityMove, async (packet) =>
                 {
                     var entityMovePacket = new EntityMovePacket(packet);
@@ -137,7 +136,7 @@ namespace ConsoleBot.Bots.Types.Baal
                     ShouldFollow[key] = false;
                 }
 
-                foreach(var task in FollowTasks)
+                foreach (var task in FollowTasks)
                 {
                     task.Value.Item2.Cancel();
                 }
@@ -150,12 +149,13 @@ namespace ConsoleBot.Bots.Types.Baal
 
                 try
                 {
-                    var leaveAndRejoinTasks = clients.Select(async (client, index) => {
+                    var leaveAndRejoinTasks = clients.Select(async (client, index) =>
+                    {
                         var account = _baalConfig.Accounts[index];
                         return await LeaveGameAndRejoinMCPWithRetry(client, account);
                     }).ToList();
                     var rejoinResults = await Task.WhenAll(leaveAndRejoinTasks);
-                    if(rejoinResults.Any(r => !r))
+                    if (rejoinResults.Any(r => !r))
                     {
                         gameCount++;
                         continue;
@@ -188,7 +188,7 @@ namespace ConsoleBot.Bots.Types.Baal
                 catch (Exception e)
                 {
                     Log.Error($"Failed one or more creates and joins, disconnecting clients {e}");
-                    LeaveGameAndDisconnectWithAllClients(clients);
+                    await LeaveGameAndDisconnectWithAllClients(clients);
                     gameCount++;
                     continue;
                 }
@@ -210,11 +210,11 @@ namespace ConsoleBot.Bots.Types.Baal
                             break;
                         }
 
-                       townTasks.Add(PrepareForBaalsTasks(client));
+                        townTasks.Add(PrepareForBaalsTasks(client));
                     }
 
                     var townResults = await Task.WhenAll(townTasks);
-                    if(anyTownFailures)
+                    if (anyTownFailures)
                     {
                         gameCount++;
                         continue;
@@ -287,14 +287,14 @@ namespace ConsoleBot.Bots.Types.Baal
                 try
                 {
                     var clientTasks = new List<Task<bool>>();
-                    foreach(var client in clients)
+                    foreach (var client in clients)
                     {
                         clientTasks.Add(RunBaals(client, baalManager));
                     }
-                    
+
                     await Task.WhenAll(clientTasks);
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
                     Log.Error($"Failed one or more tasks with exception {e}");
                 }
@@ -356,9 +356,9 @@ namespace ConsoleBot.Bots.Types.Baal
                 return false;
             }
 
-            if(isPortalCharacter)
+            if (isPortalCharacter)
             {
-                if(!await CreateThroneRoomTp(client))
+                if (!await CreateThroneRoomTp(client))
                 {
                     return false;
                 }
@@ -378,15 +378,15 @@ namespace ConsoleBot.Bots.Types.Baal
             return true;
         }
 
-        private static void LeaveGameAndDisconnectWithAllClients(List<Client> clients)
+        private static async Task LeaveGameAndDisconnectWithAllClients(List<Client> clients)
         {
             foreach (var client in clients)
             {
                 if (client.Game.IsInGame())
                 {
-                    client.Game.LeaveGame();
+                    await client.Game.LeaveGame();
                 }
-                client.Disconnect();
+                await client.Disconnect();
             }
         }
 
@@ -416,7 +416,7 @@ namespace ConsoleBot.Bots.Types.Baal
 
             await GetTaskForWave(client, baalManager);
 
-            if(client.Game.Me.Id == PortalClientPlayerId)
+            if (client.Game.Me.Id == PortalClientPlayerId)
             {
                 if (!await CreateBaalPortal(client, baalManager))
                 {
@@ -445,7 +445,7 @@ namespace ConsoleBot.Bots.Types.Baal
             {
                 await Task.Delay(100);
                 baalPortal = client.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
-                if(baalPortal == null)
+                if (baalPortal == null)
                 {
                     return false;
                 }
@@ -506,11 +506,11 @@ namespace ConsoleBot.Bots.Types.Baal
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
                 var baal = baalManager.GetNearbyAliveMonsters(client, 200, 1).FirstOrDefault();
-                if(baal == null)
+                if (baal == null)
                 {
                     return false;
                 }
-                if(baal.Location.Distance(client.Game.Me.Location) > 10)
+                if (baal.Location.Distance(client.Game.Me.Location) > 10)
                 {
                     pathBaal = await _pathingService.GetPathToLocation(client.Game, baal.Location, MovementMode.Teleport);
                     if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBaal, MovementMode.Teleport))
@@ -558,7 +558,7 @@ namespace ConsoleBot.Bots.Types.Baal
                 await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
                     var boPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-                    if(boPlayer != null)
+                    if (boPlayer != null)
                     {
                         var randomPointNear = boPlayer.Location.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5));
                         await client.Game.MoveToAsync(randomPointNear);
@@ -595,7 +595,8 @@ namespace ConsoleBot.Bots.Types.Baal
                 return false;
             }
 
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) => {
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
                 if (warp1.Location.Distance(client.Game.Me.Location) > 5 && !await game.TeleportToLocationAsync(warp1.Location))
                 {
                     Log.Debug($"Teleport to {warp1.Location} failing retrying at location: {game.Me.Location}");
@@ -634,7 +635,8 @@ namespace ConsoleBot.Bots.Types.Baal
                 return false;
             }
 
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) => {
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
                 if (warp2.Location.Distance(client.Game.Me.Location) > 5 && !await game.TeleportToLocationAsync(warp2.Location))
                 {
                     Log.Debug($"Teleport to {warp2.Location} failing retrying at location: {game.Me.Location}");
@@ -678,7 +680,7 @@ namespace ConsoleBot.Bots.Types.Baal
 
         private async Task FollowToLocation(Client client, Point location)
         {
-            if(!client.Game.IsInGame())
+            if (!client.Game.IsInGame())
             {
                 return;
             }
@@ -770,7 +772,7 @@ namespace ConsoleBot.Bots.Types.Baal
             };
             using var executeRefresh = new ExecuteAtInterval(refreshHandler, TimeSpan.FromSeconds(30));
             executeRefresh.Start();
-            
+
             switch (client.Game.Me.Class)
             {
                 case CharacterClass.Sorceress:
@@ -816,7 +818,7 @@ namespace ConsoleBot.Bots.Types.Baal
 
             if (client.Game.IsInGame())
             {
-                client.Game.LeaveGame();
+                await client.Game.LeaveGame();
             }
         }
 
@@ -889,7 +891,7 @@ namespace ConsoleBot.Bots.Types.Baal
                     continue;
                 }
 
-                if(!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
+                if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
                 {
                     client.Game.UseHealthPotions(2);
                     hasUsedPotion = true;
@@ -910,7 +912,7 @@ namespace ConsoleBot.Bots.Types.Baal
                 {
                     executeStaticField.Stop();
                     executeNova.Stop();
-                    if(!await TeleportToNearbySafeSpot(client, baalManager, client.Game.Me.Location, 15.0))
+                    if (!await TeleportToNearbySafeSpot(client, baalManager, client.Game.Me.Location, 15.0))
                     {
                         Log.Information($"Teleporting to nearby safespot {client.Game.Me.Name}");
                         continue;
@@ -924,7 +926,7 @@ namespace ConsoleBot.Bots.Types.Baal
                     var distanceToNearest = nearestAlive.Location.Distance(client.Game.Me.Location);
 
                     if (client.Game.Me.Location.Distance(nearestAlive.Location) > 5
-                        && ( !ClassHelpers.CanStaticEntity(client, nearestAlive.LifePercentage)
+                        && (!ClassHelpers.CanStaticEntity(client, nearestAlive.LifePercentage)
                         || client.Game.WorldObjects.TryGetValue((nearestAlive.Id, EntityType.NPC), out var monster) && monster.Effects.Contains(EntityEffect.Cold)))
                     {
                         executeStaticField.Stop();
@@ -939,7 +941,7 @@ namespace ConsoleBot.Bots.Types.Baal
                     {
                         executeStaticField.Stop();
 
-                        if(client.Game.Me.HasSkill(Skill.Nova))
+                        if (client.Game.Me.HasSkill(Skill.Nova))
                         {
                             if (!executeNova.IsRunning())
                             {
@@ -948,7 +950,7 @@ namespace ConsoleBot.Bots.Types.Baal
                             client.Game.UseRightHandSkillOnLocation(Skill.Nova, client.Game.Me.Location);
                             executeNova.Start();
                         }
-                        else if(client.Game.Me.HasSkill(Skill.FrozenOrb))
+                        else if (client.Game.Me.HasSkill(Skill.FrozenOrb))
                         {
                             client.Game.UseRightHandSkillOnLocation(Skill.FrozenOrb, nearestAlive.Location);
                         }
@@ -1011,7 +1013,7 @@ namespace ConsoleBot.Bots.Types.Baal
                     Log.Information($"Waves done, moving on {client.Game.Me.Name}");
                     break;
                 }
-                else if(baalPortal != null && client.Game.Me.Location.Distance(baalPortal.Location.Add(0, 30)) > 5)
+                else if (baalPortal != null && client.Game.Me.Location.Distance(baalPortal.Location.Add(0, 30)) > 5)
                 {
                     executeStaticField.Stop();
                     executeNova.Stop();
@@ -1073,11 +1075,11 @@ namespace ConsoleBot.Bots.Types.Baal
                     hasUsedPotion = true;
                 }
 
-                if(client.Game.Me.HasSkill(Skill.FrozenOrb))
+                if (client.Game.Me.HasSkill(Skill.FrozenOrb))
                 {
                     executeStaticField.Stop();
                     var nearest = baalManager.GetNearbyAliveMonsters(client, 20.0, 1).FirstOrDefault();
-                    if(nearest != null)
+                    if (nearest != null)
                     {
                         client.Game.UseRightHandSkillOnLocation(Skill.FrozenOrb, nearest.Location);
                     }
@@ -1130,7 +1132,7 @@ namespace ConsoleBot.Bots.Types.Baal
                 if (timer.Elapsed > TimeSpan.FromSeconds(5) && client.Game.Me.HasSkill(Skill.Teleport))
                 {
                     var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-                    if(leadPlayer != null)
+                    if (leadPlayer != null)
                     {
                         var randomPointNear = leadPlayer.Location.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5));
                         await client.Game.TeleportToLocationAsync(randomPointNear);
@@ -1164,7 +1166,7 @@ namespace ConsoleBot.Bots.Types.Baal
             pickitList.AddRange(baalManager.GetNearbyPotions(client, new HashSet<ItemName> { ItemName.RejuvenationPotion, ItemName.FullRejuvenationPotion }, missingRevPotions, distance));
             foreach (var item in pickitList)
             {
-                if(baalManager.GetNearbyAliveMonsters(client, 10, 1).Any())
+                if (baalManager.GetNearbyAliveMonsters(client, 10, 1).Any())
                 {
                     Log.Information($"Client {client.Game.Me.Name} not picking up {item.Name} due to nearby monsters");
                     continue;
@@ -1174,16 +1176,16 @@ namespace ConsoleBot.Bots.Types.Baal
                 await MoveToLocation(client, item.Location);
                 if (item.Ground)
                 {
-                    if(!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                    {
-                        client.Game.MoveTo(item.Location);
-                        client.Game.PickupItem(item);
-                        return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                        {
-                            await Task.Delay(50);
-                            return client.Game.Belt.FindItemById(item.Id) != null;
-                        }, TimeSpan.FromSeconds(0.2));
-                    }, TimeSpan.FromSeconds(3)))
+                    if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                     {
+                         client.Game.MoveTo(item.Location);
+                         client.Game.PickupItem(item);
+                         return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                         {
+                             await Task.Delay(50);
+                             return client.Game.Belt.FindItemById(item.Id) != null;
+                         }, TimeSpan.FromSeconds(0.2));
+                     }, TimeSpan.FromSeconds(3)))
                     {
                         baalManager.PutPotionOnPickitList(client, item);
                     }
@@ -1246,7 +1248,7 @@ namespace ConsoleBot.Bots.Types.Baal
             {
                 await ClassHelpers.CastAllShouts(client);
             }
-            
+
             while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame())
             {
                 if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
@@ -1269,12 +1271,12 @@ namespace ConsoleBot.Bots.Types.Baal
                 }
 
                 var nearbyMonsters = baalManager.GetNearbyAliveMonsters(client, 20, 1);
-                if(!nearbyMonsters.Any())
+                if (!nearbyMonsters.Any())
                 {
                     await PickupItemsFromPickupList(client, baalManager, 15);
                     await PickupNearbyPotionsIfNeeded(client, baalManager, 15);
                 }
-                else if(client.Game.Me.HasSkill(Skill.Whirlwind))
+                else if (client.Game.Me.HasSkill(Skill.Whirlwind))
                 {
                     var nearbyMonster = nearbyMonsters.FirstOrDefault();
                     if (nearbyMonster != null && (nearbyMonster.NPCCode == NPCCode.DrehyaTemple || nearbyMonster.Location.Distance(client.Game.Me.Location) < 5))
@@ -1290,7 +1292,7 @@ namespace ConsoleBot.Bots.Types.Baal
                         client.Game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
                         Thread.Sleep((int)((wwDistance * 50 + 300)));
                     }
-                }                    
+                }
             }
 
             Log.Information($"Stopped Barb Client {client.Game.Me.Name}");
@@ -1303,7 +1305,7 @@ namespace ConsoleBot.Bots.Types.Baal
             if (distance > 15)
             {
                 var path = await _pathingService.GetPathToLocation(client.Game, location, movementMode);
-                if(token.HasValue && token.Value.IsCancellationRequested)
+                if (token.HasValue && token.Value.IsCancellationRequested)
                 {
                     return;
                 }
@@ -1311,7 +1313,7 @@ namespace ConsoleBot.Bots.Types.Baal
             }
             else
             {
-                if(movementMode == MovementMode.Teleport)
+                if (movementMode == MovementMode.Teleport)
                 {
                     client.Game.TeleportToLocation(location);
                 }
@@ -1335,7 +1337,7 @@ namespace ConsoleBot.Bots.Types.Baal
             if (client.Game.IsInGame())
             {
                 Log.Information($"Leaving game with {client.LoggedInUserName()}");
-                client.Game.LeaveGame();
+                await client.Game.LeaveGame();
             }
 
             if (!client.RejoinMCP())

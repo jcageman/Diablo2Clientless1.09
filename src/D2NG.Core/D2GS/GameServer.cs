@@ -1,6 +1,7 @@
 ﻿using D2NG.Core.D2GS.Helpers;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Outgoing;
+using D2NG.Core.Extensions;
 using D2NG.Core.MCP;
 using Serilog;
 using System;
@@ -8,6 +9,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace D2NG.Core.D2GS
 {
@@ -25,7 +27,7 @@ namespace D2NG.Core.D2GS
 
         protected ConcurrentDictionary<InComingPacket, ManualResetEvent> IncomingPacketEvents { get; } = new ConcurrentDictionary<InComingPacket, ManualResetEvent>();
 
-        private Thread _listener;
+        private Task _listener;
 
         public GameServer()
         {
@@ -72,8 +74,7 @@ namespace D2NG.Core.D2GS
         public void Connect(IPAddress ip)
         {
             Connection.Connect(ip, Port);
-            _listener = new Thread(Listen);
-            _listener.Start();
+            _listener = Task.Run(Listen);
         }
 
         public bool IsInGame()
@@ -86,7 +87,7 @@ namespace D2NG.Core.D2GS
             return Connection.Connected;
         }
 
-        private void Listen()
+        private async Task Listen()
         {
             while (Connection.Connected)
             {
@@ -97,24 +98,24 @@ namespace D2NG.Core.D2GS
                 catch (Exception)
                 {
                     Log.Debug("GameServer Connection was terminated");
-                    Thread.Sleep(300);
+                    await Task.Delay(300);
                 }
             }
         }
 
-        internal void Disconnect()
+        internal async Task Disconnect()
         {
             Connection.Terminate();
-            _listener?.Join();
+            await _listener;
         }
 
-        public void LeaveGame()
+        public async Task LeaveGame()
         {
             var leaveGameConfirmed = GetResetEventOfType(InComingPacket.LeaveGameConfirmed);
             InGame = false;
             Connection.WritePacket(OutGoingPacket.LeaveGame);
-            leaveGameConfirmed.WaitOne(2000);
-            Disconnect();
+            await leaveGameConfirmed.AsTask(TimeSpan.FromSeconds(2));
+            await Disconnect();
         }
 
         internal bool GameLogon(uint gameHash, ushort gameToken, Character character)
@@ -128,7 +129,7 @@ namespace D2NG.Core.D2GS
             }
             var loadActComplete = GetResetEventOfType(InComingPacket.LoadActComplete);
             Connection.WritePacket(OutGoingPacket.Startup);
-            if(!loadActComplete.WaitOne(10000))
+            if (!loadActComplete.WaitOne(10000))
             {
                 Log.Error("Load Act failed");
                 return false;

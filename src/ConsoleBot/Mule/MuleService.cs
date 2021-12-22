@@ -2,7 +2,6 @@
 using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
-using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;
 using D2NG.Core;
 using D2NG.Core.D2GS;
@@ -37,7 +36,7 @@ namespace ConsoleBot.Mule
         public async Task<bool> MuleItemsForClient(Client client)
         {
             var muleGameName = $"{_botConfig.GameNamePrefix}m{GameCount++}";
-            if (!client.CreateGame(Difficulty.Normal, muleGameName, _botConfig.GamePassword, _botConfig.GameDescriptions?.ElementAtOrDefault(0)))
+            if (!await client.CreateGame(Difficulty.Normal, muleGameName, _botConfig.GamePassword, _botConfig.GameDescriptions?.ElementAtOrDefault(0)))
             {
                 await Task.Delay(TimeSpan.FromSeconds(10));
                 return false;
@@ -53,7 +52,7 @@ namespace ConsoleBot.Mule
                     continue;
                 }
 
-                var accountCharacters = GetAccountCharactersForMule(account);
+                var accountCharacters = await GetAccountCharactersForMule(account);
 
                 foreach (var character in accountCharacters)
                 {
@@ -79,14 +78,14 @@ namespace ConsoleBot.Mule
                         return false;
                     }
 
-                    if (!muleClient.JoinGame(muleGameName, _botConfig.GamePassword))
+                    if (!await muleClient.JoinGame(muleGameName, _botConfig.GamePassword))
                     {
                         Log.Error($"Fail to join game with {account.Username} with character {character}");
                         failedToJoinCount++;
                         await Task.Delay(TimeSpan.FromSeconds(5) * failedToJoinCount);
                         if (failedToJoinCount > 5)
                         {
-                            client.Game.LeaveGame();
+                            await client.Game.LeaveGame();
                             await Task.Delay(TimeSpan.FromSeconds(2));
                             client.RejoinMCP();
                             return false;
@@ -102,13 +101,13 @@ namespace ConsoleBot.Mule
                     {
                         var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => Pickit.Pickit.CanTouchInventoryItem(muleClient.Game, i)).ToList();
                         moveItemResult = InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0);
-                        if(moveItemResult == MoveItemResult.Failed)
+                        if (moveItemResult == MoveItemResult.Failed)
                         {
                             break;
                         }
 
                         var itemsToTrade = GetItemsToTrade(muleClient.Game.Inventory, muleItems);
-                        if(!itemsToTrade.Any())
+                        if (!itemsToTrade.Any())
                         {
                             break;
                         }
@@ -144,12 +143,12 @@ namespace ConsoleBot.Mule
                     } while (moveItemResult == MoveItemResult.Succes);
 
                     await Task.Delay(TimeSpan.FromSeconds(2));
-                    muleClient.Game.LeaveGame();
+                    await muleClient.Game.LeaveGame();
                     await Task.Delay(TimeSpan.FromSeconds(1));
-                    muleClient.Disconnect();
+                    await muleClient.Disconnect();
                     if (moveItemResult == MoveItemResult.Failed)
                     {
-                        client.Game.LeaveGame();
+                        await client.Game.LeaveGame();
                         await Task.Delay(TimeSpan.FromSeconds(2));
                         client.RejoinMCP();
                         return false;
@@ -159,7 +158,7 @@ namespace ConsoleBot.Mule
 
             var stashInventoryItems = client.Game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(client.Game, i) && Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
             InventoryHelpers.StashItemsAndGold(client.Game, stashInventoryItems, 0);
-            client.Game.LeaveGame();
+            await client.Game.LeaveGame();
             await Task.Delay(TimeSpan.FromSeconds(2));
             if (!client.RejoinMCP())
             {
@@ -169,7 +168,7 @@ namespace ConsoleBot.Mule
             return true;
         }
 
-        private List<string> GetAccountCharactersForMule(MuleAccount account)
+        private async Task<List<string>> GetAccountCharactersForMule(MuleAccount account)
         {
             var characterNames = account.IncludedCharacters.Select(c => c.ToLower()).ToList();
             if (!characterNames.Any())
@@ -190,7 +189,7 @@ namespace ConsoleBot.Mule
                 }
 
                 characterNames = characters.Select(c => c.Name.ToLower()).ToList();
-                client.Disconnect();
+                await client.Disconnect();
             }
 
             characterNames = characterNames.Except(account.ExcludedCharacters.Select(c => c.ToLower())).ToList();
@@ -200,7 +199,7 @@ namespace ConsoleBot.Mule
         private static List<Item> GetMuleItems(Client client, MuleAccount muleAccount)
         {
             var muleItems = client.Game.Items.Where(i => IsMuleItem(client, i));
-            if(muleAccount.MatchesAny.Count == 0)
+            if (muleAccount.MatchesAny.Count == 0)
             {
                 return muleItems.ToList();
             }
@@ -216,9 +215,9 @@ namespace ConsoleBot.Mule
         private static bool MatchesFilter(Item item, MuleFilter filter)
         {
             bool isMatch = true;
-            if(filter.ItemName != null)
+            if (filter.ItemName != null)
             {
-                isMatch&= item.Name == filter.ItemName;
+                isMatch &= item.Name == filter.ItemName;
             }
 
             if (filter.ClassificationType != null)
@@ -231,7 +230,7 @@ namespace ConsoleBot.Mule
                 isMatch &= item.Quality == filter.QualityType;
             }
 
-            if(filter.NotFilter.HasValue && filter.NotFilter.Value)
+            if (filter.NotFilter.HasValue && filter.NotFilter.Value)
             {
                 isMatch = !isMatch;
             }
@@ -276,8 +275,8 @@ namespace ConsoleBot.Mule
             var tries = 0;
 
             muleClient.Game.InteractWithPlayer(entityPlayerClient);
-            
-            while(!clientActions.Contains(ButtonAction.APlayerWantsToTrade) && tries < 20)
+
+            while (!clientActions.Contains(ButtonAction.APlayerWantsToTrade) && tries < 20)
             {
                 await Task.Delay(100);
                 tries++;
@@ -322,7 +321,7 @@ namespace ConsoleBot.Mule
 
         private List<Item> GetItemsToTrade(Container muleInventory, List<Item> tradeableItems)
         {
-            if(!muleInventory.HasAnyFreeSpace())
+            if (!muleInventory.HasAnyFreeSpace())
             {
                 return new List<Item>();
             }
@@ -379,7 +378,7 @@ namespace ConsoleBot.Mule
                 var freeSpaceInventory = temporaryInventory.FindFreeSpace(item);
                 if (freeSpaceInventory == null)
                 {
-                    if(atLeastOneTraded)
+                    if (atLeastOneTraded)
                     {
                         break;
                     }

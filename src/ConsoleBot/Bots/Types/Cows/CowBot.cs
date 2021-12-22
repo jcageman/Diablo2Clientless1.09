@@ -40,6 +40,7 @@ namespace ConsoleBot.Bots.Types.Cows
         private readonly IMuleService _muleService;
         private readonly CowConfiguration _cowconfig;
         private TaskCompletionSource<bool> NextGame = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private bool ShouldStop = false;
         private TaskCompletionSource<bool> CowPortalOpen = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         private ConcurrentDictionary<string, ManualResetEvent> PlayersInGame = new ConcurrentDictionary<string, ManualResetEvent>();
         private uint? BoClientPlayerId;
@@ -80,7 +81,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 _externalMessagingClient.RegisterClient(client);
                 PlayersInGame.TryAdd(account.Character.ToLower(), new ManualResetEvent(false));
                 ShouldFollow.TryAdd(account.Character.ToLower(), false);
-                FollowTasks.TryAdd(account.Character.ToLower(), (null,new CancellationTokenSource()));
+                FollowTasks.TryAdd(account.Character.ToLower(), (null, new CancellationTokenSource()));
                 client.OnReceivedPacketEvent(InComingPacket.EntityMove, async (packet) =>
                 {
                     var entityMovePacket = new EntityMovePacket(packet);
@@ -121,10 +122,17 @@ namespace ConsoleBot.Bots.Types.Cows
                 {
                     NextGame.TrySetResult(true);
                 }
+
+                if (chatPacket.Message == "stop")
+                {
+                    ShouldStop = true;
+                    NextGame.TrySetResult(true);
+                    Log.Information($"Stopping run due to receiving stop message");
+                }
             });
 
             int gameCount = 1;
-            while (true)
+            while (!ShouldStop)
             {
                 foreach (var playerInGame in PlayersInGame)
                 {
@@ -136,7 +144,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     ShouldFollow[key] = false;
                 }
 
-                foreach(var task in FollowTasks)
+                foreach (var task in FollowTasks)
                 {
                     task.Value.Item2.Cancel();
                 }
@@ -149,12 +157,13 @@ namespace ConsoleBot.Bots.Types.Cows
 
                 try
                 {
-                    var leaveAndRejoinTasks = clients.Select(async (client, index) => {
+                    var leaveAndRejoinTasks = clients.Select(async (client, index) =>
+                    {
                         var account = _cowconfig.Accounts[index];
                         return await LeaveGameAndRejoinMCPWithRetry(client, account);
                     }).ToList();
                     var rejoinResults = await Task.WhenAll(leaveAndRejoinTasks);
-                    if(rejoinResults.Any(r => !r))
+                    if (rejoinResults.Any(r => !r))
                     {
                         gameCount++;
                         continue;
@@ -187,7 +196,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 catch (Exception e)
                 {
                     Log.Error($"Failed one or more creates and joins, disconnecting clients {e}");
-                    LeaveGameAndDisconnectWithAllClients(clients);
+                    await LeaveGameAndDisconnectWithAllClients(clients);
                     gameCount++;
                     continue;
                 }
@@ -209,11 +218,11 @@ namespace ConsoleBot.Bots.Types.Cows
                             break;
                         }
 
-                       townTasks.Add(PrepareForCowsTasks(client));
+                        townTasks.Add(PrepareForCowsTasks(client));
                     }
 
                     var townResults = await Task.WhenAll(townTasks);
-                    if(anyTownFailures)
+                    if (anyTownFailures)
                     {
                         gameCount++;
                         continue;
@@ -284,14 +293,14 @@ namespace ConsoleBot.Bots.Types.Cows
                 try
                 {
                     var clientTasks = new List<Task<bool>>();
-                    foreach(var client in clients)
+                    foreach (var client in clients)
                     {
                         clientTasks.Add(RunCows(client, cowManager));
                     }
-                    
+
                     await Task.WhenAll(clientTasks);
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
                     Log.Error($"Failed one or more tasks with exception {e}");
                 }
@@ -299,6 +308,11 @@ namespace ConsoleBot.Bots.Types.Cows
                 await Task.Delay(TimeSpan.FromSeconds(3));
                 Log.Information($"Going to next game");
                 gameCount++;
+            }
+
+            if (ShouldStop)
+            {
+                await LeaveGameAndDisconnectWithAllClients(clients);
             }
         }
 
@@ -356,9 +370,9 @@ namespace ConsoleBot.Bots.Types.Cows
                 return false;
             }
 
-            if(isPortalCharacter)
+            if (isPortalCharacter)
             {
-                if(!await CreateCowLevel(client))
+                if (!await CreateCowLevel(client))
                 {
                     return false;
                 }
@@ -377,16 +391,16 @@ namespace ConsoleBot.Bots.Types.Cows
             return true;
         }
 
-        private static void LeaveGameAndDisconnectWithAllClients(List<Client> clients)
+        private static async Task LeaveGameAndDisconnectWithAllClients(List<Client> clients)
         {
-            foreach (var client in clients)
+            await Task.WhenAll(clients.Select(async c =>
             {
-                if (client.Game.IsInGame())
+                if (c.Game.IsInGame())
                 {
-                    client.Game.LeaveGame();
+                    await c.Game.LeaveGame();
                 }
-                client.Disconnect();
-            }
+                await c.Disconnect();
+            }).ToList());
         }
 
         private async Task<bool> RunCows(Client client, CowManager cowManager)
@@ -400,7 +414,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     return false;
                 }
 
-                if(!await ArrangeStartingPosition(client, cowManager))
+                if (!await ArrangeStartingPosition(client, cowManager))
                 {
                     NextGame.TrySetResult(true);
                     return false;
@@ -473,7 +487,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
                     var boPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-                    if(boPlayer != null)
+                    if (boPlayer != null)
                     {
                         var randomPointNear = boPlayer.Location.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5));
                         await client.Game.MoveToAsync(randomPointNear);
@@ -599,7 +613,7 @@ namespace ConsoleBot.Bots.Types.Cows
             var droppedItems = new List<Item>();
             if (game.Cube.Items.Any())
             {
-                if(!InventoryHelpers.MoveCubeItemsToInventory(game))
+                if (!InventoryHelpers.MoveCubeItemsToInventory(game))
                 {
                     Log.Warning($"Couldn't move all items out of cube, dropping cube items for now");
                     foreach (var item in game.Cube.Items)
@@ -646,7 +660,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 return false;
             }
 
-            foreach(var droppedItem in droppedItems)
+            foreach (var droppedItem in droppedItems)
             {
                 if (!await GeneralHelpers.TryWithTimeout((async retryCount =>
                 {
@@ -780,8 +794,8 @@ namespace ConsoleBot.Bots.Types.Cows
                     return false;
                 }
 
-                
-                if(client.Game.Inventory.FindFreeSpace(wirtsLegItem) == null)
+
+                if (client.Game.Inventory.FindFreeSpace(wirtsLegItem) == null)
                 {
                     InventoryHelpers.MoveInventoryItemsToCube(client.Game);
                 }
@@ -795,8 +809,8 @@ namespace ConsoleBot.Bots.Types.Cows
                 Log.Error($"Getting leg failed, while it's at location: {client.Game.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg)?.Location} and i'm at location {client.Game.Me.Location}");
                 return false;
             }
-            
-            if(!await _townManagementService.TakeTownPortalToTown(client))
+
+            if (!await _townManagementService.TakeTownPortalToTown(client))
             {
                 return false;
             }
@@ -807,7 +821,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
         private async Task FollowToLocation(Client client, Point location)
         {
-            if(!client.Game.IsInGame())
+            if (!client.Game.IsInGame())
             {
                 return;
             }
@@ -839,7 +853,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
         async Task GetTaskForClient(Client client, CowManager cowManager)
         {
-            if(client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] < 50 && !client.Game.Me.HasSkill(Skill.Teleport))
+            if (client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] < 50 && !client.Game.Me.HasSkill(Skill.Teleport))
             {
                 await BasicIdleClient(client, cowManager);
                 return;
@@ -854,7 +868,7 @@ namespace ConsoleBot.Bots.Types.Cows
             };
             using var executeRefresh = new ExecuteAtInterval(refreshHandler, TimeSpan.FromSeconds(30));
             executeRefresh.Start();
-            
+
             switch (client.Game.Me.Class)
             {
                 case CharacterClass.Amazon:
@@ -885,11 +899,6 @@ namespace ConsoleBot.Bots.Types.Cows
                 case CharacterClass.Assassin:
                     await BasicFollowClient(client, cowManager);
                     break;
-            }
-
-            if(client.Game.IsInGame())
-            {
-                client.Game.LeaveGame();
             }
         }
 
@@ -922,17 +931,17 @@ namespace ConsoleBot.Bots.Types.Cows
                 var cowsNearLead = leadPlayer != null ? cowManager.GetNearbyAliveMonsters(leadPlayer.Location, 20.0, 10) : new List<AliveMonster>();
                 if (leadPlayer != null && leadPlayer.Location != currentCluster && cowsNearLead.Any() && leadPlayer.Location.Distance(client.Game.Me.Location) > 20)
                 {
-                    if(cowsNearLead.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)))
+                    if (cowsNearLead.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)))
                     {
                         Log.Information($"{client.Game.Me.Name}, lightning enhanced cow nearby, next game");
                         NextGame.SetResult(true);
                     }
                     Log.Information($"{client.Game.Me.Name}, lead client in danger, moving to lead client");
-                    if(currentCluster != null)
+                    if (currentCluster != null)
                     {
                         cowManager.GiveUpCluster(currentCluster);
                     }
-                    
+
                     currentCluster = cowsNearLead.FirstOrDefault().Location;
                     executeStaticField.Stop();
                     executeNova.Stop();
@@ -973,7 +982,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     continue;
                 }
 
-                if(!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
+                if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
                 {
                     client.Game.UseHealthPotions();
                     client.Game.UseHealthPotions();
@@ -995,7 +1004,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 {
                     executeStaticField.Stop();
                     executeNova.Stop();
-                    if(!await TeleportToNearbySafeSpot(client, cowManager, client.Game.Me.Location, 15.0))
+                    if (!await TeleportToNearbySafeSpot(client, cowManager, client.Game.Me.Location, 15.0))
                     {
                         Log.Information($"Teleporting to nearby safespot {client.Game.Me.Name}");
                         continue;
@@ -1018,7 +1027,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     var distanceToNearest = nearestAlive.Location.Distance(client.Game.Me.Location);
 
                     if (client.Game.Me.Location.Distance(nearestAlive.Location) > 5
-                        && ( !ClassHelpers.CanStaticEntity(client, nearestAlive.LifePercentage)
+                        && (!ClassHelpers.CanStaticEntity(client, nearestAlive.LifePercentage)
                         || client.Game.WorldObjects.TryGetValue((nearestAlive.Id, EntityType.NPC), out var cow) && cow.Effects.Contains(EntityEffect.Cold)))
                     {
                         executeStaticField.Stop();
@@ -1033,7 +1042,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     {
                         executeStaticField.Stop();
 
-                        if(client.Game.Me.HasSkill(Skill.Nova))
+                        if (client.Game.Me.HasSkill(Skill.Nova))
                         {
                             if (!executeNova.IsRunning())
                             {
@@ -1042,7 +1051,7 @@ namespace ConsoleBot.Bots.Types.Cows
                             client.Game.UseRightHandSkillOnLocation(Skill.Nova, client.Game.Me.Location);
                             executeNova.Start();
                         }
-                        else if(client.Game.Me.HasSkill(Skill.FrozenOrb))
+                        else if (client.Game.Me.HasSkill(Skill.FrozenOrb))
                         {
                             client.Game.UseRightHandSkillOnLocation(Skill.FrozenOrb, nearestAlive.Location);
                         }
@@ -1170,11 +1179,11 @@ namespace ConsoleBot.Bots.Types.Cows
                     hasUsedPotion = true;
                 }
 
-                if(client.Game.Me.HasSkill(Skill.FrozenOrb))
+                if (client.Game.Me.HasSkill(Skill.FrozenOrb))
                 {
                     executeStaticField.Stop();
                     var nearest = cowManager.GetNearbyAliveMonsters(client, 20.0, 1).FirstOrDefault();
-                    if(nearest != null)
+                    if (nearest != null)
                     {
                         client.Game.UseRightHandSkillOnLocation(Skill.FrozenOrb, nearest.Location);
                     }
@@ -1212,7 +1221,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
                 if (timer.Elapsed > TimeSpan.FromSeconds(5) && client.Game.Me.HasSkill(Skill.Teleport))
                 {
-                    if(leadPlayer != null)
+                    if (leadPlayer != null)
                     {
                         var randomPointNear = leadPlayer.Location.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5));
                         await client.Game.TeleportToLocationAsync(randomPointNear);
@@ -1240,7 +1249,7 @@ namespace ConsoleBot.Bots.Types.Cows
             pickitList.AddRange(cowManager.GetNearbyPotions(client, new HashSet<ItemName> { ItemName.RejuvenationPotion, ItemName.FullRejuvenationPotion }, missingRevPotions, distance));
             foreach (var item in pickitList)
             {
-                if(cowManager.GetNearbyAliveMonsters(client, 10, 1).Any())
+                if (cowManager.GetNearbyAliveMonsters(client, 10, 1).Any())
                 {
                     Log.Information($"Client {client.Game.Me.Name} not picking up {item.Name} due to nearby cows");
                     continue;
@@ -1250,19 +1259,19 @@ namespace ConsoleBot.Bots.Types.Cows
                 ;
                 if (item.Ground)
                 {
-                    if(!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                    {
-                        if(!await MoveToLocation(client, item.Location))
-                        {
-                            return false;
-                        }
-                        client.Game.PickupItem(item);
-                        return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                        {
-                            await Task.Delay(50);
-                            return client.Game.Belt.FindItemById(item.Id) != null;
-                        }, TimeSpan.FromSeconds(0.2));
-                    }, TimeSpan.FromSeconds(3)))
+                    if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                     {
+                         if (!await MoveToLocation(client, item.Location))
+                         {
+                             return false;
+                         }
+                         client.Game.PickupItem(item);
+                         return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                         {
+                             await Task.Delay(50);
+                             return client.Game.Belt.FindItemById(item.Id) != null;
+                         }, TimeSpan.FromSeconds(0.2));
+                     }, TimeSpan.FromSeconds(3)))
                     {
                         cowManager.PutPotionOnPickitList(client, item);
                     }
@@ -1286,13 +1295,13 @@ namespace ConsoleBot.Bots.Types.Cows
                         Log.Information($"Client {client.Game.Me.Name} picking up {pickItem.Amount} {pickItem.Name} ({pickItem.Id})");
                         if (await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                         {
-                            if(!(await MoveToLocation(client, pickItem.Location)))
+                            if (!(await MoveToLocation(client, pickItem.Location)))
                             {
                                 return false;
                             }
 
                             var item = client.Game.FindItemById(pickItem.Id);
-                            if(item == null || !item.Ground)
+                            if (item == null || !item.Ground)
                             {
                                 return true;
                             }
@@ -1336,7 +1345,7 @@ namespace ConsoleBot.Bots.Types.Cows
             {
                 await ClassHelpers.CastAllShouts(client);
             }
-            
+
             while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
             {
                 if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
@@ -1358,12 +1367,12 @@ namespace ConsoleBot.Bots.Types.Cows
                 }
 
                 var nearbyMonsters = cowManager.GetNearbyAliveMonsters(client, 20, 1);
-                if(!nearbyMonsters.Any())
+                if (!nearbyMonsters.Any())
                 {
                     await PickupItemsFromPickupList(client, cowManager, 15);
                     await PickupNearbyPotionsIfNeeded(client, cowManager, 15);
                 }
-                else if(client.Game.Me.HasSkill(Skill.Whirlwind))
+                else if (client.Game.Me.HasSkill(Skill.Whirlwind))
                 {
                     var nearbyMonster = nearbyMonsters.FirstOrDefault();
                     if (nearbyMonster != null && (nearbyMonster.NPCCode == NPCCode.DrehyaTemple || nearbyMonster.Location.Distance(client.Game.Me.Location) < 5))
@@ -1379,10 +1388,10 @@ namespace ConsoleBot.Bots.Types.Cows
                         client.Game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
                         Thread.Sleep((int)((wwDistance * 50 + 300)));
                     }
-                }                    
+                }
             }
 
-            if(shouldBo)
+            if (shouldBo)
             {
                 NextGame.TrySetResult(true);
             }
@@ -1397,7 +1406,7 @@ namespace ConsoleBot.Bots.Types.Cows
             if (distance > 15)
             {
                 var path = await _pathingService.GetPathToLocation(client.Game, location, movementMode);
-                if(token.HasValue && token.Value.IsCancellationRequested)
+                if (token.HasValue && token.Value.IsCancellationRequested)
                 {
                     return true;
                 }
@@ -1405,7 +1414,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }
             else
             {
-                if(movementMode == MovementMode.Teleport)
+                if (movementMode == MovementMode.Teleport)
                 {
                     return client.Game.TeleportToLocation(location);
                 }
@@ -1429,8 +1438,8 @@ namespace ConsoleBot.Bots.Types.Cows
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
                 await client.Game.MoveToAsync(cowPortal);
-                
-                if(retryCount > 0 && retryCount % 5 == 0)
+
+                if (retryCount > 0 && retryCount % 5 == 0)
                 {
                     client.Game.RequestUpdate(client.Game.Me.Id);
                 }
@@ -1461,7 +1470,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 return false;
             }
 
-            foreach (var (x,y) in new List<(short,short)>{ (-3, -3), (3, 3),(-5,0),(5,0),(0,5),(0,-5)})
+            foreach (var (x, y) in new List<(short, short)> { (-3, -3), (3, 3), (-5, 0), (5, 0), (0, 5), (0, -5) })
             {
                 var newLocation = client.Game.Me.Location.Add(x, y);
                 if (await _attackService.IsInLineOfSight(client, newLocation))
@@ -1487,7 +1496,7 @@ namespace ConsoleBot.Bots.Types.Cows
             if (client.Game.IsInGame())
             {
                 Log.Information($"Leaving game with {client.LoggedInUserName()}");
-                client.Game.LeaveGame();
+                await client.Game.LeaveGame();
             }
 
             if (!client.RejoinMCP())

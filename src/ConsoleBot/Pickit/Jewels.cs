@@ -40,11 +40,12 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-
+            /*
             if(item.Quality == QualityType.Magical)
             {
                 return true;
             }
+            */
 
             return false;
         }
