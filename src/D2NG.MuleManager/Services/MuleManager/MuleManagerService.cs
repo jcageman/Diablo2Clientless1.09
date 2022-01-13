@@ -24,87 +24,89 @@ namespace D2NG.MuleManager.Services.MuleManager
 
         public async Task<bool> UpdateAllAccounts()
         {
+            await Task.WhenAll(_configuration.Accounts.Select(a => UpdateAccountMules(a)));
+            return true;
+        }
+
+        private async Task<bool> UpdateAccountMules(MuleManagerAccount account)
+        {
             var gameCount = new Random().Next(1, 100);
-            foreach (var account in _configuration.Accounts)
+            var client = new Client();
+            var connect = client.Connect(
+                _configuration.Realm,
+                _configuration.KeyOwner,
+                _configuration.GameFolder);
+            if (!connect)
             {
-                var client = new Client();
-                var connect = client.Connect(
-                    _configuration.Realm,
-                    _configuration.KeyOwner,
-                    _configuration.GameFolder);
-                if (!connect)
+                return false;
+            }
+
+            var characters = client.Login(account.Name, account.Password);
+            if (characters == null)
+            {
+                return false;
+            }
+
+            foreach (var character in characters)
+            {
+                client.SelectCharacter(character);
+                if (!await client.CreateGame(Core.D2GS.Enums.Difficulty.Normal, account.Name + "-" + gameCount++, "mulemanager", "gs2"))
                 {
                     return false;
                 }
 
-                var characters = client.Login(account.Name, account.Password);
-                if (characters == null)
+                client.Game.RequestUpdate(client.Game.Me.Id);
+
+                var stashes = client.Game.GetEntityByCode(EntityCode.Stash);
+                if (!stashes.Any())
                 {
-                    return false;
-                }
-
-                foreach (var character in characters)
-                {
-                    client.SelectCharacter(character);
-                    if (!await client.CreateGame(Core.D2GS.Enums.Difficulty.Normal, "m" + gameCount++, "mulemanager", "gs2"))
-                    {
-                        return false;
-                    }
-
-                    client.Game.RequestUpdate(client.Game.Me.Id);
-
-                    var stashes = client.Game.GetEntityByCode(EntityCode.Stash);
-                    if (!stashes.Any())
-                    {
-                        Log.Error($"{client.Game.Me.Name}: No stash found");
-                        if (!await ReconnectClient(client, account))
-                        {
-                            return false;
-                        }
-                        continue;
-                    }
-
-                    var stash = stashes.Single();
-
-                    if (client.Game.Me.Location.Distance(stash.Location) >= 5)
-                    {
-                        await client.Game.MoveToAsync(stash);
-                    }
-
-                    await Task.Delay(TimeSpan.FromSeconds(1));
-
-                    if (!client.Game.OpenStash(stash))
-                    {
-                        Log.Error($"{client.Game.Me.Name}: Open stash failed");
-                        if (!await ReconnectClient(client, account))
-                        {
-                            return false;
-                        }
-                        continue;
-                    }
-
-                    await Task.Delay(TimeSpan.FromSeconds(1));
-
-                    client.Game.ClickButton(ClickType.CloseStash);
-                    await Task.Delay(TimeSpan.FromSeconds(0.1));
-                    client.Game.ClickButton(ClickType.CloseStash);
-
-                    var itemsOnAccount = client.Game.Stash.Items;
-                    itemsOnAccount.AddRange(client.Game.Inventory.Items);
-                    itemsOnAccount.AddRange(client.Game.Cube.Items);
-                    var itemsToUpdate = itemsOnAccount.Where(i => i.Classification != ClassificationType.Scroll).Select(i => i.MapToMuleItem(account, character)).ToList();
-
-                    await _muleManagerRepository.UpdateCharacter(account, character, itemsToUpdate);
+                    Log.Error($"{client.Game.Me.Name}: No stash found");
                     if (!await ReconnectClient(client, account))
                     {
                         return false;
                     }
-
-                    await Task.Delay(TimeSpan.FromSeconds(2));
+                    continue;
                 }
-                await client.Disconnect();
-            }
 
+                var stash = stashes.Single();
+
+                if (client.Game.Me.Location.Distance(stash.Location) >= 5)
+                {
+                    await client.Game.MoveToAsync(stash);
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(1));
+
+                if (!client.Game.OpenStash(stash))
+                {
+                    Log.Error($"{client.Game.Me.Name}: Open stash failed");
+                    if (!await ReconnectClient(client, account))
+                    {
+                        return false;
+                    }
+                    continue;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(1));
+
+                client.Game.ClickButton(ClickType.CloseStash);
+                await Task.Delay(TimeSpan.FromSeconds(0.1));
+                client.Game.ClickButton(ClickType.CloseStash);
+
+                var itemsOnAccount = client.Game.Stash.Items;
+                itemsOnAccount.AddRange(client.Game.Inventory.Items);
+                itemsOnAccount.AddRange(client.Game.Cube.Items);
+                var itemsToUpdate = itemsOnAccount.Where(i => i.Classification != ClassificationType.Scroll).Select(i => i.MapToMuleItem(account, character)).ToList();
+
+                await _muleManagerRepository.UpdateCharacter(account, character, itemsToUpdate);
+                if (!await ReconnectClient(client, account))
+                {
+                    return false;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+            await client.Disconnect();
             return true;
         }
 

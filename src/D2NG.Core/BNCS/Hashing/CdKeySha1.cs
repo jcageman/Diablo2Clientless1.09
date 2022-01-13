@@ -217,7 +217,7 @@ namespace D2NG.Core.BNCS.Hashing
             buffer.AddRange(BitConverter.GetBytes(Product));
             buffer.AddRange(Public);
             buffer.AddRange(Private);
-            SHA1 sha = new SHA1CryptoServiceProvider();
+            SHA1 sha = SHA1.Create();
             return sha.ComputeHash(buffer.ToArray());
         }
     }

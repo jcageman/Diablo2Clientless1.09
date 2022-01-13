@@ -1,9 +1,9 @@
 ﻿using D2NG.Core.D2GS.Items;
 using System.Collections.Generic;
 
-namespace D2NG.MuleManager.Services.MuleManager
+namespace D2NG.MuleManager.Services.MuleManager.Models
 {
-    public class MuleItem
+    public class MuleItemDb
     {
         public string Id { get; set; }
         public string AccountName { get; set; }
@@ -14,7 +14,7 @@ namespace D2NG.MuleManager.Services.MuleManager
         public bool Ethereal { get; set; }
         public uint Level { get; set; }
         public uint Sockets { get; set; }
-
-        public Dictionary<string, int> Stats { get; set; }
+        public List<StatDb> Stats { get; set; }
+        public List<string> StatTypes { get; set; }
     }
 }

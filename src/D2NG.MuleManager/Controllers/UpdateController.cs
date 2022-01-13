@@ -1,10 +1,8 @@
-﻿using D2NG.MuleManager.Services.MuleManager;
+﻿using D2NG.Core.D2GS.Items;
+using D2NG.MuleManager.Services.MuleManager;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace D2NG.MuleManager.Controllers
@@ -14,15 +12,13 @@ namespace D2NG.MuleManager.Controllers
     public class UpdateController : ControllerBase
     {
 
-        private readonly ILogger<UpdateController> _logger;
         private readonly IMuleManagerService _muleManagerService;
         private readonly IMuleManagerRepository _muleManagerRepository;
 
-        public UpdateController(ILogger<UpdateController> logger,
+        public UpdateController(
             IMuleManagerService muleManagerService,
             IMuleManagerRepository muleManagerRepository)
         {
-            _logger = logger;
             _muleManagerService = muleManagerService;
             _muleManagerRepository = muleManagerRepository;
         }
@@ -39,9 +35,10 @@ namespace D2NG.MuleManager.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAllItems()
+        public async Task<IActionResult> GetAllItems([FromQuery] QualityType? qualityType, [FromQuery] ItemName? itemName, [FromQuery] StatType[] statTypes)
         {
-            return Ok(await _muleManagerRepository.GetAllItems());
+            var items = await _muleManagerRepository.GetAllItems(qualityType, itemName, statTypes);
+            return Ok(items.MapToDto());
         }
     }
 }

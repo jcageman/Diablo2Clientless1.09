@@ -3,7 +3,6 @@ using D2NG.Core.D2GS.Packet.Incoming;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
 
 namespace D2NG.Core.D2GS.Act
 {

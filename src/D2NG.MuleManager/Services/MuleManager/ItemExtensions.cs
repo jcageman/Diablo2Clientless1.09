@@ -1,6 +1,7 @@
 ﻿using D2NG.Core.D2GS.Items;
 using D2NG.Core.MCP;
 using D2NG.MuleManager.Configuration;
+using D2NG.MuleManager.Services.MuleManager.Models;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -8,9 +9,9 @@ namespace D2NG.MuleManager.Services.MuleManager
 {
     public static class ItemExtensions
     {
-        public static MuleItem MapToMuleItem(this Item item, MuleManagerAccount account, Character character)
+        public static MuleItemDb MapToMuleItem(this Item item, MuleManagerAccount account, Character character)
         {
-            return new MuleItem
+            return new MuleItemDb
             {
                 Id = $"{account.Name}-{character.Name}-{item.Id}",
                 AccountName = account.Name,
@@ -21,7 +22,8 @@ namespace D2NG.MuleManager.Services.MuleManager
                 Ethereal = item.Ethereal,
                 Level = item.Level,
                 Sockets = item.Sockets,
-                Stats = item.Properties.ToDictionary(k => k.MapToStatKey(), v => v.Value.Value)
+                Stats = item.Properties.Select(k => new StatDb { Type = k.MapToStatKey(), Value = k.Value.Value }).ToList(),
+                StatTypes = item.Properties.Select(k => k.MapToStatKey()).ToList()
             };
         }
 

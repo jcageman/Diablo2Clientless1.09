@@ -52,7 +52,7 @@ namespace D2NG.Core.DataManager
             };
 
             string assemblyFile = (
-            new System.Uri(Assembly.GetExecutingAssembly().CodeBase)
+            new Uri(Assembly.GetExecutingAssembly().Location)
             ).AbsolutePath.Replace("%20", " ");
             string dataDirectory = Path.Combine(Path.GetDirectoryName(assemblyFile), "data");
 

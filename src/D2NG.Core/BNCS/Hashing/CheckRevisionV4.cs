@@ -18,7 +18,7 @@ namespace D2NG.Core.BNCS.Hashing
             bytes.AddRange(Encoding.ASCII.GetBytes(":" + Version + ":"));
             bytes.Add(1);
 
-            SHA1 sha = new SHA1CryptoServiceProvider();
+            SHA1 sha = SHA1.Create();
             var hash = sha.ComputeHash(bytes.ToArray());
             var b64Hash = Convert.ToBase64String(hash);
             var checksum = Encoding.ASCII.GetBytes(b64Hash.Substring(0, 4));

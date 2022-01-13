@@ -156,7 +156,7 @@ namespace ConsoleBot.Bots
             {
                 Log.Error(e, $"Unhandled Exception: {e}");
                 await _externalMessagingClient.SendMessage($"bot crashed with exception: {e}");
-                throw e;
+                throw;
             }
             finally
             {

@@ -1,7 +1,12 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="main">
-    <div class="content px-4">
+<MudThemeProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudText Typo="Typo.h5" Class="ml-3">MuleManager</MudText>
+    </MudAppBar>
+    <MudMainContent>
         @Body
-    </div>
-</div>
+    </MudMainContent>
+</MudLayout>

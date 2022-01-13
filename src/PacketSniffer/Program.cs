@@ -92,17 +92,22 @@ namespace PacketSniffer
             //Open the device for capturing
 
             int readTimeoutMilliseconds = 1000;
-
-            selectedDevice.Open(DeviceMode.Promiscuous, readTimeoutMilliseconds);
+            var deviceConfiguration = new DeviceConfiguration
+            {
+                Mode = DeviceModes.Promiscuous,
+                ReadTimeout = readTimeoutMilliseconds
+            };
+            selectedDevice.Open(deviceConfiguration);
             selectedDevice.Filter = "tcp port 4000 or 6112 or 6113";
             selectedDevice.Capture();
             selectedDevice.Close();
         }
 
         // Callback function invoked by Pcap.Net for every incoming packet
-        private static void PacketHandler(object sender, CaptureEventArgs e)
+        private static void PacketHandler(object sender, PacketCapture packetCapture)
         {
-            var packet = PacketDotNet.Packet.ParsePacket(e.Packet.LinkLayerType, e.Packet.Data);
+            var rawPacket = packetCapture.GetPacket();
+            var packet = PacketDotNet.Packet.ParsePacket(rawPacket.LinkLayerType, rawPacket.Data);
             var tcpPacket = packet.Extract<PacketDotNet.TcpPacket>();
             if (tcpPacket != null && tcpPacket.PayloadData.Length > 0)
             {

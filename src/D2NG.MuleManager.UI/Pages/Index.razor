@@ -1,183 +1,195 @@
 ﻿@page "/"
-
+@using D2NG.Core.D2GS.Items
+@using System.Net.Http.Json
+@using System.Text.Json.Serialization
+@using System.Web
 @inject HttpClient Http
-@using D2NG.MuleManager.UI.Models
 
-<h1>Mule Items</h1>
-
-<button class="btn btn-primary" @onclick="LoadMules">
-    Load mules
-</button>
-<button class="btn btn-primary" @onclick="UpdateMules">
-    Update mules
-</button>
-
-<table class="table">
-    <thead>
-        <tr>
-            <th>Account - Character</th>
-            <th>Quality</th>
-            <th>Item</th>
-            <th>Stats</th>
-        </tr>
-        <tr>
-            <th></th>
-            <th>
-                <select @onchange=@UpdateQualityType>
-                    @foreach (var template in itemTypes)
-                    {
-                        <option value=@template>@template</option>
-                    }
-                </select>
-            </th>
-            <th>
-                ItemName: <select @onchange=@UpdateItemName>
-                    @foreach (var template in Enum.GetValues(typeof(ItemName)))
-                    {
-                        <option value=@template>@template</option>
-                    }
-                </select> <br />Or Classification: <select @onchange=@UpdateClassificationType>
-                    @foreach (var template in Enum.GetValues(typeof(ClassificationType)))
-                    {
-                        <option value=@template>@template</option>
-                    }
-                </select> <br />Sockets: <select @onchange=@UpdateNumberOfSockets>
-                    }
-                    <option>0</option>
-                    <option>1</option>
-                    <option>2</option>
-                    <option>3</option>
-                    <option>4</option>
-                    <option>5</option>
-                </select>
-                <br />Ethereal:
-                <input type="checkbox" @onchange="@UpdateEthereal" />
-            </th>
-            <th>
-                Filter 1<select @onchange=@UpdateStatType>
-                    @foreach (var template in Enum.GetValues(typeof(StatType)))
-                    {
-                        <option value=@template>@template</option>
-                    }
-                </select>
-                <br />Filter 2<select @onchange=@UpdateStatType2>
-                    @foreach (var template in Enum.GetValues(typeof(StatType)))
-                    {
-                        <option value=@template>@template</option>
-                    }
-                </select>
-                <br />OrderBy Descending
-                <select @onchange=@OrderByStatType>
-                    @foreach (var template in Enum.GetValues(typeof(StatType)))
-                    {
-                        <option value=@template>@template</option>
-                    }
-                </select>
-            </th>
-        </tr>
-
-    </thead>
-    <tbody>
-        @foreach (var item in filteredMuleItems)
-        {
-            <tr>
-                <td>@item.AccountName - @item.CharacterName</td>
-                <td>@item.QualityType</td>
-                <td>@((MarkupString)$"{@item.ItemName} (ilvl {item.Level}) ({item.Sockets}s)")</td>
-                <td>@((MarkupString)string.Join("<br />", item.Stats.Select(k => $"{k.Key} : {k.Value}")))</td>
-            </tr>
-        }
-    </tbody>
-</table>
+<MudGrid>
+    <MudItem xs="12">
+        <MudButton Variant="Variant.Filled" @onclick="UpdateMules">Update mules</MudButton>
+    </MudItem>
+    <MudItem xs="3">
+        <MudSelect T="string" Label="Quality" ValueChanged="QualityTypeChanged">
+            <MudSelectItem Value="@("None")">None</MudSelectItem>
+            <MudSelectItem Value="@("Rare")">Rare</MudSelectItem>
+            <MudSelectItem Value="@("Unique")">Unique</MudSelectItem>
+            <MudSelectItem Value="@("Crafted")">Crafted</MudSelectItem>
+            <MudSelectItem Value="@("Superior")">Superior</MudSelectItem>
+            <MudSelectItem Value="@("Normal")">Normal</MudSelectItem>
+            <MudSelectItem Value="@("Magical")">Magical</MudSelectItem>
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="3">
+        <MudAutocomplete T="string" Label="ItemName" SearchFunc="SearchItemNames" ValueChanged="AddItemNameFilter"/>
+    </MudItem>
+    <MudItem xs="6">
+    </MudItem>
+    <MudItem xs="3">
+        <MudAutocomplete T="string" Label="StatType" SearchFunc="SearchStatType" ValueChanged="AddStatTypeFilter"/>
+    </MudItem>
+    <MudItem xs="3">
+        <MudAutocomplete T="string" Label="SortOnStatType" SearchFunc="SearchStatType" ValueChanged="SortOnStatValue"/>
+    </MudItem>
+    <MudItem xs="6">
+    </MudItem>
+    <MudItem xs="12">
+        <MudText Class="mb-n3" Typo="Typo.body2">
+            Filtered Stats: 
+                @foreach (string statType in FilteredStatTypes)
+                {
+                    <MudChip Color="Color.Primary" OnClose="chip => Closed(chip, statType)">@statType</MudChip>
+                }
+        </MudText>
+    </MudItem>
+</MudGrid>
+<MudDataGrid @ref="Datagrid" Items="@MuleItems" Sortable=false Filterable=false>
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Mule Items</MudText>
+        <MudSpacer />
+    </ToolBarContent>
+    <Columns>
+        <Column T="MuleItem" Field="AccountName" Title="Account"/>
+        <Column T="MuleItem" Field="CharacterName" Title="Character"/>
+        <Column T="MuleItem" Field="ItemName" Title="Type"/>
+        <Column T="MuleItem" Field="QualityType" Title="Quality"/>
+        <Column T="MuleItem" Field="StatString" Title="Stats"/>
+        <Column T="MuleItem" Field="SortedStat" Title="SortedStat"/>
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager T="MuleItem" />
+    </PagerContent>
+</MudDataGrid>
 
 @code {
+    private MudDataGrid<MuleItem> Datagrid;
+    private List<MuleItem> MuleItems = new List<MuleItem>();
+    private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+    private string qualityTypeValue { get; set; }
+    private string sortedStatValue { get; set; }
+    private string itemNameValue { get; set; }
+    private HashSet<string> FilteredStatTypes = new HashSet<string>();
 
-        List<string> itemTypes = new List<string>() { "Inferior", "Normal", "Superior", "Magical", "Set", "Rare", "Unique", "Crafted" };
-        string selectedQualityType;
-        string selectedClassificationType;
-        string selectedItemName;
-        string selectedStatType1;
-        string selectedStatType2;
-        string selectedOrderByStatType;
-        int? selectedNumberOfSockets;
-        bool selectEthereal = false;
+    void Closed(MudChip chip, string chipValue) {
+        FilteredStatTypes.Remove(chipValue);
+        RefreshMules().AndForget();
+    }
 
-        void UpdateQualityType(ChangeEventArgs e)
-        {
-            selectedQualityType = e.Value.ToString();
-            UpdateFilteredItems();
-        }
-
-        void UpdateItemName(ChangeEventArgs e)
-        {
-            selectedItemName = e.Value.ToString();
-            selectedClassificationType = null;
-            UpdateFilteredItems();
-        }
-
-        void UpdateClassificationType(ChangeEventArgs e)
-        {
-            selectedItemName = null;
-            selectedClassificationType = e.Value.ToString();
-            UpdateFilteredItems();
-        }
-
-        void UpdateNumberOfSockets(ChangeEventArgs e)
-        {
-            selectedNumberOfSockets = int.Parse(e.Value.ToString());
-            UpdateFilteredItems();
-        }
-
-        void UpdateEthereal(ChangeEventArgs e)
-        {
-            selectEthereal = (bool)e.Value;
-            UpdateFilteredItems();
-        }
-
-        void UpdateStatType(ChangeEventArgs e)
-        {
-            selectedStatType1 = e.Value.ToString();
-            UpdateFilteredItems();
-        }
-
-        void UpdateStatType2(ChangeEventArgs e)
-        {
-            selectedStatType2 = e.Value.ToString();
-            UpdateFilteredItems();
-        }
-
-        void OrderByStatType(ChangeEventArgs e)
-        {
-            selectedOrderByStatType = e.Value.ToString();
-            UpdateFilteredItems();
-        }
-
-        void UpdateFilteredItems()
-        {
-            filteredMuleItems = muleItems.Where(i =>
-            (selectedQualityType == null || i.QualityType.ToString() == selectedQualityType)
-            && (selectedClassificationType == null || i.ClassificationType.ToString() == selectedClassificationType)
-            && (selectedItemName == null || i.ItemName.ToString() == selectedItemName)
-            && (selectedNumberOfSockets == null || i.Sockets == selectedNumberOfSockets)
-            && i.Ethereal == selectEthereal
-            && (selectedStatType1 == null || i.Stats.ContainsKey(selectedStatType1))
-            && (selectedStatType2 == null || i.Stats.ContainsKey(selectedStatType2))).OrderByDescending(i => selectedOrderByStatType != null ? i.Stats.GetValueOrDefault(selectedOrderByStatType, 0) : 0).ToList();
-        }
-
-    private MuleItem[] muleItems = new MuleItem[0];
-
-    private List<MuleItem> filteredMuleItems = new List<MuleItem>();
-
-    protected async Task LoadMules()
+    protected async Task RefreshMules()
     {
-        muleItems = await Http.GetFromJsonAsync<MuleItem[]>("https://localhost:5001/items");
-        UpdateFilteredItems();
+        cancellationTokenSource.Cancel();
+        cancellationTokenSource = new CancellationTokenSource();
+        var parameters = new List<(string, string)>();
+        if(!string.IsNullOrEmpty(qualityTypeValue) && qualityTypeValue != "None")
+        {
+            parameters.Add(("qualityType", qualityTypeValue));
+        }
+
+        if(!string.IsNullOrEmpty(itemNameValue) && itemNameValue != "None")
+        {
+            parameters.Add(("itemName", itemNameValue));
+        }
+
+        foreach(var statType in FilteredStatTypes)
+        {
+            parameters.Add(("statTypes", statType));
+        }
+
+        var url = string.Format("https://localhost:5001/items?{0}",
+            string.Join("&",
+        parameters.Select(kvp => $"{kvp.Item1}={kvp.Item2}")));
+
+        try
+        {
+            MuleItems = await Http.GetFromJsonAsync<List<MuleItem>>(url, cancellationTokenSource.Token);
+            foreach(var muleItem in MuleItems)
+            {
+                muleItem.StatString = (@MarkupString)string.Join(", ", muleItem.Stats.Select(k => $"{k.Type} : {k.Value}"));
+            }
+
+            await InvokeAsync(() => StateHasChanged());
+        }
+        catch(OperationCanceledException)
+        {
+
+        }
+
     }
 
     protected async Task UpdateMules(MouseEventArgs e)
     {
         await Http.PutAsync("https://localhost:5001/items", null);
-        await LoadMules();
+        await RefreshMules();
+    }
+
+    private void QualityTypeChanged(string value)
+    {
+        if(!string.IsNullOrEmpty(value))
+        {
+            qualityTypeValue = value;
+            RefreshMules().AndForget();
+        }
+    }
+
+    private void AddStatTypeFilter(string value)
+    {
+        if(!string.IsNullOrEmpty(value))
+        {
+            FilteredStatTypes.Add(value);
+            RefreshMules().AndForget();
+        }
+    }
+
+    private void AddItemNameFilter(string value)
+    {
+        if(!string.IsNullOrEmpty(value))
+        {
+            itemNameValue = value;
+            RefreshMules().AndForget();
+        }
+    }
+
+    private void SortOnStatValue(string value)
+    {
+        sortedStatValue = value;
+        foreach(var muleItem in MuleItems)
+        {
+            muleItem.SortedStat = muleItem.Stats.Find(s => s.Type == value)?.Value ?? 0;
+        }
+        Datagrid.SetSortAsync(SortDirection.Descending, m => m.SortedStat, "SortedStat").AndForget();
+    }
+
+    private Task<IEnumerable<string>> SearchStatType(string value)
+    {
+        // if text is null or empty, show complete list
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult<IEnumerable<string>>(Enum.GetNames(typeof(StatType)));
+
+        return Task.FromResult<IEnumerable<string>>(Enum.GetNames(typeof(StatType)).Where(s => s.Contains(value, StringComparison.InvariantCultureIgnoreCase)));
+    }
+
+    private Task<IEnumerable<string>> SearchItemNames(string value)
+    {
+        // if text is null or empty, show complete list
+        if (string.IsNullOrEmpty(value))
+        {
+            var itemNames = Enum.GetNames(typeof(ItemName))
+            .Prepend("None");
+            return Task.FromResult<IEnumerable<string>>(itemNames);
+        }
+        else
+        {
+            var itemNames = Enum.GetNames(typeof(ItemName))
+            .Where(s => s.Contains(value, StringComparison.InvariantCultureIgnoreCase))
+            .Prepend("None");
+            return Task.FromResult<IEnumerable<string>>(itemNames);
+        }
+    }
+
+    public class Stat
+    {
+        public string Type { get; set; }
+        public int Value { get; set; }
     }
 
     public class MuleItem
@@ -185,12 +197,17 @@
         public string Id { get; set; }
         public string AccountName { get; set; }
         public string CharacterName { get; set; }
-        public string ItemName { get; set; }
-        public string QualityType { get; set; }
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public ItemName ItemName { get; set; }
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public QualityType QualityType { get; set; }
         public bool Ethereal { get; set; }
         public uint Sockets { get; set; }
         public uint Level { get; set; }
-        public string ClassificationType { get; set; }
-        public Dictionary<string, int> Stats { get; set; }
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public ClassificationType ClassificationType { get; set; }
+        public List<Stat> Stats { get; set; } = new List<Stat>();
+        public MarkupString StatString { get; set; }
+        public int SortedStat { get; set; }
     }
 }
