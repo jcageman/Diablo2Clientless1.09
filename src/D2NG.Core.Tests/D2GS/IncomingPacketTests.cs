@@ -137,7 +137,7 @@ namespace D2NG.Core.Tests.D2GS
             var packet = new UpdateItemStatsPacket(new D2gsPacket(bytes));
             Assert.Equal(1036u, packet.ItemId);
             Assert.Equal(497u, packet.Amount);
-            Assert.Equal(70u, packet.Type);
+            Assert.Equal(70u, packet.UpdateType);
         }
     }
 }
