@@ -17,6 +17,7 @@
         DiabloStar = 255,
         Stash = 267,
         WirtsBody = 268,
+        ArcanePortal = 298,
         Hratli = 379,
         RightSeal1 = 392,
         RightSeal2 = 393,

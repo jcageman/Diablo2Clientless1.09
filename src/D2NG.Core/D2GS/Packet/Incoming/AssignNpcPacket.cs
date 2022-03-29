@@ -22,7 +22,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             LifePercentage = reader.ReadByte() / 1.28;
             if (id == InComingPacket.AssignNPC2)
             {
-                reader.ReadByte(); // unknown
+                reader.ReadByte(); //unknown
                 IsBoss = reader.ReadBit();
                 IsBossMinion = reader.ReadBit();
                 IsChampion = reader.ReadBit();

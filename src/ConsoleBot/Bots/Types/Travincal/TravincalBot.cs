@@ -141,7 +141,7 @@ namespace ConsoleBot.Bots.Types.Travincal
 
         private async Task<bool> PickupNearbyItems(Game game, double distance)
         {
-            var pickupItems = game.Items.Where(i =>
+            var pickupItems = game.Items.Values.Where(i =>
             {
                 return i.Ground && game.Me.Location.Distance(i.Location) < distance && Pickit.Pickit.ShouldPickupItem(game, i, true);
             }).OrderBy(n => game.Me.Location.Distance(n.Location));
@@ -330,7 +330,7 @@ namespace ConsoleBot.Bots.Types.Travincal
             {
                 game.UseRightHandSkillOnLocation(Skill.BattleCommand, game.Me.Location);
                 Thread.Sleep(200);
-                return game.Me.Effects.Contains(EntityEffect.Battlecommand);
+                return game.Me.Effects.ContainsKey(EntityEffect.Battlecommand);
             }, TimeSpan.FromSeconds(3)))
             {
                 Log.Warning("Battle command failed");
@@ -341,7 +341,7 @@ namespace ConsoleBot.Bots.Types.Travincal
             {
                 game.UseRightHandSkillOnLocation(Skill.BattleOrders, game.Me.Location);
                 Thread.Sleep(200);
-                return game.Me.Effects.Contains(EntityEffect.BattleOrders);
+                return game.Me.Effects.ContainsKey(EntityEffect.BattleOrders);
             }, TimeSpan.FromSeconds(3)))
             {
                 Log.Warning("Battle orders failed");
@@ -352,7 +352,7 @@ namespace ConsoleBot.Bots.Types.Travincal
             {
                 game.UseRightHandSkillOnLocation(Skill.Shout, game.Me.Location);
                 Thread.Sleep(200);
-                return game.Me.Effects.Contains(EntityEffect.Shout);
+                return game.Me.Effects.ContainsKey(EntityEffect.Shout);
             }, TimeSpan.FromSeconds(3)))
             {
                 Log.Warning("Shout failed");

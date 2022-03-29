@@ -198,7 +198,7 @@ namespace ConsoleBot.Mule
 
         private static List<Item> GetMuleItems(Client client, MuleAccount muleAccount)
         {
-            var muleItems = client.Game.Items.Where(i => IsMuleItem(client, i));
+            var muleItems = client.Game.Items.Values.Where(i => IsMuleItem(client, i));
             if (muleAccount.MatchesAny.Count == 0)
             {
                 return muleItems.ToList();
@@ -240,7 +240,7 @@ namespace ConsoleBot.Mule
 
         private static bool HasAnyItemsToMule(Client client)
         {
-            return client.Game.Items.Any(i => IsMuleItem(client, i));
+            return client.Game.Items.Values.Any(i => IsMuleItem(client, i));
         }
 
         private static bool IsMuleItem(Client client, Item item)
@@ -400,9 +400,9 @@ namespace ConsoleBot.Mule
 
                 await Task.Delay(100);
                 client.Game.InsertItemIntoContainer(item, space, ItemContainer.Trade);
-
+                Item newItem = null;
                 var moveResult = GeneralHelpers.TryWithTimeout(
-                    (retryCount) => client.Game.CursorItem == null && client.Game.Items.FirstOrDefault(i => i.Id == item.Id)?.Container == ContainerType.ForTrade,
+                    (retryCount) => client.Game.CursorItem == null && client.Game.Items.TryGetValue(item.Id, out newItem) && newItem.Container == ContainerType.ForTrade,
                     TimeSpan.FromSeconds(5));
                 if (!moveResult)
                 {
@@ -412,8 +412,6 @@ namespace ConsoleBot.Mule
                 }
 
                 await Task.Delay(100);
-
-                var newItem = client.Game.Items.First(i => i.Id == item.Id);
                 temporaryInventory.Block(freeSpaceInventory, newItem.Width, newItem.Height);
                 tradeScreenClient.Add(newItem);
                 atLeastOneTraded = true;

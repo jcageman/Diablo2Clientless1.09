@@ -869,7 +869,7 @@ namespace ConsoleBot.Bots.Types.Baal
                     }
                 }
 
-                if (!client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.BattleOrders))
                 {
                     Log.Information($"Lost bo on client {client.Game.Me.Name}, moving to barb for bo");
                     executeStaticField.Stop();
@@ -891,18 +891,18 @@ namespace ConsoleBot.Bots.Types.Baal
                     continue;
                 }
 
-                if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
+                if (!hasUsedPotion && client.Game.Me.Effects.ContainsKey(EntityEffect.BattleOrders))
                 {
                     client.Game.UseHealthPotions(2);
                     hasUsedPotion = true;
                 }
 
-                if (!client.Game.Me.Effects.Contains(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.ShiverArmor, client.Game.Me.Location);
                 }
 
-                if (!client.Game.Me.Effects.Contains(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
                 }
@@ -1069,7 +1069,7 @@ namespace ConsoleBot.Bots.Types.Baal
             var random = new Random();
             while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame())
             {
-                if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
+                if (!hasUsedPotion && client.Game.Me.Effects.ContainsKey(EntityEffect.BattleOrders))
                 {
                     client.Game.UseHealthPotions(2);
                     hasUsedPotion = true;
@@ -1113,17 +1113,17 @@ namespace ConsoleBot.Bots.Types.Baal
                     flipflop = !flipflop;
                 }
 
-                if (!client.Game.Me.Effects.Contains(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.ShiverArmor, client.Game.Me.Location);
                 }
 
-                if (!client.Game.Me.Effects.Contains(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
                 }
 
-                if (!client.Game.Me.Effects.Contains(EntityEffect.Holyshield) && client.Game.Me.HasSkill(Skill.HolyShield))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Holyshield) && client.Game.Me.HasSkill(Skill.HolyShield))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.HolyShield, client.Game.Me.Location);
                     client.Game.ChangeSkill(Skill.Conviction, Hand.Right);
@@ -1251,7 +1251,7 @@ namespace ConsoleBot.Bots.Types.Baal
 
             while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame())
             {
-                if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
+                if (!hasUsedPotion && client.Game.Me.Effects.ContainsKey(EntityEffect.BattleOrders))
                 {
                     client.Game.UseHealthPotions(2);
                     hasUsedPotion = true;

@@ -6,12 +6,10 @@ using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Players;
-using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace ConsoleBot.Bots.Types.CS
@@ -130,7 +128,9 @@ namespace ConsoleBot.Bots.Types.CS
 
         public void PutItemOnPickitList(Client client, Item item)
         {
-            if (Pickit.Pickit.ShouldPickupItem(client.Game, item, false) && (client.Game.Items.FirstOrDefault(i => i.Id == item.Id)?.Ground ?? false))
+            if (Pickit.Pickit.ShouldPickupItem(client.Game, item, false)
+                && client.Game.Items.TryGetValue(item.Id, out var newItem)
+                && newItem.Ground)
             {
                 _pickitItemsOnGround.TryAdd(item.Id, item);
             }

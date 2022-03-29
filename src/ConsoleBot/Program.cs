@@ -77,7 +77,14 @@ namespace ConsoleBot
             services.AddOptions<ExternalMessagingConfiguration>()
                 .Bind(config.GetSection("externalMessaging"))
                 .ValidateDataAnnotations();
-            services.AddSingleton<IExternalMessagingClient, ExternalMessagingClient>();
+            if(config.GetSection("externalMessaging").Exists())
+            {
+                services.AddSingleton<IExternalMessagingClient, ExternalMessagingClient>();
+            }
+            else
+            {
+                services.AddSingleton<IExternalMessagingClient, DummyMessagingClient>();
+            }
             services.AddSingleton<IMuleService, MuleService>();
             services.AddSingleton<ITownManagementService, TownManagementService>();
             services.AddSingleton<IAttackService, AttackService>();

@@ -91,7 +91,7 @@ namespace ConsoleBot.Bots.Types.Mephisto
                 return false;
             }
 
-            if (!client.Game.Me.Effects.Contains(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
+            if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
             {
                 client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
             }
@@ -199,7 +199,7 @@ namespace ConsoleBot.Bots.Types.Mephisto
 
         private bool PickupNearbyItems(Client client)
         {
-            var pickupItems = client.Game.Items.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
+            var pickupItems = client.Game.Items.Values.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
             Log.Information($"Killed Mephisto, picking up {pickupItems.Count()} items ");
             foreach (var item in pickupItems)
             {

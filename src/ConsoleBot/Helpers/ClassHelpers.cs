@@ -1,11 +1,9 @@
 ﻿using D2NG.Core;
 using D2NG.Core.D2GS.Enums;
-using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace ConsoleBot.Helpers
@@ -16,24 +14,14 @@ namespace ConsoleBot.Helpers
         {
             if (client != null && client.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0) > 0)
             {
-                var nearbyPlayers = client.Game.Players.Where(p => p.Location?.Distance(client.Game.Me.Location) < 10);
-                var anyPlayerMissingBc= nearbyPlayers.Any(p => !p.Effects.Contains(EntityEffect.Battlecommand));
-                var anyPlayerMissingBo = nearbyPlayers.Any(p => !p.Effects.Contains(EntityEffect.BattleOrders));
-                var anyPlayerMissingShout = nearbyPlayers.Any(p => !p.Effects.Contains(EntityEffect.Shout));
-                if (anyPlayerMissingBc)
+                var nearbyPlayers = client.Game.Players.Where(p => p.Area == client.Game.Me.Area && p.Location?.Distance(client.Game.Me.Location) < 10);
+                var anyPlayerMissingShouts = AnyPlayerIsMissingShouts(client);
+                if (anyPlayerMissingShouts)
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.BattleCommand, client.Game.Me.Location);
                     await Task.Delay(TimeSpan.FromSeconds(0.5));
-                }
-
-                if (anyPlayerMissingBo)
-                {
                     client.Game.UseRightHandSkillOnLocation(Skill.BattleOrders, client.Game.Me.Location);
                     await Task.Delay(TimeSpan.FromSeconds(0.5));
-                }
-
-                if (anyPlayerMissingShout)
-                {
                     client.Game.UseRightHandSkillOnLocation(Skill.Shout, client.Game.Me.Location);
                     await Task.Delay(TimeSpan.FromSeconds(0.5));
                 }
@@ -51,9 +39,9 @@ namespace ConsoleBot.Helpers
 
         public static bool IsMissingShouts(Player p)
         {
-            return !p.Effects.Contains(EntityEffect.Battlecommand)
-                                            || !p.Effects.Contains(EntityEffect.BattleOrders)
-                                            || !p.Effects.Contains(EntityEffect.Shout);
+            return !p.Effects.ContainsKey(EntityEffect.Battlecommand)
+                                            || !p.Effects.ContainsKey(EntityEffect.BattleOrders)
+                                            || !p.Effects.ContainsKey(EntityEffect.Shout);
         }
 
         public static bool CanStaticEntity(Client client, double LifePercentage)

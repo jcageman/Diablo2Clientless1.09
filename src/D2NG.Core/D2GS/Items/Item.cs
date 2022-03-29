@@ -61,7 +61,7 @@ namespace D2NG.Core.D2GS.Items
         public VersionType Version { get; set; }
         public bool UnspecifiedDirectory { get; set; }
         public Point Location { get; set; }
-        public uint Directory { get; set; }
+        public DirectoryType Directory { get; set; }
         public ContainerType Container { get; set; }
         public uint EarLevel { get; set; }
         public string EarName { get; set; }

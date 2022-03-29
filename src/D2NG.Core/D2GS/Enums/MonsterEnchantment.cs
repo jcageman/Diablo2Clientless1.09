@@ -15,6 +15,7 @@
         Teleportation = 26,
         SpectralHit = 27,
         StoneSkin = 28,
-        MultiShot = 29
+        MultiShot = 29,
+        AuraEnchanted = 30
     }
 }

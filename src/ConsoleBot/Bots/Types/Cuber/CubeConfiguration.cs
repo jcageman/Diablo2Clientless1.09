@@ -1,6 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-
-namespace ConsoleBot.Bots.Types.Mephisto
+﻿namespace ConsoleBot.Bots.Types.Cuber
 {
     public class CubeConfiguration : AccountCharacter
     {

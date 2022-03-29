@@ -25,7 +25,7 @@ namespace D2NG.Core
 
         private GameData Data { get; set; }
 
-        private Task ping, chicken;
+        private Thread pingThread, chickenThread;
 
         private DateTime lastTeleport;
 
@@ -99,6 +99,8 @@ namespace D2NG.Core
                     Data.ItemUpdate(itemPacket);
                     ItemOwnedHandler?.Invoke(itemPacket.Item);
                 });
+            _gameServer.OnReceivedPacketEvent(InComingPacket.UseStackableItem, p => Data.UseStackableItem(new UseStackableItemPacket(p)));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.UpdateItemStats, p => Data.UpdateItemStats(new UpdateItemStatsPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.WaypointMenu, p => Data.UpdateWaypointInfo(new WaypointMenuPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.WalkVerify, p => CheckAndPreventDesync(new WalkVerifyPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AddEntityEffect, p => Data.AddEntityEffect(new AddEntityEffectPacket(p)));
@@ -107,6 +109,9 @@ namespace D2NG.Core
             _gameServer.OnReceivedPacketEvent(InComingPacket.CorpseAssign, p => Data.PlayerCorpseAssign(new CorpseAssignPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.PlayerStop, p => Data.PlayerStop(new PlayerStopPacket(p)));
             _gameServer.OnReceivedPacketEvent(InComingPacket.AssignMerc, p => Data.AssignMerc(new AssignMercPacket(p)));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.AllyPartyInfo, p => Data.UpdatePlayerPartyInfo(new AllyPartyInfoPacket(p)));
+            _gameServer.OnReceivedPacketEvent(InComingPacket.PetAction, p => Data.UpdateSummonInfo(new PetActionPacket(p)));
+            
         }
 
         public void OnWorldItemEvent(Func<Item, Task> handler)
@@ -116,8 +121,11 @@ namespace D2NG.Core
         private void Initialize(GameFlags packet)
         {
             Data = new GameData(packet, selectedCharacter);
-            chicken = Task.Run(ChickenAndLifeMana);
-            ping = Task.Run(Ping);
+            _gameServer.Ping();
+            chickenThread = new Thread(ChickenAndLifeManaThread) { Name = "GameClient Chicken Thread", IsBackground = true };
+            chickenThread.Start();
+            pingThread = new Thread(PingThread) { Name = "GameClient Ping Thread", IsBackground = true };
+            pingThread.Start();
         }
 
         public void SelectCharacter(Character character)
@@ -134,8 +142,6 @@ namespace D2NG.Core
         {
             Log.Information("Leaving game");
             await _gameServer.LeaveGame();
-            await chicken;
-            await ping;
         }
 
         public bool TakeWaypoint(WorldObject worldObject, Waypoint waypoint)
@@ -167,7 +173,7 @@ namespace D2NG.Core
 
         public List<Player> Players { get => Data.Players.ToList(); }
 
-        public List<Item> Items { get => Data.Items.Values.ToList(); }
+        public IReadOnlyDictionary<uint, Item> Items { get => Data.Items; }
 
         public Act Act { get => Data.Act.Act; }
 
@@ -210,7 +216,7 @@ namespace D2NG.Core
 
         public WarpData GetNearestWarp()
         {
-            return Warps.Values.SelectMany(l => l).OrderBy(w => w.Location.Distance(Me.Location)).FirstOrDefault();
+            return Warps.Values.SelectMany(l => l).OrderBy(w => w.Location.Distance(Me.Location)).ThenByDescending(w => w.EntityId).FirstOrDefault();
         }
 
         public void RemoveItemFromContainer(Item item)
@@ -253,7 +259,7 @@ namespace D2NG.Core
             }
             var useStackableItem = _gameServer.GetResetEventOfType(InComingPacket.UseStackableItem);
             _gameServer.SendPacket(new ActivateBufferItemPacket(Me, item));
-            return useStackableItem.WaitOne(200);
+            return useStackableItem.WaitOne(50);
         }
 
         public bool UseRightHandSkillOnLocation(Skill skill, Point location)
@@ -354,6 +360,17 @@ namespace D2NG.Core
         public bool UseRightHandSkillOnEntity(Skill skill, Entity entity)
         {
             if (!ChangeSkill(skill, Hand.Right))
+            {
+                return false;
+            }
+
+            _gameServer.SendPacket(new RightSkillOnUnitPacket(entity));
+            return true;
+        }
+
+        public bool UseLeftHandSkillOnEntity(Skill skill, Entity entity)
+        {
+            if (!ChangeSkill(skill, Hand.Left))
             {
                 return false;
             }
@@ -466,12 +483,48 @@ namespace D2NG.Core
 
         public bool MoveTo(Entity entity)
         {
-            return MoveTo(entity.Location);
+            var distance = Me.Location.Distance(entity.Location);
+            if (distance > 20)
+            {
+                return false;
+            }
+
+            if (distance < 10 && DateTime.Now.Subtract(lastTeleport) > TimeSpan.FromSeconds(5))
+            {
+                _gameServer.SendPacket(new UpdatePlayerLocationPacket(entity.Location));
+                lastTeleport = DateTime.Now;
+                Thread.Sleep((int)(120 / Data.WalkingSpeedMultiplier));
+            }
+            else
+            {
+                _gameServer.SendPacket(new RunToEntityPacket(entity));
+                Thread.Sleep((int)(distance * 80 / Data.WalkingSpeedMultiplier));
+            }
+            Me.Location = entity.Location;
+            return true;
         }
 
-        public async Task MoveToAsync(Entity entity)
+        public async Task<bool> MoveToAsync(Entity entity)
         {
-            await MoveToAsync(entity.Location);
+            var distance = Me.Location.Distance(entity.Location);
+            if (distance > 20)
+            {
+                return false;
+            }
+
+            if (distance < 10 && DateTime.Now.Subtract(lastTeleport) > TimeSpan.FromSeconds(5))
+            {
+                _gameServer.SendPacket(new UpdatePlayerLocationPacket(entity.Location));
+                lastTeleport = DateTime.Now;
+                await Task.Delay((int)(120 / Data.WalkingSpeedMultiplier));
+            }
+            else
+            {
+                _gameServer.SendPacket(new RunToEntityPacket(entity));
+                await Task.Delay((int)(distance * 80 / Data.WalkingSpeedMultiplier));
+            }
+            Me.Location = entity.Location;
+            return true;
         }
 
         public bool InteractWithNPC(Entity entity)
@@ -593,6 +646,18 @@ namespace D2NG.Core
             _gameServer.SendPacket(new UseBeltItem(item));
         }
 
+        public bool PutItemInBelt(Item item)
+        {
+            if (item.Classification != ClassificationType.HealthPotion && item.Classification != ClassificationType.ManaPotion && item.Classification != ClassificationType.RejuvenationPotion)
+            {
+                throw new InvalidOperationException($"incorrect item type '{item.Name}', expected Potion");
+            }
+            
+            var worldItemAction = _gameServer.GetResetEventOfType(InComingPacket.WorldItemAction);
+            _gameServer.SendPacket(new SendItemToBeltPacket(item));
+            return worldItemAction.WaitOne(2000);
+        }
+
         public void SellItem(Entity entity, Item item)
         {
             _gameServer.SendPacket(new SellItemPacket(entity, item));
@@ -639,7 +704,13 @@ namespace D2NG.Core
         {
             _gameServer.SendPacket(new PartyRequestPacket(PartyRequestType.AcceptInvite, player));
         }
-        private async Task Ping()
+
+        public void AllowLootCorpse(Player player)
+        {
+            _gameServer.SendPacket(new SetPlayerRelationPacket(player));
+        }
+
+        private void PingThread()
         {
             try
             {
@@ -647,8 +718,8 @@ namespace D2NG.Core
                 {
                     _gameServer.Ping();
                     var pongPacket = _gameServer.GetResetEventOfType(InComingPacket.Pong);
-                    await pongPacket.AsTask(TimeSpan.FromMilliseconds(1000));
-                    await Task.Delay(TimeSpan.FromSeconds(5));
+                    pongPacket.WaitOne(1000);
+                    Thread.Sleep(5000);
                 }
             }
             catch (Exception)
@@ -657,6 +728,15 @@ namespace D2NG.Core
         }
         public bool UseManaPotion()
         {
+            var inventoryManaPotion = Inventory.Items.FirstOrDefault(i => i.Classification == ClassificationType.ManaPotion);
+            if (inventoryManaPotion != null)
+            {
+                Log.Information($"{Me.Name} Using mana potion with mana at {Me.Mana} out of {Me.MaxMana}");
+                LastUsedManaPotionTime = DateTime.Now;
+                UsePotion(inventoryManaPotion);
+                return true;
+            }
+
             var manapotion = Belt.FirstOrDefaultManaPotion();
             if (manapotion != null)
             {
@@ -665,26 +745,35 @@ namespace D2NG.Core
                 UseBeltItem(manapotion);
                 return true;
             }
-            else
-            {
-                return false;
-            }
+
+            return false;
         }
 
         public bool UseHealthPotions(int amount = 1)
         {
-            var healthPotions = Belt.TakeHealthPotions(amount);
-            if (healthPotions.Count > 0)
+            var inventoryHealthPotions = Inventory.Items
+                .Where(i => i.Classification == ClassificationType.HealthPotion).Take(amount)
+                .ToList();
+            foreach (var healthPotion in inventoryHealthPotions)
             {
-                Log.Information($"{Me.Name} Using {healthPotions.Count} health potions with health at {Me.Life} out of {Me.MaxLife}");
+                LastUsedHealthPotionTime = DateTime.Now;
+                UsePotion(healthPotion);
             }
 
+            var healthPotions = Belt.TakeHealthPotions(amount - inventoryHealthPotions.Count);
             foreach (var healthPotion in healthPotions)
             {
                 LastUsedHealthPotionTime = DateTime.Now;
                 UseBeltItem(healthPotion);
             }
-            return healthPotions.Count > 0;
+
+            var totalCount = healthPotions.Count + inventoryHealthPotions.Count;
+            if (totalCount > 0)
+            {
+                Log.Information($"{Me.Name} Using {totalCount} health potions with health at {Me.Life} out of {Me.MaxLife}");
+            }
+
+            return totalCount == amount;
         }
 
         public bool UseRejuvenationPotion()
@@ -695,7 +784,8 @@ namespace D2NG.Core
                 Log.Information($"{Me.Name} Using Rejuvenation potion with life at {Me.Life} out of {Me.MaxLife}");
                 LastUsedHealthPotionTime = DateTime.Now;
                 LastUsedManaPotionTime = DateTime.Now;
-                return UsePotion(revpotion);
+                UsePotion(revpotion);
+                return true;
             }
             else
             {
@@ -713,7 +803,7 @@ namespace D2NG.Core
             return Data.Items.GetValueOrDefault(itemId);
         }
 
-        private async Task ChickenAndLifeMana()
+        private void ChickenAndLifeManaThread()
         {
             try
             {
@@ -721,31 +811,38 @@ namespace D2NG.Core
                 {
                     if (Me == null || Area == Area.None)
                     {
-                        await Task.Delay(50);
+                        Thread.Sleep(50);
                         continue;
                     }
 
                     if (IsInTown())
                     {
-                        await Task.Delay(50);
+                        Thread.Sleep(50);
                         continue;
                     }
 
-                    if (Me.Effects.Contains(EntityEffect.Playerbody))
+                    if (Me.Effects.ContainsKey(EntityEffect.Playerbody))
                     {
                         Log.Information($"Leaving game since {Me.Name} has died");
-                        await LeaveGame();
+                        LeaveGame().Wait();
                         break;
                     }
 
-                    if (Me.Life / (double)Me.MaxLife < 0.1 || (Me.Life < 200 && Me.MaxLife > 600))
+                    if (Me.GetLifeFraction() < 0.2 || (Me.Life < 200 && Me.MaxLife > 600))
                     {
                         Log.Information($"{Me.Name} Leaving game due to life being {Me.Life} of max {Me.MaxLife}");
-                        await LeaveGame();
+                        LeaveGame().Wait();
                         break;
                     }
 
-                    if (Me.Life / (double)Me.MaxLife < 0.9 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(10))
+                    if (Data.Flags.Hardcore && (Me.GetLifeFraction() < 0.4 || (Me.Life < 300 && Me.MaxLife > 600)))
+                    {
+                        Log.Information($"{Me.Name} Leaving game due to life being {Me.Life} of max {Me.MaxLife}");
+                        LeaveGame().Wait();
+                        break;
+                    }
+
+                    if (Me.GetLifeFraction() < 0.9 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(10))
                     {
                         if (!UseHealthPotions())
                         {
@@ -753,7 +850,7 @@ namespace D2NG.Core
                         }
                     }
 
-                    if (Me.Life / (double)Me.MaxLife < 0.7 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(2))
+                    if (Me.GetLifeFraction() < 0.7 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(2))
                     {
                         if (!UseHealthPotions())
                         {
@@ -761,27 +858,37 @@ namespace D2NG.Core
                         }
                     }
 
-                    if (Me.Life / (double)Me.MaxLife < 0.3 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(0.7))
+                    if (Data.Flags.Hardcore && Me.GetLifeFraction() < 0.5 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(0.1))
+                    {
+                        if (!UseRejuvenationPotion())
+                        {
+                            Log.Information($"{Me.Name} Leaving game due out of rev potions");
+                            LeaveGame().Wait();
+                            break;
+                        }
+                    }
+
+                    if (Me.GetLifeFraction() < 0.3 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(0.7))
                     {
                         if (!UseRejuvenationPotion() && !UseHealthPotions())
                         {
-                            Log.Information($"{Me.Name} Leaving game due out of potions");
-                            await LeaveGame();
+                            Log.Information($"{Me.Name} Leaving game due out of health/rev potions");
+                            LeaveGame().Wait();
                             break;
                         }
                     }
 
-                    if (Me.Mana < 40 && (Me.Attributes[D2GS.Players.Attribute.Level] > 40 || Me.MaxMana > 50) && DateTime.Now.Subtract(LastUsedManaPotionTime) > TimeSpan.FromSeconds(3))
+                    if (Me.Mana < 40 && (Me.Attributes[D2GS.Players.Attribute.Level] > 40 || Me.Mana < 10) && DateTime.Now.Subtract(LastUsedManaPotionTime) > TimeSpan.FromSeconds(3))
                     {
                         if (!UseManaPotion())
                         {
-                            Log.Information($"{Me.Name} Leaving game due out of potions");
-                            await LeaveGame();
+                            Log.Information($"{Me.Name} Leaving game due out of mana potions");
+                            LeaveGame().Wait();
                             break;
                         }
                     }
 
-                    await Task.Delay(50);
+                    Thread.Sleep(50);
                 }
             }
             catch (Exception)

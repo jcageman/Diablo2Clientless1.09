@@ -671,7 +671,7 @@ namespace ConsoleBot.Bots.Types.CS
             Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> action = (async (csManager, enemies, bosses) =>
             {
                 await Task.Delay(TimeSpan.FromSeconds(0.1));
-                if (client.Game.Me.Effects.Contains(EntityEffect.Ironmaiden))
+                if (client.Game.Me.Effects.ContainsKey(EntityEffect.Ironmaiden))
                 {
                     var nearbyPlayer = client.Game.Players.Where(p => p.Id != client.Game.Me.Id).OrderBy(p => p.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
                     if (nearbyPlayer != null && nearbyPlayer.Location.Distance(client.Game.Me.Location) < 40)
@@ -757,7 +757,7 @@ namespace ConsoleBot.Bots.Types.CS
             var flipFlop = true;
             Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> action = async (csManager, enemies, bosses) =>
             {
-                if (!client.Game.Me.Effects.Contains(EntityEffect.Holyshield))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Holyshield))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.HolyShield, client.Game.Me.Location);
                     await Task.Delay(100);
@@ -827,7 +827,7 @@ namespace ConsoleBot.Bots.Types.CS
             moveTimer.Start();
             Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> action = (async (csManager, enemies, bosses) =>
             {
-                if (!client.Game.Me.Effects.Contains(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.ShiverArmor, client.Game.Me.Location);
                     await Task.Delay(TimeSpan.FromSeconds(0.1));
@@ -883,7 +883,7 @@ namespace ConsoleBot.Bots.Types.CS
             ceTimer.Start();
             Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> action = async (csManager, enemies, bosses) =>
             {
-                if (!client.Game.Me.Effects.Contains(EntityEffect.Bonearmor))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Bonearmor))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.BoneArmor, client.Game.Me.Location);
                     await Task.Delay(100);

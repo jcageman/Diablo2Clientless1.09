@@ -1,14 +1,13 @@
-﻿using System;
+﻿using D2NG.Core.D2GS.Helpers;
 using D2NG.Core.D2GS.Items;
+using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
 using Serilog;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Action = D2NG.Core.D2GS.Items.Action;
-using D2NG.Core.D2GS.Helpers;
-using D2NG.Core.D2GS.Enums;
-using D2NG.Core.D2GS.Objects;
 
 namespace D2NG.Core.D2GS.Packet.Incoming
 {
@@ -81,7 +80,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             }
             else
             {
-                item.Directory = (byte)reader.Read(4);
+                item.Directory = (DirectoryType)reader.Read(4);
                 var x = (byte)reader.Read(4);
                 var y = (byte)reader.Read(3);
                 item.Location = new Point(x, y);
@@ -107,7 +106,7 @@ namespace D2NG.Core.D2GS.Packet.Incoming
             }
             else if (item.Container == ContainerType.Unspecified)
             {
-                if (item.Directory == (uint)DirectoryType.not_applicable)
+                if (item.Directory == DirectoryType.NotApplicable)
                 {
                     if (item.IsInSocket)
                     {

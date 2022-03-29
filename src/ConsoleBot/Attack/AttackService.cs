@@ -1,24 +1,32 @@
 ﻿using ConsoleBot.Helpers;
 using D2NG.Core;
 using D2NG.Core.D2GS;
+using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
+using D2NG.Core.D2GS.Players;
 using D2NG.Navigation.Extensions;
+using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
 using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Attribute = D2NG.Core.D2GS.Players.Attribute;
 
 namespace ConsoleBot.Attack
 {
     public class AttackService : IAttackService
     {
         private readonly IPathingService _pathingService;
+        private readonly IMapApiService _mapApiService;
 
-        public AttackService(IPathingService pathingService)
+        public AttackService(IPathingService pathingService, IMapApiService mapApiService)
         {
             _pathingService = pathingService;
+            _mapApiService = mapApiService;
         }
 
         internal class Line
@@ -129,9 +137,9 @@ namespace ConsoleBot.Attack
         public async Task<bool> MoveToNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, MovementMode movementMode, double minDistance = 0, double maxDistance = 30)
         {
             var spot = await FindNearbySafeSpot(client, enemies, toLocation, minDistance, maxDistance);
-            if(spot != null)
+            if (spot != null)
             {
-                if(movementMode == MovementMode.Teleport)
+                if (movementMode == MovementMode.Teleport)
                 {
                     if (await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                     {
@@ -155,6 +163,411 @@ namespace ConsoleBot.Attack
             }
 
             return false;
+        }
+
+        public async Task<bool> AssistPlayer(Client client, Player player)
+        {
+            if (client.Game.IsInTown())
+            {
+                return true;
+            }
+
+            switch (client.Game.Me.Class)
+            {
+                case CharacterClass.Amazon:
+                    return await AmazonAssist(client, player);
+                case CharacterClass.Sorceress:
+                    return await SorceressAssist(client, player);
+                case CharacterClass.Necromancer:
+                    return await NecromancerAssist(client, player);
+                case CharacterClass.Paladin:
+                    return await PaladinAssist(client, player);
+                case CharacterClass.Barbarian:
+                    return await BarbarianAssist(client, player);
+                case CharacterClass.Druid:
+                    break;
+                case CharacterClass.Assassin:
+                    break;
+            }
+
+            return true;
+        }
+
+        private async Task<bool> AmazonAssist(Client client, Player player)
+        {
+            var me = client.Game.Me;
+            List<WorldObject> enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 20, 30);
+
+            if (me.Attributes[Attribute.Level] < 30 && client.Game.Difficulty > Difficulty.Normal)
+            {
+                return true;
+            }
+            else if (me.Attributes[Attribute.Level] < 26 && client.Game.Difficulty == Difficulty.Normal && client.Game.Area == Area.CowLevel)
+            {
+                return true;
+            }
+
+            var nearest = await GetNearestInSight(client, enemies);
+            if (nearest == null)
+            {
+                return true;
+            }
+
+            if (me.HasSkill(Skill.MultipleShot) && me.Mana > 20 && enemies.Count > 5)
+            {
+                Log.Information($"Attacking {nearest.NPCCode} with {Skill.MultipleShot}");
+                client.Game.RepeatRightHandSkillOnEntity(Skill.MultipleShot, nearest);
+                await Task.Delay(200);
+            }
+            else if (me.HasSkill(Skill.LightningFury) && me.Mana > 20 && enemies.Count > 5)
+            {
+                Log.Information($"Attacking {nearest.NPCCode} with {Skill.LightningFury}");
+                client.Game.UseRightHandSkillOnEntity(Skill.LightningFury, nearest);
+                await Task.Delay(200);
+            }
+            else if (me.HasSkill(Skill.GuidedArrow) && me.Mana > 20 && enemies.Count < 5)
+            {
+                Log.Information($"Attacking {nearest.NPCCode} with {Skill.GuidedArrow}");
+                client.Game.RepeatRightHandSkillOnLocation(Skill.GuidedArrow, nearest.Location);
+                await Task.Delay(200);
+            }
+            else if(client.Game.Me.Equipment.TryGetValue(DirectoryType.RightHand, out var weapon)
+                && weapon.Classification == ClassificationType.Bow)
+            {
+                Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
+                client.Game.RepeatRightHandSkillOnEntity(Skill.Attack, nearest);
+                await Task.Delay(200);
+            }
+            else if (me.Attributes[Attribute.Level] < 10
+                && client.Game.Me.Equipment.TryGetValue(DirectoryType.RightHand, out var javalin)
+                && javalin.Classification == ClassificationType.Javelin)
+            {
+                Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
+                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, MovementMode.Walking);
+                client.Game.LeftHandSkillHoldOnEntity(Skill.Attack, nearest);
+                await Task.Delay(200);
+            }
+
+            return true;
+        }
+
+        private async Task<WorldObject> GetNearestInSight(Client client, List<WorldObject> enemies)
+        {
+            foreach (var enemy in enemies)
+            {
+                if (await IsInLineOfSight(client, enemy.Location))
+                {
+                    return enemy;
+                }
+            }
+
+            return null;
+        }
+
+        private async Task<bool> SorceressAssist(Client client, Player player)
+        {
+            List<WorldObject> enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 30, 30);
+
+            var me = client.Game.Me;
+            if (me.Mana > 10
+                && me.HasSkill(Skill.FrozenArmor)
+                && !me.HasSkill(Skill.ShiverArmor)
+                && !client.Game.Me.Effects.ContainsKey(EntityEffect.Frozenarmor))
+            {
+                Log.Information($"Casting {Skill.FrozenArmor}");
+                client.Game.UseRightHandSkillOnLocation(Skill.FrozenArmor, client.Game.Me.Location);
+                await Task.Delay(100);
+                return true;
+            }
+            else if(me.Mana > 10
+                    && me.HasSkill(Skill.ShiverArmor)
+                    && !client.Game.Me.Effects.ContainsKey(EntityEffect.Shiverarmor))
+            {
+                Log.Information($"Casting {Skill.ShiverArmor}");
+                client.Game.UseRightHandSkillOnLocation(Skill.ShiverArmor, client.Game.Me.Location);
+                await Task.Delay(100);
+                return true;
+            }
+
+            var nearest = await GetNearestInSight(client, enemies);
+            if (nearest == null)
+            {
+                return true;
+            }
+
+            if (me.HasSkill(Skill.FireBolt)
+                && !me.HasSkill(Skill.IceBolt)
+                && me.Attributes[Attribute.Level] < 10
+                && me.Mana > 5)
+            {
+                Log.Information($"Casting {Skill.FireBolt}");
+                client.Game.UseRightHandSkillOnEntity(Skill.FireBolt, nearest);
+                await Task.Delay(200);
+            }
+            if (me.HasSkill(Skill.IceBlast)
+                && !me.HasSkill(Skill.Blizzard)
+                && me.Mana > 10)
+            {
+                Log.Information($"Casting {Skill.IceBlast}");
+                client.Game.UseRightHandSkillOnEntity(Skill.IceBlast, nearest);
+                await Task.Delay(200);
+            }
+            else if (me.HasSkill(Skill.Blizzard) && !me.HasSkill(Skill.FrozenOrb) && me.Mana > 35)
+            {
+                Log.Information($"Casting {Skill.Blizzard}");
+                client.Game.UseRightHandSkillOnEntity(Skill.Blizzard, nearest);
+                await Task.Delay(200);
+            }
+            else if (me.HasSkill(Skill.FrozenOrb) && me.Mana > 30)
+            {
+                Log.Information($"Casting {Skill.FrozenOrb}");
+                client.Game.UseRightHandSkillOnEntity(Skill.FrozenOrb, nearest);
+                await Task.Delay(200);
+            }
+            else if (me.Attributes[Attribute.Level] < 10 && client.Game.Area < Area.CowLevel)
+            {
+                Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
+                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, MovementMode.Walking);
+                client.Game.UseRightHandSkillOnEntity(Skill.Attack, nearest);
+                await Task.Delay(200);
+            }
+
+            return true;
+        }
+
+        private async Task<bool> PaladinAssist(Client client, Player player)
+        {
+            List<WorldObject> enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 30, 20);
+
+            var me = client.Game.Me;
+            if (me.Mana > 20 && me.HasSkill(Skill.HolyShield) && !client.Game.Me.Effects.ContainsKey(EntityEffect.Holyshield))
+            {
+                Log.Information($"Casting {Skill.HolyShield}");
+                client.Game.UseRightHandSkillOnLocation(Skill.HolyShield, client.Game.Me.Location);
+                await Task.Delay(100);
+                return true;
+            }
+
+            if (me.HasSkill(Skill.Salvation)
+                && enemies.Exists(e => (e.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)
+                 && e.MonsterEnchantments.Contains(MonsterEnchantment.MultiShot))
+                 || e.MonsterEnchantments.Contains(MonsterEnchantment.AuraEnchanted)))
+            {
+                if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != Skill.Salvation)
+                {
+                    Log.Information($"Changing to {Skill.Salvation}");
+                    client.Game.ChangeSkill(Skill.Salvation, Hand.Right);
+                }
+            }
+            else if (me.HasSkill(Skill.Might) || me.HasSkill(Skill.Concentration) || me.HasSkill(Skill.Fanaticism))
+            {
+                var damageSkill = me.HasSkill(Skill.Fanaticism) ? Skill.Fanaticism : me.HasSkill(Skill.Concentration) ? Skill.Concentration : Skill.Might;
+                if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != damageSkill)
+                {
+                    Log.Information($"Changing from {currentSkill} to {damageSkill}");
+                    client.Game.ChangeSkill(damageSkill, Hand.Right);
+                }
+            }
+
+            var nearest = enemies.FirstOrDefault();
+            if (nearest == null)
+            {
+                return true;
+            }
+
+            if (me.Attributes[Attribute.Level] < 25
+                && client.Game.Difficulty == Difficulty.Normal
+                && client.Game.Area != Area.CowLevel)
+            {
+                Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
+                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, MovementMode.Walking);
+                client.Game.LeftHandSkillHoldOnEntity(Skill.Attack, nearest);
+                await Task.Delay(200);
+            }
+            else if(me.HasSkill(Skill.BlessedHammer))
+            {
+                if (nearest.Location.Distance(client.Game.Me.Location) > 15)
+                {
+                    var goalLocation = client.Game.Me.Location.GetPointBeforePointInSameDirection(nearest.Location, 3);
+                    if(client.Game.Me.HasSkill(Skill.Vigor))
+                    {
+                        client.Game.ChangeSkill(Skill.Vigor, Hand.Right);
+                    }
+                    
+                    var pathNearest = await _pathingService.GetPathToLocation(client.Game, goalLocation, MovementMode.Walking);
+                    if (!await MovementHelpers.TakePathOfLocations(client.Game, pathNearest, MovementMode.Walking))
+                    {
+                        Log.Warning($"Walking to Nearest failed at {client.Game.Me.Location}");
+                    }
+                    var damageSkill = me.HasSkill(Skill.Fanaticism) ? Skill.Fanaticism : me.HasSkill(Skill.Concentration) ? Skill.Concentration : Skill.Might;
+                    client.Game.ChangeSkill(damageSkill, Hand.Right);
+                }
+
+                client.Game.ShiftHoldLeftHandSkillOnLocation(Skill.BlessedHammer, client.Game.Me.Location);
+            }
+
+            return true;
+        }
+
+        private async Task<bool> NecromancerAssist(Client client, Player player)
+        {
+            var me = client.Game.Me;
+            if (me.Mana > 20 && me.HasSkill(Skill.BoneArmor) && !client.Game.Me.Effects.ContainsKey(EntityEffect.Bonearmor))
+            {
+                Log.Information($"Casting {Skill.BoneArmor}");
+                client.Game.UseRightHandSkillOnLocation(Skill.BoneArmor, client.Game.Me.Location);
+                await Task.Delay(100);
+            }
+
+            if (me.Mana > 40
+                && me.HasSkill(Skill.Bloodgolem)
+                && !me.Summons.Exists(s => s.NPCCode == NPCCode.BloodGolem))
+            {
+                Log.Information($"Summoning {NPCCode.BloodGolem}");
+                client.Game.UseRightHandSkillOnLocation(Skill.Bloodgolem, client.Game.Me.Location);
+                await Task.Delay(200);
+            }
+
+            if (me.Mana > 20
+                && me.HasSkill(Skill.ClayGolem)
+                && !me.HasSkill(Skill.Bloodgolem)
+                && !me.Summons.Exists(s => s.NPCCode == NPCCode.ClayGolem))
+            {
+                Log.Information($"Summoning {NPCCode.ClayGolem}");
+                client.Game.UseRightHandSkillOnLocation(Skill.ClayGolem, client.Game.Me.Location);
+                await Task.Delay(200);
+            }
+
+            List<WorldObject> enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 1, 30);
+            var nearest = enemies.FirstOrDefault();
+            if (nearest == null)
+            {
+                return true;
+            }
+
+            if (me.Mana > 10
+                && me.Attributes[Attribute.Level] < 10
+                && me.HasSkill(Skill.Skeletonraise)
+                && !me.Summons.Exists(s => s.NPCCode == NPCCode.Skeleton))
+            {
+                Log.Information($"Summoning {NPCCode.Skeleton}");
+                List<WorldObject> corpses = NPCHelpers.GetNearbyCorpses(client, nearest.Location, 1);
+                var corpse = corpses.FirstOrDefault();
+                if (corpses != null)
+                {
+                    client.Game.UseRightHandSkillOnEntity(Skill.Skeletonraise, corpse);
+                    await Task.Delay(200);
+                    return true;
+                }
+            }
+
+            if (client.Game.Area == Area.ChaosSanctuary
+                && client.Game.Players.Exists(p => p.Class == CharacterClass.Barbarian)
+                && me.HasSkill(Skill.LifeTap)
+                && me.Mana > 15)
+            {
+                if (!nearest.Effects.Contains(EntityEffect.Lifetap))
+                {
+                    client.Game.UseRightHandSkillOnEntity(Skill.LifeTap, nearest);
+                    await Task.Delay(200);
+                }
+            }
+            else if (me.HasSkill(Skill.AmplifyDamage)
+                && me.Mana > 5
+                && !nearest.Effects.Contains(EntityEffect.Amplifydamage))
+            {
+                client.Game.UseRightHandSkillOnEntity(Skill.AmplifyDamage, nearest);
+                await Task.Delay(200);
+            }
+            else if (me.HasSkill(Skill.CorpseExplosion) && me.Mana > 20)
+            {
+                List<WorldObject> corpses = NPCHelpers.GetNearbyCorpses(client, nearest.Location, 1);
+                var corpse = corpses.FirstOrDefault();
+                if (corpse == null)
+                {
+                    return true;
+                }
+
+                client.Game.UseRightHandSkillOnEntity(Skill.CorpseExplosion, corpse);
+                await Task.Delay(200);
+            }
+
+            return true;
+        }
+
+        private async Task<bool> BarbarianAssist(Client client, Player player)
+        {
+            var me = client.Game.Me;
+            await ClassHelpers.CastAllShouts(client);
+            List<WorldObject> enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 1, 20);
+            var nearest = enemies.FirstOrDefault();
+            if (nearest == null)
+            {
+                return true;
+            }
+
+            if (me.Attributes[Attribute.Level] < 30 && client.Game.Difficulty > Difficulty.Normal)
+            {
+                return true;
+            }
+            else if (me.Attributes[Attribute.Level] < 26 && client.Game.Difficulty == Difficulty.Normal && client.Game.Area == Area.CowLevel)
+            {
+                return true;
+            }
+
+            if (me.HasSkill(Skill.Whirlwind) &&
+                ((me.Attributes[Attribute.Level] > 33 && client.Game.Difficulty != Difficulty.Normal) || me.Attributes[Attribute.Level] > 40)
+                && me.Mana > 30)
+            {
+                return await WhirlWindEnemy(client, nearest);
+            }
+            else if (me.HasSkill(Skill.Concentrate) && me.Mana > 5)
+            {
+                Log.Information($"Attacking {nearest.NPCCode} with {Skill.Concentrate}");
+                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, MovementMode.Walking);
+                client.Game.RepeatRightHandSkillOnEntity(Skill.Concentrate, nearest);
+                await Task.Delay(200);
+            }
+            else
+            {
+                Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
+                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, MovementMode.Walking);
+                client.Game.UseRightHandSkillOnEntity(Skill.Attack, nearest);
+                await Task.Delay(200);
+            }
+
+            return true;
+        }
+
+        private async Task<bool> WhirlWindEnemy(Client client, WorldObject worldObject)
+        {
+            if (client.Game.Me.Location.Distance(worldObject.Location) > 15)
+            {
+                var wwStartPoint = client.Game.Me.Location.GetPointBeforePointInSameDirection(worldObject.Location, 15);
+                await MovementHelpers.MoveToLocation(client.Game, _pathingService, _mapApiService, wwStartPoint, MovementMode.Walking);
+            }
+
+            var wwDirection = client.Game.Me.Location.GetPointPastPointInSameDirection(worldObject.Location, 6);
+            if (client.Game.Me.Location.Equals(worldObject.Location))
+            {
+                var pathLeft = await _pathingService.GetPathToLocation(client.Game, worldObject.Location.Add(-6, 0), MovementMode.Walking);
+                var pathRight = await _pathingService.GetPathToLocation(client.Game, worldObject.Location.Add(6, 0), MovementMode.Walking);
+                if (pathLeft.Count < pathRight.Count)
+                {
+                    Log.Debug($"same location, wwing to left");
+                    wwDirection = new Point((ushort)(client.Game.Me.Location.X - 6), client.Game.Me.Location.Y);
+                }
+                else
+                {
+                    Log.Debug($"same location, wwing to right");
+                    wwDirection = new Point((ushort)(client.Game.Me.Location.X + 6), client.Game.Me.Location.Y);
+                }
+            }
+
+            //Log.Information($"player loc: {game.Me.Location}, nearest: {nearest.Location} ww destination: {wwDirection}  ");
+            client.Game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
+            await Task.Delay(TimeSpan.FromSeconds(0.3));
+            return true;
         }
     }
 }

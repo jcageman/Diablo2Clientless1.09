@@ -73,14 +73,16 @@ namespace D2NG.Core.D2GS.Items.Containers
             Add(newItem);
         }
 
-        public void Remove(Item item) => Remove(item.Id);
+        public bool Remove(Item item) => Remove(item.Id);
 
-        public void Remove(uint id)
+        public bool Remove(uint id)
         {
             if (_items.Remove(id, out Item it))
             {
                 SetBuffer(it, false);
+                return true;
             }
+            return false;
         }
 
         public Point FindFreeSpace(Item item)

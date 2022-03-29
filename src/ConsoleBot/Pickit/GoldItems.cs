@@ -21,7 +21,7 @@ namespace ConsoleBot.Pickit
             }
 
             var valuableClassifications = new HashSet<ClassificationType> { ClassificationType.Staff, ClassificationType.Wand, ClassificationType.Scepter };
-            if (valuableClassifications.Contains(item.Classification))
+            if (item.Quality != QualityType.Rare && valuableClassifications.Contains(item.Classification))
             {
                 return true;
             }
@@ -37,7 +37,8 @@ namespace ConsoleBot.Pickit
             }
 
             //Exceptional & elite armors are worth it
-            if (item.Classification == ClassificationType.Armor
+            if ((item.Quality == QualityType.Magical || item.Quality == QualityType.Normal)
+                && item.Classification == ClassificationType.Armor
                 && (item.Type.StartsWith("x") || item.Type.StartsWith("u")))
             {
                 return true;

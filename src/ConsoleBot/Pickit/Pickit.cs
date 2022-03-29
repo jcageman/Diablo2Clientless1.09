@@ -267,13 +267,24 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            var defaultInventoryItems = new List<ItemName>() { ItemName.TomeOfTownPortal, ItemName.TomeofIdentify, ItemName.HoradricCube, ItemName.WirtsLeg, ItemName.RejuvenationPotion, ItemName.FullRejuvenationPotion };
+            var defaultInventoryItems = new List<ItemName>() { ItemName.TomeOfTownPortal, ItemName.TomeofIdentify, ItemName.HoradricCube, ItemName.WirtsLeg };
             if (defaultInventoryItems.Contains(item.Name))
             {
                 return false;
             }
 
+            var defaultClassifications = new List<ClassificationType>() { ClassificationType.HealthPotion, ClassificationType.ManaPotion, ClassificationType.RejuvenationPotion };
+            if (defaultClassifications.Contains(item.Classification))
+            {
+                return false;
+            }
+
             if (characterClass == CharacterClass.Amazon && item.Name == ItemName.Arrows)
+            {
+                return false;
+            }
+
+            if (characterClass == CharacterClass.Amazon && item.Name == ItemName.Javelin)
             {
                 return false;
             }

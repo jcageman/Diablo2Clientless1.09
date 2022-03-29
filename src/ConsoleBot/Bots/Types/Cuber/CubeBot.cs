@@ -4,14 +4,12 @@ using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using ConsoleBot.TownManagement;
 using D2NG.Core;
-using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
-using D2NG.Core.D2GS.Players;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.Pathing;
 using Microsoft.Extensions.Options;
@@ -19,10 +17,9 @@ using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
-namespace ConsoleBot.Bots.Types.Mephisto
+namespace ConsoleBot.Bots.Types.Cuber
 {
     public class CubeBot : SingleClientBotBase, IBotInstance
     {
@@ -228,12 +225,12 @@ namespace ConsoleBot.Bots.Types.Mephisto
 
         private static IEnumerable<Item> GetGemsOnGround(Client client)
         {
-            return client.Game.Items.Where(i => PerfectGems.Contains(i.Name) && i.Ground);
+            return client.Game.Items.Values.Where(i => PerfectGems.Contains(i.Name) && i.Ground);
         }
 
         private static IEnumerable<Item> GetGrandCharmsOnGround(Client client)
         {
-            return client.Game.Items.Where(i => i.Name == ItemName.GrandCharm && i.Level >= 91 && i.Ground && !Pickit.Pickit.ShouldKeepItem(client.Game, i));
+            return client.Game.Items.Values.Where(i => i.Name == ItemName.GrandCharm && i.Level >= 91 && i.Ground && !Pickit.Pickit.ShouldKeepItem(client.Game, i));
         }
 
         private static List<Item> GetGemsInInventory(Client client)

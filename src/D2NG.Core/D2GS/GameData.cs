@@ -29,11 +29,11 @@ namespace D2NG.Core.D2GS
             {
                 var walkingSpeedIncreasedMultiplier = 1.0;
                 var speedItems = this.Items.Where(i => i.Value.Action == Action.Equip && i.Value.EntityType == EntityType.Player && i.Value.PlayerId == Me?.Id).Select(i => i.Value.GetValueOfStatType(StatType.FasterRunWalk));
-                if(speedItems.Any())
+                if (speedItems.Any())
                 {
                     walkingSpeedIncreasedMultiplier += speedItems.Aggregate((agg, frw) => agg + frw) / (double)100;
                 }
-                
+
                 var increasedSpeedSkill = Me.Skills.GetValueOrDefault(Skill.IncreasedSpeed, 0);
                 if (increasedSpeedSkill > 0)
                 {
@@ -71,7 +71,8 @@ namespace D2NG.Core.D2GS
 
         public ConcurrentDictionary<uint, Item> Items { get; private set; } = new ConcurrentDictionary<uint, Item>();
 
-        internal double WalkingSpeedMultiplier  {
+        internal double WalkingSpeedMultiplier
+        {
 
             get { return _walkingSpeedMultiplier.Value; }
         }
@@ -83,12 +84,14 @@ namespace D2NG.Core.D2GS
         {
             if (packet.Name == ClientCharacter.Name && packet.Class == ClientCharacter.Class)
             {
-                if(Me == null)
+                if (Me == null)
                 {
                     Me = new Self(packet);
                 }
 
                 Me.Location = packet.Location;
+                Me.Area = Act.Area;
+                Me.Act = Act.Act;
             }
 
             var player = Players.Where(p => p.Id == packet.Id).FirstOrDefault();
@@ -137,17 +140,17 @@ namespace D2NG.Core.D2GS
 
         internal void AddEntityEffect(AddEntityEffectPacket packet)
         {
-            if(packet.EntityType == EntityType.Player)
+            if (packet.EntityType == EntityType.Player)
             {
                 var player = Players.Where(p => p.Id == packet.EntityId).FirstOrDefault();
-                if(player != null)
+                if (player != null)
                 {
-                    player.Effects.Add(packet.Effect);
+                    player.AddEffect(packet);
                 }
 
                 if (packet.EntityId == Me.Id)
                 {
-                    Me.Effects.Add(packet.Effect);
+                    Me.AddEffect(packet);
                 }
             }
             else
@@ -163,12 +166,12 @@ namespace D2NG.Core.D2GS
                 var player = Players.Where(p => p.Id == packet.EntityId).FirstOrDefault();
                 if (player != null)
                 {
-                    player.Effects.Add(packet.Effect);
+                    player.Effects.TryAdd(packet.Effect, packet.Effect);
                 }
 
                 if (packet.EntityId == Me.Id)
                 {
-                    Me.Effects.Add(packet.Effect);
+                    Me.Effects.TryAdd(packet.Effect, packet.Effect);
                 }
             }
             else
@@ -184,12 +187,12 @@ namespace D2NG.Core.D2GS
                 var player = Players.Where(p => p.Id == packet.EntityId).FirstOrDefault();
                 if (player != null)
                 {
-                    player.Effects = packet.EntityEffects;
+                    player.UpdateEffects(packet.EntityEffects);
                 }
 
                 if (packet.EntityId == Me.Id)
                 {
-                    Me.Effects = packet.EntityEffects;
+                    Me.UpdateEffects(packet.EntityEffects);
                 }
             }
             else
@@ -207,13 +210,13 @@ namespace D2NG.Core.D2GS
                 player.CorpseId = packet.CorpseId;
             }
 
-            if(Me?.Id == packet.PlayerId)
+            if (Me?.Id == packet.PlayerId)
             {
                 Me.CorpseId = packet.CorpseId;
             }
 
             var corpse = Players.Where(p => p.Id == packet.CorpseId).FirstOrDefault();
-            if(corpse != null && !packet.CorpseAdded)
+            if (corpse != null && !packet.CorpseAdded)
             {
                 Players.RemoveAll(p => p.Id == packet.CorpseId);
             }
@@ -238,12 +241,12 @@ namespace D2NG.Core.D2GS
 
         internal void PlayerStop(PlayerStopPacket packet)
         {
-            if(packet.EntityType != EntityType.Player)
+            if (packet.EntityType != EntityType.Player)
             {
                 return;
             }
 
-            if (packet.EntityId == Me.Id )
+            if (packet.EntityId == Me.Id)
             {
                 Me.Location = packet.Location;
             }
@@ -260,7 +263,7 @@ namespace D2NG.Core.D2GS
 
         internal void ReassignPlayer(EntityType entityType, uint unitId, Point location)
         {
-            if(entityType == EntityType.Player)
+            if (entityType == EntityType.Player)
             {
                 if (unitId == Me.Id)
                 {
@@ -278,8 +281,63 @@ namespace D2NG.Core.D2GS
             }
         }
 
+        internal void UpdatePlayerPartyInfo(AllyPartyInfoPacket packet)
+        {
+            if (packet.EntityType == EntityType.Player)
+            {
+                if (packet.EntityId == Me.Id)
+                {
+                    Me.Area = packet.Area;
+                    Me.Act = packet.Area.MapToAct();
+                    Me.LifePercentage = packet.LifePercentage;
+                }
+
+                foreach (var player in Players)
+                {
+                    if (packet.EntityId == player.Id)
+                    {
+                        player.Area = packet.Area;
+                        player.Act = packet.Area.MapToAct();
+                        player.LifePercentage = packet.LifePercentage;
+                        break;
+                    }
+                }
+            }
+        }
+
+        internal void UpdateSummonInfo(PetActionPacket packet)
+        {
+            if (Me.Id == packet.PlayerId)
+            {
+                if (packet.AddingSummon)
+                {
+                    Me.Summons.Add(new Summon { Id = packet.SummonId, NPCCode = packet.UniqueCode });
+                }
+                else
+                {
+                    Me.Summons.RemoveAll(s => s.Id == packet.SummonId);
+                }
+            }
+
+            foreach (var player in Players)
+            {
+                if (packet.PlayerId == player.Id)
+                {
+                    if (packet.AddingSummon)
+                    {
+                        player.Summons.Add(new Summon { Id = packet.SummonId, NPCCode = packet.UniqueCode });
+                    }
+                    else
+                    {
+                        player.Summons.RemoveAll(s => s.Id == packet.SummonId);
+                    }
+                    break;
+                }
+            }
+        }
+
         internal void SetAttribute(BaseAttributePacket baseAttribute)
-            => Me.Attributes[baseAttribute.Attribute] = baseAttribute.Value;
+            => Me.UpdateAttribute(baseAttribute.Attribute, baseAttribute.Value);
 
         internal void SetItemSkill(SetItemSkillPacket packet)
         {
@@ -312,9 +370,7 @@ namespace D2NG.Core.D2GS
         {
             Me.Location = packet.Location;
             Me.Life = packet.Life;
-            Me.MaxLife = Math.Max(Me.MaxLife, Me.Life);
             Me.Mana = packet.Mana;
-            Me.MaxMana = Math.Max(Me.MaxMana, Me.Mana);
             Me.Stamina = packet.Stamina;
         }
 
@@ -322,15 +378,7 @@ namespace D2NG.Core.D2GS
         {
             Me.Location = packet.Location;
             Me.Life = packet.Life;
-            //Workaround: seems the game server remembers battle orders during initialization
-            if (Act.MapId > 0)
-            {
-                Me.MaxLife = Math.Max(Me.MaxLife, Me.Life);
-                Me.MaxMana = Math.Max(Me.MaxMana, Me.Mana);
-            }
-
             Me.Mana = packet.Mana;
-
             Me.Stamina = packet.Stamina;
         }
 
@@ -347,15 +395,31 @@ namespace D2NG.Core.D2GS
             switch (item.Action)
             {
                 case Action.Equip:
-                    if (item.EntityType == EntityType.Player && item.PlayerId == Me?.Id && item.Classification == ClassificationType.Belt)
+
+                    if (item.EntityType == EntityType.Player)
                     {
-                        Belt.UpdateBeltRows(item.BeltRows);
+                        if(item.PlayerId == Me?.Id)
+                        {
+                            if (item.Classification == ClassificationType.Belt)
+                            {
+                                Belt.UpdateBeltRows(item.BeltRows);
+                            }
+                            Me.EquipItem(item);
+                        }
+
                     }
                     break;
                 case Action.Unequip:
-                    if (item.EntityType == EntityType.Player && item.PlayerId == Me?.Id && item.Classification == ClassificationType.Belt)
+                    if (item.EntityType == EntityType.Player)
                     {
-                        Belt.UpdateBeltRows(1);
+                        if (item.PlayerId == Me?.Id)
+                        {
+                            if (item.Classification == ClassificationType.Belt)
+                            {
+                                Belt.UpdateBeltRows(1);
+                            }
+                            Me.UnequipItem(item);
+                        }
                     }
                     break;
                 case Action.PutInContainer:
@@ -420,24 +484,35 @@ namespace D2NG.Core.D2GS
             switch (item.Container)
             {
                 case ContainerType.Stash:
-                    CursorItem = item;
-                    Stash.Remove(item);
+                    if (Stash.Remove(item))
+                    {
+                        CursorItem = item;
+                    }
                     break;
                 case ContainerType.Stash2:
-                    CursorItem = item;
-                    Stash.Remove(item);
+                    if (Stash.Remove(item))
+                    {
+                        CursorItem = item;
+                    }
                     break;
                 case ContainerType.Belt:
-                    CursorItem = item;
-                    Belt.Remove(item);
+                    if (Belt.Remove(item))
+                    {
+                        CursorItem = item;
+                    }
                     break;
                 case ContainerType.Cube:
-                    CursorItem = item;
-                    Cube.Remove(item);
+                    if (Cube.Remove(item))
+                    {
+                        CursorItem = item;
+                    }
                     break;
                 case ContainerType.Inventory:
-                    CursorItem = item;
-                    Inventory.Remove(item);
+                    if(Inventory.Remove(item))
+                    {
+                        CursorItem = item;
+                    }
+                    
                     break;
                 default:
                     // Do nothing we don't know how to handle this
@@ -461,6 +536,14 @@ namespace D2NG.Core.D2GS
                     Stash.Add(item);
                     break;
                 case ContainerType.Belt:
+                    if (Belt.Width <= item.Location.X)
+                    {
+                        Belt.UpdateBeltRows((uint)item.Location.X + 1);
+                    }
+                    if (Belt.Height <= item.Location.Y)
+                    {
+                        Belt.UpdateBeltRows((uint)item.Location.Y + 1);
+                    }
                     Belt.Add(item);
                     break;
                 case ContainerType.Cube:
@@ -474,6 +557,33 @@ namespace D2NG.Core.D2GS
                     break;
             }
         }
+
+        internal void UseStackableItem(UseStackableItemPacket packet)
+        {
+            var item = Inventory.FindItemById(packet.ItemId);
+            if(item != null &&
+                ( item.Classification == ClassificationType.HealthPotion
+                || item.Classification == ClassificationType.ManaPotion
+                || item.Classification == ClassificationType.RejuvenationPotion))
+            {
+                Inventory.Remove(item);
+            }
+        }
+
+        internal void UpdateItemStats(UpdateItemStatsPacket packet)
+        {
+            var item = Me.Equipment.Values.FirstOrDefault(i => i.Id == packet.ItemId);
+            if(item != null)
+            {
+                if (packet.UpdateType == 70
+                   && (item.Classification == ClassificationType.Javelin || item.Classification == ClassificationType.AmazonJavelin))
+                {
+                    item.Amount = packet.Amount;
+                }
+            }
+
+        }
+
         internal void RemoveObject(RemoveObjectPacket packet)
         {
             switch (packet.EntityType)
@@ -482,7 +592,7 @@ namespace D2NG.Core.D2GS
                     break;
                 case EntityType.Player:
                     Act.RemoveWorldObject(packet.EntityId, packet.EntityType);
-                    foreach(var player in Players.Where(p => p.CorpseId == packet.EntityId))
+                    foreach (var player in Players.Where(p => p.CorpseId == packet.EntityId))
                     {
                         Players.RemoveAll(p => p.Id == packet.EntityId);
                         player.CorpseId = null;

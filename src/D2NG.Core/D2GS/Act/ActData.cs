@@ -91,7 +91,7 @@ namespace D2NG.Core.D2GS.Act
         internal void RemoveWorldObject(uint entityId, EntityType entityType)
         {
             WorldObjects.Remove((entityId, entityType), out var value);
-            if(value != null)
+            if (value != null)
             {
                 WorldObjectsByEntityCode.AddOrUpdate(
     value.Code,
@@ -104,7 +104,7 @@ namespace D2NG.Core.D2GS.Act
         internal void AddWorldObject(WorldObject obj)
         {
             WorldObjects[(obj.Id, obj.Type)] = obj;
-            WorldObjectsByEntityCode.AddOrUpdate(obj.Code, (newCode => new List<WorldObject> { obj }), (existingCode, existingObjects) => {existingObjects.Add(obj); return existingObjects; });
+            WorldObjectsByEntityCode.AddOrUpdate(obj.Code, (newCode => new List<WorldObject> { obj }), (existingCode, existingObjects) => { existingObjects.Add(obj); return existingObjects; });
         }
 
         internal void AddWarp(AssignLevelWarpPacket packet)

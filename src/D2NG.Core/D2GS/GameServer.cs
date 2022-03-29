@@ -106,7 +106,10 @@ namespace D2NG.Core.D2GS
         internal async Task Disconnect()
         {
             Connection.Terminate();
-            await _listener;
+            if(_listener != null)
+            {
+                await _listener;
+            }
         }
 
         public async Task LeaveGame()

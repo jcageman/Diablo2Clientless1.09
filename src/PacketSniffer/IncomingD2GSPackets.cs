@@ -140,7 +140,7 @@ namespace PacketSniffer
                     break;
                 case InComingPacket.AddEntityEffect:
                     var addEntityEffectPacket = new AddEntityEffectPacket(eventArgs);
-                    Log.Debug($"AddEntityEffect -> Type: {addEntityEffectPacket.EntityType} with id  {addEntityEffectPacket.EntityId} effect {addEntityEffectPacket.Effect} unknown {addEntityEffectPacket.Unknown1}  with data: {eventArgs.Raw.ToPrintString()}");
+                    Log.Debug($"AddEntityEffect -> Type: {addEntityEffectPacket.EntityType} with id  {addEntityEffectPacket.EntityId} effect {addEntityEffectPacket.Effect} unknown {addEntityEffectPacket.ExtraData}  with data: {eventArgs.Raw.ToPrintString()}");
                     break;
                 case InComingPacket.AddEntityEffect2:
                     var addEntityEffectPacket2 = new AddEntityEffectPacket2(eventArgs);

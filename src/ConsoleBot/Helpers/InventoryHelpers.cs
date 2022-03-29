@@ -1,15 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using ConsoleBot.Clients.ExternalMessagingClient;
+﻿using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Attribute = D2NG.Core.D2GS.Players.Attribute;
 
 namespace ConsoleBot.Helpers
@@ -147,7 +147,7 @@ namespace ConsoleBot.Helpers
             foreach (Item item in items)
             {
                 var currentMoveResult = MoveItemFromStashToInventory(game, item);
-                if(currentMoveResult == MoveItemResult.Failed)
+                if (currentMoveResult == MoveItemResult.Failed)
                 {
                     break;
                 }
@@ -335,7 +335,7 @@ namespace ConsoleBot.Helpers
             return MoveItemResult.Succes;
         }
 
-            public static MoveItemResult PutCubeItemInInventory(Game game, Item item)
+        public static MoveItemResult PutCubeItemInInventory(Game game, Item item)
         {
             Point location = game.Inventory.FindFreeSpace(item);
             if (location == null)
@@ -437,7 +437,7 @@ namespace ConsoleBot.Helpers
         public static void IdentifyItems(Game game)
         {
             var tomeOfIdentify = game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeofIdentify);
-            if(tomeOfIdentify == null)
+            if (tomeOfIdentify == null)
             {
                 return;
             }
@@ -529,7 +529,7 @@ namespace ConsoleBot.Helpers
         {
             foreach (var item in game.Cube.Items)
             {
-                if(PutCubeItemInInventory(game, item) != MoveItemResult.Succes)
+                if (PutCubeItemInInventory(game, item) != MoveItemResult.Succes)
                 {
                     return false;
                 }
@@ -583,10 +583,46 @@ namespace ConsoleBot.Helpers
             }
 
             var revPotions = game.Belt.GetRejuvenationPotions();
-            foreach(var revPotion in revPotions)
+            foreach (var revPotion in revPotions)
             {
                 MoveBeltItemToInventory(game, revPotion);
             }
+
+            var missingHealthPotionsInBelt = game.Belt.Height * 2 - game.Belt.GetHealthPotionsInSlots(new List<int>() { 0, 1 }).Count;
+            if (missingHealthPotionsInBelt > 0)
+            {
+                var healthPotionsToAdd = game.Inventory.Items
+                    .Where(i => i.Classification == ClassificationType.HealthPotion)
+                    .Take((int)missingHealthPotionsInBelt);
+                foreach (var healthPotion in healthPotionsToAdd)
+                {
+                    game.PutItemInBelt(healthPotion);
+                }
+            }
+
+            var missingManaPotionsInBelt = game.Belt.Height * 2 - game.Belt.GetManaPotionsInSlots(new List<int>() { 2, 3 }).Count;
+            if (missingManaPotionsInBelt > 0)
+            {
+                var manaPotionsToAdd = game.Inventory.Items
+                    .Where(i => i.Classification == ClassificationType.ManaPotion)
+                    .Take((int)missingManaPotionsInBelt);
+                foreach (var manaPotion in manaPotionsToAdd)
+                {
+                    game.PutItemInBelt(manaPotion);
+                }
+            }
+        }
+
+        public static int GetTotalHealthPotions(Game game)
+        {
+            return game.Belt.NumOfHealthPotions()
+                + game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion);
+        }
+
+        public static int GetTotalManaPotions(Game game)
+        {
+            return game.Belt.NumOfManaPotions()
+                + game.Inventory.Items.Count(i => i.Classification == ClassificationType.ManaPotion);
         }
     }
 }

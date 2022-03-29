@@ -23,6 +23,7 @@ namespace ConsoleBot.Helpers
                 try
                 {
                     await client.Disconnect();
+                    await Task.Delay(TimeSpan.FromSeconds(2));
                     if (ConnectToRealm(client, botConfiguration, accountCharacter))
                     {
                         return true;
@@ -65,6 +66,12 @@ namespace ConsoleBot.Helpers
                 throw new CharacterNotFoundException(accountCharacter.Character);
             }
             client.SelectCharacter(selectedCharacter);
+
+            if (!string.IsNullOrEmpty(botConfiguration.ChannelToJoin))
+            {
+                client.Chat.EnterChat();
+                client.Chat.JoinChannel(botConfiguration.ChannelToJoin);
+            }
 
             return true;
         }
@@ -118,7 +125,7 @@ namespace ConsoleBot.Helpers
                 {
                     var retryDuration = Math.Pow(1 + retryCount, 1.2) * TimeSpan.FromSeconds(3);
                     Log.Information($"Joining game failed for {client.LoggedInUserName()} retrying in {retryDuration.TotalSeconds} seconds");
-                    await RealmConnectHelpers.ConnectToRealmWithRetry(client, botConfiguration, cowAccount, 10);
+                    await ConnectToRealmWithRetry(client, botConfiguration, cowAccount, 10);
                     await Task.Delay(retryDuration);
                 }
 

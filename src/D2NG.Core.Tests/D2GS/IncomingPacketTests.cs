@@ -118,6 +118,26 @@ namespace D2NG.Core.Tests.D2GS
             Assert.Equal(100, packet.LifePercentage);
         }
 
-        
-     }
+        [Fact]
+        public void PetActionPacket()
+        {
+            var bytes = new byte[] { 0x7A, 0x01, 0x02, 0x65, 0x01, 0x01, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00 };
+            var packet = new PetActionPacket(new D2gsPacket(bytes));
+            Assert.True(packet.AddingSummon);
+            Assert.Equal(2, packet.SkillTree);
+            Assert.Equal(NPCCode.Valkyrie, packet.UniqueCode);
+            Assert.Equal(1u, packet.PlayerId);
+            Assert.Equal(16u, packet.SummonId);
+        }
+
+        [Fact]
+        public void UpdateItemStatsPacket()
+        {
+            var bytes = new byte[] { 0x3E, 0x0C, 0x04, 0x00, 0x00, 0x01, 0x46, 0xF1, 0x01, 0x00, 0x00 };
+            var packet = new UpdateItemStatsPacket(new D2gsPacket(bytes));
+            Assert.Equal(1036u, packet.ItemId);
+            Assert.Equal(497u, packet.Amount);
+            Assert.Equal(70u, packet.Type);
+        }
+    }
 }

@@ -140,12 +140,12 @@ namespace ConsoleBot.Bots.Types.Pindle
                 return false;
             }
 
-            if (!client.Game.Me.Effects.Contains(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
+            if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
             {
                 client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
             }
 
-            if (!client.Game.Me.Effects.Contains(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
+            if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
             {
                 client.Game.UseRightHandSkillOnLocation(Skill.ShiverArmor, client.Game.Me.Location);
             }
@@ -232,11 +232,11 @@ namespace ConsoleBot.Bots.Types.Pindle
 
         private bool PickupNearbyItems(Client client)
         {
-            var pickupItems = client.Game.Items.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location)).ToList();
+            var pickupItems = client.Game.Items.Values.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location)).ToList();
             var revCountInInventory = client.Game.Inventory.Items.Count(i => i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion);
             if (revCountInInventory < 5)
             {
-                var revs = client.Game.Items.Where(i => i.Ground && (i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
+                var revs = client.Game.Items.Values.Where(i => i.Ground && (i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
                 Log.Information($"Killed Pindle, picking up {revs.Count()} rev potions since only {revCountInInventory} in inventory");
                 pickupItems.AddRange(revs);
             }

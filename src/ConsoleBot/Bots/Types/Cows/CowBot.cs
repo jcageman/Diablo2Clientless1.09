@@ -778,7 +778,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     return false;
                 }
 
-                var wirtsLegItem = client.Game.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg && i.Ground);
+                var wirtsLegItem = client.Game.Items.Values.FirstOrDefault(i => i.Name == ItemName.WirtsLeg && i.Ground);
                 if (client.Game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg) != null)
                 {
                     return true;
@@ -806,7 +806,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 return client.Game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg) != null;
             }, TimeSpan.FromSeconds(15)))
             {
-                Log.Error($"Getting leg failed, while it's at location: {client.Game.Items.FirstOrDefault(i => i.Name == ItemName.WirtsLeg)?.Location} and i'm at location {client.Game.Me.Location}");
+                Log.Error($"Getting leg failed, while it's at location: {client.Game.Items.Values.FirstOrDefault(i => i.Name == ItemName.WirtsLeg)?.Location} and i'm at location {client.Game.Me.Location}");
                 return false;
             }
 
@@ -954,7 +954,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     }
                 }
 
-                if (!client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.BattleOrders))
                 {
                     Log.Information($"Lost bo on client {client.Game.Me.Name}, moving to barb for bo");
                     executeStaticField.Stop();
@@ -982,19 +982,19 @@ namespace ConsoleBot.Bots.Types.Cows
                     continue;
                 }
 
-                if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
+                if (!hasUsedPotion && client.Game.Me.Effects.ContainsKey(EntityEffect.BattleOrders))
                 {
                     client.Game.UseHealthPotions();
                     client.Game.UseHealthPotions();
                     hasUsedPotion = true;
                 }
 
-                if (!client.Game.Me.Effects.Contains(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.ShiverArmor, client.Game.Me.Location);
                 }
 
-                if (!client.Game.Me.Effects.Contains(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
                 }
@@ -1172,7 +1172,7 @@ namespace ConsoleBot.Bots.Types.Cows
             var random = new Random();
             while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
             {
-                if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
+                if (!hasUsedPotion && client.Game.Me.Effects.ContainsKey(EntityEffect.BattleOrders))
                 {
                     client.Game.UseHealthPotions();
                     client.Game.UseHealthPotions();
@@ -1203,12 +1203,12 @@ namespace ConsoleBot.Bots.Types.Cows
                     }
                 }
 
-                if (!client.Game.Me.Effects.Contains(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Shiverarmor) && client.Game.Me.HasSkill(Skill.ShiverArmor))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.ShiverArmor, client.Game.Me.Location);
                 }
 
-                if (!client.Game.Me.Effects.Contains(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
+                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
                 }
@@ -1348,7 +1348,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
             while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
             {
-                if (!hasUsedPotion && client.Game.Me.Effects.Contains(EntityEffect.BattleOrders))
+                if (!hasUsedPotion && client.Game.Me.Effects.ContainsKey(EntityEffect.BattleOrders))
                 {
                     client.Game.UseHealthPotions();
                     client.Game.UseHealthPotions();

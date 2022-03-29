@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 
@@ -7,7 +6,7 @@ namespace D2NG.Core.D2GS.Items.Containers
 {
     public class Belt : Container
     {
-        public Belt() : base(4, 4)
+        public Belt() : base(4, 1)
         {
         }
 
@@ -16,13 +15,13 @@ namespace D2NG.Core.D2GS.Items.Containers
             var oldHeight = Height;
             var oldBuffer = Buffer;
             Height = rows;
-            
+
             Buffer = new bool[Height, Width];
             for (int y = 0; y < oldHeight; y++)
             {
                 for (int x = 0; x < Width; x++)
                 {
-                    if(Height > y)
+                    if (Height > y)
                     {
                         Buffer[y, x] = oldBuffer[y, x];
                     }

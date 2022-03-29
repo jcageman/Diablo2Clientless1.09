@@ -108,6 +108,7 @@ namespace ConsoleBot.TownManagement
                 Log.Information($"Moving to {portal.Location} failed");
                 return false;
             }
+
             var previousArea = client.Game.Area;
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
@@ -242,15 +243,31 @@ namespace ConsoleBot.TownManagement
 
         public async Task<bool> SwitchAct(Client client, Act act)
         {
-            var targetTownArea = WayPointHelpers.MapTownArea(act);
-            var movementMode = GetMovementMode(client.Game);
-            var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, movementMode);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
+            if(client.Game.Act == act)
             {
-                Log.Warning($"Teleporting to {client.Game.Act} waypoint failed");
-                return false;
+                return true;
             }
 
+            if(!client.Game.IsInTown())
+            {
+                if(!await TakeTownPortalToTown(client))
+                {
+                    Log.Warning($"Taking townportal to {WayPointHelpers.MapTownArea(client.Game.Act)} failed");
+                    return false;
+                }
+            }
+            else
+            {
+                var movementMode = GetMovementMode(client.Game);
+                var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, movementMode);
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
+                {
+                    Log.Warning($"Moving to {client.Game.Act} waypoint failed");
+                    return false;
+                }
+            }
+
+            var targetTownArea = WayPointHelpers.MapTownArea(act);
             var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).Single();
             Log.Information($"Taking waypoint to {targetTownArea}");
             if (!GeneralHelpers.TryWithTimeout((_) =>
@@ -356,7 +373,10 @@ namespace ConsoleBot.TownManagement
 
         private static MovementMode GetMovementMode(Game game)
         {
-            return game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+            return game.Me.HasSkill(Skill.Teleport)
+                && game.Me.MaxMana > 200
+                && game.Me.Mana > 20
+                ? MovementMode.Teleport : MovementMode.Walking;
         }
 
         private async Task<bool> IdentifyItems(Game game, MovementMode movementMode)
@@ -394,7 +414,11 @@ namespace ConsoleBot.TownManagement
         private async Task<bool> RefreshAndSellItems(Game game, MovementMode movementMode, TownManagementOptions options)
         {
             var sellItemCount = game.Inventory.Items.Count(i => Pickit.Pickit.CanTouchInventoryItem(game, i) && !Pickit.Pickit.ShouldKeepItem(game, i)) + game.Cube.Items.Count(i => !Pickit.Pickit.ShouldKeepItem(game, i));
-            if (NPCHelpers.ShouldRefreshCharacterAtNPC(game) || sellItemCount > 5 || options.ItemsToBuy?.Count > 0)
+            if (NPCHelpers.ShouldRefreshCharacterAtNPC(game)
+                || sellItemCount > 5
+                || options.ItemsToBuy?.Count > 0
+                || options.HealthPotionsToBuy > 0
+                || options.ManaPotionsToBuy > 0)
             {
                 var sellNpc = NPCHelpers.GetSellNPC(game.Act);
                 Log.Information($"Client {game.Me.Name} moving to {sellNpc} for refresh and selling {sellItemCount} items");
@@ -418,7 +442,11 @@ namespace ConsoleBot.TownManagement
                         return false;
                     }
 
-                    if (!NPCHelpers.SellItemsAndRefreshPotionsAtNPC(game, uniqueNPC, options.ItemsToBuy))
+                    if (!NPCHelpers.SellItemsAndRefreshPotionsAtNPC(game,
+                                                                    uniqueNPC,
+                                                                    options.ItemsToBuy,
+                                                                    options.HealthPotionsToBuy,
+                                                                    options.ManaPotionsToBuy))
                     {
                         Log.Warning($"Client {game.Me.Name} Selling items and refreshing potions failed at {game.Me.Location}");
                         return false;
@@ -436,7 +464,10 @@ namespace ConsoleBot.TownManagement
 
         private async Task<bool> ResurrectMerc(Game game, MovementMode movementMode)
         {
-            if (game.Me.MercId == null && game.ClientCharacter.IsExpansion && game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 50.000)
+            if (game.Me.MercId == null
+                && game.ClientCharacter.IsExpansion
+                && game.Me.Attributes.TryGetValue(D2NG.Core.D2GS.Players.Attribute.GoldInStash, out var goldInStash)
+                && goldInStash > 50.000)
             {
                 var mercNpc = NPCHelpers.GetMercNPCForAct(game.Act);
                 Log.Information($"Client {game.Me.Name} moving to {mercNpc} for resurrecting merc");
@@ -509,7 +540,8 @@ namespace ConsoleBot.TownManagement
 
         private async Task<bool> GambleItems(Client client, MovementMode movementMode)
         {
-            bool shouldGamble = client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.GoldInStash] > 7_000_000;
+            bool shouldGamble = client.Game.Me.Attributes.TryGetValue(D2NG.Core.D2GS.Players.Attribute.GoldInStash, out var goldInStash)
+                && goldInStash > 7_000_000;
             if (shouldGamble && System.Threading.Interlocked.Exchange(ref isAnyClientGambling, 1) == 0)
             {
                 var gambleNPC = NPCHelpers.GetGambleNPC(client.Game.Act);

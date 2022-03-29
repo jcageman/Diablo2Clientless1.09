@@ -1,6 +1,8 @@
-﻿using ConsoleBot.Bots.Types.Baal;
+﻿using ConsoleBot.Bots.Types.Assist;
+using ConsoleBot.Bots.Types.Baal;
 using ConsoleBot.Bots.Types.Cows;
 using ConsoleBot.Bots.Types.CS;
+using ConsoleBot.Bots.Types.Cuber;
 using ConsoleBot.Bots.Types.Mephisto;
 using ConsoleBot.Bots.Types.Pindle;
 using ConsoleBot.Bots.Types.Travincal;
@@ -18,6 +20,7 @@ namespace ConsoleBot.Bots.Types
             services.AddSingleton<IBotInstance, TestBot>();
             services.AddSingleton<IBotInstance, CowBot>();
             services.AddSingleton<IBotInstance, CSBot>();
+            services.AddSingleton<IBotInstance, AssistBot>();
             services.AddSingleton<IBotInstance, PindleBot>();
             services.AddSingleton<IBotInstance, BaalBot>();
             services.AddSingleton<IBotInstance, CubeBot>();
@@ -36,6 +39,8 @@ namespace ConsoleBot.Bots.Types
                 .Bind(config.GetSection("bot").GetSection("baal"));
             services.AddOptions<CubeConfiguration>()
                 .Bind(config.GetSection("bot").GetSection("cube"));
+            services.AddOptions<AssistConfiguration>()
+                .Bind(config.GetSection("bot").GetSection("assist"));
         }
     }
 }

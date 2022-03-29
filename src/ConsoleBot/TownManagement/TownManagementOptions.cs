@@ -9,5 +9,9 @@ namespace ConsoleBot.TownManagement
         public Act Act { get; set; }
         public Dictionary<ItemName, int> ItemsToBuy { get; set; }
         public bool ResurrectMerc { get; set; } = true;
+
+        public long? HealthPotionsToBuy { get; set; }
+
+        public long? ManaPotionsToBuy { get; set; }
     }
 }
