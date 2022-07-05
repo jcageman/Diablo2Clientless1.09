@@ -1,7 +1,6 @@
 ﻿using ConsoleBot.Attack;
 using ConsoleBot.Bots;
 using ConsoleBot.Bots.Types;
-using ConsoleBot.Bots.Types.Cows;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Mule;
 using ConsoleBot.TownManagement;
@@ -74,11 +73,11 @@ namespace ConsoleBot
             services.AddOptions<BotConfiguration>()
                 .Bind(config.GetSection("bot"))
                 .ValidateDataAnnotations();
-            services.AddOptions<ExternalMessagingConfiguration>()
-                .Bind(config.GetSection("externalMessaging"))
-                .ValidateDataAnnotations();
             if(config.GetSection("externalMessaging").Exists())
             {
+                services.AddOptions<ExternalMessagingConfiguration>()
+                    .Bind(config.GetSection("externalMessaging"))
+                    .ValidateDataAnnotations();
                 services.AddSingleton<IExternalMessagingClient, ExternalMessagingClient>();
             }
             else
