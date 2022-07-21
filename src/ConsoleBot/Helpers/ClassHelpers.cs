@@ -37,6 +37,11 @@ namespace ConsoleBot.Helpers
             return client.Game.Players.Any(p => IsMissingShouts(p));
         }
 
+        public static bool AnyClientIsMissingShouts(List<Client> clients)
+        {
+            return clients.Any(c => c.Game == null || c.Game.Me == null || IsMissingShouts(c.Game.Me));
+        }
+
         public static bool IsMissingShouts(Player p)
         {
             return !p.Effects.ContainsKey(EntityEffect.Battlecommand)

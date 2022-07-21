@@ -104,7 +104,7 @@ namespace ConsoleBot
                 .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
                 .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
                 .WriteTo.File(logfileName,
-                  restrictedToMinimumLevel: LogEventLevel.Information,
+                  restrictedToMinimumLevel: LogEventLevel.Verbose,
                   rollOnFileSizeLimit: true,
                   fileSizeLimitBytes: 20_000_000)
                 .CreateLogger();

@@ -29,15 +29,7 @@ namespace ConsoleBot.Helpers
             Log.Information($"Repairing items");
             GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
-                {
-                    game.TeleportToLocation(npc.Location);
-                }
-                else
-                {
-                    game.MoveTo(npc);
-                }
-
+                game.MoveTo(npc);
                 if (game.Me.Location.Distance(npc.Location) < 5)
                 {
                     return game.InteractWithNPC(npc);
@@ -89,14 +81,7 @@ namespace ConsoleBot.Helpers
             {
                 if (game.Me.Location.Distance(npc.Location) >= 2)
                 {
-                    if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
-                    {
-                        game.TeleportToLocation(npc.Location);
-                    }
-                    else
-                    {
-                        game.MoveTo(npc);
-                    }
+                    game.MoveTo(npc);
                     return false;
                 }
                 return true;
@@ -116,14 +101,7 @@ namespace ConsoleBot.Helpers
                 }
                 else
                 {
-                    if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
-                    {
-                        game.TeleportToLocation(npc.Location);
-                    }
-                    else
-                    {
-                        game.MoveTo(npc);
-                    }
+                    game.MoveTo(npc);
                 }
                 return false;
             }, TimeSpan.FromSeconds(3));
@@ -312,7 +290,7 @@ namespace ConsoleBot.Helpers
                 return false;
             }
 
-            var deckardCain = NPCHelpers.GetUniqueNPC(game, deckhardCainCode);
+            var deckardCain = GetUniqueNPC(game, deckhardCainCode);
             if (deckardCain == null)
             {
                 return false;
@@ -323,14 +301,7 @@ namespace ConsoleBot.Helpers
             {
                 if (game.Me.Location.Distance(deckardCain.Location) > 2)
                 {
-                    if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
-                    {
-                        game.TeleportToLocation(deckardCain.Location);
-                    }
-                    else
-                    {
-                        game.MoveTo(deckardCain);
-                    }
+                    game.MoveTo(deckardCain);
                 }
 
                 if (game.Me.Location.Distance(deckardCain.Location) < 5)
@@ -363,14 +334,7 @@ namespace ConsoleBot.Helpers
             {
                 if (game.Me.Location.Distance(npc.Location) > 2)
                 {
-                    if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
-                    {
-                        game.TeleportToLocation(npc.Location);
-                    }
-                    else
-                    {
-                        game.MoveTo(npc);
-                    }
+                    game.MoveTo(npc);
                 }
 
                 if (game.Me.Location.Distance(npc.Location) < 5)
@@ -439,14 +403,7 @@ namespace ConsoleBot.Helpers
             {
                 if (game.Me.Location.Distance(npc.Location) >= 2)
                 {
-                    if (game.Me.HasSkill(D2NG.Core.D2GS.Players.Skill.Teleport))
-                    {
-                        game.TeleportToLocation(npc.Location);
-                    }
-                    else
-                    {
-                        game.MoveTo(npc);
-                    }
+                    game.MoveTo(npc);
                 }
 
                 if (game.Me.Location.Distance(npc.Location) < 5)

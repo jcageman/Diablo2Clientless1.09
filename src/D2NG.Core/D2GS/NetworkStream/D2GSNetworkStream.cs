@@ -20,6 +20,14 @@ namespace D2NG.Core.D2GS.NetworkStream
             }
         }
 
+        public bool DataAvailable
+        {
+            get
+            {
+                return stream.DataAvailable;
+            }
+        }
+
         public void Close()
         {
             stream.Close();

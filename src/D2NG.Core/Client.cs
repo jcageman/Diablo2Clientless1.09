@@ -59,7 +59,7 @@ namespace D2NG.Core
         /// <param name="username">Account name</param>
         /// <param name="password">Password used to login</param>
         /// <returns>A list of Characters associated with the account</returns>
-        public List<Character> Login(string username, string password)
+        public async Task<List<Character>> Login(string username, string password)
         {
             if (!Bncs.Login(username, password))
             {
@@ -68,22 +68,22 @@ namespace D2NG.Core
             }
             Log.Information($"Logged in as {username}");
             _userName = username;
-            if (!RealmLogon())
+            if (!await RealmLogon())
             {
                 return null;
             }
 
-            return Mcp.ListCharacters();
+            return await Mcp.ListCharacters();
         }
 
         /// <summary>
         /// Select one of the available characters on the account.
         /// </summary>
         /// <param name="character">Character with name matching one of the account characters</param>
-        public void SelectCharacter(Character character)
+        public async Task SelectCharacter(Character character)
         {
             Log.Information($"Selecting {character.Name}");
-            Mcp.CharLogon(character);
+            await Mcp.CharLogon(character);
             _character = character;
             Game.SelectCharacter(character);
         }
@@ -97,7 +97,7 @@ namespace D2NG.Core
         public async Task<bool> CreateGame(Difficulty difficulty, string name, string password, string description)
         {
             Log.Information($"Creating {difficulty} game: {name}");
-            if (!Mcp.CreateGame(difficulty, name, password, description))
+            if (!await Mcp.CreateGame(difficulty, name, password, description))
             {
                 Log.Warning($"Creating {difficulty} game: {name} failed");
                 return false;
@@ -114,7 +114,7 @@ namespace D2NG.Core
         public async Task<bool> JoinGame(string name, string password)
         {
             Log.Information($"Joining game: {name} with {LoggedInUserName()}");
-            var packet = Mcp.JoinGame(name, password);
+            var packet = await Mcp.JoinGame(name, password);
             if (packet == null)
             {
                 return false;
@@ -153,7 +153,7 @@ namespace D2NG.Core
             return true;
         }
 
-        public bool RejoinMCP()
+        public async Task<bool> RejoinMCP()
         {
             if (Mcp.IsConnected())
             {
@@ -161,16 +161,16 @@ namespace D2NG.Core
             }
 
             Log.Debug("Joining MCP again");
-            if (!RealmLogon())
+            if (!await RealmLogon())
             {
                 return false;
             }
 
-            var result = Mcp.CharLogon(_character);
+            var result = await Mcp.CharLogon(_character);
             return result;
         }
 
-        private bool RealmLogon()
+        private async Task<bool> RealmLogon()
         {
             if (_mcpRealm is null)
             {
@@ -198,7 +198,7 @@ namespace D2NG.Core
 
             Log.Debug($"Connecting to {packet.McpIp}:{packet.McpPort}");
             Mcp.Connect(packet.McpIp, packet.McpPort);
-            if (!Mcp.Logon(packet.McpCookie, packet.McpStatus, packet.McpChunk, packet.McpUniqueName))
+            if (!await Mcp.Logon(packet.McpCookie, packet.McpStatus, packet.McpChunk, packet.McpUniqueName))
             {
                 Log.Warning("RealmLogin Connecting failed");
                 return false;

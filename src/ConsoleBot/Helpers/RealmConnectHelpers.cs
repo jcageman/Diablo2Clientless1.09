@@ -24,7 +24,7 @@ namespace ConsoleBot.Helpers
                 {
                     await client.Disconnect();
                     await Task.Delay(TimeSpan.FromSeconds(2));
-                    if (ConnectToRealm(client, botConfiguration, accountCharacter))
+                    if (await ConnectToRealm(client, botConfiguration, accountCharacter))
                     {
                         return true;
                     }
@@ -41,7 +41,7 @@ namespace ConsoleBot.Helpers
             return connectCount < maxRetries;
         }
 
-        public static bool ConnectToRealm(Client client,
+        public static async Task<bool> ConnectToRealm(Client client,
             BotConfiguration botConfiguration,
             AccountCharacter accountCharacter)
         {
@@ -53,7 +53,7 @@ namespace ConsoleBot.Helpers
             {
                 return false;
             }
-            var characters = client.Login(accountCharacter.Username, accountCharacter.Password);
+            var characters = await client.Login(accountCharacter.Username, accountCharacter.Password);
             if (characters == null)
             {
                 return false;
@@ -65,7 +65,7 @@ namespace ConsoleBot.Helpers
             {
                 throw new CharacterNotFoundException(accountCharacter.Character);
             }
-            client.SelectCharacter(selectedCharacter);
+            await client.SelectCharacter(selectedCharacter);
 
             if (!string.IsNullOrEmpty(botConfiguration.ChannelToJoin))
             {

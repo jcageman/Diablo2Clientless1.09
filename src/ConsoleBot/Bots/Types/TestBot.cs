@@ -1,36 +1,13 @@
-﻿using ConsoleBot.Bots;
-using ConsoleBot.Clients.ExternalMessagingClient;
-using ConsoleBot.Bots.Types.Cows;
-using ConsoleBot.Enums;
+﻿using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Exceptions;
-using ConsoleBot.Helpers;
+using ConsoleBot.Mule;
 using D2NG.Core;
-using D2NG.Core.D2GS;
-using D2NG.Core.D2GS.Act;
-using D2NG.Core.D2GS.Enums;
-using D2NG.Core.D2GS.Items;
-using D2NG.Core.D2GS.Items.Containers;
-using D2NG.Core.D2GS.Objects;
-using D2NG.Core.D2GS.Packet;
-using D2NG.Core.D2GS.Packet.Incoming;
-using D2NG.Core.D2GS.Players;
-using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
-using Serilog;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Reflection.Metadata.Ecma335;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Timers;
-using Telegram.Bot.Types;
 using Microsoft.Extensions.Options;
-using ConsoleBot.Mule;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace ConsoleBot.Bots.Types
 {
@@ -71,13 +48,13 @@ namespace ConsoleBot.Bots.Types
             {
                 return;
             }
-            var selectedCharacter1 = client1.Login("test", "1234")?.Single(c =>
+            var selectedCharacter1 = (await client1.Login("test", "1234"))?.Single(c =>
                 c.Name.Equals("testcharacter", StringComparison.CurrentCultureIgnoreCase));
             if (selectedCharacter1 == null)
             {
                 throw new CharacterNotFoundException("testcharacter");
             }
-            client1.SelectCharacter(selectedCharacter1);
+            await client1.SelectCharacter(selectedCharacter1);
             client1.Chat.EnterChat();
 
             await _muleService.MuleItemsForClient(client1);

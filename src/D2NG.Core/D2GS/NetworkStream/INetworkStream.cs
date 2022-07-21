@@ -3,6 +3,9 @@
     public interface INetworkStream
     {
         bool CanWrite { get; }
+
+        public bool DataAvailable { get; }
+
         public void Close();
 
         void Write(byte[] buffer, int offset, int size);

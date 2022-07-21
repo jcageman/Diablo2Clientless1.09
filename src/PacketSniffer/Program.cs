@@ -7,7 +7,6 @@ using Serilog.Events;
 using SharpPcap;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
 
 namespace PacketSniffer
@@ -116,7 +115,7 @@ namespace PacketSniffer
                 {
                     if(!gameServerConnections.TryGetValue(tcpPacket.DestinationPort, out var gameServerConnection))
                     {
-                        gameServerConnection = new GameServerConnection();
+                        gameServerConnection = new GameServerConnection(gameServerConnections.Count);
                         gameServerConnection._stream = new SnifferNetworkStream(new byte[] { });
                         gameServerConnection.PacketReceived += (obj, eventArgs) =>
                         {

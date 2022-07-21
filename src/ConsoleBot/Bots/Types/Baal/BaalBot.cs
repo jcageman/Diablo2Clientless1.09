@@ -402,7 +402,7 @@ namespace ConsoleBot.Bots.Types.Baal
                 return false;
             }
 
-            if (client.Game.Me.Id == PortalClientPlayerId && !_townManagementService.CreateTownPortal(client))
+            if (client.Game.Me.Id == PortalClientPlayerId && !await _townManagementService.CreateTownPortal(client))
             {
                 NextGame.TrySetResult(true);
                 return false;
@@ -527,7 +527,7 @@ namespace ConsoleBot.Bots.Types.Baal
                 return false;
             }
 
-            if (!_townManagementService.CreateTownPortal(client))
+            if (!await _townManagementService.CreateTownPortal(client))
             {
                 return false;
             }
@@ -1315,11 +1315,11 @@ namespace ConsoleBot.Bots.Types.Baal
             {
                 if (movementMode == MovementMode.Teleport)
                 {
-                    client.Game.TeleportToLocation(location);
+                    await client.Game.TeleportToLocationAsync(location);
                 }
                 else
                 {
-                    client.Game.MoveTo(location);
+                    await client.Game.MoveToAsync(location);
                 }
             }
         }
@@ -1340,7 +1340,7 @@ namespace ConsoleBot.Bots.Types.Baal
                 await client.Game.LeaveGame();
             }
 
-            if (!client.RejoinMCP())
+            if (!await client.RejoinMCP())
             {
                 Log.Warning($"Disconnecting client {account.Username} since reconnecting to MCP failed, reconnecting to realm");
                 return await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, account, 10);

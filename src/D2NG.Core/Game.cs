@@ -46,7 +46,7 @@ namespace D2NG.Core
             {
                 if (IsInGame())
                 {
-                    Log.Information($"{Data?.Me?.Name}: Game loading..., About to drop, leaving game");
+                    Log.Information($"{selectedCharacter?.Name}: Game loading..., About to drop");
                     LeaveGame().Wait();
                 }
             }
@@ -286,16 +286,26 @@ namespace D2NG.Core
 
         public bool TeleportToLocation(Point point)
         {
+            if (Me.Location.Distance(point) < 10)
+            {
+                return true;
+            }
+
             var reAssignPlayer = _gameServer.GetResetEventOfType(InComingPacket.ReassignPlayer);
             UseRightHandSkillOnLocation(Skill.Teleport, point);
-            return reAssignPlayer.WaitOne(200) && Me.Location.Distance(point) < 5;
+            return reAssignPlayer.WaitOne(200) && Me.Location.Distance(point) < 10;
         }
 
         public async Task<bool> TeleportToLocationAsync(Point point)
         {
+            if(Me.Location.Distance(point)<10)
+            {
+                return true;
+            }
+
             var reAssignPlayer = _gameServer.GetResetEventOfType(InComingPacket.ReassignPlayer);
             UseRightHandSkillOnLocation(Skill.Teleport, point);
-            return await reAssignPlayer.AsTask(TimeSpan.FromMilliseconds(200)) && Me.Location.Distance(point) < 5;
+            return await reAssignPlayer.AsTask(TimeSpan.FromMilliseconds(200)) && Me.Location.Distance(point) < 10;
         }
 
         public bool ChangeSkill(Skill skill, Hand hand)
@@ -390,11 +400,24 @@ namespace D2NG.Core
             return entityEffect.WaitOne(100);
         }
 
-        public bool CreateTownPortal()
+        public async Task<bool> CreateTownPortal()
         {
             var portalOwner = _gameServer.GetResetEventOfType(InComingPacket.PortalOwner);
+            var cts = new CancellationTokenSource();
+            cts.CancelAfter(500);
             UseRightHandSkillOnLocation(Skill.BookOfTownportal, Me.Location);
-            return portalOwner.WaitOne(500);
+            do
+            {
+                if (await portalOwner.AsTask(TimeSpan.FromMilliseconds(500)))
+                {
+                    var townPortal = GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalOwnerId == Me.Id);
+                    return townPortal != null && townPortal.Location?.Distance(Me.Location) < 15;
+                };
+                portalOwner = _gameServer.GetResetEventOfType(InComingPacket.PortalOwner);
+            } while (!cts.IsCancellationRequested);
+            
+            var townPortalNearby = GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalOwnerId == Me.Id);
+            return townPortalNearby != null && townPortalNearby.Location?.Distance(Me.Location) < 15;
         }
 
         public void InsertItemIntoContainer(Item item, Point location, ItemContainer container)

@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace D2NG.Core.MCP
 {
@@ -65,12 +66,12 @@ namespace D2NG.Core.MCP
             }
         }
 
-        internal bool CharLogon(Character character)
+        internal async Task<bool> CharLogon(Character character)
         {
             CharLogonEvent.Reset();
             var packet = new CharLogonRequestPacket(character.Name);
             Connection.WritePacket(packet);
-            var loginResponsePacket = CharLogonEvent.WaitForPacket(2000);
+            var loginResponsePacket = await CharLogonEvent.WaitForPacket(2000);
             if (loginResponsePacket == null)
             {
                 return false;
@@ -88,12 +89,12 @@ namespace D2NG.Core.MCP
             Log.Verbose("Disconnected from MCP");
         }
 
-        internal bool Logon(uint mcpCookie, uint mcpStatus, List<byte> mcpChunk, string mcpUniqueName)
+        internal async Task<bool> Logon(uint mcpCookie, uint mcpStatus, List<byte> mcpChunk, string mcpUniqueName)
         {
             StartupEvent.Reset();
             var packet = new McpStartupRequestPacket(mcpCookie, mcpStatus, mcpChunk, mcpUniqueName);
             Connection.WritePacket(packet);
-            var response = StartupEvent.WaitForPacket(5000);
+            var response = await StartupEvent.WaitForPacket(5000);
             if (response == null)
             {
                 return false;
@@ -102,11 +103,11 @@ namespace D2NG.Core.MCP
             return true;
         }
 
-        internal List<Character> ListCharacters()
+        internal async Task<List<Character>> ListCharacters()
         {
             ListCharactersEvent.Reset();
             Connection.WritePacket(new ListCharactersClientPacket());
-            var packet = ListCharactersEvent.WaitForPacket(5000);
+            var packet = await ListCharactersEvent.WaitForPacket(5000);
             if(packet == null)
             {
                 return new List<Character>();
@@ -115,11 +116,11 @@ namespace D2NG.Core.MCP
             return response.Characters;
         }
 
-        internal bool CreateGame(Difficulty difficulty, string gameName, string password, string description)
+        internal async Task<bool> CreateGame(Difficulty difficulty, string gameName, string password, string description)
         {
             CreateGameEvent.Reset();
             Connection.WritePacket(new CreateGameRequestPacket(RequestId++, difficulty, gameName, password, description));
-            var packet = CreateGameEvent.WaitForPacket(5000);
+            var packet = await CreateGameEvent.WaitForPacket(5000);
             if(packet == null)
             {
                 return false;
@@ -128,11 +129,11 @@ namespace D2NG.Core.MCP
             return result.ResultCode == 0x00;
         }
 
-        internal JoinGameResponsePacket JoinGame(string name, string password)
+        internal async Task<JoinGameResponsePacket> JoinGame(string name, string password)
         {
             JoinGameEvent.Reset();
             Connection.WritePacket(new JoinGameRequestPacket(RequestId++, name, password));
-            var response = JoinGameEvent.WaitForPacket(5000);
+            var response = await JoinGameEvent.WaitForPacket(5000);
             if(response == null)
             {
                 return null;

@@ -24,7 +24,8 @@ namespace D2NG.MuleManager.Services.MuleManager
 
         public async Task<bool> UpdateAllAccounts()
         {
-            await Task.WhenAll(_configuration.Accounts.Select(a => UpdateAccountMules(a)));
+            var updateTasks = _configuration.Accounts.Select(async a => await UpdateAccountMules(a)).ToList();
+            await Task.WhenAll(updateTasks);
             return true;
         }
 
@@ -38,21 +39,30 @@ namespace D2NG.MuleManager.Services.MuleManager
                 _configuration.GameFolder);
             if (!connect)
             {
+                Log.Error($"{account.Name}: Connect failed");
                 return false;
             }
 
-            var characters = client.Login(account.Name, account.Password);
+            var characters = await client.Login(account.Name, account.Password);
             if (characters == null)
             {
+                Log.Error($"{account.Name}: Login failed");
                 return false;
             }
 
             foreach (var character in characters)
             {
-                client.SelectCharacter(character);
-                if (!await client.CreateGame(Core.D2GS.Enums.Difficulty.Normal, account.Name + "-" + gameCount++, "mulemanager", "gs2"))
+                await client.SelectCharacter(character);
+                if (!await client.CreateGame(Core.D2GS.Enums.Difficulty.Normal, account.Name + "-" + gameCount++, "terx", "gs1"))
                 {
-                    return false;
+                    Log.Error($"{account.Name}: Creating game failed");
+                    if (!await ReconnectClient(client, account))
+                    {
+                        Log.Error($"{account.Name}: Reconnect failed");
+                        return false;
+                    }
+                    await Task.Delay(TimeSpan.FromSeconds(10));
+                    continue;
                 }
 
                 client.Game.RequestUpdate(client.Game.Me.Id);
@@ -63,6 +73,7 @@ namespace D2NG.MuleManager.Services.MuleManager
                     Log.Error($"{client.Game.Me.Name}: No stash found");
                     if (!await ReconnectClient(client, account))
                     {
+                        Log.Error($"{account.Name}: Reconnect failed");
                         return false;
                     }
                     continue;
@@ -79,9 +90,10 @@ namespace D2NG.MuleManager.Services.MuleManager
 
                 if (!client.Game.OpenStash(stash))
                 {
-                    Log.Error($"{client.Game.Me.Name}: Open stash failed");
+                    Log.Error($"{account.Name}: Open stash failed");
                     if (!await ReconnectClient(client, account))
                     {
+                        Log.Error($"{account.Name}: Reconnect failed");
                         return false;
                     }
                     continue;
@@ -101,10 +113,11 @@ namespace D2NG.MuleManager.Services.MuleManager
                 await _muleManagerRepository.UpdateCharacter(account, character, itemsToUpdate);
                 if (!await ReconnectClient(client, account))
                 {
+                    Log.Error($"{account.Name}: Reconnect failed");
                     return false;
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(2));
+                await Task.Delay(TimeSpan.FromSeconds(5));
             }
             await client.Disconnect();
             return true;
@@ -117,7 +130,7 @@ namespace D2NG.MuleManager.Services.MuleManager
                 await client.Game.LeaveGame();
             }
 
-            if (!client.RejoinMCP())
+            if (!await client.RejoinMCP())
             {
                 await client.Disconnect();
                 if (!client.Connect(
@@ -128,7 +141,7 @@ namespace D2NG.MuleManager.Services.MuleManager
                     return false;
                 }
 
-                client.Login(account.Name, account.Password);
+                await client.Login(account.Name, account.Password);
             }
 
             return true;

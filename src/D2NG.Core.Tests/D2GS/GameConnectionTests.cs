@@ -34,7 +34,7 @@ namespace D2NG.Core.Tests.D2GS
                 return readSize;
             });
 
-            var gameServerConnection = new GameServerConnection();
+            var gameServerConnection = new GameServerConnection(0);
             gameServerConnection._stream = mockedStream.Object;
             return gameServerConnection;
         }

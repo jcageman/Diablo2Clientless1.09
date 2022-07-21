@@ -17,11 +17,15 @@ namespace ConsoleBot.Bots.Types.CS
     public class CSManager
     {
         private readonly ConcurrentDictionary<uint, AliveMonster> _aliveMonsters = new ConcurrentDictionary<uint, AliveMonster>();
-        private readonly ConcurrentDictionary<uint, DeadMonster> _monstersAvailableForCorpseExplosion = new ConcurrentDictionary<uint, DeadMonster>();
+        private readonly ConcurrentDictionary<uint, DeadMonster> _deadMonsters = new ConcurrentDictionary<uint, DeadMonster>();
         private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new ConcurrentDictionary<uint, Item>();
         private readonly ConcurrentDictionary<uint, Item> _pickitRevsOnGround = new ConcurrentDictionary<uint, Item>();
+
+        public List<Client> Clients { get; }
+
         public CSManager(List<Client> clients)
         {
+            Clients = clients;
             foreach (var client in clients)
             {
                 client.OnReceivedPacketEvent(InComingPacket.AssignNPC2, p => HandleAssignNPC(new AssignNpcPacket(p)));
@@ -93,12 +97,13 @@ namespace ConsoleBot.Bots.Types.CS
         {
             if (packet.EntityState == EntityState.Dead || packet.EntityState == EntityState.Dieing)
             {
-                if (_aliveMonsters.TryRemove(packet.EntityId, out var _))
+                if (_aliveMonsters.TryRemove(packet.EntityId, out var aliveMonster))
                 {
-                    _monstersAvailableForCorpseExplosion.TryAdd(packet.EntityId, new DeadMonster
+                    _deadMonsters.TryAdd(packet.EntityId, new DeadMonster
                     {
                         Id = packet.EntityId,
-                        Location = packet.Location
+                        Location = packet.Location,
+                        MonsterEnchantments = aliveMonster.MonsterEnchantments
                     });
                 }
             }
@@ -111,9 +116,10 @@ namespace ConsoleBot.Bots.Types.CS
             }
         }
 
-        public void ResetAliveMonsters()
+        public void ResetMonsters()
         {
             _aliveMonsters.Clear();
+            _deadMonsters.Clear();
         }
 
         public List<AliveMonster> GetNearbyAliveMonsters(Client client, double distance)
@@ -124,6 +130,11 @@ namespace ConsoleBot.Bots.Types.CS
         public List<AliveMonster> GetNearbyAliveMonsters(Point location, double distance)
         {
             return _aliveMonsters.Values.Where(c => c.Location.Distance(location) < distance).OrderBy(c => c.Location.Distance(location)).ToList();
+        }
+
+        public List<DeadMonster> GetNearbyDeadMonsters(Point location, double distance)
+        {
+            return _deadMonsters.Values.Where(c => c.Location.Distance(location) < distance).OrderBy(c => c.Location.Distance(location)).ToList();
         }
 
         public void PutItemOnPickitList(Client client, Item item)
@@ -188,7 +199,7 @@ namespace ConsoleBot.Bots.Types.CS
             var nearbyAliveMonsters = _aliveMonsters.Values.Where(c => c.Location.Distance(client.Game.Me.Location) < 20);
             foreach (var nearbyMonster in nearbyAliveMonsters)
             {
-                var firstMatch = _monstersAvailableForCorpseExplosion.Values.FirstOrDefault(c => c.Location.Distance(nearbyMonster.Location) < 10);
+                var firstMatch = _deadMonsters.Values.FirstOrDefault(c => c.Location.Distance(nearbyMonster.Location) < 10 && c.AvailableForCorpseExplosion);
                 if (firstMatch != null)
                 {
                     if (client.Game.WorldObjects.TryGetValue((firstMatch.Id, EntityType.NPC), out var monster))
@@ -197,8 +208,8 @@ namespace ConsoleBot.Bots.Types.CS
                         {
                             return client.Game.UseRightHandSkillOnEntity(Skill.CorpseExplosion, monster);
                         }
-                        
-                        _monstersAvailableForCorpseExplosion.TryRemove(monster.Id, out var _);
+
+                        firstMatch.AvailableForCorpseExplosion = false;
                     }
                 }
             }

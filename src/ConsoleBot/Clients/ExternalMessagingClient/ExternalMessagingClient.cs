@@ -5,11 +5,10 @@ using D2NG.Core.D2GS.Packet.Incoming;
 using Microsoft.Extensions.Options;
 using Serilog;
 using System;
-using System.Threading;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Telegram.Bot;
-using Telegram.Bot.Args;
-using Telegram.Bot.Exceptions;
 using Telegram.Bot.Extensions.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -20,37 +19,39 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
     {
         private readonly ExternalMessagingConfiguration _externalConfiguration;
         private readonly ITelegramBotClient _telegramBotClient;
+        private readonly List<Client> _clients = new List<Client>();
 
         public ExternalMessagingClient(IOptions<ExternalMessagingConfiguration> externalConfiguration)
         {
             _externalConfiguration = externalConfiguration.Value ?? throw new ArgumentNullException(nameof(externalConfiguration), $"ExternalMessagingClient constructor fails due to {nameof(externalConfiguration)} being null");
             _telegramBotClient = new TelegramBotClient(_externalConfiguration.TelegramApiKey);
+            var receiverOptions = new ReceiverOptions
+            {
+                AllowedUpdates = new[] { UpdateType.Message }
+            };
+            _telegramBotClient.StartReceiving(
+                (botClient, update, token) => HandleUpdateAsync(update),
+                (botClient, exception, token) => HandleExceptionAsync(exception),
+                receiverOptions
+            );
         }
 
         public void RegisterClient(Client client)
         {
-            var receiverOptions = new ReceiverOptions
-            {
-                AllowedUpdates = new []{ UpdateType.Message }
-            };
-            _telegramBotClient.StartReceiving(
-                (botClient, update, token) => HandleUpdateAsync(client, update),
-                null,
-                receiverOptions
-            );
-
+            _clients.Add(client);
             client.OnReceivedPacketEvent(Sid.CHATEVENT, (packet) => HandleChatEvent(client, packet));
             client.OnReceivedPacketEvent(InComingPacket.ReceiveChat, (packet) => HandleChatMessageEvent(client, packet));
         }
 
-        Task HandleUpdateAsync(Client client, Update update)
+        Task HandleUpdateAsync(Update update)
         {
             if (update.Message is Message message)
             {
                 if (message == null || message.Type != MessageType.Text) return Task.CompletedTask;
 
                 Log.Information($"Text received: {message.Text}");
-                if (message.Text.StartsWith(client.LoggedInUserName() + " "))
+                var client = _clients.FirstOrDefault(c => message.Text.StartsWith(c.LoggedInUserName() + " "));
+                if (client != null)
                 {
                     var modifiedText = message.Text.Substring(client.LoggedInUserName().Length + 1);
                     if (modifiedText.StartsWith("/w") || modifiedText.StartsWith("/msg"))
@@ -67,6 +68,12 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
                     }
                 }
             }
+            return Task.CompletedTask;
+        }
+
+        Task HandleExceptionAsync(Exception exception)
+        {
+            Log.Information($"Exception received: {exception}");
             return Task.CompletedTask;
         }
 

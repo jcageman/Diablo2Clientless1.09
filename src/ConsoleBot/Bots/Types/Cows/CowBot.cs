@@ -210,7 +210,8 @@ namespace ConsoleBot.Bots.Types.Cows
                     {
                         var account = _cowconfig.Accounts[i];
                         var client = clients[i];
-                        Thread.Sleep(TimeSpan.FromSeconds(1 + i * 0.7));
+                        var numberOfSecondsToWait = (i > 3 ? 15 : 0);
+                        Thread.Sleep(TimeSpan.FromSeconds(numberOfSecondsToWait));
                         if (firstFiller != client && !await RealmConnectHelpers.JoinGameWithRetry(gameCount, client, _config, account))
                         {
                             Log.Warning($"Client {client.LoggedInUserName()} failed to join game, retrying new game");
@@ -533,7 +534,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     var nearbyAliveCows = cowManager.GetNearbyAliveMonsters(client, 35.0, 100);
                     if (!nearbyAliveCows.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)))
                     {
-                        if (!_townManagementService.CreateTownPortal(client))
+                        if (!await _townManagementService.CreateTownPortal(client))
                         {
                             continue;
                         }
@@ -554,7 +555,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }
 
             Log.Information($"Client {client.Game.Me.Name} creating town portal at {Waypoint.CatacombsLevel2}");
-            if (!_townManagementService.CreateTownPortal(client))
+            if (!await _townManagementService.CreateTownPortal(client))
             {
                 return false;
             }
@@ -1416,11 +1417,11 @@ namespace ConsoleBot.Bots.Types.Cows
             {
                 if (movementMode == MovementMode.Teleport)
                 {
-                    return client.Game.TeleportToLocation(location);
+                    return await client.Game.TeleportToLocationAsync(location);
                 }
                 else
                 {
-                    return client.Game.MoveTo(location);
+                    return await client.Game.MoveToAsync(location);
                 }
             }
         }
@@ -1499,7 +1500,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 await client.Game.LeaveGame();
             }
 
-            if (!client.RejoinMCP())
+            if (!await client.RejoinMCP())
             {
                 Log.Warning($"Disconnecting client {cowAccount.Username} since reconnecting to MCP failed, reconnecting to realm");
                 return await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, cowAccount, 10);

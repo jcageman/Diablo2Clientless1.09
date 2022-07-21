@@ -71,7 +71,7 @@ namespace ConsoleBot.Mule
                         Character = character
                     };
 
-                    if (!RealmConnectHelpers.ConnectToRealm(
+                    if (!await RealmConnectHelpers.ConnectToRealm(
                         muleClient, _botConfig, accountCharacter))
                     {
                         Log.Error($"Fail to connect to realm with {account.Username} with character {character}");
@@ -87,7 +87,7 @@ namespace ConsoleBot.Mule
                         {
                             await client.Game.LeaveGame();
                             await Task.Delay(TimeSpan.FromSeconds(2));
-                            client.RejoinMCP();
+                            await client.RejoinMCP();
                             return false;
                         }
                         continue;
@@ -150,7 +150,7 @@ namespace ConsoleBot.Mule
                     {
                         await client.Game.LeaveGame();
                         await Task.Delay(TimeSpan.FromSeconds(2));
-                        client.RejoinMCP();
+                        await client.RejoinMCP();
                         return false;
                     }
                 }
@@ -160,7 +160,7 @@ namespace ConsoleBot.Mule
             InventoryHelpers.StashItemsAndGold(client.Game, stashInventoryItems, 0);
             await client.Game.LeaveGame();
             await Task.Delay(TimeSpan.FromSeconds(2));
-            if (!client.RejoinMCP())
+            if (!await client.RejoinMCP())
             {
                 return false;
             }
@@ -182,7 +182,7 @@ namespace ConsoleBot.Mule
                 {
                     return characterNames;
                 }
-                var characters = client.Login(account.Username, account.Password);
+                var characters = await client.Login(account.Username, account.Password);
                 if (characters == null)
                 {
                     return characterNames;

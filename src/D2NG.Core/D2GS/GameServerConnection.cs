@@ -5,14 +5,12 @@ using D2NG.Core.Exceptions;
 using Serilog;
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Threading;
 
 namespace D2NG.Core.D2GS
 {
     internal class GameServerConnection : Connection
     {
-        private static int instanceCounter;
-        private readonly int instanceId;
         internal static readonly short[] PacketSizes =
         {
             1, 8, 1, 12, 1, 1, 1, 6, 6, 11, 6, 6, 9, 13, 12, 16,
@@ -29,13 +27,16 @@ namespace D2NG.Core.D2GS
             1
         };
 
+        public int InstanceId { get; }
+
         internal event EventHandler<D2gsPacket> PacketReceived;
 
         internal event EventHandler<D2gsPacket> PacketSent;
 
-        public GameServerConnection()
+        public GameServerConnection(int instanceId)
+
         {
-            instanceId = ++instanceCounter;
+            InstanceId = instanceId;
         }
 
         internal override void Initialize()
@@ -82,17 +83,24 @@ namespace D2NG.Core.D2GS
             var buffer = ReadBytes(size);
             if(buffer.Length == 0)
             {
-                Log.Information($"Empty buffer length received");
+                Log.Information($"Empty buffer length received with size {size}");
                 return null;
             }
             readBytes.AddRange(buffer);
-            var fullString = readBytes.ToArray().ByteArrayToString();
-            Log.Verbose($"Instance {instanceId} Full packet received: {fullString}");
 
+            if(Log.IsEnabled(Serilog.Events.LogEventLevel.Verbose))
+            {
+                var fullString = readBytes.ToArray().ByteArrayToString();
+                Log.Verbose($"Instance {InstanceId} Full packet received: {fullString}");
+            }
+            
             Huffman.Decompress(buffer, out var output);
 
-            var fullPacketString = output.ToPrintString();
-            Log.Verbose($"Instance {instanceId} Full decompressed packet received: {fullPacketString}");
+            if (Log.IsEnabled(Serilog.Events.LogEventLevel.Verbose))
+            {
+                var fullPacketString = output.ToPrintString();
+                Log.Verbose($"Instance {InstanceId} Full decompressed packet received: {fullPacketString}");
+            }
 
             var index = 0;
             do
@@ -119,17 +127,26 @@ namespace D2NG.Core.D2GS
         private byte[] ReadBytes(int count)
         {
             var buffer = new byte[count];
-            var bytesRead = _stream.Read(buffer, 0, count);
-            if(bytesRead != count)
+            int bytesRead = 0;
+            do
             {
-                return new byte[0];
+                bytesRead += _stream.Read(buffer, bytesRead, count - bytesRead);
+                if(bytesRead != count)
+                {
+                    Log.Verbose($"Instance {InstanceId} Received {bytesRead}, expected {count}");
+                    while (!_stream.DataAvailable)
+                    {
+                        Thread.Sleep(20);
+                    }
+                    Log.Verbose($"Instance {InstanceId} Received new data");
+                }
             }
+            while (bytesRead != count);
             return buffer;
         }
 
         int GetChatPacketSize(ArraySegment<byte> input)
         {
-            var output = 0;
             if (input.Count < 12)
                 throw new D2GSPacketException("Unable to determine packet size");
 
@@ -137,7 +154,7 @@ namespace D2NG.Core.D2GS
 
             int name_offset = Array.IndexOf(input.Array, (byte)0, input.Offset + initial_offset);
 
-            string name = System.Text.Encoding.UTF8.GetString(input.Array, input.Offset + initial_offset, name_offset - input.Offset - initial_offset);
+            //string name = System.Text.Encoding.UTF8.GetString(input.Array, input.Offset + initial_offset, name_offset - input.Offset - initial_offset);
 
             if (name_offset == -1)
                 throw new D2GSPacketException("Unable to determine packet size");
@@ -146,13 +163,13 @@ namespace D2NG.Core.D2GS
             name_offset -= initial_offset;
 
             int message_offset = Array.IndexOf(input.Array, (byte)0, input.Offset + initial_offset + name_offset + 1);
-            string message = System.Text.Encoding.UTF8.GetString(input.Array, input.Offset + initial_offset + name_offset, message_offset - input.Offset - initial_offset - name_offset);
+            //string message = System.Text.Encoding.UTF8.GetString(input.Array, input.Offset + initial_offset + name_offset, message_offset - input.Offset - initial_offset - name_offset);
             if (message_offset == -1)
                 throw new D2GSPacketException("Unable to determine packet size"); ;
 
             message_offset = message_offset - initial_offset - name_offset - input.Offset - 1;
 
-            output = initial_offset + name_offset + 1 + message_offset + 1;
+            int output = initial_offset + name_offset + 1 + message_offset + 1;
 
             return output;
         }

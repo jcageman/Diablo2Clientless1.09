@@ -214,7 +214,7 @@ namespace ConsoleBot.Bots.Types.Assist
                 await client.Game.LeaveGame();
             }
 
-            if (!client.RejoinMCP())
+            if (!await client.RejoinMCP())
             {
                 Log.Warning($"Disconnecting client {cowAccount.Username} since reconnecting to MCP failed, reconnecting to realm");
                 return await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, cowAccount, 10);
@@ -230,7 +230,7 @@ namespace ConsoleBot.Bots.Types.Assist
             {
                 if (!IsHostClient(c.Item1))
                 {
-                    var numberOfSecondsToWait = 2 * i + (i > 3 ? 15 : 0);
+                    var numberOfSecondsToWait = (i > 3 ? 15 : 0);
                     Log.Information($"Waiting {numberOfSecondsToWait} seconds for joining game with {c.Item1.Character}");
                     await Task.Delay(TimeSpan.FromSeconds(numberOfSecondsToWait));
                     Log.Information($"Starting joining game with {c.Item1.Character}");
@@ -320,7 +320,7 @@ namespace ConsoleBot.Bots.Types.Assist
                     else
                     {
                         await Task.Delay(TimeSpan.FromSeconds(3));
-                        if (client.RejoinMCP() || await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, c.Item1, 10))
+                        if (await client.RejoinMCP() || await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, c.Item1, 10))
                         {
                             await RealmConnectHelpers.JoinGameWithRetry(gameCount, c.Item2, _config, c.Item1);
                         }
@@ -424,7 +424,7 @@ namespace ConsoleBot.Bots.Types.Assist
 
                     if (NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 1, 20).Count == 0)
                     {
-                        PickupNearbyItems(client);
+                        await PickupNearbyItems(client);
                         await PickupNearbyPotionsIfNeeded(client);
                     }
                 }
@@ -530,7 +530,7 @@ namespace ConsoleBot.Bots.Types.Assist
             return true;
         }
 
-        private bool PickupNearbyItems(Client client)
+        private async Task<bool> PickupNearbyItems(Client client)
         {
             var pickupItems = client.Game.Items.Values
                 .Where(i => i.Ground
@@ -568,24 +568,24 @@ namespace ConsoleBot.Bots.Types.Assist
                     continue;
                 }
 
-                if (!GeneralHelpers.TryWithTimeout((retryCount =>
+                if (!await GeneralHelpers.TryWithTimeout(async (_) =>
                 {
                     if (client.Game.Me.Location.Distance(item.Location) >= 5)
                     {
                         if (GetMovementMode(client.Game) == MovementMode.Teleport)
                         {
-                            client.Game.TeleportToLocation(item.Location);
+                            await client.Game.TeleportToLocationAsync(item.Location);
                         }
                         else
                         {
-                            client.Game.MoveTo(item.Location);
+                            await client.Game.MoveToAsync(item.Location);
                         }
                         return false;
                     }
                     else
                     {
                         client.Game.PickupItem(item);
-                        Thread.Sleep(50);
+                        await Task.Delay(50);
                         if (client.Game.Inventory.FindItemById(item.Id) == null && !item.IsGold)
                         {
                             return false;
@@ -593,7 +593,7 @@ namespace ConsoleBot.Bots.Types.Assist
                     }
 
                     return true;
-                }), TimeSpan.FromSeconds(3)))
+                }, TimeSpan.FromSeconds(3)))
                 {
                     Log.Warning($"Picking up item {item.GetFullDescription()} at location {item.Location} from location {client.Game.Me.Location} failed");
                 }

@@ -19,7 +19,10 @@ namespace D2NG.Core.D2GS
 
         private bool InGame = false;
 
-        private GameServerConnection Connection { get; } = new GameServerConnection();
+        private static int instanceCounter;
+        private readonly int InstanceId;
+
+        private GameServerConnection Connection { get; }
 
         protected ConcurrentDictionary<InComingPacket, Action<D2gsPacket>> PacketReceivedEventHandlers { get; } = new ConcurrentDictionary<InComingPacket, Action<D2gsPacket>>();
 
@@ -31,6 +34,9 @@ namespace D2NG.Core.D2GS
 
         public GameServer()
         {
+            InstanceId = ++instanceCounter;
+            Connection = new GameServerConnection(InstanceId);
+
             Connection.PacketReceived += (obj, eventArgs) =>
             {
                 if (Enum.IsDefined(typeof(InComingPacket), eventArgs.Type))
@@ -40,13 +46,13 @@ namespace D2NG.Core.D2GS
                     {
                         InGame = true;
                     }
-                    Log.Debug($"Received D2GS packet of type: {incomingPacketType} with data {eventArgs.Raw.ToPrintString()}");
+                    Log.Debug($"Instance {InstanceId} Received D2GS packet of type: {incomingPacketType} with data {eventArgs.Raw.ToPrintString()}");
                     PacketReceivedEventHandlers.GetValueOrDefault(incomingPacketType, p => Log.Debug($"Received unhandled D2GS packet of type: {incomingPacketType}"))?.Invoke(eventArgs);
                     SetPacketEventType(incomingPacketType);
                 }
                 else
                 {
-                    Log.Warning($"Received unknown D2GS packet of type: 0x{eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
+                    Log.Warning($"Instance {InstanceId} Received unknown D2GS packet of type: 0x{eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
                 }
             };
 
@@ -55,12 +61,12 @@ namespace D2NG.Core.D2GS
                 if (Enum.IsDefined(typeof(OutGoingPacket), eventArgs.Type))
                 {
                     var outgoingPacketType = (OutGoingPacket)eventArgs.Type;
-                    Log.Debug($"Sent D2GS packet of type: {outgoingPacketType} with data {eventArgs.Raw.ToPrintString()}");
+                    Log.Debug($"Instance {InstanceId} send D2GS packet of type: {outgoingPacketType} with data {eventArgs.Raw.ToPrintString()}");
                     PacketSentEventHandlers.GetValueOrDefault(outgoingPacketType, null)?.Invoke(eventArgs);
                 }
                 else
                 {
-                    Log.Warning($"Send unknown D2GS packet of type: 0x{eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
+                    Log.Warning($"Instance {InstanceId} send unknown D2GS packet of type: 0x{eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
                 }
             };
         }
@@ -94,10 +100,11 @@ namespace D2NG.Core.D2GS
                 try
                 {
                     _ = Connection.ReadPacket();
+
                 }
                 catch (Exception)
                 {
-                    Log.Debug("GameServer Connection was terminated");
+                    Log.Debug($"InstanceId {InstanceId} GameServer Connection was terminated");
                     await Task.Delay(300);
                 }
             }

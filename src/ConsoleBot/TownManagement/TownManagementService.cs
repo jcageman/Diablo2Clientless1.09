@@ -34,7 +34,7 @@ namespace ConsoleBot.TownManagement
             var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, movementMode);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
             {
-                Log.Information($"{movementMode} to {client.Game.Act} waypoint failed");
+                Log.Information($"Client {client.Game.Me.Name} {movementMode} to {client.Game.Act} waypoint failed");
                 return false;
             }
 
@@ -47,7 +47,7 @@ namespace ConsoleBot.TownManagement
 
             if (townWaypoint == null)
             {
-                Log.Error("No waypoint found");
+                Log.Error($"Client {client.Game.Me.Name} No waypoint found");
                 return false;
             }
 
@@ -86,7 +86,7 @@ namespace ConsoleBot.TownManagement
                 return isValidPoint;
             }, TimeSpan.FromSeconds(3.5)))
             {
-                Log.Error("Checking whether moved to area failed");
+                Log.Error($"Client {client.Game.Me.Name} Checking whether moved to area failed");
                 return false;
             }
 
@@ -102,11 +102,14 @@ namespace ConsoleBot.TownManagement
             }
 
             var movementMode = GetMovementMode(client.Game);
-            var pathToPortal = await _pathingService.GetPathToLocation(client.Game, portal.Location, movementMode);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToPortal, movementMode))
+            if(client.Game.Me.Location.Distance(portal.Location) > 10)
             {
-                Log.Information($"Moving to {portal.Location} failed");
-                return false;
+                var pathToPortal = await _pathingService.GetPathToLocation(client.Game, portal.Location, movementMode);
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToPortal, movementMode))
+                {
+                    Log.Warning($"Client {client.Game.Me.Name} Moving to {portal.Location} failed");
+                    return false;
+                }
             }
 
             var previousArea = client.Game.Area;
@@ -118,7 +121,11 @@ namespace ConsoleBot.TownManagement
                     return false;
                 }
 
-                await client.Game.MoveToAsync(portal);
+                if(!await client.Game.MoveToAsync(portal))
+                {
+                    return false;
+                }
+
                 if (retryCount > 0 && retryCount % 5 == 0)
                 {
                     client.Game.RequestUpdate(client.Game.Me.Id);
@@ -143,7 +150,7 @@ namespace ConsoleBot.TownManagement
                 }
                 else
                 {
-                    await Task.Delay(100);
+                    await Task.Delay(300);
                 }
 
                 return !await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, previousArea, client.Game.Me.Location);
@@ -155,14 +162,14 @@ namespace ConsoleBot.TownManagement
             return true;
         }
 
-        public bool CreateTownPortal(Client client)
+        public async Task<bool> CreateTownPortal(Client client)
         {
-            if (!GeneralHelpers.TryWithTimeout((retryCount) =>
+            if (!await GeneralHelpers.TryWithTimeout(async (_) =>
             {
-                return client.Game.CreateTownPortal();
+                return await client.Game.CreateTownPortal();
             }, TimeSpan.FromSeconds(3.5)))
             {
-                Log.Error("Failed to create town portal");
+                Log.Error($"Client {client.Game.Me.Name} failed to create town portal");
                 return false;
             }
 
@@ -171,29 +178,8 @@ namespace ConsoleBot.TownManagement
 
         public async Task<bool> TakeTownPortalToTown(Client client)
         {
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            if (!await CreateTownPortal(client))
             {
-                if (!GeneralHelpers.TryWithTimeout((_) =>
-                {
-                    return client.Game.CreateTownPortal();
-                }, TimeSpan.FromSeconds(1.0)))
-                {
-                    return false;
-                }
-
-                if (!await GeneralHelpers.TryWithTimeout(async (_) =>
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(0.1));
-                    return client.Game.GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalOwnerId == client.Game.Me.Id) != null;
-                }, TimeSpan.FromSeconds(0.5)))
-                {
-                    return false;
-                }
-
-                return true;
-            }, TimeSpan.FromSeconds(3.5)))
-            {
-                Log.Error("Failed to create or find town portal");
                 return false;
             }
 
@@ -201,7 +187,10 @@ namespace ConsoleBot.TownManagement
             var townportal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
-                client.Game.MoveTo(townportal);
+                if(!await client.Game.MoveToAsync(townportal))
+                {
+                    return false;
+                }
 
                 client.Game.InteractWithEntity(townportal);
                 return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
@@ -252,7 +241,7 @@ namespace ConsoleBot.TownManagement
             {
                 if(!await TakeTownPortalToTown(client))
                 {
-                    Log.Warning($"Taking townportal to {WayPointHelpers.MapTownArea(client.Game.Act)} failed");
+                    Log.Warning($"Client {client.Game.Me.Name} taking townportal to {WayPointHelpers.MapTownArea(client.Game.Act)} failed");
                     return false;
                 }
             }
@@ -262,21 +251,21 @@ namespace ConsoleBot.TownManagement
                 var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, movementMode);
                 if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
                 {
-                    Log.Warning($"Moving to {client.Game.Act} waypoint failed");
+                    Log.Warning($"Client {client.Game.Me.Name} moving to {client.Game.Act} waypoint failed");
                     return false;
                 }
             }
 
             var targetTownArea = WayPointHelpers.MapTownArea(act);
             var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).Single();
-            Log.Information($"Taking waypoint to {targetTownArea}");
+            Log.Information($"Client {client.Game.Me.Name} taking waypoint to {targetTownArea}");
             if (!GeneralHelpers.TryWithTimeout((_) =>
             {
                 client.Game.TakeWaypoint(townWaypoint, act.MapTownWayPoint());
                 return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == targetTownArea, TimeSpan.FromSeconds(2));
             }, TimeSpan.FromSeconds(5)))
             {
-                Log.Information($"Moving to {act} failed");
+                Log.Information($"Client {client.Game.Me.Name} moving to {act} failed");
                 return false;
             }
 
@@ -337,13 +326,13 @@ namespace ConsoleBot.TownManagement
                 var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, townArea, game.Me.Location, EntityCode.Stash, movementMode);
                 if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))
                 {
-                    Log.Warning($"{movementMode} failed at location {game.Me.Location}");
+                    Log.Warning($"Client {client.Game.Me.Name} {movementMode} failed at location {game.Me.Location}");
                 }
 
                 var stashItemsResult = InventoryHelpers.StashItemsToKeep(game, _externalMessagingClient);
                 if (stashItemsResult != Enums.MoveItemResult.Succes)
                 {
-                    Log.Warning($"Stashing items failed with result {stashItemsResult}");
+                    Log.Warning($"Client {client.Game.Me.Name} Stashing items failed with result {stashItemsResult}");
                 }
 
                 if(stashItemsResult == Enums.MoveItemResult.NoSpace)
@@ -357,7 +346,7 @@ namespace ConsoleBot.TownManagement
                 var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, townArea, game.Me.Location, EntityCode.Stash, movementMode);
                 if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))
                 {
-                    Log.Warning($"{movementMode} failed at location {game.Me.Location}");
+                    Log.Warning($"Client {client.Game.Me.Name} {movementMode} failed at location {game.Me.Location}");
                 }
                 CubeHelpers.TransmuteGems(client.Game);
             }
@@ -385,7 +374,7 @@ namespace ConsoleBot.TownManagement
         game.Cube.Items.Count(i => !i.IsIdentified);
             if (unidentifiedItemCount > 6)
             {
-                Log.Information($"Visiting Deckard Cain with {unidentifiedItemCount} unidentified items");
+                Log.Information($"Client {game.Me.Name} Visiting Deckard Cain with {unidentifiedItemCount} unidentified items");
                 var deckhardCainCode = NPCHelpers.GetDeckardCainForAct(game.Act);
 
                 var deckardCain = NPCHelpers.GetUniqueNPC(game, deckhardCainCode);
@@ -545,7 +534,7 @@ namespace ConsoleBot.TownManagement
             if (shouldGamble && System.Threading.Interlocked.Exchange(ref isAnyClientGambling, 1) == 0)
             {
                 var gambleNPC = NPCHelpers.GetGambleNPC(client.Game.Act);
-                Log.Information($"Gambling items at {gambleNPC}");
+                Log.Information($"Client {client.Game.Me.Name} Gambling items at {gambleNPC}");
                 List<Point> pathToGamble;
                 if (gambleNPC == NPCCode.Anya)
                 {
@@ -558,14 +547,14 @@ namespace ConsoleBot.TownManagement
                 
                 if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToGamble, movementMode))
                 {
-                    Log.Warning($"{movementMode} to {gambleNPC} failed at {client.Game.Me.Location}");
+                    Log.Warning($"Client {client.Game.Me.Name} {movementMode} to {gambleNPC} failed at {client.Game.Me.Location}");
                     return false;
                 }
 
                 var uniqueNPC = NPCHelpers.GetUniqueNPC(client.Game, gambleNPC);
                 if (uniqueNPC == null)
                 {
-                    Log.Warning($"{gambleNPC} not found at {client.Game.Me.Location}");
+                    Log.Warning($"Client {client.Game.Me.Name} {gambleNPC} not found at {client.Game.Me.Location}");
                     return false;
                 }
 

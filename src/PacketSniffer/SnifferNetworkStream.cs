@@ -21,6 +21,14 @@ namespace PacketSniffer
             }
         }
 
+        public bool DataAvailable
+        {
+            get
+            {
+                return true;
+            }
+        }
+
         public void Close()
         {
         }

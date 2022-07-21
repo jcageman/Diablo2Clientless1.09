@@ -171,7 +171,7 @@ namespace ConsoleBot.Helpers
                         {
                             Log.Debug($"Seems stuck, whirlwinding to point {point}");
                             game.UseRightHandSkillOnLocation(Skill.Whirlwind, point);
-                            Thread.Sleep((int)(game.Me.Location.Distance(point) * 80 + 400));
+                            await Task.Delay((int)(game.Me.Location.Distance(point) * 80 + 400));
                         }
                     }
 
@@ -199,7 +199,7 @@ namespace ConsoleBot.Helpers
                 {
                     break;
                 }
-                if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                var retryTeleportTask = GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
                     if (token.HasValue && token.Value.IsCancellationRequested)
                     {
@@ -211,13 +211,17 @@ namespace ConsoleBot.Helpers
                         return false;
                     }
                     return true;
-                }, TimeSpan.FromSeconds(4)))
+                }, TimeSpan.FromSeconds(4));
+
+                await Task.WhenAll(retryTeleportTask, Task.Delay(280));
+
+                if (!await retryTeleportTask)
                 {
                     if (token.HasValue && token.Value.IsCancellationRequested)
                     {
                         return true;
                     }
-                    Log.Warning($"Teleport failed at location: {game.Me.Location}");
+                    Log.Warning($"Teleport to {point} failed at location: {game.Me.Location}");
                     return false;
                 }
 

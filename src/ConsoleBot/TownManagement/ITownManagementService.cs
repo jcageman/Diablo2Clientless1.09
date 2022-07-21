@@ -8,7 +8,7 @@ namespace ConsoleBot.TownManagement
 {
     public interface ITownManagementService
     {
-        bool CreateTownPortal(Client client);
+        Task<bool> CreateTownPortal(Client client);
         Task<TownTaskResult> PerformTownTasks(Client client, TownManagementOptions options);
         Task<bool> SwitchAct(Client client, Act act);
         Task<bool> TakeTownPortalToArea(Client client, Player player, Area area);

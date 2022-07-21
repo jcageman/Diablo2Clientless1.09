@@ -38,7 +38,7 @@ namespace ConsoleBot.Bots
             _accountCharacter.Validate();
             try
             {
-                if (!RealmConnectHelpers.ConnectToRealm(client, _config, _accountCharacter))
+                if (!await RealmConnectHelpers.ConnectToRealm(client, _config, _accountCharacter))
                 {
                     throw new Exception("Could not connect to realm");
                 }
@@ -118,7 +118,7 @@ namespace ConsoleBot.Bots
                             await client.Game.LeaveGame();
                         }
 
-                        if (!client.RejoinMCP())
+                        if (!await client.RejoinMCP())
                         {
                             var reconnectMessage = $"Reconnecting to MCP failed, reconnecting to realm instead";
                             Log.Warning(reconnectMessage);
