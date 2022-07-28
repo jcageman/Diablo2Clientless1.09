@@ -154,7 +154,10 @@ namespace D2NG.Core
             var waypointMenuEvent = _gameServer.GetResetEventOfType(InComingPacket.WaypointMenu);
             Data.Me.LastSelectedWaypointId = 0;
             _gameServer.SendPacket(new InteractWithEntityPacket(worldObject));
-            waypointMenuEvent.WaitOne(2000);
+            if(!waypointMenuEvent.WaitOne(2000))
+            {
+                return false;
+            }
 
             if (!Data.Me.AllowedWaypoints.Contains(waypoint))
             {

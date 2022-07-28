@@ -478,7 +478,7 @@ namespace D2NG.Core.DataManager
             itemNameMap["Diablo's Horn"] = ItemName.DiablosHorn;
             itemNameMap["Baal's Eye"] = ItemName.BaalsEye;
             itemNameMap["Mephisto's Brain"] = ItemName.MephistosBrain;
-            itemNameMap["Standard of Heroes"] = ItemName.StandardofHeroes;
+            itemNameMap["Standard of Heroes"] = ItemName.StandardOfHeroes;
             itemNameMap["Hand Axe"] = ItemName.HandAxe;
             itemNameMap["Axe"] = ItemName.Axe;
             itemNameMap["Double Axe"] = ItemName.DoubleAxe;

@@ -125,7 +125,7 @@ namespace ConsoleBot
                 catch (Exception e)
                 {
                     var externalClient = serviceProvider.GetRequiredService<IExternalMessagingClient>();
-                    Log.Information($"Bot crashed with exception {e.Message}, restarting");
+                    Log.Information($"Bot crashed with exception {e.Message}, stack: {e.StackTrace}, restarting");
                     await externalClient.SendMessage($"Bot crashed with exception {e.Message}, restarting");
                     await Task.Delay(TimeSpan.FromSeconds(30));
                 }

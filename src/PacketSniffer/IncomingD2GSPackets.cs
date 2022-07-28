@@ -5,7 +5,6 @@ using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using Serilog;
 using System;
-using System.Linq;
 
 namespace PacketSniffer
 {

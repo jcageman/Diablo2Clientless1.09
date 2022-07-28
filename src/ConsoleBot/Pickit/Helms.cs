@@ -160,6 +160,11 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            if (item.Quality == QualityType.Unique && item.Name == ItemName.SkullCap && item.Sockets == 1 && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= 40)
+            {
+                return true;
+            }
+
             return false;
         }
     }

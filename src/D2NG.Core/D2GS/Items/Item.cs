@@ -278,7 +278,8 @@ namespace D2NG.Core.D2GS.Items
         public string GetFullDescription()
         {
             string etherealText = Ethereal ? "ethereal " : string.Empty;
-            string fullDescription = $"{Name} ({Level}) - {etherealText}{Quality}: \r\n";
+            string socketText = Sockets > 0 ? $"[{Sockets}s]" : string.Empty;
+            string fullDescription = $"{Name}{socketText} ({Level}) - {etherealText}{Quality}: \r\n";
             foreach (var property in Properties)
             {
                 switch(property.Key)

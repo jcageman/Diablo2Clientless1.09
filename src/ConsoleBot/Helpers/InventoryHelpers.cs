@@ -77,6 +77,10 @@ namespace ConsoleBot.Helpers
             if (!result)
             {
                 Log.Error($"{game.Me.Name}: Failed to open stash while at location {game.Me.Location} with stash at {stash.Location}");
+                Thread.Sleep(300);
+                game.ClickButton(ClickType.CloseStash);
+                Thread.Sleep(100);
+                game.ClickButton(ClickType.CloseStash);
                 return MoveItemResult.Failed;
             }
 
@@ -138,6 +142,10 @@ namespace ConsoleBot.Helpers
             if (!result)
             {
                 Log.Error($"{game.Me.Name}: Failed to open stash while at location {game.Me.Location} with stash at {stash.Location}");
+                Thread.Sleep(300);
+                game.ClickButton(ClickType.CloseStash);
+                Thread.Sleep(100);
+                game.ClickButton(ClickType.CloseStash);
                 return MoveItemResult.Failed;
             }
 

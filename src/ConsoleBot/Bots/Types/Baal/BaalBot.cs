@@ -386,7 +386,7 @@ namespace ConsoleBot.Bots.Types.Baal
                 {
                     await client.Game.LeaveGame();
                 }
-                await client.Disconnect();
+                client.Disconnect();
             }
         }
 

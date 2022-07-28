@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\D2NG.Core\D2NG.Core.csproj" />
+    <ProjectReference Include="..\D2NG.Navigation\D2NG.Navigation.csproj" />
   </ItemGroup>
 
 

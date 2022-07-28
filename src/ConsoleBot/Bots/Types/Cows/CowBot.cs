@@ -400,7 +400,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 {
                     await c.Game.LeaveGame();
                 }
-                await c.Disconnect();
+                c.Disconnect();
             }).ToList());
         }
 
@@ -1284,58 +1284,66 @@ namespace ConsoleBot.Bots.Types.Cows
 
         private async Task PickupItemsFromPickupList(Client client, CowManager cowManager, double distance)
         {
-            var pickitList = cowManager.GetPickitList(client, distance);
-            foreach (var pickItem in pickitList)
+            var maxPicks = 3;
+            var picks = 0;
+            var pickitList = new List<Item>();
+            do
             {
-                if (pickItem.Ground)
+                picks++;
+                pickitList = cowManager.GetPickitList(client, distance);
+                foreach (var pickItem in pickitList)
                 {
-                    SetShouldFollowLead(client, false);
-                    InventoryHelpers.IdentifyItems(client.Game);
-                    if (client.Game.Inventory.FindFreeSpace(pickItem) != null)
+                    if (pickItem.Ground)
                     {
-                        Log.Information($"Client {client.Game.Me.Name} picking up {pickItem.Amount} {pickItem.Name} ({pickItem.Id})");
-                        if (await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                        SetShouldFollowLead(client, false);
+                        InventoryHelpers.IdentifyItems(client.Game);
+                        if (client.Game.Inventory.FindFreeSpace(pickItem) != null)
                         {
-                            if (!(await MoveToLocation(client, pickItem.Location)))
+                            Log.Information($"Client {client.Game.Me.Name} picking up {pickItem.Amount} {pickItem.Name} ({pickItem.Id})");
+                            if (await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                             {
-                                return false;
-                            }
-
-                            var item = client.Game.FindItemById(pickItem.Id);
-                            if (item == null || !item.Ground)
-                            {
-                                return true;
-                            }
-
-                            await client.Game.MoveToAsync(item);
-                            client.Game.PickupItem(item);
-                            return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                            {
-                                await Task.Delay(50);
-                                if (!item.IsGold && client.Game.Inventory.FindItemById(item.Id) == null)
+                                if (!(await MoveToLocation(client, pickItem.Location)))
                                 {
                                     return false;
                                 }
 
-                                return true;
-                            }, TimeSpan.FromSeconds(0.3));
-                        }, TimeSpan.FromSeconds(3)))
-                        {
-                            InventoryHelpers.MoveInventoryItemsToCube(client.Game);
+                                var item = client.Game.FindItemById(pickItem.Id);
+                                if (item == null || !item.Ground)
+                                {
+                                    return true;
+                                }
+
+                                await client.Game.MoveToAsync(item);
+                                client.Game.PickupItem(item);
+                                return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                                {
+                                    await Task.Delay(50);
+                                    if (!item.IsGold && client.Game.Inventory.FindItemById(item.Id) == null)
+                                    {
+                                        return false;
+                                    }
+
+                                    return true;
+                                }, TimeSpan.FromSeconds(0.3));
+                            }, TimeSpan.FromSeconds(3)))
+                            {
+                                InventoryHelpers.MoveInventoryItemsToCube(client.Game);
+                            }
+                            else
+                            {
+                                Log.Warning($"Client {client.Game.Me.Name} failed picking up {pickItem.Amount} {pickItem.Name} ({pickItem.Id})");
+                                cowManager.PutItemOnPickitList(client, pickItem);
+                            }
                         }
                         else
                         {
-                            Log.Warning($"Client {client.Game.Me.Name} failed picking up {pickItem.Amount} {pickItem.Name} ({pickItem.Id})");
+                            Log.Warning($"Client {client.Game.Me.Name} no space for {pickItem.Amount} {pickItem.Name} ({pickItem.Id})");
                             cowManager.PutItemOnPickitList(client, pickItem);
                         }
                     }
-                    else
-                    {
-                        Log.Warning($"Client {client.Game.Me.Name} no space for {pickItem.Amount} {pickItem.Name} ({pickItem.Id})");
-                        cowManager.PutItemOnPickitList(client, pickItem);
-                    }
                 }
             }
+            while (pickitList.Count != 0 && picks < maxPicks);
         }
 
         async Task BarbClient(Client client, CowManager cowManager, bool shouldBo)

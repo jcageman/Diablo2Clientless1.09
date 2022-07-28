@@ -135,7 +135,7 @@ namespace D2NG.Core
             {
                 if (D2gs.IsConnected())
                 {
-                    await D2gs.Disconnect();
+                    D2gs.Disconnect();
                 }
 
                 return false;
@@ -145,7 +145,7 @@ namespace D2NG.Core
             {
                 if (D2gs.IsConnected())
                 {
-                    await D2gs.Disconnect();
+                    D2gs.Disconnect();
                 }
                 return false;
             }
@@ -207,7 +207,7 @@ namespace D2NG.Core
             return true;
         }
 
-        public async Task Disconnect()
+        public void Disconnect()
         {
             if (Bncs.IsConnected())
             {
@@ -221,7 +221,7 @@ namespace D2NG.Core
 
             if (D2gs.IsConnected())
             {
-                await D2gs.Disconnect();
+                D2gs.Disconnect();
             }
         }
 

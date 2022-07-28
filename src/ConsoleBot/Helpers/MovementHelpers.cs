@@ -178,7 +178,6 @@ namespace ConsoleBot.Helpers
                     previousBackupPoint = bestIndex;
                     i = bestIndex;
                 }
-                Log.Debug($"Running to point {point}");
                 await game.MoveToAsync(point);
             }
 

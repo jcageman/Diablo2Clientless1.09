@@ -308,6 +308,10 @@ namespace ConsoleBot.Bots.Types.Cows
                 if(_pickitItemsOnGround.TryRemove(tryItem.Id, out var item))
                 {
                     resultPickitList.Add(item);
+                    if(resultPickitList.Count == 2)
+                    {
+                        break;
+                    }
                 }
             }
 

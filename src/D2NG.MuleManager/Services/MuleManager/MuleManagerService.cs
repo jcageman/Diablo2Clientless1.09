@@ -24,12 +24,16 @@ namespace D2NG.MuleManager.Services.MuleManager
 
         public async Task<bool> UpdateAllAccounts()
         {
-            var updateTasks = _configuration.Accounts.Select(async a => await UpdateAccountMules(a)).ToList();
-            await Task.WhenAll(updateTasks);
+            ParallelOptions parallelOptions = new()
+            {
+                MaxDegreeOfParallelism = 2
+            };
+
+            await Parallel.ForEachAsync(_configuration.Accounts, parallelOptions, async (a, token) => await UpdateAccountMules(a));
             return true;
         }
 
-        private async Task<bool> UpdateAccountMules(MuleManagerAccount account)
+        private async ValueTask<bool> UpdateAccountMules(MuleManagerAccount account)
         {
             var gameCount = new Random().Next(1, 100);
             var client = new Client();
@@ -52,17 +56,22 @@ namespace D2NG.MuleManager.Services.MuleManager
 
             foreach (var character in characters)
             {
-                await client.SelectCharacter(character);
-                if (!await client.CreateGame(Core.D2GS.Enums.Difficulty.Normal, account.Name + "-" + gameCount++, "terx", "gs1"))
+                for(int i = 0; i < 5; i++)
                 {
-                    Log.Error($"{account.Name}: Creating game failed");
-                    if (!await ReconnectClient(client, account))
+                    await client.SelectCharacter(character);
+                    if (!await client.CreateGame(Core.D2GS.Enums.Difficulty.Normal, account.Name + "-" + gameCount++, "terx", "gs1"))
                     {
-                        Log.Error($"{account.Name}: Reconnect failed");
-                        return false;
+                        Log.Error($"{account.Name}: Creating game failed");
+                        await Task.Delay(TimeSpan.FromSeconds(5*(i+1)));
+                        if (!await ReconnectClient(client, account))
+                        {
+                            Log.Error($"{account.Name}: Reconnect failed");
+                            return false;
+                        }
+                        await Task.Delay(TimeSpan.FromSeconds(10 * (i + 1)));
+                        continue;
                     }
-                    await Task.Delay(TimeSpan.FromSeconds(10));
-                    continue;
+                    break;
                 }
 
                 client.Game.RequestUpdate(client.Game.Me.Id);
@@ -117,9 +126,9 @@ namespace D2NG.MuleManager.Services.MuleManager
                     return false;
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(5));
+                await Task.Delay(TimeSpan.FromSeconds(new Random().Next(3,5)));
             }
-            await client.Disconnect();
+            client.Disconnect();
             return true;
         }
 
@@ -132,7 +141,7 @@ namespace D2NG.MuleManager.Services.MuleManager
 
             if (!await client.RejoinMCP())
             {
-                await client.Disconnect();
+                client.Disconnect();
                 if (!client.Connect(
                     _configuration.Realm,
                     _configuration.KeyOwner,

@@ -145,7 +145,7 @@ namespace ConsoleBot.Mule
                     await Task.Delay(TimeSpan.FromSeconds(2));
                     await muleClient.Game.LeaveGame();
                     await Task.Delay(TimeSpan.FromSeconds(1));
-                    await muleClient.Disconnect();
+                    muleClient.Disconnect();
                     if (moveItemResult == MoveItemResult.Failed)
                     {
                         await client.Game.LeaveGame();
@@ -189,7 +189,7 @@ namespace ConsoleBot.Mule
                 }
 
                 characterNames = characters.Select(c => c.Name.ToLower()).ToList();
-                await client.Disconnect();
+                client.Disconnect();
             }
 
             characterNames = characterNames.Except(account.ExcludedCharacters.Select(c => c.ToLower())).ToList();

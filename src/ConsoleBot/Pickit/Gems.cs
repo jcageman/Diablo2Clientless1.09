@@ -62,6 +62,11 @@ namespace ConsoleBot.Pickit
             }
             /*
 
+            if (item.Name == ItemName.FlawlessTopaz || item.Name == ItemName.PerfectTopaz)
+            {
+                return true;
+            }
+
             if (item.Name == ItemName.FlawlessAmethyst || item.Name == ItemName.PerfectAmethyst)
             {
                 return true;

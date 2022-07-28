@@ -65,7 +65,10 @@ namespace ConsoleBot.TownManagement
                     }
                     
                 }
-                client.Game.TakeWaypoint(townWaypoint, waypoint);
+                if(!client.Game.TakeWaypoint(townWaypoint, waypoint))
+                {
+                    return false;
+                }
                 return GeneralHelpers.TryWithTimeout((retryCount) => {
                     if(retryCount % 5 == 0 && client.Game.Area != waypoint.ToArea())
                     {
@@ -261,7 +264,10 @@ namespace ConsoleBot.TownManagement
             Log.Information($"Client {client.Game.Me.Name} taking waypoint to {targetTownArea}");
             if (!GeneralHelpers.TryWithTimeout((_) =>
             {
-                client.Game.TakeWaypoint(townWaypoint, act.MapTownWayPoint());
+                if(!client.Game.TakeWaypoint(townWaypoint, act.MapTownWayPoint()))
+                {
+                    return false;
+                }
                 return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == targetTownArea, TimeSpan.FromSeconds(2));
             }, TimeSpan.FromSeconds(5)))
             {

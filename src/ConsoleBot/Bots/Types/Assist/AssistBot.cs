@@ -194,7 +194,7 @@ namespace ConsoleBot.Bots.Types.Assist
                 {
                     await c.Game.LeaveGame();
                 }
-                await c.Disconnect();
+                c.Disconnect();
             }).ToList());
         }
 

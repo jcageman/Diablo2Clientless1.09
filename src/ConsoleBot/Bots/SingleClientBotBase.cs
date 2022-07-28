@@ -165,7 +165,7 @@ namespace ConsoleBot.Bots
                     await client.Game.LeaveGame();
                 }
 
-                await client.Disconnect();
+                client.Disconnect();
             }
         }
     }

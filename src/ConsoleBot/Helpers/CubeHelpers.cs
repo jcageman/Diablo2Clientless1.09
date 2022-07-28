@@ -83,6 +83,10 @@ namespace ConsoleBot.Helpers
             if (!result)
             {
                 Log.Error($"Failed to open stash");
+                Thread.Sleep(300);
+                game.ClickButton(ClickType.CloseStash);
+                Thread.Sleep(100);
+                game.ClickButton(ClickType.CloseStash);
                 return;
             }
 

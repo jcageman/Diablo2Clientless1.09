@@ -30,7 +30,7 @@ namespace D2NG.Core.D2GS
 
         protected ConcurrentDictionary<InComingPacket, ManualResetEvent> IncomingPacketEvents { get; } = new ConcurrentDictionary<InComingPacket, ManualResetEvent>();
 
-        private Task _listener;
+        private Thread _listener;
 
         public GameServer()
         {
@@ -80,7 +80,8 @@ namespace D2NG.Core.D2GS
         public void Connect(IPAddress ip)
         {
             Connection.Connect(ip, Port);
-            _listener = Task.Run(Listen);
+            _listener = new Thread(Listen);
+            _listener.Start();
         }
 
         public bool IsInGame()
@@ -93,7 +94,7 @@ namespace D2NG.Core.D2GS
             return Connection.Connected;
         }
 
-        private async Task Listen()
+        private void Listen()
         {
             while (Connection.Connected)
             {
@@ -105,17 +106,20 @@ namespace D2NG.Core.D2GS
                 catch (Exception)
                 {
                     Log.Debug($"InstanceId {InstanceId} GameServer Connection was terminated");
-                    await Task.Delay(300);
                 }
             }
         }
 
-        internal async Task Disconnect()
+        internal void Disconnect()
         {
-            Connection.Terminate();
+            if(Connection.Connected)
+            {
+                Connection.Terminate();
+            }
+            
             if(_listener != null)
             {
-                await _listener;
+                _listener.Join();
             }
         }
 
@@ -124,8 +128,8 @@ namespace D2NG.Core.D2GS
             var leaveGameConfirmed = GetResetEventOfType(InComingPacket.LeaveGameConfirmed);
             InGame = false;
             Connection.WritePacket(OutGoingPacket.LeaveGame);
-            await leaveGameConfirmed.AsTask(TimeSpan.FromSeconds(2));
-            await Disconnect();
+            await leaveGameConfirmed.AsTask(TimeSpan.FromSeconds(5));
+            Disconnect();
         }
 
         internal bool GameLogon(uint gameHash, ushort gameToken, Character character)
@@ -158,7 +162,13 @@ namespace D2NG.Core.D2GS
             return IncomingPacketEvents.AddOrUpdate(inComingPacket, new ManualResetEvent(false), (key, oldValue) => new ManualResetEvent(false));
         }
 
-        internal void Ping() => Connection.WritePacket(new PingPacket());
+        internal void Ping()
+        {
+            if (IsInGame())
+            {
+                Connection.WritePacket(new PingPacket());
+            }
+        }
 
         public void Dispose()
         {

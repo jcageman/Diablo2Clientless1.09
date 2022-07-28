@@ -1,7 +1,6 @@
 ﻿using D2NG.Core.D2GS.NetworkStream;
 using D2NG.Core.Exceptions;
 using Serilog;
-using Stateless;
 using System.Net;
 using System.Net.Sockets;
 
@@ -15,21 +14,6 @@ namespace D2NG.Core
             Connected
         }
 
-        protected enum Trigger
-        {
-            ConnectSocket,
-            Terminate,
-            Write,
-            Read
-        }
-
-        /**
-         * State Machine for the connection
-         */
-        protected readonly StateMachine<State, Trigger> _machine;
-
-        private readonly StateMachine<State, Trigger>.TriggerWithParameters<IPAddress, int> _connectTrigger;
-
         /**
         * The actual TCP Connection
         */
@@ -37,19 +21,7 @@ namespace D2NG.Core
 
         protected TcpClient _tcpClient;
 
-        protected Connection()
-        {
-            _machine = new StateMachine<State, Trigger>(State.NotConnected);
-            _connectTrigger = _machine.SetTriggerParameters<IPAddress, int>(Trigger.ConnectSocket);
-
-            _machine.Configure(State.NotConnected)
-                .OnEntryFrom(Trigger.Terminate, OnTerminate)
-                .Permit(Trigger.ConnectSocket, State.Connected);
-
-            _machine.Configure(State.Connected)
-                .OnEntryFrom(_connectTrigger, (ip, port) => OnConnect(ip, port))
-                .Permit(Trigger.Terminate, State.NotConnected);
-        }
+        private State _state = State.NotConnected;
 
         internal abstract byte[] ReadPacket();
 
@@ -57,9 +29,7 @@ namespace D2NG.Core
 
         internal abstract void WritePacket(byte[] packet);
 
-        public void Connect(IPAddress ip, int port) => _machine.Fire(_connectTrigger, ip, port);
-
-        protected void OnConnect(IPAddress ip, int port)
+        public void Connect(IPAddress ip, int port)
         {
             Log.Debug("[{0}] Connecting to {1}:{2}", GetType(), ip, port);
             _tcpClient = new TcpClient()
@@ -77,16 +47,16 @@ namespace D2NG.Core
             }
             Initialize();
             Log.Debug("[{0}] Successfully connected to {1}:{2}", GetType(), ip, port);
+            _state = State.Connected;
         }
 
         internal abstract void Initialize();
 
-        public bool Connected => _machine.IsInState(State.Connected);
+        public bool Connected => _state == State.Connected;
 
-        public void Terminate() => _machine.Fire(Trigger.Terminate);
-
-        protected void OnTerminate()
+        public void Terminate()
         {
+            _state = State.NotConnected;
             _tcpClient.Close();
             _stream.Close();
         }

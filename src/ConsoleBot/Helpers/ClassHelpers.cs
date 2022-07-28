@@ -39,7 +39,7 @@ namespace ConsoleBot.Helpers
 
         public static bool AnyClientIsMissingShouts(List<Client> clients)
         {
-            return clients.Any(c => c.Game == null || c.Game.Me == null || IsMissingShouts(c.Game.Me));
+            return clients.Any(c => c.Game == null || !c.Game.IsInGame() || c.Game.Me == null || IsMissingShouts(c.Game.Me));
         }
 
         public static bool IsMissingShouts(Player p)

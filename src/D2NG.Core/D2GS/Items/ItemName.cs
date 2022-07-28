@@ -349,7 +349,7 @@
         DiablosHorn,
         BaalsEye,
         MephistosBrain,
-        StandardofHeroes,
+        StandardOfHeroes,
         HandAxe,
         Axe,
         DoubleAxe,

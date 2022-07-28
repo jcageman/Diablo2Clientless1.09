@@ -22,7 +22,7 @@ namespace ConsoleBot.Helpers
             {
                 try
                 {
-                    await client.Disconnect();
+                    client.Disconnect();
                     await Task.Delay(TimeSpan.FromSeconds(2));
                     if (await ConnectToRealm(client, botConfiguration, accountCharacter))
                     {

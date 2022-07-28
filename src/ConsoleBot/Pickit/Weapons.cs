@@ -1,7 +1,5 @@
-﻿using D2NG.Core;
-using D2NG.Core.D2GS.Enums;
+﻿using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
-using D2NG.Core.D2GS.Players;
 using System;
 using System.Collections.Generic;
 
@@ -91,7 +89,12 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Quality == QualityType.Unique && item.Name == ItemName.Blade)
+            if (item.Quality == QualityType.Unique && item.Name == ItemName.Blade && item.Level >= 90)
+            {
+                return true;
+            }
+
+            if (item.Quality == QualityType.Unique && item.Name == ItemName.Maul && item.Level >= 90)
             {
                 return true;
             }
@@ -254,6 +257,20 @@ namespace ConsoleBot.Pickit
                 return true;
             }
             */
+
+            if (item.Sockets > 0)
+            {
+                if (item.Quality == QualityType.Unique && item.Name == ItemName.Blade)
+                {
+                    return true;
+                }
+
+                if (item.Quality == QualityType.Unique && item.Name == ItemName.Maul)
+                {
+                    return true;
+                }
+            }
+
             return false;
         }
     }

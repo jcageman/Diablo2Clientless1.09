@@ -163,6 +163,10 @@ namespace ConsoleBot.Bots.Types.CS
                 if (_pickitItemsOnGround.TryRemove(tryItem.Id, out var item))
                 {
                     resultPickitList.Add(item);
+                    if(resultPickitList.Count == 2)
+                    {
+                        break;
+                    }
                 }
             }
 
@@ -199,7 +203,7 @@ namespace ConsoleBot.Bots.Types.CS
             var nearbyAliveMonsters = _aliveMonsters.Values.Where(c => c.Location.Distance(client.Game.Me.Location) < 20);
             foreach (var nearbyMonster in nearbyAliveMonsters)
             {
-                var firstMatch = _deadMonsters.Values.FirstOrDefault(c => c.Location.Distance(nearbyMonster.Location) < 10 && c.AvailableForCorpseExplosion);
+                var firstMatch = _deadMonsters.Values.FirstOrDefault(c => c.Location.Distance(nearbyMonster.Location) < 10);
                 if (firstMatch != null)
                 {
                     if (client.Game.WorldObjects.TryGetValue((firstMatch.Id, EntityType.NPC), out var monster))
@@ -209,7 +213,7 @@ namespace ConsoleBot.Bots.Types.CS
                             return client.Game.UseRightHandSkillOnEntity(Skill.CorpseExplosion, monster);
                         }
 
-                        firstMatch.AvailableForCorpseExplosion = false;
+                        _deadMonsters.TryRemove(firstMatch.Id, out var removedMonster);
                     }
                 }
             }

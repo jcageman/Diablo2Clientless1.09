@@ -1,5 +1,4 @@
-﻿using D2NG.Core;
-using D2NG.Core.D2GS.Enums;
+﻿using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using System.Collections.Generic;
 
@@ -33,17 +32,16 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldPickupItemClassic(Item item)
         {
-            /*
-            if(item.Quality == QualityType.Unique && item.Name == "Gothic Shield")
+            if(item.Quality == QualityType.Unique && item.Name == ItemName.GothicShield && item.Level >= 90)
             {
                 return true;
             }
  
-            if (item.Quality == QualityType.Unique && item.Name == "Bone Shield")
+            if (item.Quality == QualityType.Unique && item.Name == ItemName.BoneShield && item.Level >= 90)
             {
                 return true;
             }
-                       */
+
             return item.Quality == QualityType.Rare;
         }
 
@@ -73,17 +71,18 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItemClassic(Item item)
         {
-            /*
-            if (item.Quality == QualityType.Unique && item.Name == "Bone Shield")
+            if(item.Sockets > 0)
             {
-                return true;
+                if (item.Quality == QualityType.Unique && item.Name == ItemName.GothicShield && item.GetTotalResistFrLrCr() > 140)
+                {
+                    return true;
+                }
+
+                if (item.Quality == QualityType.Unique && item.Name == ItemName.BoneShield && item.Level >= 90)
+                {
+                    return true;
+                }
             }
-            
-            if (item.Quality == QualityType.Unique && item.Name == "Gothic Shield" && item.GetTotalResist() > 155)
-            {
-                return true;
-            }
-            */
 
             if (DesirableShields.Contains(item.Name))
             {

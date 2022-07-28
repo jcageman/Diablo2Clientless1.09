@@ -109,6 +109,8 @@ namespace ConsoleBot.Attack
 
         private async Task<Point> FindNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, double minDistance = 0, double maxdistance = 30)
         {
+            Point bestSpot = null;
+            int spotMonsters = int.MaxValue;
             for (int i = 1; i < 5; ++i)
             {
                 foreach (var (p1, p2) in new List<(short, short)> {
@@ -124,14 +126,19 @@ namespace ConsoleBot.Attack
                     }
 
                     var tryLocation = toLocation.Add(x, y);
-                    if (await IsVisitable(client, tryLocation) && await IsInLineOfSight(client, tryLocation, toLocation) && GetNearbyMonsters(enemies, tryLocation, 5.0).Count() < 2)
+                    if (await IsVisitable(client, tryLocation) && await IsInLineOfSight(client, tryLocation, toLocation))
                     {
-                        return tryLocation;
+                        var monsters = GetNearbyMonsters(enemies, tryLocation, 5.0).Count;
+                        if(monsters < spotMonsters)
+                        {
+                            spotMonsters = monsters;
+                            bestSpot = tryLocation;
+                        }
                     }
                 }
             }
 
-            return null;
+            return bestSpot;
         }
 
         public async Task<bool> MoveToNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, MovementMode movementMode, double minDistance = 0, double maxDistance = 30)
@@ -161,7 +168,7 @@ namespace ConsoleBot.Attack
                     return true;
                 }
             }
-
+            Log.Warning($"No safe spot found for {client.Game.Me.Name} on location {client.Game.Me.Location}");
             return false;
         }
 
@@ -231,7 +238,7 @@ namespace ConsoleBot.Attack
                 client.Game.RepeatRightHandSkillOnLocation(Skill.GuidedArrow, nearest.Location);
                 await Task.Delay(200);
             }
-            else if(client.Game.Me.Equipment.TryGetValue(DirectoryType.RightHand, out var weapon)
+            else if (client.Game.Me.Equipment.TryGetValue(DirectoryType.RightHand, out var weapon)
                 && weapon.Classification == ClassificationType.Bow)
             {
                 Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
@@ -279,7 +286,7 @@ namespace ConsoleBot.Attack
                 await Task.Delay(100);
                 return true;
             }
-            else if(me.Mana > 10
+            else if (me.Mana > 10
                     && me.HasSkill(Skill.ShiverArmor)
                     && !client.Game.Me.Effects.ContainsKey(EntityEffect.Shiverarmor))
             {
@@ -384,16 +391,16 @@ namespace ConsoleBot.Attack
                 client.Game.LeftHandSkillHoldOnEntity(Skill.Attack, nearest);
                 await Task.Delay(200);
             }
-            else if(me.HasSkill(Skill.BlessedHammer))
+            else if (me.HasSkill(Skill.BlessedHammer))
             {
                 if (nearest.Location.Distance(client.Game.Me.Location) > 15)
                 {
                     var goalLocation = client.Game.Me.Location.GetPointBeforePointInSameDirection(nearest.Location, 3);
-                    if(client.Game.Me.HasSkill(Skill.Vigor))
+                    if (client.Game.Me.HasSkill(Skill.Vigor))
                     {
                         client.Game.ChangeSkill(Skill.Vigor, Hand.Right);
                     }
-                    
+
                     var pathNearest = await _pathingService.GetPathToLocation(client.Game, goalLocation, MovementMode.Walking);
                     if (!await MovementHelpers.TakePathOfLocations(client.Game, pathNearest, MovementMode.Walking))
                     {

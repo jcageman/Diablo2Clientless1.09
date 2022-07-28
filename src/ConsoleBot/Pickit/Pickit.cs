@@ -116,23 +116,23 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            if (item.Name == ItemName.EssenceOfAnguish
+            || item.Name == ItemName.EssenceOfPain
+            || item.Name == ItemName.EssenceOfSuffering
+            || item.Name == ItemName.EssenceOfHatred
+            || item.Name == ItemName.EssenceOfTerror
+            || item.Name == ItemName.StandardOfHeroes
+            || item.Name == ItemName.TokenOfAbsolution)
+            {
+                return true;
+            }
+
             if (item.IsIdentified)
             {
                 return ShouldKeepItem(isExpansion, characterClass, item);
             }
 
             if (Sets.ShouldPickupItem(item))
-            {
-                return true;
-            }
-
-
-
-            if (item.Name == ItemName.EssenceOfAnguish
-                || item.Name == ItemName.EssenceOfPain
-                || item.Name == ItemName.EssenceOfSuffering
-                || item.Name == ItemName.StandardofHeroes
-                || item.Name == ItemName.TokenOfAbsolution)
             {
                 return true;
             }
@@ -169,7 +169,7 @@ namespace ConsoleBot.Pickit
             if (item.Name == ItemName.EssenceOfAnguish
                 || item.Name == ItemName.EssenceOfPain
                 || item.Name == ItemName.EssenceOfSuffering
-                || item.Name == ItemName.StandardofHeroes
+                || item.Name == ItemName.StandardOfHeroes
                 || item.Name == ItemName.TokenOfAbsolution)
             {
                 return true;
@@ -201,17 +201,22 @@ namespace ConsoleBot.Pickit
             {
                 return false;
             }
-            /*
-            if(self.Attributes[Attribute.Level] > 86)
+            
+            if(self.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] >= 90)
             {
                 return item.Name == ItemName.Amulet;
+            }
+
+            if (item.Name == ItemName.BoneHelm && self.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] >= 86)
+            {
+                return true;
             }
 
             if (item.Name == ItemName.Boots || item.Name == ItemName.HeavyBoots)
             {
                 return true;
             }
-            
+            /*
             if (item.Classification == ClassificationType.Ring)
             {
                 return true;
@@ -228,11 +233,6 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Name == ItemName.BoneHelm)
-            {
-                return true;
-            }
-
             if (item.Name == ItemName.JaredsStone)
             {
                 return true;
@@ -241,7 +241,7 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-*/
+
             if (item.Name == ItemName.SplintMail)
             {
                 return true;
@@ -251,7 +251,7 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-
+            */
             return false;
         }
 
