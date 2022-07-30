@@ -811,11 +811,40 @@ namespace ConsoleBot.Bots.Types.CS
                 CharacterClass.Sorceress => GetSorceressKillAction(client),
                 CharacterClass.Paladin => GetPaladinKillAction(client),
                 CharacterClass.Necromancer => GetNecromancerKillAction(client),
+                CharacterClass.Amazon => GetAmazonKillAction(client),
                 _ => new Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task>((csManager, enemies, bosses) =>
 {
     return Task.CompletedTask;
 }),
             };
+        }
+
+        private Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> GetAmazonKillAction(Client client)
+        {
+            Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> action = (async (csManager, enemies, bosses) =>
+            {
+                var nearest = bosses.FirstOrDefault();
+                if (nearest == null)
+                {
+                    await PickupItemsFromPickupList(client, csManager, 10);
+                    await PickupNearbyRejuvenationsIfNeeded(client, csManager, 10);
+                    nearest = enemies.FirstOrDefault();
+                }
+
+                if (nearest == null || nearest.Location.Distance(client.Game.Me.Location) > 50)
+                {
+                    return;
+                }
+
+                var nearbyPlayer = client.Game.Players
+                .Where(p => p.Id != client.Game.Me.Id && p.Location != null && (p.Class == CharacterClass.Paladin || p.Class == CharacterClass.Barbarian))
+                .OrderBy(p => p.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
+                if(nearbyPlayer != null)
+                {
+                    await _attackService.AssistPlayer(client, nearbyPlayer);
+                }
+            });
+            return action;
         }
 
         private Func<CSManager, List<AliveMonster>, List<AliveMonster>, Task> GetBarbarianKillAction(Client client)
