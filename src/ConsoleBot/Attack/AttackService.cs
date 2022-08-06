@@ -203,7 +203,7 @@ namespace ConsoleBot.Attack
         private async Task<bool> AmazonAssist(Client client, Player player)
         {
             var me = client.Game.Me;
-            List<WorldObject> enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 20, 30);
+            var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 20, 30).ToList();
 
             if (me.Attributes[Attribute.Level] < 30 && client.Game.Difficulty > Difficulty.Normal)
             {
@@ -235,7 +235,7 @@ namespace ConsoleBot.Attack
             else if (me.HasSkill(Skill.GuidedArrow) && me.Mana > 20 && enemies.Count < 5)
             {
                 Log.Information($"Attacking {nearest.NPCCode} with {Skill.GuidedArrow}");
-                client.Game.RepeatRightHandSkillOnLocation(Skill.GuidedArrow, nearest.Location);
+                client.Game.RepeatRightHandSkillOnEntity(Skill.GuidedArrow, nearest);
                 await Task.Delay(200);
             }
             else if (client.Game.Me.Equipment.TryGetValue(DirectoryType.RightHand, out var weapon)
@@ -273,7 +273,7 @@ namespace ConsoleBot.Attack
 
         private async Task<bool> SorceressAssist(Client client, Player player)
         {
-            List<WorldObject> enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 30, 30);
+            var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 30, 30).ToList();
 
             var me = client.Game.Me;
             if (me.Mana > 10
@@ -344,7 +344,7 @@ namespace ConsoleBot.Attack
 
         private async Task<bool> PaladinAssist(Client client, Player player)
         {
-            List<WorldObject> enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 30, 20);
+            var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 30, 20).ToList();
 
             var me = client.Game.Me;
             if (me.Mana > 20 && me.HasSkill(Skill.HolyShield) && !client.Game.Me.Effects.ContainsKey(EntityEffect.Holyshield))
@@ -445,7 +445,7 @@ namespace ConsoleBot.Attack
                 await Task.Delay(200);
             }
 
-            List<WorldObject> enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 1, 30);
+            var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 2, 30);
             var nearest = enemies.FirstOrDefault();
             if (nearest == null)
             {
@@ -471,6 +471,7 @@ namespace ConsoleBot.Attack
             if (client.Game.Area == Area.ChaosSanctuary
                 && client.Game.Players.Exists(p => p.Class == CharacterClass.Barbarian)
                 && me.HasSkill(Skill.LifeTap)
+                && enemies.Count() > 1
                 && me.Mana > 15)
             {
                 if (!nearest.Effects.Contains(EntityEffect.Lifetap))
@@ -506,7 +507,7 @@ namespace ConsoleBot.Attack
         {
             var me = client.Game.Me;
             await ClassHelpers.CastAllShouts(client);
-            List<WorldObject> enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 1, 20);
+            var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 1, 20);
             var nearest = enemies.FirstOrDefault();
             if (nearest == null)
             {

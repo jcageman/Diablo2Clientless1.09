@@ -14,6 +14,7 @@ using Microsoft.Extensions.Options;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -39,6 +40,12 @@ namespace ConsoleBot.Mule
             if (!await client.CreateGame(Difficulty.Normal, muleGameName, _botConfig.GamePassword, _botConfig.GameDescriptions?.ElementAtOrDefault(0)))
             {
                 await Task.Delay(TimeSpan.FromSeconds(10));
+                return false;
+            }
+
+            if (!await WaitForInitialize(client))
+            {
+                Log.Error($"Fail to initialize client {client.LoggedInUserName()}");
                 return false;
             }
 
@@ -93,7 +100,12 @@ namespace ConsoleBot.Mule
                         continue;
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(2));
+                    if(!await WaitForInitialize(muleClient))
+                    {
+                        Log.Error($"Fail to initialize client {muleClient.LoggedInUserName()}");
+                        return false;
+                    }
+
                     InventoryHelpers.CleanupCursorItem(muleClient.Game);
 
                     MoveItemResult moveItemResult = MoveItemResult.Succes;
@@ -162,6 +174,33 @@ namespace ConsoleBot.Mule
             await Task.Delay(TimeSpan.FromSeconds(2));
             if (!await client.RejoinMCP())
             {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static async Task<bool> WaitForInitialize(Client client)
+        {
+            var timer = new Stopwatch();
+            timer.Start();
+            while (client.Game.Me == null && timer.Elapsed < TimeSpan.FromSeconds(3))
+            {
+                await Task.Delay(100);
+            }
+
+            if (client.Game.Me == null)
+            {
+                Log.Error($"{client.Game.Me.Name} failed to initialize Me");
+                return false;
+            }
+
+            client.Game.RequestUpdate(client.Game.Me.Id);
+            if (!GeneralHelpers.TryWithTimeout(
+                (_) => client.Game.Me.Location.X != 0 && client.Game.Me.Location.Y != 0,
+                TimeSpan.FromSeconds(5)))
+            {
+                Log.Error($"{client.Game.Me.Name} failed to initialize current location");
                 return false;
             }
 

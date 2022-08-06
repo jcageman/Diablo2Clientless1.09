@@ -497,14 +497,13 @@ namespace ConsoleBot.Helpers
             return true;
         }
 
-        public static List<WorldObject> GetNearbyNPCs(Client client, Point point, int numberOfEnemies, int distance)
+        public static IEnumerable<WorldObject> GetNearbyNPCs(Client client, Point point, int numberOfEnemies, int distance)
         {
             return client.Game.WorldObjects
             .Where(w => w.Key.Item2 == EntityType.NPC && !FriendlyNPCs.Contains(w.Value.NPCCode) && w.Value.State != EntityState.Dead && w.Value.State != EntityState.Dieing && w.Value.Location.Distance(point) < distance)
             .OrderBy(w => w.Value.Location.Distance(point))
             .Take(numberOfEnemies)
-            .Select(w => w.Value)
-            .ToList();
+            .Select(w => w.Value);
         }
 
         public static List<WorldObject> GetNearbyCorpses(Client client, Point point, int numberOfEnemies)
@@ -518,6 +517,15 @@ namespace ConsoleBot.Helpers
             .Take(numberOfEnemies)
             .Select(w => w.Value)
             .ToList();
+        }
+
+        public static IEnumerable<WorldObject> GetNearbySuperUniques(Client client, double distance = 40.0)
+        {
+            return client.Game.WorldObjects
+            .Where(w => w.Key.Item2 == EntityType.NPC
+                && w.Value.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique)
+                && w.Value.Location.Distance(client.Game.Me.Location) < distance)
+            .Select(w => w.Value);
         }
 
         private static void BuyMagicItemsAtMerchant(Game game, WorldObject npc)

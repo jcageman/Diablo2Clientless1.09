@@ -99,12 +99,12 @@ namespace ConsoleBot.Helpers
                     newGameCount++;
                     var retryDuration = Math.Pow(1 + retryCount, 1.2) * TimeSpan.FromSeconds(3);
                     Log.Information($"Creating game failed for {client.LoggedInUserName()} retrying in {retryDuration.TotalSeconds} seconds");
-                    await RealmConnectHelpers.ConnectToRealmWithRetry(client, botConfiguration, account, 10);
+                    await ConnectToRealmWithRetry(client, botConfiguration, account, 10);
                     await Task.Delay(retryDuration);
                 }
 
                 return createGame;
-            }, TimeSpan.FromSeconds(15));
+            }, TimeSpan.FromMinutes(5));
             return Tuple.Create(result, newGameCount);
         }
 

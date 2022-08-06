@@ -60,14 +60,8 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-            /*
 
-            if (item.Name == ItemName.FlawlessTopaz || item.Name == ItemName.PerfectTopaz)
-            {
-                return true;
-            }
-
-            if (item.Name == ItemName.FlawlessAmethyst || item.Name == ItemName.PerfectAmethyst)
+            if (item.Name == ItemName.FlawlessRuby || item.Name == ItemName.PerfectRuby)
             {
                 return true;
             }
@@ -77,7 +71,14 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.Name == ItemName.FlawlessRuby || item.Name == ItemName.PerfectRuby)
+
+            if (item.Name == ItemName.FlawlessAmethyst || item.Name == ItemName.PerfectAmethyst)
+            {
+                return true;
+            }
+            /*
+
+            if (item.Name == ItemName.FlawlessTopaz || item.Name == ItemName.PerfectTopaz)
             {
                 return true;
             }

@@ -141,7 +141,16 @@ namespace D2NG.Core
         public async Task LeaveGame()
         {
             Log.Information("Leaving game");
-            await _gameServer.LeaveGame();
+            try
+            {
+                await _gameServer.LeaveGame();
+            }
+            finally
+            {
+                pingThread.Join();
+                chickenThread.Join();
+                await Task.Delay(1000);
+            }
         }
 
         public bool TakeWaypoint(WorldObject worldObject, Waypoint waypoint)

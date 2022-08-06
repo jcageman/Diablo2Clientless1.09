@@ -844,7 +844,7 @@ namespace ConsoleBot.Bots.Types.Baal
             runStopWatch.Start();
 
             var random = new Random();
-            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.5)), NextGame.Task) && client.Game.IsInGame())
+            while (!await IsNextGame() && client.Game.IsInGame())
             {
                 if (runStopWatch.Elapsed > TimeSpan.FromSeconds(50))
                 {
@@ -1034,6 +1034,11 @@ namespace ConsoleBot.Bots.Types.Baal
             Log.Information($"Finished with Sorc Client {client.Game.Me.Name}");
             executeStaticField.Stop();
             executeNova.Stop();
+        }
+
+        private async Task<bool> IsNextGame()
+        {
+            return NextGame.Task == await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.1)), NextGame.Task);
         }
 
         private async Task<bool> TeleportToNearbySafeSpot(Client client, BaalManager baalManager, Point toLocation, double minDistance = 0, double maxDistance = 30)

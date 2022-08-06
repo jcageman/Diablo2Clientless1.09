@@ -422,7 +422,7 @@ namespace ConsoleBot.Bots.Types.Assist
                         await _attackService.AssistPlayer(client, client.Game.Me);
                     }
 
-                    if (NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 1, 20).Count == 0)
+                    if (!NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 1, 20).Any())
                     {
                         await PickupNearbyItems(client);
                         await PickupNearbyPotionsIfNeeded(client);
