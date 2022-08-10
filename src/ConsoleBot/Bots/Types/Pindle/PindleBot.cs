@@ -65,14 +65,15 @@ namespace ConsoleBot.Bots.Types.Pindle
                 throw new NotSupportedException("Only sorceress is supported on Pindle");
             }
 
-            /*
-            while (client.Game.Players.Count < 2)
+            if (client.Game.Act == Act.Act5)
             {
-                Thread.Sleep(TimeSpan.FromMilliseconds(100));
+                var sellNpc = NPCHelpers.GetSellNPC(client.Game.Act);
+                GeneralHelpers.TryWithTimeout((retryCount) =>
+                {
+                    var uniqueNPC = NPCHelpers.GetUniqueNPC(client.Game, sellNpc);
+                    return uniqueNPC != null;
+                }, TimeSpan.FromSeconds(2));
             }
-
-            Thread.Sleep(TimeSpan.FromMilliseconds(1000));
-            */
 
             var townManagementOptions = new TownManagementOptions()
             {

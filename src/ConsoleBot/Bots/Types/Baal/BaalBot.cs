@@ -12,7 +12,6 @@ using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Players;
 using D2NG.Navigation.Extensions;
-using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
 using Microsoft.Extensions.Options;
 using Serilog;
@@ -30,27 +29,21 @@ namespace ConsoleBot.Bots.Types.Baal
     {
         private readonly ITownManagementService _townManagementService;
         private readonly IAttackService _attackService;
-        private readonly IMapApiService _mapApiService;
         private readonly BaalConfiguration _baalConfig;
         private uint? BoClientPlayerId;
         private uint? PortalClientPlayerId;
         private ConcurrentDictionary<string, bool> ShouldFollow = new ConcurrentDictionary<string, bool>();
         private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new ConcurrentDictionary<string, (Point, CancellationTokenSource)>();
 
-        private Point LeftTopThroneRoom { get; set; }
-        private Point RightBottomThroneRoom { get; set; }
-
         public BaalBot(IOptions<BotConfiguration> config, IOptions<BaalConfiguration> baalconfig,
             IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
             ITownManagementService townManagementService,
             IAttackService attackService,
-            IMapApiService mapApiService,
             IMuleService muleService
             ) : base(config, baalconfig, externalMessagingClient, muleService, pathingService)
         {
             _townManagementService = townManagementService;
             _attackService = attackService;
-            _mapApiService = mapApiService;
             _baalConfig = baalconfig.Value;
         }
 
@@ -140,14 +133,8 @@ namespace ConsoleBot.Bots.Types.Baal
             return true;
         }
 
-        protected async override Task PostInitializeAllJoined(List<Client> clients)
+        protected override Task PostInitializeAllJoined(List<Client> clients)
         {
-            var mapId = clients.First().Game.MapId;
-            var areaMap = await _mapApiService.GetArea(mapId, Difficulty.Normal, Area.ThroneOfDestruction);
-            var baalPortal = areaMap.Objects[(int)EntityCode.BaalPortal][0];
-            LeftTopThroneRoom = baalPortal.Add(-35, -20);
-            RightBottomThroneRoom = baalPortal.Add(35, 90);
-
             var boClient = clients.Aggregate((agg, client) =>
             {
                 var boClient = client.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0);
@@ -163,12 +150,13 @@ namespace ConsoleBot.Bots.Types.Baal
             if (boClient == null)
             {
                 Log.Error($"Expected at least bo barb in game");
-                return;
+                return Task.CompletedTask;
             }
 
             BoClientPlayerId = boClient.Game.Me.Id;
             var portalClient = clients.First(c => _baalConfig.PortalCharacterName.Equals(c.Game.Me.Name, StringComparison.InvariantCultureIgnoreCase));
             PortalClientPlayerId = portalClient.Game.Me.Id;
+            return Task.CompletedTask;
         }
 
         protected override async Task<bool> PerformRun(Client client)
