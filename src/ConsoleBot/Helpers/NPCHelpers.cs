@@ -18,7 +18,7 @@ namespace ConsoleBot.Helpers
             NPCCode.MephistoGhost, NPCCode.ATrap1, NPCCode.ATrap2, NPCCode.ATrap3, NPCCode.ATrap4,
             NPCCode.ATrap5, NPCCode.ATrap6, NPCCode.ATrap7,
             NPCCode.ClayGolem, NPCCode.BloodGolem, NPCCode.FireGolem, NPCCode.IronGolem, NPCCode.Valkyrie,
-            NPCCode.Act1Npc};
+            NPCCode.Act1Npc, NPCCode.Guard, NPCCode.BaalThrone, NPCCode.BaalTentacle1, NPCCode.BaalTentacle2, NPCCode.BaalTentacle3, NPCCode.BaalTentacle4, NPCCode.BaalTentacle5};
         public static WorldObject GetUniqueNPC(Game game, NPCCode npcCode)
         {
             return game.GetNPCsByCode(npcCode).FirstOrDefault();
@@ -428,8 +428,6 @@ namespace ConsoleBot.Helpers
             }, TimeSpan.FromSeconds(3)))
             {
                 Log.Warning($"Did not find healing or mana potions at {npc.NPCCode} {game.Me.Location}");
-                game.TerminateEntityChat(npc);
-                return false;
             }
 
             var inventoryItemsToSell = game.Inventory.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
@@ -462,18 +460,24 @@ namespace ConsoleBot.Helpers
                 game.BuyItem(npc, scrollOfIdentify, true);
             }
 
-            var numberOfHealthPotions = healthPotionsToBuy ?? game.Belt.Height * 2 - game.Belt.NumOfHealthPotions();
-            while (numberOfHealthPotions > 0)
+            if(healingPotion != null)
             {
-                game.BuyItem(npc, healingPotion, false);
-                numberOfHealthPotions -= 1;
+                var numberOfHealthPotions = healthPotionsToBuy ?? game.Belt.Height * 3 - game.Belt.NumOfHealthPotions();
+                while (numberOfHealthPotions > 0)
+                {
+                    game.BuyItem(npc, healingPotion, false);
+                    numberOfHealthPotions -= 1;
+                }
             }
 
-            var numberOfManaPotions = manaPotionsToBuy ?? game.Belt.Height * 2 - game.Belt.NumOfManaPotions();
-            while (numberOfManaPotions > 0)
+            if(manaPotion != null)
             {
-                game.BuyItem(npc, manaPotion, false);
-                numberOfManaPotions -= 1;
+                var numberOfManaPotions = manaPotionsToBuy ?? game.Belt.Height * 1 - game.Belt.NumOfManaPotions();
+                while (numberOfManaPotions > 0)
+                {
+                    game.BuyItem(npc, manaPotion, false);
+                    numberOfManaPotions -= 1;
+                }
             }
 
             if (additionalBuys != null)

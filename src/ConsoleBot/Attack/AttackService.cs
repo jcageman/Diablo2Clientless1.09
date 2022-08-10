@@ -22,6 +22,7 @@ namespace ConsoleBot.Attack
     {
         private readonly IPathingService _pathingService;
         private readonly IMapApiService _mapApiService;
+        private readonly Random _random = new Random();
 
         public AttackService(IPathingService pathingService, IMapApiService mapApiService)
         {
@@ -273,7 +274,7 @@ namespace ConsoleBot.Attack
 
         private async Task<bool> SorceressAssist(Client client, Player player)
         {
-            var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 30, 30).ToList();
+            var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 30, 40).ToList();
 
             var me = client.Game.Me;
             if (me.Mana > 10
@@ -302,38 +303,57 @@ namespace ConsoleBot.Attack
                 return true;
             }
 
-            if (me.HasSkill(Skill.FireBolt)
-                && !me.HasSkill(Skill.IceBolt)
-                && me.Attributes[Attribute.Level] < 10
-                && me.Mana > 5)
+            if (me.HasSkill(Skill.Blizzard) && !me.HasSkill(Skill.FrozenOrb) && me.Mana > 35)
             {
-                Log.Information($"Casting {Skill.FireBolt}");
-                client.Game.UseRightHandSkillOnEntity(Skill.FireBolt, nearest);
-                await Task.Delay(200);
-            }
-            if (me.HasSkill(Skill.IceBlast)
-                && !me.HasSkill(Skill.Blizzard)
-                && me.Mana > 10)
-            {
-                Log.Information($"Casting {Skill.IceBlast}");
-                client.Game.UseRightHandSkillOnEntity(Skill.IceBlast, nearest);
-                await Task.Delay(200);
-            }
-            else if (me.HasSkill(Skill.Blizzard) && !me.HasSkill(Skill.FrozenOrb) && me.Mana > 35)
-            {
-                Log.Information($"Casting {Skill.Blizzard}");
                 client.Game.UseRightHandSkillOnEntity(Skill.Blizzard, nearest);
                 await Task.Delay(200);
             }
             else if (me.HasSkill(Skill.FrozenOrb) && me.Mana > 30)
             {
-                Log.Information($"Casting {Skill.FrozenOrb}");
-                client.Game.UseRightHandSkillOnEntity(Skill.FrozenOrb, nearest);
+                if(me.Skills.GetValueOrDefault(Skill.StaticField) > 10 && _random.NextDouble() < 0.5)
+                {
+                    client.Game.UseRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
+                }
+                else
+                {
+                    client.Game.UseRightHandSkillOnEntity(Skill.FrozenOrb, nearest);
+                }
+                
+                await Task.Delay(200);
+            }
+            else if (me.Skills.GetValueOrDefault(Skill.Nova) >= 20 && me.Mana > 30)
+            {
+                if(nearest.Location.Distance(client.Game.Me.Location) > 10)
+                {
+                    await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking);
+                }
+                if (me.HasSkill(Skill.StaticField) && ClassHelpers.CanStaticEntity(client, nearest.LifePercentage) &&  _random.NextDouble() < 0.2)
+                {
+                    client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
+                }
+                else
+                {
+                    client.Game.RepeatRightHandSkillOnLocation(Skill.Nova, client.Game.Me.Location);
+                }
+
+                await Task.Delay(200);
+            }
+            else if (me.HasSkill(Skill.FireBolt)
+                && !me.HasSkill(Skill.IceBolt)
+                && me.Attributes[Attribute.Level] < 10
+                && me.Mana > 5)
+            {
+                client.Game.UseRightHandSkillOnEntity(Skill.FireBolt, nearest);
+                await Task.Delay(200);
+            }
+            else if (me.HasSkill(Skill.IceBlast)
+                && me.Mana > 10)
+            {
+                client.Game.UseRightHandSkillOnEntity(Skill.IceBlast, nearest);
                 await Task.Delay(200);
             }
             else if (me.Attributes[Attribute.Level] < 10 && client.Game.Area < Area.CowLevel)
             {
-                Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
                 await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, MovementMode.Walking);
                 client.Game.UseRightHandSkillOnEntity(Skill.Attack, nearest);
                 await Task.Delay(200);
@@ -355,15 +375,25 @@ namespace ConsoleBot.Attack
                 return true;
             }
 
-            if (me.HasSkill(Skill.Salvation)
-                && enemies.Exists(e => (e.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)
+            var conviction = me.Skills.GetValueOrDefault(Skill.Conviction);
+            var enemyLightningEnhanced = enemies.FirstOrDefault(e => (e.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)
                  && e.MonsterEnchantments.Contains(MonsterEnchantment.MultiShot))
-                 || e.MonsterEnchantments.Contains(MonsterEnchantment.AuraEnchanted)))
+                 || e.MonsterEnchantments.Contains(MonsterEnchantment.AuraEnchanted));
+            if (me.HasSkill(Skill.Salvation)
+                && enemyLightningEnhanced != null)
             {
                 if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != Skill.Salvation)
                 {
-                    Log.Information($"Changing to {Skill.Salvation}");
+                    Log.Information($"Changing to {Skill.Salvation} due to monster with {string.Join(",", enemyLightningEnhanced.MonsterEnchantments)}");
                     client.Game.ChangeSkill(Skill.Salvation, Hand.Right);
+                }
+            }
+            else if (player.Class == CharacterClass.Sorceress && me.HasSkill(Skill.Conviction))
+            {
+                if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != Skill.Conviction)
+                {
+                    Log.Information($"Changing to {Skill.Conviction}");
+                    client.Game.ChangeSkill(Skill.Conviction, Hand.Right);
                 }
             }
             else if (me.HasSkill(Skill.Might) || me.HasSkill(Skill.Concentration) || me.HasSkill(Skill.Fanaticism))
@@ -391,7 +421,8 @@ namespace ConsoleBot.Attack
                 client.Game.LeftHandSkillHoldOnEntity(Skill.Attack, nearest);
                 await Task.Delay(200);
             }
-            else if (me.HasSkill(Skill.BlessedHammer))
+            else if (me.ActiveSkills.TryGetValue(Hand.Right, out var rightSkill)
+                && (rightSkill == Skill.Fanaticism || rightSkill == Skill.Concentration || rightSkill == Skill.Might) && me.HasSkill(Skill.BlessedHammer))
             {
                 if (nearest.Location.Distance(client.Game.Me.Location) > 15)
                 {

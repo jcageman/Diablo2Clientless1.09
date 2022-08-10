@@ -391,6 +391,7 @@ namespace ConsoleBot.TownManagement
                 }
                 else
                 {
+                    Log.Information($"Client {game.Me.Name} {movementMode} to deckard cain according to map {game.Me.Location}");
                     pathDeckardCain = await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, deckhardCainCode, movementMode);
                 }
 

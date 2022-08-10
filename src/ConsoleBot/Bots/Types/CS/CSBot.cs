@@ -28,7 +28,6 @@ namespace ConsoleBot.Bots.Types.CS
     {
         private readonly CsConfiguration _csconfig;
 
-        private readonly IPathingService _pathingService;
         private readonly ITownManagementService _townManagementService;
         private readonly IAttackService _attackService;
         private readonly IMapApiService _mapApiService;
@@ -44,7 +43,6 @@ namespace ConsoleBot.Bots.Types.CS
             IMapApiService mapApiService,
             IAttackService attackService) : base(config, csconfig, externalMessagingClient, muleService, pathingService)
         {
-            _pathingService = pathingService;
             _mapApiService = mapApiService;
             _csconfig = csconfig.Value;
             _townManagementService = townManagementService;
@@ -328,10 +326,11 @@ namespace ConsoleBot.Bots.Types.CS
             var csState = new CsState();
             csState.KillLocation = initialLocation;
             var stopWatch = new Stopwatch();
+            var random = new Random();
             stopWatch.Start();
             while (stopWatch.Elapsed < TimeSpan.FromSeconds(30) && ClassHelpers.AnyPlayerIsMissingShouts(client) && !await IsNextGame())
             {
-                await client.Game.MoveToAsync(initialLocation.Add((short)new Random().Next(-5, 5), (short)new Random().Next(-5, 5)));
+                await client.Game.MoveToAsync(initialLocation.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5)));
 
                 if (client.Game.Me.Class == CharacterClass.Barbarian)
                 {
@@ -730,6 +729,7 @@ namespace ConsoleBot.Bots.Types.CS
 
         private Func<Task> GetBarbarianKillAction(Client client)
         {
+            var random = new Random();
             Func<Task> action = (async () =>
             {
                 var anyPlayersWithoutShouts = ClassHelpers.AnyPlayerIsMissingShouts(client);
@@ -758,7 +758,7 @@ namespace ConsoleBot.Bots.Types.CS
                         }
                         else
                         {
-                            await client.Game.MoveToAsync(nearbyPlayerPala.Location.Add((short)((short) new Random().Next(-1, 1) * 10), (short)((short)new Random().Next(-1, 1) * 10)));
+                            await client.Game.MoveToAsync(nearbyPlayerPala.Location.Add((short)random.Next(-10, 10), (short)random.Next(-10, 10)));
                         }
                     }
 

@@ -27,13 +27,13 @@ namespace ConsoleBot.Bots.Types.Baal
         protected readonly BotConfiguration _config;
         protected readonly IExternalMessagingClient _externalMessagingClient;
         protected readonly IMuleService _muleService;
-        private readonly IPathingService _pathingService;
+        protected readonly IPathingService _pathingService;
         private readonly MultiClientConfiguration _multiClientConfig;
         protected TaskCompletionSource<bool> NextGame = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         private ConcurrentDictionary<string, ManualResetEvent> PlayersInGame = new ConcurrentDictionary<string, ManualResetEvent>();
         protected HashSet<string> ClientsNeedingMule = new HashSet<string>();
         private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new ConcurrentDictionary<uint, Item>();
-        private readonly ConcurrentDictionary<uint, Item> _pickitRevsOnGround = new ConcurrentDictionary<uint, Item>();
+        private readonly ConcurrentDictionary<uint, Item> _pickitPotionsOnGround = new ConcurrentDictionary<uint, Item>();
 
         public MultiClientBotBase(IOptions<BotConfiguration> config, IOptions<MultiClientConfiguration> multiClientConfig,
             IExternalMessagingClient externalMessagingClient, IMuleService muleService, IPathingService pathingService)
@@ -56,6 +56,7 @@ namespace ConsoleBot.Bots.Types.Baal
                 var client = new Client();
                 client.OnReceivedPacketEvent(InComingPacket.EventMessage, (packet) => HandleEventMessage(client, new EventNotifyPacket(packet)));
                 _externalMessagingClient.RegisterClient(client);
+                PostInitializeClient(client, account);
                 PlayersInGame.TryAdd(account.Character.ToLower(), new ManualResetEvent(false));
                 clients.Add(client);
             }
@@ -162,7 +163,7 @@ namespace ConsoleBot.Bots.Types.Baal
                     continue;
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(2));
+                await Task.WhenAny(PostInitializeAllJoined(clients), Task.Delay(TimeSpan.FromSeconds(2)));
 
                 foreach (var player in firstFiller.Game.Players)
                 {
@@ -198,6 +199,10 @@ namespace ConsoleBot.Bots.Types.Baal
             }
         }
 
+        protected virtual Task PostInitializeAllJoined(List<Client> clients)
+        {
+            return Task.CompletedTask;
+        }
 
         private async Task<bool> InternalPrepareForRun(Client client, AccountCharacter account, TimeSpan waitToJoinTime, int gameCount)
         {
@@ -236,12 +241,17 @@ namespace ConsoleBot.Bots.Types.Baal
         protected async Task PickupItemsAndPotions(Client client, double distance)
         {
             await PickupItemsFromPickupList(client, distance);
-            await PickupNearbyRejuvenationsIfNeeded(client, distance);
+            await PickupNearbyPotionsIfNeeded(client, distance);
         }
 
         protected async Task<bool> IsNextGame()
         {
             return NextGame.Task == await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.05)), NextGame.Task);
+        }
+
+        protected virtual void PostInitializeClient(Client client, AccountCharacter accountCharacter)
+        {
+
         }
 
         protected virtual void ResetForNextRun()
@@ -321,9 +331,9 @@ namespace ConsoleBot.Bots.Types.Baal
                 _pickitItemsOnGround.TryAdd(item.Id, item);
             }
 
-            if (item.Name == ItemName.RejuvenationPotion || item.Name == ItemName.FullRejuvenationPotion)
+            if (item.Name == ItemName.RejuvenationPotion || item.Name == ItemName.FullRejuvenationPotion || item.Name == ItemName.SuperHealingPotion || item.Name == ItemName.SuperManaPotion)
             {
-                _pickitRevsOnGround.TryAdd(item.Id, item);
+                _pickitPotionsOnGround.TryAdd(item.Id, item);
             }
 
             return Task.CompletedTask;
@@ -365,27 +375,37 @@ namespace ConsoleBot.Bots.Types.Baal
             return resultPickitList;
         }
 
-        private List<Item> GetRejuvenationPotionPickupList(Client client, double distance, int nofPotions)
+        private List<Item> GetPotionPickupList(Client client, double distance, int nofRevPotions, int nofHealthPotions, int nofManaPotions)
         {
             var resultPickitList = new List<Item>();
-            var listItems = _pickitRevsOnGround.Values.Where(i => client.Game.Me.Location.Distance(i.Location) < distance).ToList();
-            foreach (var tryItem in listItems)
+            resultPickitList.AddRange(TakePotionsOfType(client, distance, nofRevPotions, ClassificationType.RejuvenationPotion));
+            resultPickitList.AddRange(TakePotionsOfType(client, distance, nofHealthPotions, ClassificationType.HealthPotion));
+            resultPickitList.AddRange(TakePotionsOfType(client, distance, nofManaPotions, ClassificationType.ManaPotion));
+            return resultPickitList;
+        }
+
+        private List<Item> TakePotionsOfType(Client client, double distance, int nofPotions, ClassificationType classificationType)
+        {
+            var resultPickitList = new List<Item>();
+            var potionsToTryPick = _pickitPotionsOnGround.Values.Where(i =>
+            client.Game.Me.Location.Distance(i.Location) < distance
+            && i.Classification == classificationType).ToList();
+            foreach (var tryItem in potionsToTryPick)
             {
                 if (resultPickitList.Count >= nofPotions)
                 {
                     break;
                 }
 
-                if (_pickitRevsOnGround.TryRemove(tryItem.Id, out var item))
+                if (_pickitPotionsOnGround.TryRemove(tryItem.Id, out var item))
                 {
                     resultPickitList.Add(item);
                 }
             }
-
             return resultPickitList;
         }
 
-        private async Task MoveToLocation(Client client, Point location, CancellationToken? token = null)
+        protected async Task MoveToLocation(Client client, Point location, CancellationToken? token = null)
         {
             var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
             var distance = client.Game.Me.Location.Distance(location);
@@ -411,10 +431,15 @@ namespace ConsoleBot.Bots.Types.Baal
             }
         }
 
-        private async Task PickupNearbyRejuvenationsIfNeeded(Client client, double distance)
+        private async Task PickupNearbyPotionsIfNeeded(Client client, double distance)
         {
             var totalRejuvanationPotions = client.Game.Inventory.Items.Count(i => i.Name == ItemName.RejuvenationPotion || i.Name == ItemName.FullRejuvenationPotion);
-            var pickitList = GetRejuvenationPotionPickupList(client, distance, 5 - totalRejuvanationPotions);
+            
+            var missingHealthPotions = (int)client.Game.Belt.Height * 2 - client.Game.Belt.GetHealthPotionsInSlots(new List<int>() { 0, 1 }).Count;
+            var missingManaPotions = (int)client.Game.Belt.Height * 2 - client.Game.Belt.GetManaPotionsInSlots(new List<int>() { 2, 3 }).Count;
+            var missingRevPotions = Math.Max(6 - client.Game.Inventory.Items.Count(i => i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion), 0);
+            //Log.Information($"Client {client.Game.Me.Name} missing {missingHealthPotions} healthpotions and missing {missingManaPotions} mana");
+            var pickitList = GetPotionPickupList(client, distance, missingRevPotions, missingHealthPotions, missingManaPotions);
             foreach (var item in pickitList)
             {
                 Log.Information($"Client {client.Game.Me.Name} picking up {item.Name}");
