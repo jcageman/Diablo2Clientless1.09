@@ -76,24 +76,65 @@ namespace ConsoleBot.Attack
                 return true;
             }
 
-            var path = await _pathingService.GetPathToLocation(client.Game, toLocation, MovementMode.Walking);
-            if (path.Count == 0)
+            var clientArea = client.Game.Area;
+            if (clientArea == Area.None)
             {
-                return true;
+                return false;
             }
 
-            var line = new Line
+            var areaMap = await _mapApiService.GetArea(client.Game.MapId, Difficulty.Normal, clientArea);
+            var pointsOnLine = GetPointsOnLine(fromLocation.X, fromLocation.Y, toLocation.X, toLocation.Y);
+            foreach (var point in pointsOnLine)
             {
-                StartPoint = fromLocation,
-                EndPoint = toLocation
-            };
-
-            var pointsOutside = false;
-            if (path.Count() > 1)
-            {
-                pointsOutside = ((double)path.Count(p => MinimumDistanceToLineSegment(p, line) >= 4.1)) / path.Count > 0.15;
+                var mapValue = areaMap.Map[point.Y - areaMap.LevelOrigin.Y][point.X - areaMap.LevelOrigin.X];
+                if (!AreaMapExtensions.IsMovable(mapValue) && mapValue != 1)
+                {
+                    return false;
+                }
             }
-            return !pointsOutside;
+
+            return true;
+        }
+
+        public static IEnumerable<Point> GetPointsOnLine(ushort x0, ushort y0, ushort x1, ushort y1)
+        {
+            bool steep = Math.Abs(y1 - y0) > Math.Abs(x1 - x0);
+            if (steep)
+            {
+                ushort t;
+                t = x0; // swap x0 and y0
+                x0 = y0;
+                y0 = t;
+                t = x1; // swap x1 and y1
+                x1 = y1;
+                y1 = t;
+            }
+            if (x0 > x1)
+            {
+                ushort t;
+                t = x0; // swap x0 and x1
+                x0 = x1;
+                x1 = t;
+                t = y0; // swap y0 and y1
+                y0 = y1;
+                y1 = t;
+            }
+            ushort dx = (ushort)(x1 - x0);
+            ushort dy = (ushort)(Math.Abs(y1 - y0));
+            ushort error = (ushort)(dx / 2);
+            ushort ystep = (ushort)((y0 < y1) ? 1 : -1);
+            ushort y = y0;
+            for (ushort x = x0; x <= x1; x++)
+            {
+                yield return new Point((steep ? y : x), (steep ? x : y));
+                error = (ushort)(error - dy);
+                if (error < 0)
+                {
+                    y += ystep;
+                    error += dx;
+                }
+            }
+            yield break;
         }
 
         public async Task<bool> IsVisitable(Client client, Point point)
@@ -310,9 +351,9 @@ namespace ConsoleBot.Attack
             }
             else if (me.HasSkill(Skill.FrozenOrb) && me.Mana > 30)
             {
-                if(me.Skills.GetValueOrDefault(Skill.StaticField) > 10 && _random.NextDouble() < 0.5)
+                if(me.Skills.GetValueOrDefault(Skill.StaticField) > 10 && nearest.LifePercentage > 50 && ClassHelpers.CanStaticEntity(client, nearest.LifePercentage))
                 {
-                    client.Game.UseRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
+                    client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
                 }
                 else
                 {
@@ -327,7 +368,7 @@ namespace ConsoleBot.Attack
                 {
                     await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking);
                 }
-                if (me.HasSkill(Skill.StaticField) && ClassHelpers.CanStaticEntity(client, nearest.LifePercentage) &&  _random.NextDouble() < 0.2)
+                if (me.Skills.GetValueOrDefault(Skill.StaticField) > 10 && nearest.LifePercentage > 50 && ClassHelpers.CanStaticEntity(client, nearest.LifePercentage))
                 {
                     client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
                 }
@@ -376,9 +417,8 @@ namespace ConsoleBot.Attack
             }
 
             var conviction = me.Skills.GetValueOrDefault(Skill.Conviction);
-            var enemyLightningEnhanced = enemies.FirstOrDefault(e => (e.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)
-                 && e.MonsterEnchantments.Contains(MonsterEnchantment.MultiShot))
-                 || e.MonsterEnchantments.Contains(MonsterEnchantment.AuraEnchanted));
+            var enemyLightningEnhanced = enemies.FirstOrDefault(e => e.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)
+                 && (e.MonsterEnchantments.Contains(MonsterEnchantment.MultiShot) || e.MonsterEnchantments.Contains(MonsterEnchantment.AuraEnchanted)));
             if (me.HasSkill(Skill.Salvation)
                 && enemyLightningEnhanced != null)
             {
@@ -555,10 +595,12 @@ namespace ConsoleBot.Attack
             }
 
             if (me.HasSkill(Skill.Whirlwind) &&
-                ((me.Attributes[Attribute.Level] > 33 && client.Game.Difficulty != Difficulty.Normal) || me.Attributes[Attribute.Level] > 40)
-                && me.Mana > 30)
+                ((me.Attributes[Attribute.Level] > 33 && client.Game.Difficulty != Difficulty.Normal) || me.Attributes[Attribute.Level] > 40))
             {
-                return await WhirlWindEnemy(client, nearest);
+                if(me.Mana > 30)
+                {
+                    return await WhirlWindEnemy(client, nearest);
+                }
             }
             else if (me.HasSkill(Skill.Concentrate) && me.Mana > 5)
             {

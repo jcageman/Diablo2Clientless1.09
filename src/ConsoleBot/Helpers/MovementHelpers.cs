@@ -67,12 +67,8 @@ namespace ConsoleBot.Helpers
             }
             else
             {
-                var clientArea = await mapApiService.GetAreaFromLocation(game.MapId, Difficulty.Normal, game.Me.Location, game.Me.Area) ?? game.Me.Area;
-                if (!clientArea.HasValue)
-                {
-                    return false;
-                }
-                var path = await pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, clientArea.Value, game.Me.Location, location, movementMode);
+                var clientArea = await mapApiService.GetAreaFromLocation(game.MapId, Difficulty.Normal, game.Me.Location, game.Act ,game.Area) ?? game.Area;
+                var path = await pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, clientArea, game.Me.Location, location, movementMode);
                 if (path.Count != 0 && !await TakePathOfLocations(game, path, movementMode, token))
                 {
                     Log.Warning($"Walking to location failed at {game.Me.Location}");

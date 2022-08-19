@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Text;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace ConsoleBot.Clients.ExternalMessagingClient
 {
@@ -12,5 +9,7 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
 
         [Required]
         public int TelegramChatId { get; set; }
+
+        public bool ReceiveMessages { get; set; } = false;
     }
 }

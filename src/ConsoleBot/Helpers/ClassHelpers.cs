@@ -14,9 +14,8 @@ namespace ConsoleBot.Helpers
         {
             if (client != null && client.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0) > 0)
             {
-                var nearbyPlayers = client.Game.Players.Where(p => p.Area == client.Game.Me.Area && p.Location?.Distance(client.Game.Me.Location) < 10);
-                var anyPlayerMissingShouts = AnyPlayerIsMissingShouts(client);
-                if (anyPlayerMissingShouts)
+                var nearbyPlayers = client.Game.Players.Where(p => p.Area == client.Game.Area && p.Location?.Distance(client.Game.Me.Location) < 10 && IsMissingShouts(p));
+                if (nearbyPlayers.Any())
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.BattleCommand, client.Game.Me.Location);
                     await Task.Delay(TimeSpan.FromSeconds(0.5));
@@ -26,7 +25,7 @@ namespace ConsoleBot.Helpers
                     await Task.Delay(TimeSpan.FromSeconds(0.5));
                 }
 
-                return !AnyPlayerIsMissingShouts(client);
+                return client.Game.Players.Where(p => p.Area == client.Game.Area && p.Location?.Distance(client.Game.Me.Location) < 10 && IsMissingShouts(p)).Any();
             }
 
             return true;

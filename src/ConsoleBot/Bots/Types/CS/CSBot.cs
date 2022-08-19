@@ -137,7 +137,7 @@ namespace ConsoleBot.Bots.Types.CS
         {
             if (IsTeleportClient(client))
             {
-                var result = await TaxiCs(client, _state);
+                var result = await TaxiCs(client);
                 NextGame.TrySetResult(true);
 
                 return result;
@@ -180,16 +180,6 @@ namespace ConsoleBot.Bots.Types.CS
                     return false;
                 }
 
-                Log.Information($"Client {client.Game.Me.Name} taking town portal to town");
-                if (!await GeneralHelpers.TryWithTimeout(async (_) =>
-                {
-                    return await _townManagementService.TakeTownPortalToTown(client);
-                }, TimeSpan.FromSeconds(30)))
-                {
-                    Log.Warning($"Client {client.Game.Me.Name} Taking townportal to Town failed");
-                    return false;
-                }
-
                 return await BaseCsBot(client, action);
             }
         }
@@ -212,10 +202,11 @@ namespace ConsoleBot.Bots.Types.CS
                 var newTeleportId = _state.TeleportId;
                 if (client.Game.IsInTown() && newTeleportId != null && newTeleportId != ownState.TeleportId)
                 {
-                    Log.Information($"Client {client.Game.Me.Name} taking town portal to chaos");
+                    Log.Information($"Client {client.Game.Me.Name} taking town portal to chaos {ownState.TeleportId} --> {newTeleportId}");
                     var teleportPlayer = client.Game.Players.FirstOrDefault(p => p.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.CurrentCultureIgnoreCase));
                     if (teleportPlayer == null || !await _townManagementService.TakeTownPortalToArea(client, teleportPlayer, Area.ChaosSanctuary))
                     {
+                        Log.Warning($"Client {client.Game.Me.Name} failed to take town portal");
                         continue;
                     }
 
@@ -231,7 +222,7 @@ namespace ConsoleBot.Bots.Types.CS
                 }
             }
 
-            if (!!await IsNextGame() && !client.Game.IsInGame())
+            if (!await IsNextGame() && !client.Game.IsInGame())
             {
                 return false;
             }
@@ -244,12 +235,16 @@ namespace ConsoleBot.Bots.Types.CS
             return client.Game.Me.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.CurrentCultureIgnoreCase);
         }
 
-        private async Task<bool> TaxiCs(Client client, CsState state)
+        private async Task<bool> TaxiCs(Client client)
         {
             if (!await GeneralHelpers.TryWithTimeout(async (_) =>
             {
+                if(client.Game.Area == Area.ChaosSanctuary)
+                {
+                    return true;
+                }
                 return await _townManagementService.TakeTownPortalToArea(client, client.Game.Me, Area.ChaosSanctuary);
-            }, TimeSpan.FromSeconds(5)))
+            }, TimeSpan.FromSeconds(15)))
             {
                 Log.Warning($"Client {client.Game.Me.Name} Taking townportal to {Area.ChaosSanctuary} failed");
                 return false;
@@ -266,8 +261,8 @@ namespace ConsoleBot.Bots.Types.CS
 
             var myPortal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
 
-            state.TeleportId = myPortal.Id;
-            state.KillLocation = client.Game.Me.Location;
+            _state.TeleportId = myPortal.Id;
+            _state.KillLocation = client.Game.Me.Location;
             var action = GetSorceressKillAction(client);
             if (!await WaitForBo(client, action))
             {
@@ -279,9 +274,9 @@ namespace ConsoleBot.Bots.Types.CS
                 return true;
             }
 
-            state.TeleportId = null;
+            _state.TeleportId = null;
 
-            if (!await KillLeftSeal(client, state))
+            if (!await KillLeftSeal(client, _state))
             {
                 return false;
             }
@@ -291,9 +286,9 @@ namespace ConsoleBot.Bots.Types.CS
                 return true;
             }
 
-            state.TeleportId = null;
+            _state.TeleportId = null;
 
-            if (!await KillTopSeal(client, state))
+            if (!await KillTopSeal(client, _state))
             {
                 return false;
             }
@@ -303,9 +298,9 @@ namespace ConsoleBot.Bots.Types.CS
                 return true;
             }
 
-            state.TeleportId = null;
+            _state.TeleportId = null;
 
-            if (!await KillRightSeal(client, state))
+            if (!await KillRightSeal(client, _state))
             {
                 return false;
             }
@@ -315,9 +310,9 @@ namespace ConsoleBot.Bots.Types.CS
                 return true;
             }
 
-            state.TeleportId = null;
+            _state.TeleportId = null;
 
-            return await KillDiablo(client, state);
+            return await KillDiablo(client, _state);
         }
 
         private async Task<bool> WaitForBo(Client client, Func<Task> action)
@@ -870,6 +865,7 @@ namespace ConsoleBot.Bots.Types.CS
                         Log.Warning($"Back-up move teleporting to nearby player for {client.Game.Me.Name} on location {client.Game.Me.Location}");
                         await client.Game.TeleportToLocationAsync(nearbyLocation);
                     }
+                    return;
                 }
 
                 var monster = client.Game.WorldObjects.GetValueOrDefault((nearest.Id, EntityType.NPC));
@@ -884,6 +880,7 @@ namespace ConsoleBot.Bots.Types.CS
                 && (!monster.Effects.Contains(EntityEffect.Cold) || !ClassHelpers.CanStaticEntity(client, monster.LifePercentage)))
                 {
                     client.Game.UseRightHandSkillOnLocation(Skill.FrozenOrb, monster.Location);
+                    await Task.Delay(TimeSpan.FromSeconds(0.25));
                     orbTimer.Restart();
                 }
                 else if (!client.Game.Me.HasSkill(Skill.FrozenOrb) && client.Game.Me.HasSkill(Skill.FrostNova) && distanceToNearest < 10 && !monster.Effects.Contains(EntityEffect.Cold))
@@ -893,7 +890,7 @@ namespace ConsoleBot.Bots.Types.CS
                 }
                 else if (client.Game.Me.HasSkill(Skill.StaticField) && distanceToNearest < 20)
                 {
-                    client.Game.UseRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
+                    client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
                 }
                 await Task.Delay(TimeSpan.FromSeconds(0.1));
             });
@@ -928,8 +925,10 @@ namespace ConsoleBot.Bots.Types.CS
             do
             {
                 await Task.Delay(100);
-                if (sealMaxTimeout.Elapsed > TimeSpan.FromSeconds(30))
+                if (sealMaxTimeout.Elapsed > TimeSpan.FromSeconds(50))
                 {
+                    Log.Warning($" {client.Game.Me.Name} reached seal timeout");
+                    NextGame.TrySetResult(true);
                     return false;
                 }
 

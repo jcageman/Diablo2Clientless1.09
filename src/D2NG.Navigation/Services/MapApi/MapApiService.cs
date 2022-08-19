@@ -36,12 +36,12 @@ namespace D2NG.Navigation.Services.MapApi
             return await areaMap.Value;
         }
 
-        public async Task<Area?> GetAreaFromLocation(uint mapId, Difficulty difficulty, Point point, Area? hintArea)
+        public async Task<Area?> GetAreaFromLocation(uint mapId, Difficulty difficulty, Point point, Act act, Area? hintArea)
         {
-            if (hintArea != null && _cache.TryGetValue(GetMapApiKey(mapId, difficulty, hintArea.Value), out AsyncLazy<AreaMap> hintAreaMapLazy))
+            if (hintArea != null && hintArea != Area.None)
             {
-                var hintAreaMap = await hintAreaMapLazy.Value;
-                if (hintAreaMap.TryMapToPointInMap(point, out var _))
+                var area = await GetArea(mapId, difficulty, hintArea.Value);
+                if (area.TryMapToPointInMap(point, out var _))
                 {
                     return hintArea;
                 }
@@ -49,13 +49,15 @@ namespace D2NG.Navigation.Services.MapApi
 
             foreach (var area in (Area[])Enum.GetValues(typeof(Area)))
             {
-                if (_cache.TryGetValue(GetMapApiKey(mapId, difficulty, area), out AsyncLazy<AreaMap> areaMapLazy))
+                if(area == Area.None || act != area.MapToAct())
                 {
-                    var areaMap = await areaMapLazy.Value;
-                    if (areaMap.TryMapToPointInMap(point, out var _))
-                    {
-                        return area;
-                    }
+                    continue;
+                }
+
+                var areaMap = await GetArea(mapId, difficulty, area);
+                if (areaMap.TryMapToPointInMap(point, out var _))
+                {
+                    return area;
                 }
             }
 

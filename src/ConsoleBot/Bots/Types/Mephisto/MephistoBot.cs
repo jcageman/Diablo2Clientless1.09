@@ -111,10 +111,22 @@ namespace ConsoleBot.Bots.Types.Mephisto
             }
 
             Log.Information($"Taking warp to Durance 3");
-            if (!GeneralHelpers.TryWithTimeout((_) => client.Game.TakeWarp(warp) && client.Game.Area == Area.DuranceOfHateLevel3,
-                TimeSpan.FromSeconds(2)))
+            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
-                Log.Warning($"Taking warp failed at location {client.Game.Me.Location} to warp at location {warp.Location}");
+                if (warp.Location.Distance(client.Game.Me.Location) > 5 && !await client.Game.TeleportToLocationAsync(warp.Location))
+                {
+                    Log.Debug($"Teleport to {warp.Location} failing retrying at location: {client.Game.Me.Location}");
+                    return false;
+                }
+                else
+                {
+                    await client.Game.MoveToAsync(warp.Location);
+                }
+
+                return client.Game.TakeWarp(warp) && client.Game.Area == Area.DuranceOfHateLevel3;
+            }, TimeSpan.FromSeconds(4)))
+            {
+                Log.Warning($"Teleport failed at location: {client.Game.Me.Location}");
                 return false;
             }
 
@@ -180,7 +192,7 @@ namespace ConsoleBot.Bots.Types.Mephisto
                     return true;
                 }
 
-                return GeneralHelpers.TryWithTimeout((_) => mephisto.State == EntityState.Dead,
+                return GeneralHelpers.TryWithTimeout((_) => mephisto.State == EntityState.Dead || mephisto.State == EntityState.Dieing,
                     TimeSpan.FromSeconds(0.7));
             }, TimeSpan.FromSeconds(50)))
             {
@@ -226,10 +238,12 @@ namespace ConsoleBot.Bots.Types.Mephisto
                     if (client.Game.Me.Location.Distance(item.Location) >= 5)
                     {
                         client.Game.TeleportToLocation(item.Location);
+                        client.Game.MoveTo(item.Location);
                         return false;
                     }
                     else
                     {
+                        client.Game.MoveTo(item.Location);
                         client.Game.PickupItem(item);
                         Thread.Sleep(50);
                         if (client.Game.Inventory.FindItemById(item.Id) == null && !item.IsGold)

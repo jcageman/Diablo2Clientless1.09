@@ -414,6 +414,7 @@ namespace D2NG.Core
 
         public async Task<bool> CreateTownPortal()
         {
+            var existingTownPortalId = GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalOwnerId == Me.Id)?.Id;
             var portalOwner = _gameServer.GetResetEventOfType(InComingPacket.PortalOwner);
             var cts = new CancellationTokenSource();
             cts.CancelAfter(500);
@@ -423,13 +424,13 @@ namespace D2NG.Core
                 if (await portalOwner.AsTask(TimeSpan.FromMilliseconds(500)))
                 {
                     var townPortal = GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalOwnerId == Me.Id);
-                    return townPortal != null && townPortal.Location?.Distance(Me.Location) < 15;
+                    return townPortal != null && existingTownPortalId != townPortal.Id;
                 };
                 portalOwner = _gameServer.GetResetEventOfType(InComingPacket.PortalOwner);
             } while (!cts.IsCancellationRequested);
             
             var townPortalNearby = GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalOwnerId == Me.Id);
-            return townPortalNearby != null && townPortalNearby.Location?.Distance(Me.Location) < 15;
+            return townPortalNearby != null && existingTownPortalId != townPortalNearby.Id;
         }
 
         public void InsertItemIntoContainer(Item item, Point location, ItemContainer container)

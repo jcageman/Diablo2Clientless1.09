@@ -273,7 +273,7 @@ namespace ConsoleBot.Pickit
                 return false;
             }
 
-            var defaultClassifications = new List<ClassificationType>() { ClassificationType.HealthPotion, ClassificationType.ManaPotion, ClassificationType.RejuvenationPotion };
+            var defaultClassifications = new List<ClassificationType>() { ClassificationType.RejuvenationPotion };
             if (defaultClassifications.Contains(item.Classification))
             {
                 return false;

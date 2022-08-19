@@ -30,20 +30,9 @@ namespace D2NG.Navigation.Extensions
             return new Point((ushort)pointDto.X, (ushort)pointDto.Y);
         }
 
-        private static void DisconnectFromNode(this INode fromNode, INode toNode)
-        {
-            var existingEdgeFrom = fromNode.Outgoing.SingleOrDefault(o => o.End.Position == toNode.Position);
-            if (existingEdgeFrom != null)
-            {
-                fromNode.Outgoing.Remove(existingEdgeFrom);
-                var existingEdgeTo = toNode.Outgoing.Single(o => o.End.Position == toNode.Position);
-                toNode.Outgoing.Remove(existingEdgeTo);
-            }
-        }
-
         public static bool IsMovable(int value)
         {
-            return value == 0 || value == 16;
+            return value % 2 == 0;
         }
 
         public static float GetVelocityWithAdjacency(this AreaMap areaMap, int i, int j, int columns, int rows)

@@ -162,7 +162,7 @@ namespace ConsoleBot.Helpers
 
             if (!game.OpenStash(stash))
             {
-                Log.Error($"Opening stash failed");
+                Log.Error($"{game.Me.Name}: Opening stash failed");
                 return;
             }
 

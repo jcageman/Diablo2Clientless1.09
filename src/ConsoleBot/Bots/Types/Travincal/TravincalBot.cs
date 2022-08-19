@@ -1,9 +1,9 @@
-﻿using ConsoleBot.Clients.ExternalMessagingClient;
+﻿using ConsoleBot.Attack;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using ConsoleBot.TownManagement;
 using D2NG.Core;
-using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Objects;
@@ -24,13 +24,15 @@ namespace ConsoleBot.Bots.Types.Travincal
     {
         private readonly IPathingService _pathingService;
         private readonly ITownManagementService _townManagementService;
+        private readonly IAttackService _attackService;
 
         public TravincalBot(IOptions<BotConfiguration> config, IOptions<TravincalConfiguration> travconfig, IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
-            IMuleService muleService, ITownManagementService townManagementService)
+            IMuleService muleService, ITownManagementService townManagementService, IAttackService attackService)
         : base(config.Value, travconfig.Value, externalMessagingClient, muleService)
         {
             _pathingService = pathingService;
             _townManagementService = townManagementService;
+            _attackService = attackService;
         }
 
         public string GetName()
@@ -102,7 +104,7 @@ namespace ConsoleBot.Bots.Types.Travincal
             }
 
             Log.Information("Kill council members");
-            if (!await KillCouncilMembers(client.Game))
+            if (!await KillCouncilMembers(client))
             {
                 Log.Information("Kill council members failed");
                 return false;
@@ -184,37 +186,14 @@ namespace ConsoleBot.Bots.Types.Travincal
         private async Task<bool> UseFindItemOnCouncilMembers(Game game)
         {
             List<WorldObject> councilMembers = GetCouncilMembers(game);
-            var nearestMembers = councilMembers.OrderBy(n => game.Me.Location.Distance(n.Location));
+            var nearestMembers = councilMembers.Where(m => m.State == EntityState.Dead || m.State == EntityState.Dieing).OrderBy(n => game.Me.Location.Distance(n.Location));
 
             foreach (var nearestMember in nearestMembers)
             {
                 await PickupNearbyItems(game, 10);
-                bool result = await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                {
-                    if (!game.IsInGame())
-                    {
-                        return false;
-                    }
+                bool result = await FindItemOnDeadEnemy(game, nearestMember);
 
-                    if (nearestMember.Location.Distance(game.Me.Location) > 5)
-                    {
-                        var pathNearest = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearestMember.Location, MovementMode.Walking);
-                        await MovementHelpers.TakePathOfLocations(game, pathNearest, MovementMode.Walking);
-                    }
-
-                    if (nearestMember.Location.Distance(game.Me.Location) <= 5)
-                    {
-                        if(game.UseFindItem(nearestMember))
-                        {
-                            return nearestMember.Effects.Contains(EntityEffect.CorpseNoDraw);
-                        }
-                    }
-
-                    return false;
-
-                }, TimeSpan.FromSeconds(5));
-
-                if(!result)
+                if (!result)
                 {
                     Log.Warning("Failed to do find item on corpse");
                 }
@@ -227,24 +206,51 @@ namespace ConsoleBot.Bots.Types.Travincal
 
             return true;
         }
-        private async Task<bool> KillCouncilMembers(Game game)
+
+        private async Task<bool> FindItemOnDeadEnemy(Game game, WorldObject nearestMember)
+        {
+            return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                if (!game.IsInGame())
+                {
+                    return false;
+                }
+
+                if (nearestMember.Effects.Contains(EntityEffect.CorpseNoDraw))
+                {
+                    return true;
+                }
+
+                if (nearestMember.Location.Distance(game.Me.Location) > 5)
+                {
+                    var pathNearest = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearestMember.Location, MovementMode.Walking);
+                    await MovementHelpers.TakePathOfLocations(game, pathNearest, MovementMode.Walking);
+                }
+
+                await game.MoveToAsync(nearestMember.Location);
+                game.UseFindItem(nearestMember);
+
+                return nearestMember.Effects.Contains(EntityEffect.CorpseNoDraw);
+
+            }, TimeSpan.FromSeconds(5));
+        }
+
+        private async Task<bool> KillCouncilMembers(Client client)
         {
             var startTime = DateTime.Now;
-            var lastBattlyCry = DateTime.MinValue;
-            var lastWarCry = DateTime.MinValue;
             List<WorldObject> aliveMembers;
             do
             {
-                List<WorldObject> councilMembers = GetCouncilMembers(game);
+                List<WorldObject> councilMembers = GetCouncilMembers(client.Game);
                 aliveMembers = councilMembers
-                    .Where(n => n.State != EntityState.Dead)
-                    .OrderBy(n => game.Me.Location.Distance(n.Location))
+                    .Where(n => n.State != EntityState.Dead && n.State != EntityState.Dieing)
+                    .OrderBy(n => client.Game.Me.Location.Distance(n.Location))
                     .ToList();
 
                 var nearest = aliveMembers.FirstOrDefault();
                 if (nearest != null)
                 {
-                    if (!game.IsInGame())
+                    if (!client.Game.IsInGame())
                     {
                         return false;
                     }
@@ -255,62 +261,25 @@ namespace ConsoleBot.Bots.Types.Travincal
                         return false;
                     }
 
-                    if(game.Me.Location.Distance(nearest.Location) > 5)
+                    if (client.Game.Me.Location.Distance(nearest.Location) > 10)
                     {
-                        var closeTo = game.Me.Location.GetPointBeforePointInSameDirection(nearest.Location, 6);
-                        if(game.Me.Location.Distance(closeTo) < 3)
+                        var nearestFindItemMember = councilMembers
+                        .Where(n => n.State == EntityState.Dead && !n.Effects.Contains(EntityEffect.CorpseNoDraw))
+                        .OrderBy(n => client.Game.Me.Location.Distance(n.Location))
+                        .FirstOrDefault();
+                        if (nearestFindItemMember != null && nearestFindItemMember.Location.Distance(client.Game.Me.Location) <= 10)
                         {
-                            closeTo = nearest.Location;
+                            await FindItemOnDeadEnemy(client.Game, nearestFindItemMember);
                         }
-
-                        var pathNearest = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearest.Location, MovementMode.Walking);
-                        if (!await MovementHelpers.TakePathOfLocations(game, pathNearest, MovementMode.Walking))
+                        var closeTo = client.Game.Me.Location.GetPointBeforePointInSameDirection(nearest.Location, 6);
+                        var pathNearest = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.Travincal, client.Game.Me.Location, closeTo, MovementMode.Walking);
+                        if (!await MovementHelpers.TakePathOfLocations(client.Game, pathNearest, MovementMode.Walking))
                         {
-                            Log.Warning($"Walking to Council Member failed at {game.Me.Location}");
+                            Log.Warning($"Walking to Council Member failed at {client.Game.Me.Location}");
                         }
                     }
 
-                    if(game.Me.HasSkill(Skill.Whirlwind))
-                    {
-                        var wwDirection = game.Me.Location.GetPointPastPointInSameDirection(nearest.Location, 6);
-                        if (game.Me.Location.Equals(nearest.Location))
-                        {
-                            var pathLeft = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearest.Location.Add(-6, 0), MovementMode.Walking);
-                            var pathRight = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearest.Location.Add(6, 0), MovementMode.Walking);
-                            if (pathLeft.Count < pathRight.Count)
-                            {
-                                Log.Debug($"same location, wwing to left");
-                                wwDirection = new Point((ushort)(game.Me.Location.X - 6), game.Me.Location.Y);
-                            }
-                            else
-                            {
-                                Log.Debug($"same location, wwing to right");
-                                wwDirection = new Point((ushort)(game.Me.Location.X + 6), game.Me.Location.Y);
-                            }
-                        }
-
-                        //Log.Information($"player loc: {game.Me.Location}, nearest: {nearest.Location} ww destination: {wwDirection}  ");
-                        game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
-                        await Task.Delay(TimeSpan.FromSeconds(0.3));
-                    }
-                    else
-                    {
-                        if (game.Me.HasSkill(Skill.BattleCry) && DateTime.Now.Subtract(lastBattlyCry) > TimeSpan.FromSeconds(20))
-                        {
-                            game.UseRightHandSkillOnLocation(Skill.BattleCry, game.Me.Location);
-                            lastBattlyCry = DateTime.Now;
-                        }
-                        else if (game.Me.HasSkill(Skill.WarCry) && DateTime.Now.Subtract(lastWarCry) > TimeSpan.FromSeconds(3))
-                        {
-                            game.UseRightHandSkillOnLocation(Skill.WarCry, game.Me.Location);
-                            lastWarCry = DateTime.Now;
-                        }
-                        else if(game.Me.Location.Distance(nearest.Location) < 5)
-                        {
-                            game.LeftHandSkillHoldOnEntity(Skill.Berserk, nearest);
-                            await Task.Delay(TimeSpan.FromSeconds(0.3));
-                        }
-                    }
+                    await _attackService.AssistPlayer(client, client.Game.Me);
                 }
             } while (aliveMembers.Any());
 

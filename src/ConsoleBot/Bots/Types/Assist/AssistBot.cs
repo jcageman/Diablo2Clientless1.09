@@ -666,6 +666,7 @@ namespace ConsoleBot.Bots.Types.Assist
 
             var leadPlayerAct = leadPlayer.Act.Value;
             var leadPlayerArea = leadPlayer.Area.Value;
+            var clientAct = client.Game.Act;
             var clientArea = client.Game.Area;
             if (!await _townManagementService.SwitchAct(client, leadPlayerAct))
             {
@@ -673,11 +674,8 @@ namespace ConsoleBot.Bots.Types.Assist
                 return false;
             }
 
-            var cacheAreaLead = _mapApiService.GetArea(client.Game.MapId, Difficulty.Normal, leadPlayerArea);
-            var cacheAreaClient = _mapApiService.GetArea(client.Game.MapId, Difficulty.Normal, clientArea);
-            await Task.WhenAll(cacheAreaLead, cacheAreaClient);
-            leadPlayerArea = await _mapApiService.GetAreaFromLocation(client.Game.MapId, Difficulty.Normal, leadPlayer.Location, leadPlayerArea) ?? leadPlayerArea;
-            clientArea = await _mapApiService.GetAreaFromLocation(client.Game.MapId, Difficulty.Normal, client.Game.Me.Location, clientArea) ?? clientArea;
+            leadPlayerArea = await _mapApiService.GetAreaFromLocation(client.Game.MapId, Difficulty.Normal, leadPlayer.Location, leadPlayerAct, leadPlayerArea) ?? leadPlayerArea;
+            clientArea = await _mapApiService.GetAreaFromLocation(client.Game.MapId, Difficulty.Normal, client.Game.Me.Location, clientAct, clientArea) ?? clientArea;
             if (leadPlayerArea != clientArea && leadPlayerArea != WayPointHelpers.MapTownArea(client.Game.Act))
             {
                 var movementMode = GetMovementMode(client.Game);

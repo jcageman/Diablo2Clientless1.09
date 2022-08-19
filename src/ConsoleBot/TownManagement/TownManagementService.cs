@@ -53,19 +53,16 @@ namespace ConsoleBot.TownManagement
 
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
-                while (client.Game.Me.Location.Distance(townWaypoint.Location) > 5)
+                if (client.Game.Me.HasSkill(Skill.Teleport))
                 {
-                    if(client.Game.Me.HasSkill(Skill.Teleport))
-                    {
-                        await client.Game.TeleportToLocationAsync(townWaypoint.Location);
-                    }
-                    else
-                    {
-                        await client.Game.MoveToAsync(townWaypoint);
-                    }
-                    
+                    await client.Game.TeleportToLocationAsync(townWaypoint.Location);
                 }
-                if(!client.Game.TakeWaypoint(townWaypoint, waypoint))
+                else
+                {
+                    await client.Game.MoveToAsync(townWaypoint);
+                }
+
+                if (!client.Game.TakeWaypoint(townWaypoint, waypoint))
                 {
                     return false;
                 }

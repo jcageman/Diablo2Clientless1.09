@@ -60,6 +60,7 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
+            /*
 
             if (item.Name == ItemName.FlawlessRuby || item.Name == ItemName.PerfectRuby)
             {
@@ -76,7 +77,6 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-            /*
 
             if (item.Name == ItemName.FlawlessTopaz || item.Name == ItemName.PerfectTopaz)
             {

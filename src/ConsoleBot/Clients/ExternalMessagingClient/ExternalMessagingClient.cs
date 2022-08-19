@@ -25,15 +25,18 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
         {
             _externalConfiguration = externalConfiguration.Value ?? throw new ArgumentNullException(nameof(externalConfiguration), $"ExternalMessagingClient constructor fails due to {nameof(externalConfiguration)} being null");
             _telegramBotClient = new TelegramBotClient(_externalConfiguration.TelegramApiKey);
-            var receiverOptions = new ReceiverOptions
+            if(_externalConfiguration.ReceiveMessages)
             {
-                AllowedUpdates = new[] { UpdateType.Message }
-            };
-            _telegramBotClient.StartReceiving(
-                (botClient, update, token) => HandleUpdateAsync(update),
-                (botClient, exception, token) => HandleExceptionAsync(exception),
-                receiverOptions
-            );
+                var receiverOptions = new ReceiverOptions
+                {
+                    AllowedUpdates = new[] { UpdateType.Message }
+                };
+                _telegramBotClient.StartReceiving(
+                    (botClient, update, token) => HandleUpdateAsync(update),
+                    (botClient, exception, token) => HandleExceptionAsync(exception),
+                    receiverOptions
+                );
+            }
         }
 
         public void RegisterClient(Client client)

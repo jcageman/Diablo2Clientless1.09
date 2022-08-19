@@ -578,13 +578,13 @@ namespace ConsoleBot.Helpers
 
         public static void CleanupPotionsInBelt(Game game)
         {
-            var manaPotionsInWrongSlot = game.Belt.GetManaPotionsInSlots(new List<int>() { 0, 1 });
+            var manaPotionsInWrongSlot = game.Belt.GetManaPotionsInSlots(new List<int>() { 0, 1, 2 });
             foreach (var manaPotion in manaPotionsInWrongSlot)
             {
                 game.UseBeltItem(manaPotion);
             }
 
-            var healthPotionsInWrongSlot = game.Belt.GetHealthPotionsInSlots(new List<int>() { 2, 3 });
+            var healthPotionsInWrongSlot = game.Belt.GetHealthPotionsInSlots(new List<int>() { 3 });
             foreach (var healthPotion in healthPotionsInWrongSlot)
             {
                 game.UseBeltItem(healthPotion);
