@@ -12,7 +12,7 @@ This project builds with .NET 6 and can be built by running `dotnet build` on th
 ## Functionality
 Initially based on https://github.com/dkuwahara/D2NG, but now with a lot more features.
 
-- Bots: Mephisto, Travincal, Cows, Cs (and it's easy to add new bots)
+- Bots: Mephisto, Travincal, Pindle, Cows, Cs, Baal (and it's easy to add new bots)
 - Pathing module using https://github.com/jcageman/d2mapapi
 - Gambling, pickit, muling
 
