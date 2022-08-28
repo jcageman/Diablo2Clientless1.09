@@ -74,11 +74,7 @@ namespace ConsoleBot.Bots.Types.Cuber
                 return false;
             }
 
-            var townManagementOptions = new TownManagementOptions()
-            {
-                Act = Act.Act1,
-                ResurrectMerc = false
-            };
+            var townManagementOptions = new TownManagementOptions(_accountConfig, Act.Act1);
 
             if (client.Game.Act != Act.Act1)
             {

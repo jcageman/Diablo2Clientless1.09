@@ -71,7 +71,7 @@ namespace ConsoleBot.Mule
                     }
 
                     var muleClient = new Client();
-                    var accountCharacter = new AccountCharacter()
+                    var accountCharacter = new AccountConfig()
                     {
                         Username = account.Username,
                         Password = account.Password,

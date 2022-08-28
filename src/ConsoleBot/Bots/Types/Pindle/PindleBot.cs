@@ -75,10 +75,7 @@ namespace ConsoleBot.Bots.Types.Pindle
                 }, TimeSpan.FromSeconds(2));
             }
 
-            var townManagementOptions = new TownManagementOptions()
-            {
-                Act = Act.Act5
-            };
+            var townManagementOptions = new TownManagementOptions(_accountConfig, Act.Act5);
 
             var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
             if(townTaskResult.ShouldMule)

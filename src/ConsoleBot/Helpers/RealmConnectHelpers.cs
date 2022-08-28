@@ -14,7 +14,7 @@ namespace ConsoleBot.Helpers
         public static async Task<bool> ConnectToRealmWithRetry(
             Client client,
             BotConfiguration botConfiguration,
-            AccountCharacter accountCharacter,
+            AccountConfig accountCharacter,
             int maxRetries)
         {
             var connectCount = 0;
@@ -43,7 +43,7 @@ namespace ConsoleBot.Helpers
 
         public static async Task<bool> ConnectToRealm(Client client,
             BotConfiguration botConfiguration,
-            AccountCharacter accountCharacter)
+            AccountConfig accountCharacter)
         {
             var connect = client.Connect(
                 botConfiguration.Realm,
@@ -80,7 +80,7 @@ namespace ConsoleBot.Helpers
             int gameCount,
             Client client,
             BotConfiguration botConfiguration,
-            AccountCharacter account)
+            AccountConfig account)
         {
             var newGameCount = gameCount;
             var result = await GeneralHelpers.TryWithTimeout(async (retryCount) =>
@@ -108,7 +108,7 @@ namespace ConsoleBot.Helpers
             return Tuple.Create(result, newGameCount);
         }
 
-        public static async Task<bool> JoinGameWithRetry(int gameCount, Client client, BotConfiguration botConfiguration, AccountCharacter cowAccount)
+        public static async Task<bool> JoinGameWithRetry(int gameCount, Client client, BotConfiguration botConfiguration, AccountConfig cowAccount)
         {
             return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {

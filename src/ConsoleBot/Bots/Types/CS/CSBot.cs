@@ -59,13 +59,9 @@ namespace ConsoleBot.Bots.Types.CS
             _state = new CsState();
         }
 
-        protected override async Task<bool> PrepareForRun(Client client)
+        protected override async Task<bool> PrepareForRun(Client client, AccountConfig accountConfig)
         {
-            var townManagementOptions = new TownManagementOptions()
-            {
-                Act = Act.Act4,
-                ResurrectMerc = false
-            };
+            var townManagementOptions = new TownManagementOptions(accountConfig, Act.Act4);
 
             if (!await GeneralHelpers.TryWithTimeout(
                 async (_) =>
@@ -133,18 +129,18 @@ namespace ConsoleBot.Bots.Types.CS
             return true;
         }
 
-        protected override async Task<bool> PerformRun(Client client)
+        protected override async Task<bool> PerformRun(Client client, AccountConfig account)
         {
             if (IsTeleportClient(client))
             {
-                var result = await TaxiCs(client);
+                var result = await TaxiCs(client, account);
                 NextGame.TrySetResult(true);
 
                 return result;
             }
             else
             {
-                var action = GetKillActionForClass(client);
+                var action = GetKillActionForClass(client, account);
 
                 var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
                 var pathToTpLocation = await _pathingService.GetPathToLocation(client.Game, new Point(5042, 5036), movementMode);
@@ -175,16 +171,16 @@ namespace ConsoleBot.Bots.Types.CS
                     return false;
                 }
 
-                if (!await WaitForBo(client, action))
+                if (!await WaitForBo(client, account, action))
                 {
                     return false;
                 }
 
-                return await BaseCsBot(client, action);
+                return await BaseCsBot(client, account, action);
             }
         }
 
-        private async Task<bool> BaseCsBot(Client client, Func<Task> action)
+        private async Task<bool> BaseCsBot(Client client, AccountConfig account, Func<Task> action)
         {
             var ownState = new CsState();
             while (!await IsNextGame() && client.Game.IsInGame())
@@ -215,7 +211,7 @@ namespace ConsoleBot.Bots.Types.CS
 
                 if (!client.Game.IsInTown())
                 {
-                    if (!await KillBosses(client, null, action, ownState, _state))
+                    if (!await KillBosses(client, account, null, action, ownState, _state))
                     {
                         return false;
                     }
@@ -235,7 +231,7 @@ namespace ConsoleBot.Bots.Types.CS
             return client.Game.Me.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.CurrentCultureIgnoreCase);
         }
 
-        private async Task<bool> TaxiCs(Client client)
+        private async Task<bool> TaxiCs(Client client, AccountConfig account)
         {
             if (!await GeneralHelpers.TryWithTimeout(async (_) =>
             {
@@ -263,8 +259,8 @@ namespace ConsoleBot.Bots.Types.CS
 
             _state.TeleportId = myPortal.Id;
             _state.KillLocation = client.Game.Me.Location;
-            var action = GetSorceressKillAction(client);
-            if (!await WaitForBo(client, action))
+            var action = GetSorceressKillAction(client, account);
+            if (!await WaitForBo(client, account, action))
             {
                 return false;
             }
@@ -276,7 +272,7 @@ namespace ConsoleBot.Bots.Types.CS
 
             _state.TeleportId = null;
 
-            if (!await KillLeftSeal(client, _state))
+            if (!await KillLeftSeal(client, account, _state))
             {
                 return false;
             }
@@ -288,7 +284,7 @@ namespace ConsoleBot.Bots.Types.CS
 
             _state.TeleportId = null;
 
-            if (!await KillTopSeal(client, _state))
+            if (!await KillTopSeal(client, account, _state))
             {
                 return false;
             }
@@ -300,7 +296,7 @@ namespace ConsoleBot.Bots.Types.CS
 
             _state.TeleportId = null;
 
-            if (!await KillRightSeal(client, _state))
+            if (!await KillRightSeal(client, account, _state))
             {
                 return false;
             }
@@ -312,10 +308,10 @@ namespace ConsoleBot.Bots.Types.CS
 
             _state.TeleportId = null;
 
-            return await KillDiablo(client, _state);
+            return await KillDiablo(client, account, _state);
         }
 
-        private async Task<bool> WaitForBo(Client client, Func<Task> action)
+        private async Task<bool> WaitForBo(Client client, AccountConfig account, Func<Task> action)
         {
             var initialLocation = client.Game.Me.Location;
             var csState = new CsState();
@@ -335,7 +331,7 @@ namespace ConsoleBot.Bots.Types.CS
                 {
                     var killCancellation = new CancellationTokenSource();
                     killCancellation.CancelAfter(500);
-                    await KillBosses(client, killCancellation, action, csState, csState);
+                    await KillBosses(client, account, killCancellation, action, csState, csState);
                 }
                 
                 var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
@@ -354,7 +350,7 @@ namespace ConsoleBot.Bots.Types.CS
             return true;
         }
 
-        private async Task<bool> KillDiablo(Client client, CsState csState)
+        private async Task<bool> KillDiablo(Client client, AccountConfig account, CsState csState)
         {
             var pathToDiabloStar = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, Area.ChaosSanctuary, client.Game.Me.Location, EntityCode.DiabloStar, MovementMode.Teleport);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToDiabloStar, MovementMode.Teleport))
@@ -371,15 +367,15 @@ namespace ConsoleBot.Bots.Types.CS
             var myPortal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
             csState.TeleportId = myPortal.Id;
             csState.KillLocation = client.Game.Me.Location;
-            var action = GetSorceressKillAction(client);
-            if (!await KillBosses(client, null, action, csState, csState, true))
+            var action = GetSorceressKillAction(client, account);
+            if (!await KillBosses(client, account, null, action, csState, csState, true))
             {
                 return false;
             }
             return true;
         }
 
-        private async Task<bool> KillRightSeal(Client client, CsState csState)
+        private async Task<bool> KillRightSeal(Client client, AccountConfig account, CsState csState)
         {
             Log.Information($"Teleporting to {EntityCode.RightSeal1}");
 
@@ -437,8 +433,8 @@ namespace ConsoleBot.Bots.Types.CS
                 return false;
             }
 
-            var action = GetSorceressKillAction(client);
-            if (!await KillBosses(client, null, action, csState, csState, true))
+            var action = GetSorceressKillAction(client, account);
+            if (!await KillBosses(client, account, null, action, csState, csState, true))
             {
                 return false;
             }
@@ -469,7 +465,7 @@ namespace ConsoleBot.Bots.Types.CS
             return true;
         }
 
-        private async Task<bool> KillTopSeal(Client client, CsState csState)
+        private async Task<bool> KillTopSeal(Client client, AccountConfig account, CsState csState)
         {
             Log.Information($"Teleporting to {EntityCode.TopSeal}");
 
@@ -532,8 +528,8 @@ namespace ConsoleBot.Bots.Types.CS
             }
 
             Log.Information($"Killing top seal bosses {client.Game.Me.Name}");
-            var action = GetSorceressKillAction(client);
-            if (!await KillBosses(client, null, action, csState, csState, true))
+            var action = GetSorceressKillAction(client, account);
+            if (!await KillBosses(client, account, null, action, csState, csState, true))
             {
                 return false;
             }
@@ -583,7 +579,7 @@ namespace ConsoleBot.Bots.Types.CS
             return true;
         }
 
-        private async Task<bool> KillLeftSeal(Client client, CsState csState)
+        private async Task<bool> KillLeftSeal(Client client, AccountConfig account, CsState csState)
         {
             Log.Information($"Teleporting to {EntityCode.LeftSeal1}");
 
@@ -668,8 +664,8 @@ namespace ConsoleBot.Bots.Types.CS
                 return false;
             }
 
-            var action = GetSorceressKillAction(client);
-            if (!await KillBosses(client, null, action, csState, csState, true))
+            var action = GetSorceressKillAction(client, account);
+            if (!await KillBosses(client, account, null, action, csState, csState, true))
             {
                 return false;
             }
@@ -677,15 +673,15 @@ namespace ConsoleBot.Bots.Types.CS
             return true;
         }
 
-        private Func<Task> GetKillActionForClass(Client client)
+        private Func<Task> GetKillActionForClass(Client client, AccountConfig account)
         {
             return client.Game.Me.Class switch
             {
-                CharacterClass.Barbarian => GetBarbarianKillAction(client),
-                CharacterClass.Sorceress => GetSorceressKillAction(client),
-                CharacterClass.Paladin => GetPaladinKillAction(client),
-                CharacterClass.Necromancer => GetNecromancerKillAction(client),
-                CharacterClass.Amazon => GetAmazonKillAction(client),
+                CharacterClass.Barbarian => GetBarbarianKillAction(client, account),
+                CharacterClass.Sorceress => GetSorceressKillAction(client, account),
+                CharacterClass.Paladin => GetPaladinKillAction(client, account),
+                CharacterClass.Necromancer => GetNecromancerKillAction(client, account),
+                CharacterClass.Amazon => GetAmazonKillAction(client, account),
                 _ => new Func<Task>(() =>
                 {
                     return Task.CompletedTask;
@@ -693,7 +689,7 @@ namespace ConsoleBot.Bots.Types.CS
             };
         }
 
-        private Func<Task> GetAmazonKillAction(Client client)
+        private Func<Task> GetAmazonKillAction(Client client, AccountConfig account)
         {
             Func<Task> action = (async () =>
             {
@@ -701,7 +697,7 @@ namespace ConsoleBot.Bots.Types.CS
                 var nearest = enemies.FirstOrDefault(e => e.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique));
                 if (nearest == null)
                 {
-                    await PickupItemsAndPotions(client, 10);
+                    await PickupItemsAndPotions(client, account, 10);
                     nearest = enemies.FirstOrDefault();
                 }
 
@@ -722,7 +718,7 @@ namespace ConsoleBot.Bots.Types.CS
             return action;
         }
 
-        private Func<Task> GetBarbarianKillAction(Client client)
+        private Func<Task> GetBarbarianKillAction(Client client, AccountConfig account)
         {
             var random = new Random();
             Func<Task> action = (async () =>
@@ -757,7 +753,7 @@ namespace ConsoleBot.Bots.Types.CS
                         }
                     }
 
-                    await PickupItemsAndPotions(client, 20);
+                    await PickupItemsAndPotions(client,  account, 20);
 
                     return;
                 }
@@ -766,7 +762,7 @@ namespace ConsoleBot.Bots.Types.CS
                 var nearest = enemies.FirstOrDefault(e => e.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique));
                 if (nearest == null)
                 {
-                    await PickupItemsAndPotions(client, 10);
+                    await PickupItemsAndPotions(client, account, 10);
                     nearest = enemies.FirstOrDefault();
                 }
 
@@ -786,7 +782,7 @@ namespace ConsoleBot.Bots.Types.CS
             return action;
         }
 
-        private Func<Task> GetPaladinKillAction(Client client)
+        private Func<Task> GetPaladinKillAction(Client client, AccountConfig account)
         {
             Func<Task> action = async () =>
             {
@@ -794,7 +790,7 @@ namespace ConsoleBot.Bots.Types.CS
                 var nearest = enemies.FirstOrDefault(e => e.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique));
                 if (nearest == null)
                 {
-                    await PickupItemsAndPotions(client, 10);
+                    await PickupItemsAndPotions(client, account, 10);
                 }
 
                 var nearbyPlayer = client.Game.Players
@@ -812,7 +808,7 @@ namespace ConsoleBot.Bots.Types.CS
             return action;
         }
 
-        private Func<Task> GetSorceressKillAction(Client client)
+        private Func<Task> GetSorceressKillAction(Client client, AccountConfig account)
         {
             var moveTimer = new Stopwatch();
             moveTimer.Start();
@@ -830,7 +826,7 @@ namespace ConsoleBot.Bots.Types.CS
                 var nearest = enemies.FirstOrDefault(e => e.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique));
                 if (nearest == null)
                 {
-                    await PickupItemsAndPotions(client, 30);
+                    await PickupItemsAndPotions(client, account, 30);
                     nearest = enemies.FirstOrDefault();
                 }
 
@@ -897,7 +893,7 @@ namespace ConsoleBot.Bots.Types.CS
             return action;
         }
 
-        private Func<Task> GetNecromancerKillAction(Client client)
+        private Func<Task> GetNecromancerKillAction(Client client, AccountConfig account)
         {
             Func<Task> action = async () =>
             {
@@ -908,12 +904,20 @@ namespace ConsoleBot.Bots.Types.CS
                 {
                     await _attackService.AssistPlayer(client, nearbyPlayer);
                 }
-                
+
+                var enemies = NPCHelpers.GetNearbyNPCs(client, _state.KillLocation, 5, 20);
+                var nearest = enemies.FirstOrDefault(e => e.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique));
+                if (nearest == null)
+                {
+                    await PickupItemsAndPotions(client, account, 20);
+                }
+
             };
             return action;
         }
 
         private async Task<bool> KillBosses(Client client,
+                                AccountConfig account,
                                 CancellationTokenSource nextGameCancellation,
                                 Func<Task> action,
                                 CsState ownState,
@@ -947,7 +951,7 @@ namespace ConsoleBot.Bots.Types.CS
 
             if (client.Game.IsInGame())
             {
-                await PickupItemsAndPotions(client, 15);
+                await PickupItemsAndPotions(client, account, 15);
             }
 
             return client.Game.IsInGame();

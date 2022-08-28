@@ -2,7 +2,7 @@
 
 namespace ConsoleBot.Bots.Types.Pindle
 {
-    public class PindleConfiguration : AccountCharacter
+    public class PindleConfiguration : AccountConfig
     {
     }
 }

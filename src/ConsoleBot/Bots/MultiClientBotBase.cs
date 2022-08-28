@@ -178,9 +178,9 @@ namespace ConsoleBot.Bots.Types.Baal
                 try
                 {
                     var clientTasks = new List<Task<bool>>();
-                    foreach (var client in clients)
+                    for (int i = 0; i < clients.Count; i++)
                     {
-                        clientTasks.Add(PerformRun(client));
+                        clientTasks.Add(PerformRun(clients[i], _multiClientConfig.Accounts[i]));
                     }
 
                     var clientResults = await Task.WhenAll(clientTasks);
@@ -204,7 +204,7 @@ namespace ConsoleBot.Bots.Types.Baal
             return Task.CompletedTask;
         }
 
-        private async Task<bool> InternalPrepareForRun(Client client, AccountCharacter account, TimeSpan waitToJoinTime, int gameCount)
+        private async Task<bool> InternalPrepareForRun(Client client, AccountConfig account, TimeSpan waitToJoinTime, int gameCount)
         {
             await Task.Delay(waitToJoinTime);
             if (!client.Game.IsInGame() && !await RealmConnectHelpers.JoinGameWithRetry(gameCount, client, _config, account))
@@ -235,13 +235,13 @@ namespace ConsoleBot.Bots.Types.Baal
                 return false;
             }
 
-            return await PrepareForRun(client);
+            return await PrepareForRun(client, account);
         }
 
-        protected async Task PickupItemsAndPotions(Client client, double distance)
+        protected async Task PickupItemsAndPotions(Client client, AccountConfig account, double distance)
         {
             await PickupItemsFromPickupList(client, distance);
-            await PickupNearbyPotionsIfNeeded(client, distance);
+            await PickupNearbyPotionsIfNeeded(client, account, distance);
         }
 
         protected async Task<bool> IsNextGame()
@@ -249,7 +249,7 @@ namespace ConsoleBot.Bots.Types.Baal
             return NextGame.Task == await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.05)), NextGame.Task);
         }
 
-        protected virtual void PostInitializeClient(Client client, AccountCharacter accountCharacter)
+        protected virtual void PostInitializeClient(Client client, AccountConfig accountCharacter)
         {
 
         }
@@ -259,9 +259,9 @@ namespace ConsoleBot.Bots.Types.Baal
 
         }
 
-        protected abstract Task<bool> PrepareForRun(Client client);
+        protected abstract Task<bool> PrepareForRun(Client client, AccountConfig account);
 
-        protected abstract Task<bool> PerformRun(Client client);
+        protected abstract Task<bool> PerformRun(Client client, AccountConfig account);
 
         private static async Task LeaveGameAndDisconnectWithAllClients(List<Client> clients)
         {
@@ -275,7 +275,7 @@ namespace ConsoleBot.Bots.Types.Baal
             }
         }
 
-        private async Task<bool> LeaveGameAndRejoinMCPWithRetry(Client client, AccountCharacter account)
+        private async Task<bool> LeaveGameAndRejoinMCPWithRetry(Client client, AccountConfig account)
         {
             if (!client.Chat.IsConnected())
             {
@@ -431,12 +431,12 @@ namespace ConsoleBot.Bots.Types.Baal
             }
         }
 
-        private async Task PickupNearbyPotionsIfNeeded(Client client, double distance)
+        private async Task PickupNearbyPotionsIfNeeded(Client client, AccountConfig account, double distance)
         {
             var totalRejuvanationPotions = client.Game.Inventory.Items.Count(i => i.Name == ItemName.RejuvenationPotion || i.Name == ItemName.FullRejuvenationPotion);
             
-            var missingHealthPotions = (int)client.Game.Belt.Height * 2 - client.Game.Belt.GetHealthPotionsInSlots(new List<int>() { 0, 1 }).Count;
-            var missingManaPotions = (int)client.Game.Belt.Height * 2 - client.Game.Belt.GetManaPotionsInSlots(new List<int>() { 2, 3 }).Count;
+            var missingHealthPotions = (int)client.Game.Belt.Height * 2 - client.Game.Belt.GetHealthPotionsInSlots(account.HealthSlots).Count;
+            var missingManaPotions = (int)client.Game.Belt.Height * 2 - client.Game.Belt.GetManaPotionsInSlots(account.ManaSlots).Count;
             var missingRevPotions = Math.Max(6 - client.Game.Inventory.Items.Count(i => i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion), 0);
             //Log.Information($"Client {client.Game.Me.Name} missing {missingHealthPotions} healthpotions and missing {missingManaPotions} mana");
             var pickitList = GetPotionPickupList(client, distance, missingRevPotions, missingHealthPotions, missingManaPotions);

@@ -5,7 +5,7 @@ namespace ConsoleBot.Bots.Types.Assist
 {
     public class AssistConfiguration
     {
-        public List<AccountCharacter> Accounts { get; set; }
+        public List<AccountConfig> Accounts { get; set; }
 
         public string HostCharacterName { get; set; }
 

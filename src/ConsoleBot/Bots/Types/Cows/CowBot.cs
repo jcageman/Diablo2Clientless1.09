@@ -219,7 +219,7 @@ namespace ConsoleBot.Bots.Types.Cows
                             break;
                         }
 
-                        townTasks.Add(PrepareForCowsTasks(client));
+                        townTasks.Add(PrepareForCowsTasks(client, account));
                     }
 
                     var townResults = await Task.WhenAll(townTasks);
@@ -294,9 +294,9 @@ namespace ConsoleBot.Bots.Types.Cows
                 try
                 {
                     var clientTasks = new List<Task<bool>>();
-                    foreach (var client in clients)
+                    for (int i = 0; i < clients.Count(); i++)
                     {
-                        clientTasks.Add(RunCows(client, cowManager));
+                        clientTasks.Add(RunCows(clients[i], _cowconfig.Accounts[i], cowManager));
                     }
 
                     await Task.WhenAll(clientTasks);
@@ -317,7 +317,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }
         }
 
-        private async Task<bool> PrepareForCowsTasks(Client client)
+        private async Task<bool> PrepareForCowsTasks(Client client, AccountConfig accountConfig)
         {
             var timer = new Stopwatch();
             timer.Start();
@@ -343,10 +343,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
             var initialLocation = client.Game.Me.Location;
 
-            var townManagementOptions = new TownManagementOptions()
-            {
-                Act = Act.Act1,
-            };
+            var townManagementOptions = new TownManagementOptions(accountConfig, Act.Act1);
 
             var isPortalCharacter = _cowconfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.InvariantCultureIgnoreCase);
             if (isPortalCharacter)
@@ -404,7 +401,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }).ToList());
         }
 
-        private async Task<bool> RunCows(Client client, CowManager cowManager)
+        private async Task<bool> RunCows(Client client, AccountConfig account, CowManager cowManager)
         {
             var isPortalCharacter = _cowconfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.InvariantCultureIgnoreCase);
             if (isPortalCharacter)
@@ -451,7 +448,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 Log.Information($"Client {client.Game.Me.Name} ín cow level");
             }
 
-            await GetTaskForClient(client, cowManager);
+            await GetTaskForClient(client, account, cowManager);
             return true;
         }
 
@@ -852,7 +849,7 @@ namespace ConsoleBot.Bots.Types.Cows
             ShouldFollow[client.Game.Me.Name.ToLower()] = follow;
         }
 
-        async Task GetTaskForClient(Client client, CowManager cowManager)
+        async Task GetTaskForClient(Client client, AccountConfig account, CowManager cowManager)
         {
             if (client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] < 50 && !client.Game.Me.HasSkill(Skill.Teleport))
             {
@@ -873,37 +870,37 @@ namespace ConsoleBot.Bots.Types.Cows
             switch (client.Game.Me.Class)
             {
                 case CharacterClass.Amazon:
-                    await BasicFollowClient(client, cowManager);
+                    await BasicFollowClient(client, account, cowManager);
 
                     break;
                 case CharacterClass.Sorceress:
                     if (client.Game.Me.HasSkill(Skill.StaticField) && client.Game.Me.Skills.GetValueOrDefault(Skill.Nova) >= 20)
                     {
-                        await StaticSorcClient(client, cowManager);
+                        await StaticSorcClient(client, account, cowManager);
                     }
                     else
                     {
-                        await BasicFollowClient(client, cowManager);
+                        await BasicFollowClient(client, account, cowManager);
                     }
                     break;
                 case CharacterClass.Necromancer:
-                    await BasicFollowClient(client, cowManager);
+                    await BasicFollowClient(client, account, cowManager);
                     break;
                 case CharacterClass.Paladin:
-                    await BasicFollowClient(client, cowManager);
+                    await BasicFollowClient(client, account, cowManager);
                     break;
                 case CharacterClass.Barbarian:
                     bool shouldBo = client.Game.Me.Id == BoClientPlayerId;
-                    await BarbClient(client, cowManager, shouldBo);
+                    await BarbClient(client, account, cowManager, shouldBo);
                     break;
                 case CharacterClass.Druid:
                 case CharacterClass.Assassin:
-                    await BasicFollowClient(client, cowManager);
+                    await BasicFollowClient(client, account, cowManager);
                     break;
             }
         }
 
-        async Task StaticSorcClient(Client client, CowManager cowManager)
+        async Task StaticSorcClient(Client client, AccountConfig account, CowManager cowManager)
         {
             Log.Information($"Starting Sorc Client {client.Game.Me.Name}");
             ElapsedEventHandler staticFieldAction = (sender, args) =>
@@ -1106,7 +1103,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 executeStaticField.Stop();
                 executeNova.Stop();
                 await PickupItemsFromPickupList(client, cowManager, 100);
-                await PickupNearbyPotionsIfNeeded(client, cowManager, 30);
+                await PickupNearbyPotionsIfNeeded(client, account, cowManager, 30);
 
                 SetShouldFollowLead(client, false);
 
@@ -1157,7 +1154,7 @@ namespace ConsoleBot.Bots.Types.Cows
             Log.Information($"Stopped Idle Client {client.Game.Me.Name}");
         }
 
-        async Task BasicFollowClient(Client client, CowManager cowManager)
+        async Task BasicFollowClient(Client client, AccountConfig account, CowManager cowManager)
         {
             SetShouldFollowLead(client, true);
 
@@ -1233,16 +1230,16 @@ namespace ConsoleBot.Bots.Types.Cows
                 if (!cowManager.GetNearbyAliveMonsters(client, 20, 1).Any())
                 {
                     await PickupItemsFromPickupList(client, cowManager, 25);
-                    await PickupNearbyPotionsIfNeeded(client, cowManager, 15);
+                    await PickupNearbyPotionsIfNeeded(client, account, cowManager, 15);
                     SetShouldFollowLead(client, true);
                 }
             }
         }
 
-        private async Task PickupNearbyPotionsIfNeeded(Client client, CowManager cowManager, int distance)
+        private async Task PickupNearbyPotionsIfNeeded(Client client, AccountConfig account, CowManager cowManager, int distance)
         {
-            var missingHealthPotions = client.Game.Belt.Height * 2 - client.Game.Belt.GetHealthPotionsInSlots(new List<int>() { 0, 1 }).Count;
-            var missingManaPotions = client.Game.Belt.Height * 2 - client.Game.Belt.GetManaPotionsInSlots(new List<int>() { 2, 3 }).Count;
+            var missingHealthPotions = client.Game.Belt.Height * 2 - client.Game.Belt.GetHealthPotionsInSlots(account.HealthSlots).Count;
+            var missingManaPotions = client.Game.Belt.Height * 2 - client.Game.Belt.GetManaPotionsInSlots(account.ManaSlots).Count;
             var missingRevPotions = Math.Max(6 - client.Game.Inventory.Items.Count(i => i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion), 0);
             //Log.Information($"Client {client.Game.Me.Name} missing {missingHealthPotions} healthpotions and missing {missingManaPotions} mana");
             var pickitList = cowManager.GetNearbyPotions(client, new HashSet<ItemName> { ItemName.SuperHealingPotion }, (int)missingHealthPotions, distance);
@@ -1346,7 +1343,7 @@ namespace ConsoleBot.Bots.Types.Cows
             while (pickitList.Count != 0 && picks < maxPicks);
         }
 
-        async Task BarbClient(Client client, CowManager cowManager, bool shouldBo)
+        async Task BarbClient(Client client, AccountConfig account, CowManager cowManager, bool shouldBo)
         {
             Log.Information($"Starting BoBarb Client {client.Game.Me.Name}");
             bool hasUsedPotion = false;
@@ -1379,7 +1376,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 if (!nearbyMonsters.Any())
                 {
                     await PickupItemsFromPickupList(client, cowManager, 15);
-                    await PickupNearbyPotionsIfNeeded(client, cowManager, 15);
+                    await PickupNearbyPotionsIfNeeded(client, account, cowManager, 15);
                 }
                 else if (client.Game.Me.HasSkill(Skill.Whirlwind))
                 {
@@ -1492,7 +1489,7 @@ namespace ConsoleBot.Bots.Types.Cows
             return true;
         }
 
-        private async Task<bool> LeaveGameAndRejoinMCPWithRetry(Client client, AccountCharacter cowAccount)
+        private async Task<bool> LeaveGameAndRejoinMCPWithRetry(Client client, AccountConfig cowAccount)
         {
             if (!client.Chat.IsConnected())
             {

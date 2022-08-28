@@ -583,7 +583,7 @@ namespace D2NG.Core
         {
             var buttonActionPacket = _gameServer.GetResetEventOfType(InComingPacket.ButtonAction);
             _gameServer.SendPacket(new InteractWithEntityPacket(stash));
-            return buttonActionPacket.WaitOne(200);
+            return buttonActionPacket.WaitOne(1500);
         }
 
         public bool TakeWarp(WarpData warpData)

@@ -66,7 +66,7 @@ namespace ConsoleBot.Bots.Types.Assist
             }
 
             _assistConfig.Validate();
-            var clients = new List<Tuple<AccountCharacter, Client, AssistBotClientState>>();
+            var clients = new List<Tuple<AccountConfig, Client, AssistBotClientState>>();
             foreach (var account in _assistConfig.Accounts)
             {
                 var client = new Client();
@@ -176,12 +176,12 @@ namespace ConsoleBot.Bots.Types.Assist
             }
         }
 
-        private bool IsHostClient(AccountCharacter accountCharacter)
+        private bool IsHostClient(AccountConfig accountCharacter)
         {
             return accountCharacter.Character.Equals(_assistConfig.HostCharacterName, StringComparison.CurrentCultureIgnoreCase);
         }
 
-        private bool IsLeadClient(AccountCharacter accountCharacter)
+        private bool IsLeadClient(AccountConfig accountCharacter)
         {
             return accountCharacter.Character.Equals(_assistConfig.LeadCharacterName, StringComparison.CurrentCultureIgnoreCase);
         }
@@ -198,7 +198,7 @@ namespace ConsoleBot.Bots.Types.Assist
             }).ToList());
         }
 
-        private async Task<bool> LeaveGameAndRejoinMCPWithRetry(Client client, AccountCharacter cowAccount)
+        private async Task<bool> LeaveGameAndRejoinMCPWithRetry(Client client, AccountConfig cowAccount)
         {
             if (!client.Chat.IsConnected())
             {
@@ -223,7 +223,7 @@ namespace ConsoleBot.Bots.Types.Assist
             return true;
         }
 
-        public async Task GameLoop(List<Tuple<AccountCharacter, Client, AssistBotClientState>> clients, int gameCount)
+        public async Task GameLoop(List<Tuple<AccountConfig, Client, AssistBotClientState>> clients, int gameCount)
         {
             var nextGameCancellation = new CancellationTokenSource();
             var gameTasks = clients.Select(async (c, i) =>
@@ -254,10 +254,8 @@ namespace ConsoleBot.Bots.Types.Assist
                     return false;
                 }
 
-                var townManagementOptions = new TownManagementOptions()
+                var townManagementOptions = new TownManagementOptions(c.Item1, client.Game.Act)
                 {
-                    Act = client.Game.Act,
-                    ResurrectMerc = false,
                     HealthPotionsToBuy = Math.Max(0, client.Game.Belt.Height * 2 + 10 - InventoryHelpers.GetTotalHealthPotions(client.Game)),
                     ManaPotionsToBuy = Math.Max(0, client.Game.Belt.Height * 2 + 5 - InventoryHelpers.GetTotalManaPotions(client.Game))
                 };
@@ -315,7 +313,7 @@ namespace ConsoleBot.Bots.Types.Assist
                     await Task.Delay(TimeSpan.FromSeconds(0.1));
                     if(client.Game.IsInGame())
                     {
-                        await AssistLeadClient(client, c.Item3);
+                        await AssistLeadClient(client, c.Item1, c.Item3);
                     }
                     else
                     {
@@ -350,7 +348,7 @@ namespace ConsoleBot.Bots.Types.Assist
 
         }
 
-        async Task<bool> AssistLeadClient(Client client, AssistBotClientState state)
+        async Task<bool> AssistLeadClient(Client client, AccountConfig accountConfig, AssistBotClientState state)
         {
             var movementMode = GetMovementMode(client.Game);
             if (state.GoNextLevel)
@@ -375,7 +373,7 @@ namespace ConsoleBot.Bots.Types.Assist
             }
             else if(state.ShouldHeal)
             {
-                return await HealInTown(client, state);
+                return await HealInTown(client, accountConfig, state);
             }
 
             if (!state.ShouldHeal && InventoryHelpers.GetTotalHealthPotions(client.Game) < 3
@@ -433,7 +431,7 @@ namespace ConsoleBot.Bots.Types.Assist
             return true;
         }
 
-        private async Task<bool> HealInTown(Client client, AssistBotClientState state)
+        private async Task<bool> HealInTown(Client client, AccountConfig accountConfig, AssistBotClientState state)
         {
             if (!client.Game.IsInTown())
             {
@@ -444,10 +442,8 @@ namespace ConsoleBot.Bots.Types.Assist
                 }
             }
 
-            var townManagementOptions = new TownManagementOptions()
+            var townManagementOptions = new TownManagementOptions(accountConfig, client.Game.Act)
             {
-                Act = client.Game.Act,
-                ResurrectMerc = false,
                 HealthPotionsToBuy = Math.Max(0, client.Game.Belt.Height * 2 + 10 - InventoryHelpers.GetTotalHealthPotions(client.Game)),
                 ManaPotionsToBuy = Math.Max(0, client.Game.Belt.Height * 2 + 5 - InventoryHelpers.GetTotalManaPotions(client.Game))
             };

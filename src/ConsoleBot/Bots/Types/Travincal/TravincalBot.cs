@@ -69,10 +69,7 @@ namespace ConsoleBot.Bots.Types.Travincal
             }
              */
 
-            var townManagementOptions = new TownManagementOptions()
-            {
-                Act = Act.Act4
-            };
+            var townManagementOptions = new TownManagementOptions(_accountConfig, Act.Act4);
 
             var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
             if (townTaskResult.ShouldMule)

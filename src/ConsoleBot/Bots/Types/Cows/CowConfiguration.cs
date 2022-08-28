@@ -5,7 +5,7 @@ namespace ConsoleBot.Bots.Types.Cows
 {
     public class CowConfiguration
     {
-        public List<AccountCharacter> Accounts { get; set; }
+        public List<AccountConfig> Accounts { get; set; }
 
         public string PortalCharacterName { get; set; }
 

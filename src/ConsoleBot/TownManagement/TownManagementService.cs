@@ -281,7 +281,7 @@ namespace ConsoleBot.TownManagement
             var game = client.Game;
             var movementMode = GetMovementMode(game);
             game.CleanupCursorItem();
-            InventoryHelpers.CleanupPotionsInBelt(game);
+            InventoryHelpers.CleanupPotionsInBelt(game, options.AccountConfig);
 
             if(client.Game.Me.Class == CharacterClass.Paladin && client.Game.Me.HasSkill(Skill.Vigor))
             {
@@ -319,7 +319,7 @@ namespace ConsoleBot.TownManagement
                 return result;
             }
 
-            if (options.ResurrectMerc && !await ResurrectMerc(game, movementMode))
+            if (options.AccountConfig.ResurrectMerc && !await ResurrectMerc(game, movementMode))
             {
                 return result;
             }

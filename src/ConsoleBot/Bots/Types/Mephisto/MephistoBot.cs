@@ -71,11 +71,7 @@ namespace ConsoleBot.Bots.Types.Mephisto
             }
             */
 
-            var townManagementOptions = new TownManagementOptions()
-            {
-                Act = Act.Act3,
-                ResurrectMerc = false
-            };
+            var townManagementOptions = new TownManagementOptions(_accountConfig, Act.Act3);
 
             var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
             if (townTaskResult.ShouldMule)

@@ -2,7 +2,7 @@
 
 namespace ConsoleBot.Bots.Types.Travincal
 {
-    public class TravincalConfiguration : AccountCharacter
+    public class TravincalConfiguration : AccountConfig
     {
     }
 }

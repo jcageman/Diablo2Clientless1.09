@@ -1,4 +1,5 @@
-﻿using ConsoleBot.Clients.ExternalMessagingClient;
+﻿using ConsoleBot.Bots.Types;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using D2NG.Core;
 using D2NG.Core.D2GS;
@@ -576,15 +577,15 @@ namespace ConsoleBot.Helpers
             return MoveItemResult.Succes;
         }
 
-        public static void CleanupPotionsInBelt(Game game)
+        public static void CleanupPotionsInBelt(Game game, AccountConfig accountConfig)
         {
-            var manaPotionsInWrongSlot = game.Belt.GetManaPotionsInSlots(new List<int>() { 0, 1, 2 });
+            var manaPotionsInWrongSlot = game.Belt.GetManaPotionsInSlots(accountConfig.HealthSlots);
             foreach (var manaPotion in manaPotionsInWrongSlot)
             {
                 game.UseBeltItem(manaPotion);
             }
 
-            var healthPotionsInWrongSlot = game.Belt.GetHealthPotionsInSlots(new List<int>() { 3 });
+            var healthPotionsInWrongSlot = game.Belt.GetHealthPotionsInSlots(accountConfig.ManaSlots);
             foreach (var healthPotion in healthPotionsInWrongSlot)
             {
                 game.UseBeltItem(healthPotion);
@@ -596,7 +597,7 @@ namespace ConsoleBot.Helpers
                 MoveBeltItemToInventory(game, revPotion);
             }
 
-            var missingHealthPotionsInBelt = game.Belt.Height * 2 - game.Belt.GetHealthPotionsInSlots(new List<int>() { 0, 1 }).Count;
+            var missingHealthPotionsInBelt = game.Belt.Height * 2 - game.Belt.GetHealthPotionsInSlots(accountConfig.HealthSlots).Count;
             if (missingHealthPotionsInBelt > 0)
             {
                 var healthPotionsToAdd = game.Inventory.Items
@@ -608,7 +609,7 @@ namespace ConsoleBot.Helpers
                 }
             }
 
-            var missingManaPotionsInBelt = game.Belt.Height * 2 - game.Belt.GetManaPotionsInSlots(new List<int>() { 2, 3 }).Count;
+            var missingManaPotionsInBelt = game.Belt.Height * 2 - game.Belt.GetManaPotionsInSlots(accountConfig.ManaSlots).Count;
             if (missingManaPotionsInBelt > 0)
             {
                 var manaPotionsToAdd = game.Inventory.Items

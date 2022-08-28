@@ -6,7 +6,7 @@ namespace ConsoleBot.Bots
 {
     public class MultiClientConfiguration
     {
-        public List<AccountCharacter> Accounts { get; set; }
+        public List<AccountConfig> Accounts { get; set; }
 
         public virtual void Validate()
         {

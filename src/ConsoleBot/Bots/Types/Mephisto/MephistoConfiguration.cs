@@ -2,7 +2,7 @@
 
 namespace ConsoleBot.Bots.Types.Mephisto
 {
-    public class MephistoConfiguration : AccountCharacter
+    public class MephistoConfiguration : AccountConfig
     {
     }
 }
