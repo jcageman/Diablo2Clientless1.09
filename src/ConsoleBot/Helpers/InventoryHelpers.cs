@@ -3,6 +3,7 @@ using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using D2NG.Core;
 using D2NG.Core.D2GS;
+using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using Serilog;
@@ -597,7 +598,7 @@ namespace ConsoleBot.Helpers
                 MoveBeltItemToInventory(game, revPotion);
             }
 
-            var missingHealthPotionsInBelt = game.Belt.Height * 2 - game.Belt.GetHealthPotionsInSlots(accountConfig.HealthSlots).Count;
+            var missingHealthPotionsInBelt = game.Belt.Height * accountConfig.HealthSlots.Count - game.Belt.GetHealthPotionsInSlots(accountConfig.HealthSlots).Count;
             if (missingHealthPotionsInBelt > 0)
             {
                 var healthPotionsToAdd = game.Inventory.Items
@@ -609,7 +610,7 @@ namespace ConsoleBot.Helpers
                 }
             }
 
-            var missingManaPotionsInBelt = game.Belt.Height * 2 - game.Belt.GetManaPotionsInSlots(accountConfig.ManaSlots).Count;
+            var missingManaPotionsInBelt = game.Belt.Height * accountConfig.ManaSlots.Count - game.Belt.GetManaPotionsInSlots(accountConfig.ManaSlots).Count;
             if (missingManaPotionsInBelt > 0)
             {
                 var manaPotionsToAdd = game.Inventory.Items

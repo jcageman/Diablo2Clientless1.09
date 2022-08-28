@@ -51,15 +51,6 @@ namespace ConsoleBot.Bots.Types.Pindle
 
         protected override async Task<bool> RunSingleGame(Client client)
         {
-            Log.Information("In game");
-            client.Game.RequestUpdate(client.Game.Me.Id);
-            if (!GeneralHelpers.TryWithTimeout(
-                (_) => client.Game.Me.Location.X != 0 && client.Game.Me.Location.Y != 0,
-                TimeSpan.FromSeconds(10)))
-            {
-                return false;
-            }
-
             if (client.Game.Me.Class != CharacterClass.Sorceress)
             {
                 throw new NotSupportedException("Only sorceress is supported on Pindle");

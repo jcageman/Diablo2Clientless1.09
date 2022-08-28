@@ -398,6 +398,20 @@ namespace ConsoleBot.TownManagement
                     return false;
                 }
 
+                deckardCain = NPCHelpers.GetUniqueNPC(game, deckhardCainCode);
+                if(deckardCain == null)
+                {
+                    Log.Error($"Client {game.Me.Name} could not find deckard cain failed at {game.Me.Location}");
+                    return false;
+                }
+
+                pathDeckardCain = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, deckardCain.Location, movementMode);
+                if (!await MovementHelpers.TakePathOfLocations(game, pathDeckardCain, movementMode))
+                {
+                    Log.Warning($"Client {game.Me.Name} {movementMode} to real deckard cain failed at {game.Me.Location}");
+                    return false;
+                }
+
                 return NPCHelpers.IdentifyItemsAtDeckardCain(game);
             }
 
@@ -407,7 +421,7 @@ namespace ConsoleBot.TownManagement
         private async Task<bool> RefreshAndSellItems(Game game, MovementMode movementMode, TownManagementOptions options)
         {
             var sellItemCount = game.Inventory.Items.Count(i => Pickit.Pickit.CanTouchInventoryItem(game, i) && !Pickit.Pickit.ShouldKeepItem(game, i)) + game.Cube.Items.Count(i => !Pickit.Pickit.ShouldKeepItem(game, i));
-            if (NPCHelpers.ShouldRefreshCharacterAtNPC(game)
+            if (NPCHelpers.ShouldRefreshCharacterAtNPC(game, options)
                 || sellItemCount > 5
                 || options.ItemsToBuy?.Count > 0
                 || options.HealthPotionsToBuy > 0
@@ -435,11 +449,7 @@ namespace ConsoleBot.TownManagement
                         return false;
                     }
 
-                    if (!NPCHelpers.SellItemsAndRefreshPotionsAtNPC(game,
-                                                                    uniqueNPC,
-                                                                    options.ItemsToBuy,
-                                                                    options.HealthPotionsToBuy,
-                                                                    options.ManaPotionsToBuy))
+                    if (!NPCHelpers.SellItemsAndRefreshPotionsAtNPC(game, uniqueNPC, options))
                     {
                         Log.Warning($"Client {game.Me.Name} Selling items and refreshing potions failed at {game.Me.Location}");
                         return false;

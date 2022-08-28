@@ -50,26 +50,10 @@ namespace ConsoleBot.Bots.Types.Mephisto
 
         protected override async Task<bool> RunSingleGame(Client client)
         {
-            Log.Information("In game");
-            client.Game.RequestUpdate(client.Game.Me.Id);
-            if (!GeneralHelpers.TryWithTimeout(
-                (_) => client.Game.Me.Location.X != 0 && client.Game.Me.Location.Y != 0,
-                TimeSpan.FromSeconds(10)))
-            {
-                return false;
-            }
-
             if (client.Game.Me.Class != CharacterClass.Sorceress)
             {
                 throw new NotSupportedException("Only sorceress is supported on Mephisto");
             }
-
-            /*
-            while (client.Game.Players.Count < 2)
-            {
-                Thread.Sleep(TimeSpan.FromMilliseconds(100));
-            }
-            */
 
             var townManagementOptions = new TownManagementOptions(_accountConfig, Act.Act3);
 
@@ -163,6 +147,12 @@ namespace ConsoleBot.Bots.Types.Mephisto
                     if (mephisto.Location.Distance(client.Game.Me.Location) < 30 && (!client.Game.ClientCharacter.IsExpansion || mephisto.LifePercentage > 50))
                     {
                         client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
+                    }
+
+                    if(mephisto.Location.Distance(client.Game.Me.Location) > 20)
+                    {
+                        var teleportLocation = client.Game.Me.Location.GetPointBeforePointInSameDirection(mephisto.Location, 15);
+                        client.Game.TeleportToLocation(teleportLocation);
                     }
 
                     Thread.Sleep(200);

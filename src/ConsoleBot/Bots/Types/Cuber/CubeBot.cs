@@ -65,15 +65,6 @@ namespace ConsoleBot.Bots.Types.Cuber
 
         protected override async Task<bool> RunSingleGame(Client client)
         {
-            Log.Information("In game");
-            client.Game.RequestUpdate(client.Game.Me.Id);
-            if (!GeneralHelpers.TryWithTimeout(
-                (_) => client.Game.Me.Location.X != 0 && client.Game.Me.Location.Y != 0,
-                TimeSpan.FromSeconds(10)))
-            {
-                return false;
-            }
-
             var townManagementOptions = new TownManagementOptions(_accountConfig, Act.Act1);
 
             if (client.Game.Act != Act.Act1)

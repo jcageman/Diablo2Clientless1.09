@@ -98,6 +98,13 @@ namespace ConsoleBot.Bots
                         totalCount++;
                         if (await client.CreateGame(_config.Difficulty, $"{_config.GameNamePrefix}{gameCount}", _config.GamePassword, _config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)))
                         {
+                            Log.Information("In game");
+                            client.Game.RequestUpdate(client.Game.Me.Id);
+                            while (client.Game.Me.Location.X == 0 && client.Game.Me.Location.Y == 0)
+                            {
+                                await Task.Delay(10);
+                            }
+
                             if (!await RunSingleGame(client))
                             {
                                 successiveFailures += 1;

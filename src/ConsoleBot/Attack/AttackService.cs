@@ -22,7 +22,6 @@ namespace ConsoleBot.Attack
     {
         private readonly IPathingService _pathingService;
         private readonly IMapApiService _mapApiService;
-        private readonly Random _random = new Random();
 
         public AttackService(IPathingService pathingService, IMapApiService mapApiService)
         {
@@ -35,32 +34,6 @@ namespace ConsoleBot.Attack
             public Point StartPoint { get; set; }
 
             public Point EndPoint { get; set; }
-        }
-
-        private static double DotProduct((double X, double Y) a, (double X, double Y) b)
-        {
-            return (a.X * b.X) + (a.Y * b.Y);
-        }
-
-        private static double MinimumDistanceToLineSegment(Point p,
-            Line line)
-        {
-            var v = line.StartPoint;
-            var w = line.EndPoint;
-
-            double lengthSquared = v.DistanceSquared(w);
-
-            if (lengthSquared == 0.0)
-                return p.Distance(v);
-
-            double t = Math.Max(0, Math.Min(1, DotProduct(p.Substract((v.X, v.Y)), w.Substract((v.X, v.Y))) / lengthSquared));
-
-            short dX = (short)(((double)w.X - v.X) * t);
-            short dY = (short)(((double)w.Y - v.Y) * t);
-            var projection = v;
-            projection = projection.Add(dX, dY);
-
-            return p.Distance(projection);
         }
 
         public async Task<bool> IsInLineOfSight(Client client, Point toLocation)

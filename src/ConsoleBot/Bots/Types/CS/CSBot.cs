@@ -1,5 +1,4 @@
 ﻿using ConsoleBot.Attack;
-using ConsoleBot.Bots.Types.Baal;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
@@ -63,7 +62,7 @@ namespace ConsoleBot.Bots.Types.CS
         {
             var townManagementOptions = new TownManagementOptions(accountConfig, Act.Act4);
 
-            if (!await GeneralHelpers.TryWithTimeout(
+            await GeneralHelpers.TryWithTimeout(
                 async (_) =>
                 {
                     var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
@@ -77,10 +76,7 @@ namespace ConsoleBot.Bots.Types.CS
                     }
                     return townTaskResult.Succes;
                 },
-                TimeSpan.FromSeconds(20)))
-            {
-                return false;
-            }
+                TimeSpan.FromSeconds(20));
 
             if (IsTeleportClient(client))
             {

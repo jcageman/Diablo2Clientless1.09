@@ -4,7 +4,6 @@ using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using ConsoleBot.Helpers;
 using D2NG.Core;
-using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Items.Containers;

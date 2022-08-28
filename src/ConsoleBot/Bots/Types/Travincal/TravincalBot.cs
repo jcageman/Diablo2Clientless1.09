@@ -49,25 +49,10 @@ namespace ConsoleBot.Bots.Types.Travincal
 
         protected override async Task<bool> RunSingleGame(Client client)
         {
-            Log.Information("In game");
-            client.Game.RequestUpdate(client.Game.Me.Id);
-            while (client.Game.Me.Location.X == 0 && client.Game.Me.Location.Y == 0)
-            {
-                Thread.Sleep(10);
-            }
-
             if (client.Game.Me.Class != CharacterClass.Barbarian)
             {
                 throw new NotSupportedException("Only barbarian is supported on travincal");
             }
-
-            /*
-             *
-            while (client.Game.Players.Count < 2)
-            {
-                Thread.Sleep(TimeSpan.FromMilliseconds(100));
-            }
-             */
 
             var townManagementOptions = new TownManagementOptions(_accountConfig, Act.Act4);
 
@@ -268,11 +253,12 @@ namespace ConsoleBot.Bots.Types.Travincal
                         {
                             await FindItemOnDeadEnemy(client.Game, nearestFindItemMember);
                         }
-                        var closeTo = client.Game.Me.Location.GetPointBeforePointInSameDirection(nearest.Location, 6);
-                        var pathNearest = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.Travincal, client.Game.Me.Location, closeTo, MovementMode.Walking);
-                        if (!await MovementHelpers.TakePathOfLocations(client.Game, pathNearest, MovementMode.Walking))
+
+                        var pathNearest = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.Travincal, client.Game.Me.Location, nearest.Location, MovementMode.Walking);
+                        pathNearest = pathNearest.SkipLast(2).ToList();
+                        if (pathNearest.Count > 0 && !await MovementHelpers.TakePathOfLocations(client.Game, pathNearest, MovementMode.Walking))
                         {
-                            Log.Warning($"Walking to Council Member failed at {client.Game.Me.Location}");
+                            Log.Warning($"Walking to Council Member from {client.Game.Me.Location} to {pathNearest.Last()} failed at {client.Game.Me.Location}");
                         }
                     }
 

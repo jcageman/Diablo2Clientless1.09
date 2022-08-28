@@ -569,7 +569,7 @@ namespace D2NG.Core
             _gameServer.SendPacket(new MakeEntityMovePacket(Me, entity));
             Thread.Sleep(50);
             _gameServer.SendPacket(new InteractWithEntityPacket(entity));
-            return npcInfoPacket.WaitOne(400);
+            return npcInfoPacket.WaitOne(1500);
         }
 
         public bool PickupBody(Player player)

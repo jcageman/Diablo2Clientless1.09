@@ -131,6 +131,12 @@ namespace ConsoleBot.Helpers
 
             for (int i = 0; i < points.Count; ++i)
             {
+                if(tries >= maxTries)
+                {
+                    Log.Warning($"failed to walk to end location, something went wrong while client at location: {game.Me.Location}");
+                    return false;
+                }
+
                 if (token.HasValue && token.Value.IsCancellationRequested)
                 {
                     return true;
@@ -146,12 +152,12 @@ namespace ConsoleBot.Helpers
                 {
                     tries++;
                     var bestDistance = game.Me.Location.Distance(point);
-                    var bestIndex = i;
+                    int? bestIndex = null;
                     var j = i - 1;
                     while (j > 0)
                     {
                         var newDistance = game.Me.Location.Distance(points[j]);
-                        if (newDistance < bestDistance)
+                        if (newDistance < bestDistance && newDistance < 20)
                         {
                             bestDistance = newDistance;
                             bestIndex = j;
@@ -159,7 +165,13 @@ namespace ConsoleBot.Helpers
 
                         j--;
                     }
-                    Log.Information($"Backing up to point {j} from {i}");
+
+                    if(bestIndex == null)
+                    {
+                        Log.Warning($"failed to find back-up point, something went wrong while client at location: {game.Me.Location}");
+                        return false;
+                    }
+                    Log.Information($"Backing up to point {bestIndex} from {i}");
 
                     if (previousBackupPoint == bestIndex && tries < maxTries)
                     {
@@ -171,8 +183,8 @@ namespace ConsoleBot.Helpers
                         }
                     }
 
-                    previousBackupPoint = bestIndex;
-                    i = bestIndex;
+                    previousBackupPoint = bestIndex.Value;
+                    i = bestIndex.Value;
                 }
                 await game.MoveToAsync(point);
             }

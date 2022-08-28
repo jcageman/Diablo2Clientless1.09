@@ -1,4 +1,5 @@
-﻿using ConsoleBot.Clients.ExternalMessagingClient;
+﻿using ConsoleBot.Bots.Types;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using D2NG.Core;
@@ -20,7 +21,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ConsoleBot.Bots.Types.Baal
+namespace ConsoleBot.Bots
 {
     public abstract class MultiClientBotBase : IBotInstance
     {
@@ -434,9 +435,9 @@ namespace ConsoleBot.Bots.Types.Baal
         private async Task PickupNearbyPotionsIfNeeded(Client client, AccountConfig account, double distance)
         {
             var totalRejuvanationPotions = client.Game.Inventory.Items.Count(i => i.Name == ItemName.RejuvenationPotion || i.Name == ItemName.FullRejuvenationPotion);
-            
-            var missingHealthPotions = (int)client.Game.Belt.Height * 2 - client.Game.Belt.GetHealthPotionsInSlots(account.HealthSlots).Count;
-            var missingManaPotions = (int)client.Game.Belt.Height * 2 - client.Game.Belt.GetManaPotionsInSlots(account.ManaSlots).Count;
+
+            var missingHealthPotions = (int)client.Game.Belt.Height * account.HealthSlots.Count - client.Game.Belt.GetHealthPotionsInSlots(account.HealthSlots).Count;
+            var missingManaPotions = (int)client.Game.Belt.Height * account.ManaSlots.Count - client.Game.Belt.GetManaPotionsInSlots(account.ManaSlots).Count;
             var missingRevPotions = Math.Max(6 - client.Game.Inventory.Items.Count(i => i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion), 0);
             //Log.Information($"Client {client.Game.Me.Name} missing {missingHealthPotions} healthpotions and missing {missingManaPotions} mana");
             var pickitList = GetPotionPickupList(client, distance, missingRevPotions, missingHealthPotions, missingManaPotions);

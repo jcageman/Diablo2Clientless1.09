@@ -256,8 +256,8 @@ namespace ConsoleBot.Bots.Types.Assist
 
                 var townManagementOptions = new TownManagementOptions(c.Item1, client.Game.Act)
                 {
-                    HealthPotionsToBuy = Math.Max(0, client.Game.Belt.Height * 2 + 10 - InventoryHelpers.GetTotalHealthPotions(client.Game)),
-                    ManaPotionsToBuy = Math.Max(0, client.Game.Belt.Height * 2 + 5 - InventoryHelpers.GetTotalManaPotions(client.Game))
+                    HealthPotionsToBuy = Math.Max(0, client.Game.Belt.Height * c.Item1.HealthSlots.Count + 10 - InventoryHelpers.GetTotalHealthPotions(client.Game)),
+                    ManaPotionsToBuy = Math.Max(0, client.Game.Belt.Height * c.Item1.ManaSlots.Count + 5 - InventoryHelpers.GetTotalManaPotions(client.Game))
                 };
 
                 var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
@@ -348,7 +348,7 @@ namespace ConsoleBot.Bots.Types.Assist
 
         }
 
-        async Task<bool> AssistLeadClient(Client client, AccountConfig accountConfig, AssistBotClientState state)
+        async Task<bool> AssistLeadClient(Client client, AccountConfig account, AssistBotClientState state)
         {
             var movementMode = GetMovementMode(client.Game);
             if (state.GoNextLevel)
@@ -373,7 +373,7 @@ namespace ConsoleBot.Bots.Types.Assist
             }
             else if(state.ShouldHeal)
             {
-                return await HealInTown(client, accountConfig, state);
+                return await HealInTown(client, account, state);
             }
 
             if (!state.ShouldHeal && InventoryHelpers.GetTotalHealthPotions(client.Game) < 3
@@ -423,7 +423,7 @@ namespace ConsoleBot.Bots.Types.Assist
                     if (!NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 1, 20).Any())
                     {
                         await PickupNearbyItems(client);
-                        await PickupNearbyPotionsIfNeeded(client);
+                        await PickupNearbyPotionsIfNeeded(client, account);
                     }
                 }
             }
@@ -431,7 +431,7 @@ namespace ConsoleBot.Bots.Types.Assist
             return true;
         }
 
-        private async Task<bool> HealInTown(Client client, AccountConfig accountConfig, AssistBotClientState state)
+        private async Task<bool> HealInTown(Client client, AccountConfig account, AssistBotClientState state)
         {
             if (!client.Game.IsInTown())
             {
@@ -442,10 +442,10 @@ namespace ConsoleBot.Bots.Types.Assist
                 }
             }
 
-            var townManagementOptions = new TownManagementOptions(accountConfig, client.Game.Act)
+            var townManagementOptions = new TownManagementOptions(account, client.Game.Act)
             {
-                HealthPotionsToBuy = Math.Max(0, client.Game.Belt.Height * 2 + 10 - InventoryHelpers.GetTotalHealthPotions(client.Game)),
-                ManaPotionsToBuy = Math.Max(0, client.Game.Belt.Height * 2 + 5 - InventoryHelpers.GetTotalManaPotions(client.Game))
+                HealthPotionsToBuy = Math.Max(0, client.Game.Belt.Height * account.HealthSlots.Count + 10 - InventoryHelpers.GetTotalHealthPotions(client.Game)),
+                ManaPotionsToBuy = Math.Max(0, client.Game.Belt.Height * account.ManaSlots.Count + 5 - InventoryHelpers.GetTotalManaPotions(client.Game))
             };
             var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
             if (!townTaskResult.Succes)
@@ -598,10 +598,10 @@ namespace ConsoleBot.Bots.Types.Assist
             return true;
         }
 
-        private async Task PickupNearbyPotionsIfNeeded(Client client)
+        private async Task PickupNearbyPotionsIfNeeded(Client client, AccountConfig account)
         {
-            var missingHealthPotions = 10 + client.Game.Belt.Height * 2 - InventoryHelpers.GetTotalHealthPotions(client.Game);
-            var missingManaPotions = 5 + client.Game.Belt.Height * 2 - InventoryHelpers.GetTotalManaPotions(client.Game);
+            var missingHealthPotions = 10 + client.Game.Belt.Height * account.HealthSlots.Count - InventoryHelpers.GetTotalHealthPotions(client.Game);
+            var missingManaPotions = 5 + client.Game.Belt.Height * account.ManaSlots.Count - InventoryHelpers.GetTotalManaPotions(client.Game);
             var missingRevPotions = Math.Max(6 - client.Game.Inventory.Items.Count(i => i.Classification == ClassificationType.RejuvenationPotion), 0);
             var pickitList = client.Game.Items.Values
                 .Where(i => i.Ground && i.Classification == ClassificationType.HealthPotion &&

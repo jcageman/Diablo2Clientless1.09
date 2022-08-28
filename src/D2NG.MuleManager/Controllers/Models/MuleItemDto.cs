@@ -1,7 +1,7 @@
 ﻿using D2NG.Core.D2GS.Items;
 using System.Collections.Generic;
 
-namespace D2NG.MuleManager.Services.MuleManager.Models
+namespace D2NG.MuleManager.Controllers.Models
 {
     public class MuleItemDto
     {

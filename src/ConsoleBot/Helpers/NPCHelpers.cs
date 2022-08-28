@@ -1,4 +1,5 @@
-﻿using D2NG.Core;
+﻿using ConsoleBot.TownManagement;
+using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
@@ -361,12 +362,10 @@ namespace ConsoleBot.Helpers
             return true;
         }
 
-        public static bool ShouldRefreshCharacterAtNPC(Game game)
+        public static bool ShouldRefreshCharacterAtNPC(Game game, TownManagementOptions options)
         {
-            var healingPotionsInBelt = game.Belt.NumOfHealthPotions();
-            var manaPotionsInBelt = game.Belt.NumOfManaPotions();
-            return healingPotionsInBelt < game.Belt.Height * 2
-                || manaPotionsInBelt < game.Belt.Height * 2
+            return game.Belt.Height * options.AccountConfig.HealthSlots.Count - game.Belt.NumOfHealthPotions() > 1
+                || game.Belt.Height * options.AccountConfig.ManaSlots.Count - game.Belt.NumOfManaPotions() > 1
                 || game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeOfTownPortal)?.Amount < 5
                 || (game.Me.Life / (double)game.Me.MaxLife) < 0.7;
         }
@@ -397,7 +396,7 @@ namespace ConsoleBot.Helpers
                 && weapon.Classification == ClassificationType.Bow;
         }
 
-        public static bool SellItemsAndRefreshPotionsAtNPC(Game game, WorldObject npc, Dictionary<ItemName, int> additionalBuys = null, long? healthPotionsToBuy = null, long? manaPotionsToBuy = null)
+        public static bool SellItemsAndRefreshPotionsAtNPC(Game game, WorldObject npc, TownManagementOptions options)
         {
             GeneralHelpers.TryWithTimeout((retryCount) =>
             {
@@ -462,7 +461,7 @@ namespace ConsoleBot.Helpers
 
             if(healingPotion != null)
             {
-                var numberOfHealthPotions = healthPotionsToBuy ?? game.Belt.Height * 3 - game.Belt.NumOfHealthPotions();
+                var numberOfHealthPotions = options.HealthPotionsToBuy ?? game.Belt.Height * options.AccountConfig.HealthSlots.Count - game.Belt.NumOfHealthPotions();
                 while (numberOfHealthPotions > 0)
                 {
                     game.BuyItem(npc, healingPotion, false);
@@ -472,7 +471,7 @@ namespace ConsoleBot.Helpers
 
             if(manaPotion != null)
             {
-                var numberOfManaPotions = manaPotionsToBuy ?? game.Belt.Height * 1 - game.Belt.NumOfManaPotions();
+                var numberOfManaPotions = options.ManaPotionsToBuy ?? game.Belt.Height * options.AccountConfig.ManaSlots.Count - game.Belt.NumOfManaPotions();
                 while (numberOfManaPotions > 0)
                 {
                     game.BuyItem(npc, manaPotion, false);
@@ -480,9 +479,9 @@ namespace ConsoleBot.Helpers
                 }
             }
 
-            if (additionalBuys != null)
+            if (options.ItemsToBuy != null)
             {
-                foreach (var additionalBuy in additionalBuys)
+                foreach (var additionalBuy in options.ItemsToBuy)
                 {
                     var additionalItem = game.Items.Values.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Name == additionalBuy.Key);
                     for (var i = 0; i < additionalBuy.Value; ++i)
