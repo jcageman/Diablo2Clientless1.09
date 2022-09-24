@@ -128,7 +128,7 @@ namespace D2NG.Core.D2GS
             var leaveGameConfirmed = GetResetEventOfType(InComingPacket.LeaveGameConfirmed);
             InGame = false;
             Connection.WritePacket(OutGoingPacket.LeaveGame);
-            await leaveGameConfirmed.AsTask(TimeSpan.FromSeconds(5));
+            await leaveGameConfirmed.AsTask(TimeSpan.FromSeconds(10));
             Disconnect();
         }
 
