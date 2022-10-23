@@ -130,12 +130,12 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if ((item.Name == ItemName.GrimShield) && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70 && item.GetTotalResistFrLrCr() > 50)
+            if (item.Name == ItemName.GrimShield && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70 && item.GetTotalResistFrLrCr() > 50)
             {
                 return true;
             }
 
-            if ((item.Name == ItemName.TowerShield) && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResistFrLrCr() > 50 && item.GetValueOfStatType(StatType.ReducedRequirements) <= -20)
+            if (item.Name == ItemName.TowerShield && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResistFrLrCr() > 50 && item.GetValueOfStatType(StatType.ReducedRequirements) <= -20)
             {
                 return true;
             }

@@ -114,15 +114,23 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
-                && item.GetValueOfStatType(StatType.ExtraGold) >= 100
+                && item.GetValueOfStatType(StatType.ExtraGold) >= 80
                 && item.GetTotalResistFrLrCr() >= 80)
+            {
+                return true;
+            }
+            if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
+                && item.GetValueOfStatType(StatType.ExtraGold) >= 80
+                && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= 30
+                && item.GetTotalResistFrLrCr() >= 40)
             {
                 return true;
             }
 
             if (item.GetValueOfStatType(StatType.BarbarianSkills) == 2
-            && item.GetValueOfStatType(StatType.ExtraGold) >= 100
-            && item.GetTotalResistFrLrCr() >= 60)
+            && item.GetValueOfStatType(StatType.ExtraGold) >= 80
+            && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
+            && item.GetTotalResistFrLrCr() >= 40)
             {
                 return true;
             }

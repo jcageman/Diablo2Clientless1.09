@@ -109,22 +109,31 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItemClassic(Item item)
         {
-            if (item.Name == ItemName.GrimHelm
-                && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
-                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 40
-                && item.GetTotalResistFrLrCr() >= 40)
-            {
-                return true;
-            }
-
             if (desirableHelms.Contains(item.Name) && item.GetValueOfStatType(StatType.Life) >= 30)
             {
+                if (item.Name == ItemName.GrimHelm
+                && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
+                && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50
+                && item.GetTotalResistFrLrCr() >= 40)
+                {
+                    return true;
+                }
                 if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 70)
                 {
                     return true;
                 }
 
                 if (item.GetTotalResistFrLrCr() >= 45 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 40 && item.GetValueOfStatType(StatType.MinimumDamage) == 2)
+                {
+                    return true;
+                }
+
+                if (item.GetTotalResistFrLrCr() >= 20 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 90 && item.GetValueOfStatType(StatType.MinimumDamage) == 2)
+                {
+                    return true;
+                }
+
+                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 20 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 90)
                 {
                     return true;
                 }
@@ -145,12 +154,12 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            if (item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 50)
+            if (item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 60)
             {
                 return true;
             }
 
-            if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 60)
+            if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 70)
             {
                 return true;
             }

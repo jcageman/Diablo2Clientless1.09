@@ -18,7 +18,7 @@ namespace D2NG.MuleManager.Services.MuleManager
             _store = store;
         }
 
-        public async Task<List<MuleItemDb>> GetAllItems(QualityType? qualityType, ItemName? itemName,StatType[] statTypes)
+        public async Task<List<MuleItemDb>> GetAllItems(QualityType? qualityType, ItemName? itemName,StatType[] statTypes, ClassificationType? classificationType)
         {
             var query = _store.QuerySession()
                 .Query<MuleItemDb>().AsQueryable();
@@ -33,6 +33,11 @@ namespace D2NG.MuleManager.Services.MuleManager
             if (itemName.HasValue)
             {
                 query = query.Where(m => m.ItemName == itemName.ToString());
+            }
+
+            if (classificationType.HasValue)
+            {
+                query = query.Where(m => m.ClassificationType == classificationType.ToString());
             }
 
             if (qualityType.HasValue)

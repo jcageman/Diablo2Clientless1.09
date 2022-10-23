@@ -23,12 +23,12 @@ namespace ConsoleBot.Bots.Types.Cuber
 {
     public class CubeBot : SingleClientBotBase, IBotInstance
     {
+        private readonly CubeConfiguration _cubeConfig;
         private readonly IPathingService _pathingService;
         private readonly ITownManagementService _townManagementService;
 
         private TaskCompletionSource<bool> ItemDropped = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         private TaskCompletionSource<bool> NextGame = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        static HashSet<ItemName> PerfectGems = new HashSet<ItemName> { ItemName.PerfectAmethyst, ItemName.PerfectDiamond, ItemName.PerfectEmerald, ItemName.PerfectRuby, ItemName.PerfectSapphire, ItemName.PerfectSkull, ItemName.PerfectTopaz };
 
         public CubeBot(
             IOptions<BotConfiguration> config,
@@ -38,6 +38,7 @@ namespace ConsoleBot.Bots.Types.Cuber
             IMuleService muleService,
             ITownManagementService townManagementService) : base(config.Value, cubeConfig.Value, externalMessagingClient, muleService)
         {
+            _cubeConfig = cubeConfig.Value;
             _pathingService = pathingService;
             _townManagementService = townManagementService;
         }
@@ -85,57 +86,6 @@ namespace ConsoleBot.Bots.Types.Cuber
 
             while(!NextGame.Task.IsCompleted)
             {
-                foreach(var item in client.Game.Inventory.Items.Where(i =>
-                                        i.Name == ItemName.GrandCharm
-                                        && Pickit.Pickit.ShouldKeepItem(client.Game, i)
-                                        && Pickit.Pickit.CanTouchInventoryItem(client.Game, i)))
-                {
-                    if (Pickit.Pickit.ShouldKeepItem(client.Game, item))
-                    {
-                        Log.Information($"{client.Game.Me.Name}: Dropping {item.GetFullDescription()}");
-
-                        InventoryHelpers.DropItemFromInventory(client.Game, item);
-                    }
-                }
-                var grandCharms = GetGrandCharmsInInventory(client);
-                if (grandCharms.Count <= 1)
-                {
-                    var grandCharmOnGround = GetGrandCharmsOnGround(client).FirstOrDefault();
-                    if (grandCharmOnGround != null)
-                    {
-                        await PickupItemOnGround(client, grandCharmOnGround);
-                        grandCharms = GetGrandCharmsInInventory(client);
-                    }
-                }
-
-                var gems = GetGemsInInventory(client);
-                if (gems.Count <= 3)
-                {
-                    var gemsOnGround = GetGemsOnGround(client).Take(3 - gems.Count).ToList();
-                    foreach (var gem in gemsOnGround)
-                    {
-                        await PickupItemOnGround(client, gem);
-
-                    }
-                    gems = GetGemsInInventory(client);
-                }
-
-                if (grandCharms.Count < 1)
-                {
-                    ItemDropped = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    Log.Information($"Missing 1 grandcharm");
-                    await ItemDropped.Task;
-                    continue;
-                }
-
-                if (gems.Count < 3)
-                {
-                    ItemDropped = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    Log.Information($"Missing {3-gems.Count} perfect gems");
-                    await ItemDropped.Task;
-                    continue;
-                }
-
                 if (client.Game.Cube.Items.Any())
                 {
                     if (!InventoryHelpers.MoveCubeItemsToInventory(client.Game))
@@ -145,11 +95,51 @@ namespace ConsoleBot.Bots.Types.Cuber
                     }
                 }
 
-                var grandCharm = grandCharms.First();
-                var itemsToTransmute = new List<Item>();
-                itemsToTransmute.Add(grandCharms.First());
-                itemsToTransmute.AddRange(gems.Take(3));
-                TransMuteItems(client, itemsToTransmute);
+                foreach (var item in client.Game.Inventory.Items.Where(i =>
+                                        IsCubeResultItem(i) &&
+                                        Pickit.Pickit.ShouldKeepItem(client.Game, i) &&
+                                        Pickit.Pickit.CanTouchInventoryItem(client.Game, i)))
+                {
+                    if (Pickit.Pickit.ShouldKeepItem(client.Game, item))
+                    {
+                        Log.Information($"{client.Game.Me.Name}: Dropping {item.GetFullDescription()}");
+
+                        InventoryHelpers.DropItemFromInventory(client.Game, item);
+                    }
+                }
+
+                var recipeItems = new List<Item>();
+                foreach (var requirement in _cubeConfig.RecipeRequirements)
+                {
+                    var matchingItems = new List<Item>();
+                    do
+                    {
+                        matchingItems = GetCubeRequirementInInventory(client, requirement);
+                        if (matchingItems.Count < requirement.Amount)
+                        {
+                            var requiredItemsOnGround = GetRequiredItemOnGround(client, requirement).Take(requirement.Amount - matchingItems.Count).ToList();
+                            foreach (var item in requiredItemsOnGround)
+                            {
+                                await PickupItemOnGround(client, item);
+
+                            }
+                            var missingItems = requirement.Amount - matchingItems.Count - requiredItemsOnGround.Count;
+                            if (missingItems > 0)
+                            {
+                                var itemType = (requirement.ItemNames != null ? string.Join(",", requirement.ItemNames) : null);
+                                itemType ??= requirement.Classification?.ToString();
+                                itemType ??= requirement.Quality.ToString();
+                                Log.Information($"Missing {missingItems} of {itemType}");
+                                await ItemDropped.Task;
+                                ItemDropped = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                            }
+                        } 
+                    } while (matchingItems.Count < requirement.Amount);
+
+                    recipeItems.AddRange(matchingItems.Take(requirement.Amount));
+                }
+
+                TransMuteItems(client, recipeItems);
             }
 
             return true;
@@ -210,29 +200,26 @@ namespace ConsoleBot.Bots.Types.Cuber
             return true;
         }
 
-        private static IEnumerable<Item> GetGemsOnGround(Client client)
+        private static List<Item> GetRequiredItemOnGround(Client client, RecipeRequirement requirement)
         {
-            return client.Game.Items.Values.Where(i => PerfectGems.Contains(i.Name) && i.Ground);
+            return client.Game.Items.Values.Where(i => MatchesRequiredItem(i, requirement) && i.Ground && IsItemForCubing(client, i)).ToList();
         }
 
-        private static IEnumerable<Item> GetGrandCharmsOnGround(Client client)
-        {
-            return client.Game.Items.Values.Where(i => i.Name == ItemName.GrandCharm && i.Level >= 91 && i.Ground && !Pickit.Pickit.ShouldKeepItem(client.Game, i));
-        }
-
-        private static List<Item> GetGemsInInventory(Client client)
+        private static List<Item> GetCubeRequirementInInventory(Client client, RecipeRequirement requirement)
         {
             return client.Game.Inventory.Items.Where(i =>
-                                PerfectGems.Contains(i.Name)
-                                && Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
+            {
+                return MatchesRequiredItem(i, requirement) &&
+                IsItemForCubing(client, i) &&
+                Pickit.Pickit.CanTouchInventoryItem(client.Game, i);
+            }).ToList();
         }
 
-        private static List<Item> GetGrandCharmsInInventory(Client client)
+        private static bool IsItemForCubing(Client client, Item item)
         {
-            return client.Game.Inventory.Items.Where(i =>
-                                        i.Name == ItemName.GrandCharm
-                                        && !Pickit.Pickit.ShouldKeepItem(client.Game, i)
-                                        && Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
+            return !Pickit.Pickit.ShouldKeepItem(client.Game, item)
+                || item.Classification == ClassificationType.Gem
+                || (item.Name == ItemName.Ring && item.Quality == QualityType.Unique);
         }
 
         private async Task<bool> PickupItemOnGround(Client client, Item item)
@@ -274,6 +261,20 @@ namespace ConsoleBot.Bots.Types.Cuber
             }
 
             return Task.CompletedTask;
+        }
+
+        private static bool MatchesRequiredItem(Item item, RecipeRequirement requirement)
+        {
+            return (requirement.ItemNames == null || requirement.ItemNames.Contains(item.Name))
+                && (requirement.Classification == null || requirement.Classification == item.Classification)
+                && (requirement.Quality == null || requirement.Quality == item.Quality);
+        }
+
+        private bool IsCubeResultItem(Item item)
+        {
+            return (_cubeConfig.RecipeResult.ItemNames == null || _cubeConfig.RecipeResult.ItemNames.Contains(item.Name))
+            && (_cubeConfig.RecipeResult.Classification == null || _cubeConfig.RecipeResult.Classification == item.Classification)
+            && (_cubeConfig.RecipeResult.Quality == null || _cubeConfig.RecipeResult.Quality == item.Quality);
         }
     }
 }

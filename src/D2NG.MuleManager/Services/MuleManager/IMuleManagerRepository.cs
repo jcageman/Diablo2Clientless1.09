@@ -13,6 +13,6 @@ namespace D2NG.MuleManager.Services.MuleManager
 
         Task<List<MuleItemDb>> GetAllItemsOfCharacter(MuleManagerAccount account, Character character);
 
-        Task<List<MuleItemDb>> GetAllItems(QualityType? qualityType, ItemName? itemName, StatType[] statTypes);
+        Task<List<MuleItemDb>> GetAllItems(QualityType? qualityType, ItemName? itemName, StatType[] statTypes, ClassificationType? classificationType);
     }
 }

@@ -201,34 +201,36 @@ namespace ConsoleBot.Pickit
             {
                 return false;
             }
-            
-            if(self.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] >= 90)
+
+            if(self.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] >= 86)
+            {
+                if (item.Name == ItemName.BoneHelm)
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                if (item.Name == ItemName.Boots || item.Name == ItemName.HeavyBoots)
+                {
+                    return true;
+                }
+            }
+
+            /*
+            if (self.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] >= 90)
             {
                 return item.Name == ItemName.Amulet;
             }
 
-            if (item.Name == ItemName.BoneHelm && self.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] >= 86)
-            {
-                return true;
-            }
-
-            if (item.Name == ItemName.Boots || item.Name == ItemName.HeavyBoots)
-            {
-                return true;
-            }
-            /*
             if (item.Classification == ClassificationType.Ring)
             {
                 return true;
             }
-             */
+
+            */
             /*
             if (item.Name == ItemName.BoneShield)
-            {
-                return true;
-            }
-
-            if (item.Name == ItemName.SplintMail)
             {
                 return true;
             }

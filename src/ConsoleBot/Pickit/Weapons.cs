@@ -7,9 +7,9 @@ namespace ConsoleBot.Pickit
 {
     public static class Weapons
     {
-        private static readonly HashSet<ItemName> desirableExceptionalWeapons = new HashSet<ItemName> { ItemName.MarteldeFer, ItemName.BattleHammer, ItemName.AncientAxe, ItemName.Lance, ItemName.ExecutionerSword, ItemName.Naga };
+        private static readonly HashSet<ItemName> desirableExceptionalWeapons = new HashSet<ItemName> { ItemName.MarteldeFer, ItemName.BattleHammer, ItemName.Lance, ItemName.ExecutionerSword, ItemName.Naga };
 
-        private static readonly HashSet<ItemName> interestingExceptionalWeapons = new HashSet<ItemName> { ItemName.Tabar, ItemName.GothicSword, ItemName.BecDeCorbin, ItemName.GrimScythe, ItemName.Zweihander };
+        private static readonly HashSet<ItemName> interestingExceptionalWeapons = new HashSet<ItemName> { ItemName.AncientAxe, ItemName.Tabar, ItemName.GothicSword, ItemName.BecDeCorbin, ItemName.GrimScythe, ItemName.Zweihander };
 
         private static readonly HashSet<ItemName> desirableBows = new HashSet<ItemName> { ItemName.DoubleBow, ItemName.RuneBow };
 
@@ -180,6 +180,11 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldKeepItemClassic(Item item)
         {
+            if (item.GetValueOfStatType(StatType.Knockback) > 0)
+            {
+                return false;
+            }
+
             var additionalDamage = item.GetValueOfStatType(StatType.EnhancedMaximumDamage);
             additionalDamage += (int)1.5 * Math.Max(item.GetValueOfStatType(StatType.MinimumDamage), item.GetValueOfStatType(StatType.SecondaryMinimumDamage));
             additionalDamage += (int)1.5 * Math.Max(item.GetValueOfStatType(StatType.MaximumDamage), item.GetValueOfStatType(StatType.SecondaryMaximumDamage));
@@ -201,7 +206,7 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
-            var desirablePvmWeapons = new HashSet<ItemName> { ItemName.MarteldeFer, ItemName.AncientAxe, ItemName.Lance, ItemName.ExecutionerSword };
+            var desirablePvmWeapons = new HashSet<ItemName> { ItemName.MarteldeFer, ItemName.Lance, ItemName.ExecutionerSword };
             if (item.Quality == QualityType.Rare
             && desirablePvmWeapons.Contains(item.Name)
             && additionalDamage > 140 && item.GetValueOfStatType(StatType.ReducedRequirements) <= -20 && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6)

@@ -2,7 +2,6 @@
 using D2NG.MuleManager.Services.MuleManager;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 
 namespace D2NG.MuleManager.Controllers
@@ -35,9 +34,9 @@ namespace D2NG.MuleManager.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAllItems([FromQuery] QualityType? qualityType, [FromQuery] ItemName? itemName, [FromQuery] StatType[] statTypes)
+        public async Task<IActionResult> GetAllItems([FromQuery] QualityType? qualityType, [FromQuery] ItemName? itemName, [FromQuery] StatType[] statTypes, [FromQuery] ClassificationType? classification)
         {
-            var items = await _muleManagerRepository.GetAllItems(qualityType, itemName, statTypes);
+            var items = await _muleManagerRepository.GetAllItems(qualityType, itemName, statTypes, classification);
             return Ok(items.MapToDto());
         }
     }

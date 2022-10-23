@@ -65,6 +65,12 @@ namespace ConsoleBot.Pickit
                 return true;
             }
 
+            if (item.Quality == QualityType.Rare && item.GetValueOfStatType(StatType.FasterCastRate) >= 10
+                && item.GetTotalResistFrLrCr() >= 45 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 80)
+            {
+                return true;
+            }
+
             var totalMinDamage = Math.Max(item.GetValueOfStatType(StatType.MinimumDamage), item.GetValueOfStatType(StatType.SecondaryMinimumDamage));
             var totalMaxDamage = Math.Max(item.GetValueOfStatType(StatType.MaximumDamage), item.GetValueOfStatType(StatType.SecondaryMaximumDamage));
             var totalAddedDamage = totalMinDamage + totalMaxDamage;

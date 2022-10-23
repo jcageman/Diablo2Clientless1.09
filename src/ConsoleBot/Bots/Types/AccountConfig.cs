@@ -22,7 +22,7 @@ namespace ConsoleBot.Bots.Types
 
         public bool ResurrectMerc { get; set; } = true;
 
-        public void Validate()
+        public virtual void Validate()
         {
             if (string.IsNullOrEmpty(Username))
             {

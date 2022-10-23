@@ -140,16 +140,16 @@ namespace ConsoleBot.Pickit
 
             if(item.Sockets > 0)
             {
+                /*
                 if (item.Name == ItemName.QuiltedArmor && item.Quality == QualityType.Unique)
                 {
                     return true;
-                }
+                }*/
 
                 if (item.Name == ItemName.LeatherArmor && item.Quality == QualityType.Unique)
                 {
                     return true;
                 }
-
 
                 if (item.Name == ItemName.ScaleMail && item.Quality == QualityType.Unique)
                 {

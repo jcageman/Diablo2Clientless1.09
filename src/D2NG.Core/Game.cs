@@ -140,6 +140,11 @@ namespace D2NG.Core
 
         public async Task LeaveGame()
         {
+            if(!IsInGame())
+            {
+                return;
+            }
+
             Log.Information("Leaving game");
             try
             {

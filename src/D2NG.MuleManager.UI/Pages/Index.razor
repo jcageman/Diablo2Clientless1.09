@@ -11,7 +11,7 @@
     </MudItem>
     <MudItem xs="3">
         <MudSelect T="string" Label="Quality" ValueChanged="QualityTypeChanged">
-            <MudSelectItem Value="@("None")">None</MudSelectItem>
+            <MudSelectItem Value="@("-")">None</MudSelectItem>
             <MudSelectItem Value="@("Rare")">Rare</MudSelectItem>
             <MudSelectItem Value="@("Unique")">Unique</MudSelectItem>
             <MudSelectItem Value="@("Crafted")">Crafted</MudSelectItem>
@@ -31,7 +31,10 @@
     <MudItem xs="3">
         <MudAutocomplete T="string" Label="SortOnStatType" SearchFunc="SearchStatType" ValueChanged="SortOnStatValue"/>
     </MudItem>
-    <MudItem xs="6">
+    <MudItem xs="3">
+        <MudAutocomplete T="string" Label="Classification" SearchFunc="SearchClassification" ValueChanged="AddClassificationFilter" />
+    </MudItem>
+    <MudItem xs="3">
     </MudItem>
     <MudItem xs="12">
         <MudText Class="mb-n3" Typo="Typo.body2">
@@ -68,6 +71,7 @@
     private string qualityTypeValue { get; set; }
     private string sortedStatValue { get; set; }
     private string itemNameValue { get; set; }
+    private string classificationValue { get; set; }
     private HashSet<string> FilteredStatTypes = new HashSet<string>();
 
     void Closed(MudChip chip, string chipValue) {
@@ -80,14 +84,19 @@
         cancellationTokenSource.Cancel();
         cancellationTokenSource = new CancellationTokenSource();
         var parameters = new List<(string, string)>();
-        if(!string.IsNullOrEmpty(qualityTypeValue) && qualityTypeValue != "None")
+        if(!string.IsNullOrEmpty(qualityTypeValue) && qualityTypeValue != "-")
         {
             parameters.Add(("qualityType", qualityTypeValue));
         }
 
-        if(!string.IsNullOrEmpty(itemNameValue) && itemNameValue != "None")
+        if(!string.IsNullOrEmpty(itemNameValue) && itemNameValue != "-")
         {
             parameters.Add(("itemName", itemNameValue));
+        }
+
+        if (!string.IsNullOrEmpty(classificationValue) && classificationValue != "-")
+        {
+            parameters.Add(("classification", classificationValue));
         }
 
         foreach(var statType in FilteredStatTypes)
@@ -106,7 +115,6 @@
             {
                 muleItem.StatString = (@MarkupString)string.Join(", ", muleItem.Stats.Select(k => $"{k.Type} : {k.Value}"));
             }
-
             await InvokeAsync(() => StateHasChanged());
         }
         catch(OperationCanceledException)
@@ -149,6 +157,15 @@
         }
     }
 
+    private void AddClassificationFilter(string value)
+    {
+        if (!string.IsNullOrEmpty(value))
+        {
+            classificationValue = value;
+            RefreshMules().AndForget();
+        }
+    }
+
     private void SortOnStatValue(string value)
     {
         sortedStatValue = value;
@@ -174,15 +191,33 @@
         if (string.IsNullOrEmpty(value))
         {
             var itemNames = Enum.GetNames(typeof(ItemName))
-            .Prepend("None");
+            .Prepend("-");
             return Task.FromResult<IEnumerable<string>>(itemNames);
         }
         else
         {
             var itemNames = Enum.GetNames(typeof(ItemName))
             .Where(s => s.Contains(value, StringComparison.InvariantCultureIgnoreCase))
-            .Prepend("None");
+            .Prepend("-");
             return Task.FromResult<IEnumerable<string>>(itemNames);
+        }
+    }
+
+    private Task<IEnumerable<string>> SearchClassification(string value)
+    {
+        // if text is null or empty, show complete list
+        if (string.IsNullOrEmpty(value))
+        {
+            var classifications = Enum.GetNames(typeof(ClassificationType))
+            .Prepend("-");
+            return Task.FromResult<IEnumerable<string>>(classifications);
+        }
+        else
+        {
+            var classifications = Enum.GetNames(typeof(ClassificationType))
+            .Where(s => s.Contains(value, StringComparison.InvariantCultureIgnoreCase))
+            .Prepend("-");
+            return Task.FromResult<IEnumerable<string>>(classifications);
         }
     }
 
