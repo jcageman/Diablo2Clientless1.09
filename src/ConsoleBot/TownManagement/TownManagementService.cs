@@ -324,7 +324,7 @@ namespace ConsoleBot.TownManagement
                 return result;
             }
 
-            if (InventoryHelpers.HasAnyItemsToStash(client.Game))
+            if (InventoryHelpers.ShouldStashItems(client.Game))
             {
                 var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, townArea, game.Me.Location, EntityCode.Stash, movementMode);
                 if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))

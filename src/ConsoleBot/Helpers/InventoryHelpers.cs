@@ -174,16 +174,17 @@ namespace ConsoleBot.Helpers
             return moveItemResult;
         }
 
-        public static bool HasAnyItemsToStash(Game game)
+        public static bool ShouldStashItems(Game game)
         {
-            return game.Inventory.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i))
-                || game.Cube.Items.Any(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i))
-                || game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0) > 500000;
+            var itemsToKeepInInventory = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i));
+            var itemstoKeepInCube = game.Cube.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i));
+            return (itemsToKeepInInventory.Sum(i => i.Width * i.Height) + itemstoKeepInCube.Sum(i => i.Width * i.Height) > 6)
+                || game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0) > 1000000;
         }
 
         public static MoveItemResult StashItemsToKeep(Game game, IExternalMessagingClient externalMessagingClient)
         {
-            if (!HasAnyItemsToStash(game))
+            if (!ShouldStashItems(game))
             {
                 return MoveItemResult.Succes;
             }

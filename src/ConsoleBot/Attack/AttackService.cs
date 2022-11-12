@@ -619,9 +619,22 @@ namespace ConsoleBot.Attack
             }
 
             //Log.Information($"player loc: {game.Me.Location}, nearest: {nearest.Location} ww destination: {wwDirection}  ");
-            client.Game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
-            await Task.Delay(TimeSpan.FromSeconds(0.3));
-            return true;
+            var distance = client.Game.Me.Location.Distance(wwDirection);;
+            bool gotInWhirldWindState = false;
+            var result = GeneralHelpers.TryWithTimeout((retryCount) =>
+            {
+                var isInWhirldWindState = client.Game.Me.Effects.ContainsKey(EntityEffect.Skillmove) && client.Game.Me.Effects.ContainsKey(EntityEffect.Uninterruptable);
+                if (!gotInWhirldWindState)
+                {
+                    client.Game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, wwDirection);
+                }
+                if (!gotInWhirldWindState && isInWhirldWindState)
+                {
+                    gotInWhirldWindState = true;
+                }
+                return gotInWhirldWindState && !isInWhirldWindState;
+            }, TimeSpan.FromSeconds(distance * 0.2));
+            return result;
         }
     }
 }
