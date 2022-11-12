@@ -135,11 +135,11 @@ namespace ConsoleBot.Bots
                 try
                 {
                     var prepareTasks = new List<Task<bool>>();
-                    for (int i = 0; i < clients.Count(); i++)
+                    for (int i = 0; i < clients.Count; i++)
                     {
                         var account = _multiClientConfig.Accounts[i];
                         var client = clients[i];
-                        var numberOfSecondsToWait = i > 3 ? TimeSpan.FromSeconds(15) : TimeSpan.Zero;
+                        var numberOfSecondsToWait = i > 2 ? TimeSpan.FromSeconds(15) : TimeSpan.Zero;
                         prepareTasks.Add(InternalPrepareForRun(client, account, numberOfSecondsToWait, gameCount));
                     }
 
