@@ -6,6 +6,7 @@ namespace ConsoleBot.Bots
 {
     public class MultiClientConfiguration
     {
+        public bool ShouldCreateGames { get; set; } = true;
         public List<AccountConfig> Accounts { get; set; }
 
         public virtual void Validate()

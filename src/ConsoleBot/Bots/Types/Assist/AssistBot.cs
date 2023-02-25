@@ -531,9 +531,7 @@ namespace ConsoleBot.Bots.Types.Assist
             var pickupItems = client.Game.Items.Values
                 .Where(i => i.Ground
                 && Pickit.GoldItems.ShouldPickupItem(i)
-                && i.Name != ItemName.FlawlessDiamond
-                && i.Name != ItemName.FlawlessSkull
-                && i.Name != ItemName.FlawlessRuby
+                && i.Classification != ClassificationType.Gem
                 && i.Classification != ClassificationType.Essence)
                 .Where(n => n.Location.Distance(client.Game.Me.Location) < 20)
                 .OrderBy(n => n.Location.Distance(client.Game.Me.Location))

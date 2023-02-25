@@ -56,6 +56,7 @@ namespace ConsoleBot.Bots
             {
                 var client = new Client();
                 client.OnReceivedPacketEvent(InComingPacket.EventMessage, (packet) => HandleEventMessage(client, new EventNotifyPacket(packet)));
+                client.Game.OnWorldItemEvent(i => HandleItemDrop(client.Game, i));
                 _externalMessagingClient.RegisterClient(client);
                 PostInitializeClient(client, account);
                 PlayersInGame.TryAdd(account.Character.ToLower(), new ManualResetEvent(false));
@@ -73,18 +74,19 @@ namespace ConsoleBot.Bots
                     NextGame.TrySetResult(true);
                 }
             });
-            firstFiller.Game.OnWorldItemEvent(i => HandleItemDrop(firstFiller.Game, i));
 
             int gameCount = 1;
             while (true)
             {
+                _pickitItemsOnGround.Clear();
+                _pickitPotionsOnGround.Clear();
                 foreach (var playerInGame in PlayersInGame)
                 {
                     playerInGame.Value.Reset();
                 }
 
                 NextGame = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                Log.Information($"Joining next game");
+                Log.Information($"Joining next game {_config.GameNamePrefix}{gameCount}");
 
                 try
                 {
@@ -114,15 +116,18 @@ namespace ConsoleBot.Bots
                         }
                     }
                     ClientsNeedingMule.Clear();
-
-                    var result = await RealmConnectHelpers.CreateGameWithRetry(gameCount, firstFiller, _config, _multiClientConfig.Accounts.First());
-                    gameCount = result.Item2;
-                    if (!result.Item1)
+                    if(_multiClientConfig.ShouldCreateGames)
                     {
-                        gameCount++;
-                        await Task.Delay(TimeSpan.FromSeconds(60));
-                        continue;
+                        var result = await RealmConnectHelpers.CreateGameWithRetry(gameCount, firstFiller, _config, _multiClientConfig.Accounts.First());
+                        gameCount = result.Item2;
+                        if (!result.Item1)
+                        {
+                            gameCount++;
+                            await Task.Delay(TimeSpan.FromSeconds(60));
+                            continue;
+                        }
                     }
+
                 }
                 catch (Exception e)
                 {
@@ -146,7 +151,8 @@ namespace ConsoleBot.Bots
                     var townResults = await Task.WhenAll(prepareTasks);
                     if (townResults.Any(r => !r))
                     {
-                        Log.Warning($"One or more characters failed there join or prepare task");
+                        var failedAccounts = string.Join(",", townResults.Select((r, idx) => (clients[idx], r)).Where(i => !i.r).Select(c => c.Item1.LoggedInUserName()));
+                        Log.Warning($"One or more accounts {failedAccounts} failed there join or prepare task");
                         gameCount++;
                         continue;
                     }
@@ -318,6 +324,11 @@ namespace ConsoleBot.Bots
                 var relevantPlayer = client.Game.Players.Where(p => p.Name == characterName).FirstOrDefault();
                 client.Game.InvitePlayer(relevantPlayer);
             }
+            else
+            {
+                var relevantPlayer = client.Game.Players.Where(p => p.Name == characterName).FirstOrDefault();
+                client.Game.InvitePlayer(relevantPlayer);
+            }
         }
 
         private Task HandleItemDrop(Game game, Item item)
@@ -443,6 +454,15 @@ namespace ConsoleBot.Bots
             var pickitList = GetPotionPickupList(client, distance, missingRevPotions, missingHealthPotions, missingManaPotions);
             foreach (var item in pickitList)
             {
+                if(await IsNextGame() && item.Classification != ClassificationType.RejuvenationPotion)
+                {
+                    continue;
+                }
+
+                if (client.Game.Me.HasSkill(Skill.Vigor))
+                {
+                    client.Game.ChangeSkill(Skill.Vigor, Hand.Right);
+                }
                 Log.Information($"Client {client.Game.Me.Name} picking up {item.Name}");
                 await MoveToLocation(client, item.Location);
                 if (item.Ground)
@@ -475,6 +495,10 @@ namespace ConsoleBot.Bots
                 pickitList = pickitList = GetPickitList(client, distance);
                 foreach (var item in pickitList)
                 {
+                    if (client.Game.Me.HasSkill(Skill.Vigor))
+                    {
+                        client.Game.ChangeSkill(Skill.Vigor, Hand.Right);
+                    }
                     if (item.Ground)
                     {
                         Log.Information($"Client {client.Game.Me.Name} picking up {item.Amount} {item.Name}");

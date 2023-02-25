@@ -317,14 +317,13 @@ namespace ConsoleBot.Bots.Types.CS
             stopWatch.Start();
             while (stopWatch.Elapsed < TimeSpan.FromSeconds(30) && ClassHelpers.AnyPlayerIsMissingShouts(client) && !await IsNextGame())
             {
-                await client.Game.MoveToAsync(initialLocation.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5)));
-
                 if (client.Game.Me.Class == CharacterClass.Barbarian)
                 {
                     await ClassHelpers.CastAllShouts(client);
                 }
                 else
                 {
+                    await client.Game.MoveToAsync(initialLocation.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5)));
                     var killCancellation = new CancellationTokenSource();
                     killCancellation.CancelAfter(500);
                     await KillBosses(client, account, killCancellation, action, csState, csState);

@@ -522,13 +522,18 @@ namespace ConsoleBot.Helpers
             .ToList();
         }
 
-        public static IEnumerable<WorldObject> GetNearbySuperUniques(Client client, double distance = 40.0)
+        public static IEnumerable<WorldObject> GetNearbySuperUniques(Client client, Point point, double distance = 40.0)
         {
             return client.Game.WorldObjects
             .Where(w => w.Key.Item2 == EntityType.NPC
                 && w.Value.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique)
-                && w.Value.Location.Distance(client.Game.Me.Location) < distance)
+                && w.Value.Location.Distance(point) < distance)
             .Select(w => w.Value);
+        }
+
+        public static IEnumerable<WorldObject> GetNearbySuperUniques(Client client, double distance = 40.0)
+        {
+            return GetNearbySuperUniques(client, client.Game.Me.Location, distance);
         }
 
         private static void BuyMagicItemsAtMerchant(Game game, WorldObject npc)

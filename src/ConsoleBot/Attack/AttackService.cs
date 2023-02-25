@@ -218,7 +218,7 @@ namespace ConsoleBot.Attack
         private async Task<bool> AmazonAssist(Client client, Player player)
         {
             var me = client.Game.Me;
-            var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 20, 30).ToList();
+            var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 20, 40).ToList();
 
             if (me.Attributes[Attribute.Level] < 30 && client.Game.Difficulty > Difficulty.Normal)
             {
@@ -311,7 +311,7 @@ namespace ConsoleBot.Attack
                 return true;
             }
 
-            var nearest = await GetNearestInSight(client, enemies);
+            var nearest = enemies.FirstOrDefault();
             if (nearest == null)
             {
                 return true;
@@ -324,7 +324,14 @@ namespace ConsoleBot.Attack
             }
             else if (me.HasSkill(Skill.FrozenOrb) && me.Mana > 30)
             {
-                if(me.Skills.GetValueOrDefault(Skill.StaticField) > 10 && nearest.LifePercentage > 50 && ClassHelpers.CanStaticEntity(client, nearest.LifePercentage))
+                if (me.Skills.GetValueOrDefault(Skill.StaticField) > 10
+                    && nearest.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique)
+                    && nearest.LifePercentage > 20
+                    && ClassHelpers.CanStaticEntity(client, nearest.LifePercentage))
+                {
+                    client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
+                }
+                else if (me.Skills.GetValueOrDefault(Skill.StaticField) > 10 && nearest.LifePercentage > 50 && ClassHelpers.CanStaticEntity(client, nearest.LifePercentage))
                 {
                     client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
                 }
@@ -390,18 +397,18 @@ namespace ConsoleBot.Attack
             }
 
             var conviction = me.Skills.GetValueOrDefault(Skill.Conviction);
-            var enemyLightningEnhanced = enemies.FirstOrDefault(e => e.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)
-                 && (e.MonsterEnchantments.Contains(MonsterEnchantment.MultiShot) || e.MonsterEnchantments.Contains(MonsterEnchantment.AuraEnchanted)));
+            var enemyLightningEnhancedMultiShot = enemies.FirstOrDefault(e => e.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)
+                 && (e.MonsterEnchantments.Contains(MonsterEnchantment.MultiShot)));
             if (me.HasSkill(Skill.Salvation)
-                && enemyLightningEnhanced != null)
+                && ( enemyLightningEnhancedMultiShot != null || client.Game.Players.Any(p => p.Effects.ContainsKey(EntityEffect.Convicted))))
             {
                 if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != Skill.Salvation)
                 {
-                    Log.Information($"Changing to {Skill.Salvation} due to monster with {string.Join(",", enemyLightningEnhanced.MonsterEnchantments)}");
+                    Log.Information($"Changing to {Skill.Salvation} due to monster with {string.Join(",", enemyLightningEnhancedMultiShot.MonsterEnchantments)} or convicted player");
                     client.Game.ChangeSkill(Skill.Salvation, Hand.Right);
                 }
             }
-            else if (player.Class == CharacterClass.Sorceress && me.HasSkill(Skill.Conviction))
+            else if (player.Class == CharacterClass.Sorceress && me.HasSkill(Skill.Conviction) && me.Skills.GetValueOrDefault(Skill.BlessedHammer) < 10)
             {
                 if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != Skill.Conviction)
                 {
@@ -435,7 +442,7 @@ namespace ConsoleBot.Attack
                 await Task.Delay(200);
             }
             else if (me.ActiveSkills.TryGetValue(Hand.Right, out var rightSkill)
-                && (rightSkill == Skill.Fanaticism || rightSkill == Skill.Concentration || rightSkill == Skill.Might) && me.HasSkill(Skill.BlessedHammer))
+                && (rightSkill == Skill.Fanaticism || rightSkill == Skill.Concentration || rightSkill == Skill.Might) && me.Skills.GetValueOrDefault(Skill.BlessedHammer) >= 20)
             {
                 if (nearest.Location.Distance(client.Game.Me.Location) > 15)
                 {
@@ -489,7 +496,7 @@ namespace ConsoleBot.Attack
                 await Task.Delay(200);
             }
 
-            var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 2, 30);
+            var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 10, 30);
             var nearest = enemies.FirstOrDefault();
             if (nearest == null)
             {
@@ -512,36 +519,43 @@ namespace ConsoleBot.Attack
                 }
             }
 
+            var cursableEnemy = enemies.FirstOrDefault(e => !e.Effects.Contains(EntityEffect.Lifetap) & !e.Effects.Contains(EntityEffect.Amplifydamage));
             if (client.Game.Area == Area.ChaosSanctuary
-                && client.Game.Players.Exists(p => p.Class == CharacterClass.Barbarian)
+                && client.Game.Players.Any(p => p.Class == CharacterClass.Barbarian && p.Location.Distance(nearest.Location) < 10)
                 && me.HasSkill(Skill.LifeTap)
                 && enemies.Count() > 1
+                && cursableEnemy != null
                 && me.Mana > 15)
             {
-                if (!nearest.Effects.Contains(EntityEffect.Lifetap))
-                {
-                    client.Game.UseRightHandSkillOnEntity(Skill.LifeTap, nearest);
-                    await Task.Delay(200);
-                }
+                client.Game.UseRightHandSkillOnEntity(Skill.LifeTap, cursableEnemy);
+                await Task.Delay(200);
             }
             else if (me.HasSkill(Skill.AmplifyDamage)
                 && me.Mana > 5
-                && !nearest.Effects.Contains(EntityEffect.Amplifydamage))
+                && cursableEnemy != null)
             {
-                client.Game.UseRightHandSkillOnEntity(Skill.AmplifyDamage, nearest);
+                client.Game.UseRightHandSkillOnEntity(Skill.AmplifyDamage, cursableEnemy);
                 await Task.Delay(200);
             }
             else if (me.HasSkill(Skill.CorpseExplosion) && me.Mana > 20)
             {
-                List<WorldObject> corpses = NPCHelpers.GetNearbyCorpses(client, nearest.Location, 1);
-                var corpse = corpses.FirstOrDefault();
-                if (corpse == null)
+                foreach(var enemy in enemies)
                 {
-                    return true;
-                }
+                    if(!enemy.Effects.Contains(EntityEffect.Amplifydamage))
+                    {
+                        continue;
+                    }
 
-                client.Game.UseRightHandSkillOnEntity(Skill.CorpseExplosion, corpse);
-                await Task.Delay(200);
+                    List<WorldObject> corpses = NPCHelpers.GetNearbyCorpses(client, enemy.Location, 1);
+                    var corpse = corpses.FirstOrDefault();
+                    if (corpse == null)
+                    {
+                        continue;
+                    }
+
+                    client.Game.UseRightHandSkillOnEntity(Skill.CorpseExplosion, corpse);
+                    await Task.Delay(200);
+                }
             }
 
             return true;

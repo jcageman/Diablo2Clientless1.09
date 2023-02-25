@@ -107,15 +107,21 @@ namespace ConsoleBot.Bots.Types.Cows
                 }
             }
 
-            var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
-            if (townTaskResult.ShouldMule)
-            {
-                ClientsNeedingMule.Add(client.LoggedInUserName());
-            }
-            if (!townTaskResult.Succes)
-            {
-                return false;
-            }
+            await GeneralHelpers.TryWithTimeout(
+                async (_) =>
+                {
+                    var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
+                    if (townTaskResult.ShouldMule)
+                    {
+                        ClientsNeedingMule.Add(client.LoggedInUserName());
+                    }
+                    if (!townTaskResult.Succes)
+                    {
+                        client.Game.RequestUpdate(client.Game.Me.Id);
+                    }
+                    return townTaskResult.Succes;
+                },
+                TimeSpan.FromSeconds(20));
 
             if (isPortalCharacter)
             {
@@ -127,22 +133,10 @@ namespace ConsoleBot.Bots.Types.Cows
             else
             {
                 var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
-                var deckhardCainCode = NPCHelpers.GetDeckardCainForAct(client.Game.Act);
-                var deckardCain = NPCHelpers.GetUniqueNPC(client.Game, deckhardCainCode);
-                var pathDeckardCain = new List<Point>();
-                if (deckardCain != null)
+                var pathTownPortalArea = await _pathingService.GetPathToObjectWithOffset(client.Game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(client.Game.Act), client.Game.Me.Location, EntityCode.Stash, 24, 29, movementMode);
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathTownPortalArea, movementMode))
                 {
-                    pathDeckardCain = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(client.Game.Act), client.Game.Me.Location, deckardCain.Location, movementMode);
-                }
-                else
-                {
-                    Log.Information($"Client {client.Game.Me.Name} {movementMode} to deckard cain according to map {client.Game.Me.Location}");
-                    pathDeckardCain = await _pathingService.GetPathToNPC(client.Game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(client.Game.Act), client.Game.Me.Location, deckhardCainCode, movementMode);
-                }
-
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathDeckardCain, movementMode))
-                {
-                    Log.Warning($"Client {client.Game.Me.Name} {movementMode} to deckard cain failed at {client.Game.Me.Location}");
+                    Log.Warning($"Client {client.Game.Me.Name} {movementMode} to town portal area failed at {client.Game.Me.Location}");
                     return false;
                 }
             }
@@ -215,10 +209,24 @@ namespace ConsoleBot.Bots.Types.Cows
                 if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
                     await Task.Delay(TimeSpan.FromSeconds(0.2));
-                    return await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.CowLevel);
+                    var portal = client.Game.GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalArea == Area.CowLevel && t.TownPortalOwnerId == portalPlayer.Id);
+                    return portal != null;
                 }, TimeSpan.FromSeconds(30)))
                 {
-                    Log.Warning($"Client {client.Game.Me.Name} stopped waiting for cow level to start");
+                    Log.Warning($"Client {client.Game.Me.Name} stopped waiting for cow level tp to open");
+                    NextGame.TrySetResult(true);
+                    return false;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(0.5));
+
+                if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(0.2));
+                    return await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.CowLevel);
+                }, TimeSpan.FromSeconds(10)))
+                {
+                    Log.Warning($"Client {client.Game.Me.Name} stopped trying to get into portal");
                     NextGame.TrySetResult(true);
                     return false;
                 }
@@ -697,7 +705,7 @@ namespace ConsoleBot.Bots.Types.Cows
             var random = new Random();
 
             Point currentCluster = null;
-            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.5)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
             {
                 var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
                 var cowsNearLead = leadPlayer != null ? cowManager.GetNearbyAliveMonsters(leadPlayer.Location, 20.0, 10) : new List<AliveMonster>();
@@ -927,7 +935,7 @@ namespace ConsoleBot.Bots.Types.Cows
             var timer = new Stopwatch();
             timer.Start();
             var random = new Random();
-            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
             {
                 var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
                 if (leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) > 10)
@@ -963,7 +971,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 await ClassHelpers.CastAllShouts(client);
             }
 
-            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
             {
                 if (shouldBo)
                 {

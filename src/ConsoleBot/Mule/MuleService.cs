@@ -48,6 +48,8 @@ namespace ConsoleBot.Mule
                 return false;
             }
 
+            InventoryHelpers.MoveCubeItemsToInventory(client.Game);
+
             var failedToJoinCount = 0;
 
             foreach (var account in _muleConfig.Accounts)
