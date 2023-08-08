@@ -173,7 +173,7 @@ namespace ConsoleBot.Bots.Types.Travincal
             foreach (var nearestMember in nearestMembers)
             {
                 await PickupNearbyItems(game, 10);
-                bool result = await FindItemOnDeadEnemy(game, nearestMember);
+                bool result = await ClassHelpers.FindItemOnDeadEnemy(game, _pathingService,nearestMember);
 
                 if (!result)
                 {
@@ -187,34 +187,6 @@ namespace ConsoleBot.Bots.Types.Travincal
             }
 
             return true;
-        }
-
-        private async Task<bool> FindItemOnDeadEnemy(Game game, WorldObject nearestMember)
-        {
-            return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                if (!game.IsInGame())
-                {
-                    return false;
-                }
-
-                if (nearestMember.Effects.Contains(EntityEffect.CorpseNoDraw))
-                {
-                    return true;
-                }
-
-                if (nearestMember.Location.Distance(game.Me.Location) > 5)
-                {
-                    var pathNearest = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, Area.Travincal, game.Me.Location, nearestMember.Location, MovementMode.Walking);
-                    await MovementHelpers.TakePathOfLocations(game, pathNearest, MovementMode.Walking);
-                }
-
-                await game.MoveToAsync(nearestMember.Location);
-                game.UseFindItem(nearestMember);
-
-                return nearestMember.Effects.Contains(EntityEffect.CorpseNoDraw);
-
-            }, TimeSpan.FromSeconds(5));
         }
 
         private async Task<bool> KillCouncilMembers(Client client)
@@ -251,7 +223,7 @@ namespace ConsoleBot.Bots.Types.Travincal
                         .FirstOrDefault();
                         if (nearestFindItemMember != null && nearestFindItemMember.Location.Distance(client.Game.Me.Location) <= 10)
                         {
-                            await FindItemOnDeadEnemy(client.Game, nearestFindItemMember);
+                            await ClassHelpers.FindItemOnDeadEnemy(client.Game, _pathingService, nearestFindItemMember);
                         }
 
                         var pathNearest = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.Travincal, client.Game.Me.Location, nearest.Location, MovementMode.Walking);

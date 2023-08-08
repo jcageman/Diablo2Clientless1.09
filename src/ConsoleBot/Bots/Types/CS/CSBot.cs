@@ -760,6 +760,10 @@ namespace ConsoleBot.Bots.Types.CS
                     await PickupItemsAndPotions(client, account, 10);
                     nearest = enemies.FirstOrDefault();
                 }
+                else if(nearest.State == EntityState.Dead || nearest.State == EntityState.Dieing)
+                {
+                    await ClassHelpers.FindItemOnDeadEnemy(client.Game, _pathingService, nearest);
+                }
 
                 var nearbyPlayer = client.Game.Players
                 .Where(p => p.Id != client.Game.Me.Id && p.Location != null && (p.Class == CharacterClass.Amazon))
@@ -943,6 +947,16 @@ namespace ConsoleBot.Bots.Types.CS
             && !await IsNextGame()
             && client.Game.IsInGame()
             && !ownState.TeleportHasChanged(newState));
+
+            var nearest = NPCHelpers.GetNearbySuperUniques(client).FirstOrDefault(w => w.State == EntityState.Dead || w.State == EntityState.Dieing);
+            if (nearest != null && (nearest.State == EntityState.Dead || nearest.State == EntityState.Dieing))
+            {
+                if(client.Game.Me.HasSkill(Skill.FindItem)
+                    && await ClassHelpers.FindItemOnDeadEnemy(client.Game, _pathingService, nearest))
+                {
+                    await Task.Delay(300);
+                }
+            }
 
             if (client.Game.IsInGame())
             {

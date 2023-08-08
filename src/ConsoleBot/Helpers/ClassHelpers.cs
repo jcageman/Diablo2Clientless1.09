@@ -1,6 +1,8 @@
 ﻿using D2NG.Core;
 using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
+using D2NG.Navigation.Services.Pathing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -46,6 +48,38 @@ namespace ConsoleBot.Helpers
         public static bool CanStaticEntity(Client client, double LifePercentage)
         {
             return !client.Game.ClientCharacter.IsExpansion || LifePercentage > 60;
+        }
+
+        public static async Task<bool> FindItemOnDeadEnemy(Game game, IPathingService pathingService, WorldObject monster)
+        {
+            if(!game.Me.HasSkill(Skill.FindItem))
+            {
+                return true;
+            }
+
+            return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                if (!game.IsInGame() || monster.State == EntityState.Dieing)
+                {
+                    return false;
+                }
+
+                if (monster.Effects.Contains(EntityEffect.CorpseNoDraw))
+                {
+                    return true;
+                }
+
+                if (monster.Location.Distance(game.Me.Location) > 5)
+                {
+                    await MovementHelpers.MoveToWorldObject(game, pathingService, monster, MovementMode.Walking);
+                }
+
+                await game.MoveToAsync(monster.Location);
+                game.UseFindItem(monster);
+
+                return monster.Effects.Contains(EntityEffect.CorpseNoDraw);
+
+            }, TimeSpan.FromSeconds(5));
         }
     }
 }
