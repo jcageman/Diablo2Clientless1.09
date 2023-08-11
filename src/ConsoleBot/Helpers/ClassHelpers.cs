@@ -52,7 +52,7 @@ namespace ConsoleBot.Helpers
 
         public static async Task<bool> FindItemOnDeadEnemy(Game game, IPathingService pathingService, WorldObject monster)
         {
-            if(!game.Me.HasSkill(Skill.FindItem))
+            if(!game.Me.HasSkill(Skill.FindItem) || monster.NPCCode == NPCCode.Diablo)
             {
                 return true;
             }

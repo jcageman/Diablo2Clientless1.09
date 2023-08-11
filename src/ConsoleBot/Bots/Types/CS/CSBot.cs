@@ -917,7 +917,7 @@ namespace ConsoleBot.Bots.Types.CS
 
         private async Task<bool> KillBosses(Client client,
                                 AccountConfig account,
-                                CancellationTokenSource nextGameCancellation,
+                                CancellationTokenSource taskCancellation,
                                 Func<Task> action,
                                 CsState ownState,
                                 CsState newState,
@@ -943,15 +943,15 @@ namespace ConsoleBot.Bots.Types.CS
                 await action.Invoke();
 
             } while (
-            (nextGameCancellation == null || !nextGameCancellation.IsCancellationRequested)
+            (taskCancellation == null || !taskCancellation.IsCancellationRequested)
             && !await IsNextGame()
             && client.Game.IsInGame()
             && !ownState.TeleportHasChanged(newState));
 
             var nearest = NPCHelpers.GetNearbySuperUniques(client).FirstOrDefault(w => w.State == EntityState.Dead || w.State == EntityState.Dieing);
-            if (nearest != null && (nearest.State == EntityState.Dead || nearest.State == EntityState.Dieing))
+            if (nearest != null)
             {
-                if(client.Game.Me.HasSkill(Skill.FindItem)
+                if (client.Game.Me.HasSkill(Skill.FindItem)
                     && await ClassHelpers.FindItemOnDeadEnemy(client.Game, _pathingService, nearest))
                 {
                     await Task.Delay(300);

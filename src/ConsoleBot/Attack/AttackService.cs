@@ -404,7 +404,7 @@ namespace ConsoleBot.Attack
             {
                 if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != Skill.Salvation)
                 {
-                    Log.Information($"Changing to {Skill.Salvation} due to monster with {string.Join(",", enemyLightningEnhancedMultiShot.MonsterEnchantments)} or convicted player");
+                    Log.Information($"Changing to {Skill.Salvation} due to monster with {string.Join(",", enemyLightningEnhancedMultiShot?.MonsterEnchantments)} or convicted player");
                     client.Game.ChangeSkill(Skill.Salvation, Hand.Right);
                 }
             }
