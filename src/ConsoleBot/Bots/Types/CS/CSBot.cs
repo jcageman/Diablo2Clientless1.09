@@ -762,7 +762,7 @@ namespace ConsoleBot.Bots.Types.CS
                 }
                 else if(nearest.State == EntityState.Dead || nearest.State == EntityState.Dieing)
                 {
-                    await ClassHelpers.FindItemOnDeadEnemy(client.Game, _pathingService, nearest);
+                    await ClassHelpers.FindItemOnDeadEnemy(client.Game, _pathingService, _mapApiService, nearest);
                 }
 
                 var nearbyPlayer = client.Game.Players
@@ -952,7 +952,7 @@ namespace ConsoleBot.Bots.Types.CS
             if (nearest != null)
             {
                 if (client.Game.Me.HasSkill(Skill.FindItem)
-                    && await ClassHelpers.FindItemOnDeadEnemy(client.Game, _pathingService, nearest))
+                    && await ClassHelpers.FindItemOnDeadEnemy(client.Game, _pathingService, _mapApiService, nearest))
                 {
                     await Task.Delay(300);
                 }

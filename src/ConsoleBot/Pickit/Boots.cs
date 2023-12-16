@@ -74,7 +74,7 @@ namespace ConsoleBot.Pickit
             }
 
             if (item.GetValueOfStatType(StatType.FasterRunWalk) >= 30
-            && (item.GetValueOfStatType(StatType.FireResistance) + item.GetValueOfStatType(StatType.LightningResistance)) >= 60
+            && (item.GetValueOfStatType(StatType.FireResistance) + item.GetValueOfStatType(StatType.LightningResistance)) >= 50
             && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= 20
             && item.GetValueOfStatType(StatType.ExtraGold) > 90)
             {
@@ -84,6 +84,15 @@ namespace ConsoleBot.Pickit
             if (casterBoots.Contains(item.Name))
             {
                 if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
+                {
+                    return true;
+                }
+
+                if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10
+                    && item.GetValueOfStatType(StatType.ColdResistance) >= 30
+                    && item.GetTotalResistFrLrCr() >= 50
+                    && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 30
+                    && item.GetValueOfStatType(StatType.ReplenishLife) >= 4)
                 {
                     return true;
                 }

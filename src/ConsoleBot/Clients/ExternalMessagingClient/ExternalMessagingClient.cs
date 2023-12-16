@@ -29,7 +29,6 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
             {
                 var receiverOptions = new ReceiverOptions
                 {
-                    AllowedUpdates = new[] { UpdateType.Message }
                 };
                 _telegramBotClient.StartReceiving(
                     (botClient, update, token) => HandleUpdateAsync(update),
@@ -53,7 +52,7 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
                 if (message == null || message.Type != MessageType.Text) return Task.CompletedTask;
 
                 Log.Information($"Text received: {message.Text}");
-                var client = _clients.FirstOrDefault(c => message.Text.StartsWith(c.LoggedInUserName() + " "));
+                var client = _clients.FirstOrDefault(c => message.Text.StartsWith(c.LoggedInUserName() + " ", StringComparison.InvariantCultureIgnoreCase));
                 if (client != null)
                 {
                     var modifiedText = message.Text.Substring(client.LoggedInUserName().Length + 1);

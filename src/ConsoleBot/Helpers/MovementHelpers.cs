@@ -4,7 +4,6 @@ using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
-using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
 using Serilog;
@@ -83,6 +82,7 @@ namespace ConsoleBot.Helpers
 
         public static async Task<bool> MoveToWorldObject(Game game,
                                                          IPathingService pathingService,
+                                                         IMapApiService mapApiService,
                                                          WorldObject worldObject,
                                                          MovementMode movementMode,
                                                          CancellationToken? token = null)
@@ -93,7 +93,8 @@ namespace ConsoleBot.Helpers
             }
             else
             {
-                var path = await pathingService.GetPathToLocation(game, worldObject.Location, movementMode);
+                var clientArea = await mapApiService.GetAreaFromLocation(game.MapId, Difficulty.Normal, game.Me.Location, game.Act, game.Area) ?? game.Area;
+                var path = await pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, clientArea, game.Me.Location, worldObject.Location, movementMode);
                 if (path.Count != 0 && !await TakePathOfLocations(game, path, movementMode, token))
                 {
                     Log.Warning($"Walking to enemy to attack failed at {game.Me.Location}");

@@ -9,6 +9,7 @@ using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
 using D2NG.Navigation.Extensions;
+using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
 using Microsoft.Extensions.Options;
 using Serilog;
@@ -25,14 +26,16 @@ namespace ConsoleBot.Bots.Types.Travincal
         private readonly IPathingService _pathingService;
         private readonly ITownManagementService _townManagementService;
         private readonly IAttackService _attackService;
+        private readonly IMapApiService _mapApiService;
 
         public TravincalBot(IOptions<BotConfiguration> config, IOptions<TravincalConfiguration> travconfig, IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
-            IMuleService muleService, ITownManagementService townManagementService, IAttackService attackService)
+            IMuleService muleService, ITownManagementService townManagementService, IAttackService attackService, IMapApiService mapApiService)
         : base(config.Value, travconfig.Value, externalMessagingClient, muleService)
         {
             _pathingService = pathingService;
             _townManagementService = townManagementService;
             _attackService = attackService;
+            _mapApiService = mapApiService;
         }
 
         public string GetName()
@@ -173,8 +176,8 @@ namespace ConsoleBot.Bots.Types.Travincal
             foreach (var nearestMember in nearestMembers)
             {
                 await PickupNearbyItems(game, 10);
-                bool result = await ClassHelpers.FindItemOnDeadEnemy(game, _pathingService,nearestMember);
 
+                bool result = await ClassHelpers.FindItemOnDeadEnemy(game, _pathingService, _mapApiService, nearestMember);
                 if (!result)
                 {
                     Log.Warning("Failed to do find item on corpse");
@@ -223,7 +226,7 @@ namespace ConsoleBot.Bots.Types.Travincal
                         .FirstOrDefault();
                         if (nearestFindItemMember != null && nearestFindItemMember.Location.Distance(client.Game.Me.Location) <= 10)
                         {
-                            await ClassHelpers.FindItemOnDeadEnemy(client.Game, _pathingService, nearestFindItemMember);
+                            await ClassHelpers.FindItemOnDeadEnemy(client.Game, _pathingService, _mapApiService, nearestFindItemMember);
                         }
 
                         var pathNearest = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.Travincal, client.Game.Me.Location, nearest.Location, MovementMode.Walking);

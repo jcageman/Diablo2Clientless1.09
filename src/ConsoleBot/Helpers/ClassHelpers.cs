@@ -2,6 +2,7 @@
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
+using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
 using System;
 using System.Collections.Generic;
@@ -50,7 +51,7 @@ namespace ConsoleBot.Helpers
             return !client.Game.ClientCharacter.IsExpansion || LifePercentage > 60;
         }
 
-        public static async Task<bool> FindItemOnDeadEnemy(Game game, IPathingService pathingService, WorldObject monster)
+        public static async Task<bool> FindItemOnDeadEnemy(Game game, IPathingService pathingService, IMapApiService mapApiService, WorldObject monster)
         {
             if(!game.Me.HasSkill(Skill.FindItem) || monster.NPCCode == NPCCode.Diablo)
             {
@@ -71,7 +72,7 @@ namespace ConsoleBot.Helpers
 
                 if (monster.Location.Distance(game.Me.Location) > 5)
                 {
-                    await MovementHelpers.MoveToWorldObject(game, pathingService, monster, MovementMode.Walking);
+                    await MovementHelpers.MoveToWorldObject(game, pathingService, mapApiService, monster, MovementMode.Walking);
                 }
 
                 await game.MoveToAsync(monster.Location);

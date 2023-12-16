@@ -204,7 +204,7 @@ namespace ConsoleBot.Pickit
 
             if(self.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] >= 86)
             {
-                if (item.Name == ItemName.BoneHelm)
+                if (item.Name == ItemName.Boots || item.Name == ItemName.HeavyBoots)
                 {
                     return true;
                 }

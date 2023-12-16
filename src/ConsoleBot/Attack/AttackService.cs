@@ -265,7 +265,7 @@ namespace ConsoleBot.Attack
                 && javalin.Classification == ClassificationType.Javelin)
             {
                 Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
-                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, MovementMode.Walking);
+                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
                 client.Game.LeftHandSkillHoldOnEntity(Skill.Attack, nearest);
                 await Task.Delay(200);
             }
@@ -346,7 +346,7 @@ namespace ConsoleBot.Attack
             {
                 if(nearest.Location.Distance(client.Game.Me.Location) > 10)
                 {
-                    await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking);
+                    await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking);
                 }
                 if (me.Skills.GetValueOrDefault(Skill.StaticField) > 10 && nearest.LifePercentage > 50 && ClassHelpers.CanStaticEntity(client, nearest.LifePercentage))
                 {
@@ -375,7 +375,7 @@ namespace ConsoleBot.Attack
             }
             else if (me.Attributes[Attribute.Level] < 10 && client.Game.Area < Area.CowLevel)
             {
-                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, MovementMode.Walking);
+                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
                 client.Game.UseRightHandSkillOnEntity(Skill.Attack, nearest);
                 await Task.Delay(200);
             }
@@ -437,7 +437,7 @@ namespace ConsoleBot.Attack
                 && client.Game.Area != Area.CowLevel)
             {
                 Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
-                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, MovementMode.Walking);
+                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
                 client.Game.LeftHandSkillHoldOnEntity(Skill.Attack, nearest);
                 await Task.Delay(200);
             }
@@ -592,14 +592,14 @@ namespace ConsoleBot.Attack
             else if (me.HasSkill(Skill.Concentrate) && me.Mana > 5)
             {
                 Log.Information($"Attacking {nearest.NPCCode} with {Skill.Concentrate}");
-                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, MovementMode.Walking);
+                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
                 client.Game.RepeatRightHandSkillOnEntity(Skill.Concentrate, nearest);
                 await Task.Delay(200);
             }
             else
             {
                 Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
-                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, nearest, MovementMode.Walking);
+                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
                 client.Game.UseRightHandSkillOnEntity(Skill.Attack, nearest);
                 await Task.Delay(200);
             }
@@ -620,14 +620,16 @@ namespace ConsoleBot.Attack
             {
                 var pathLeft = await _pathingService.GetPathToLocation(client.Game, worldObject.Location.Add(-6, 0), MovementMode.Walking);
                 var pathRight = await _pathingService.GetPathToLocation(client.Game, worldObject.Location.Add(6, 0), MovementMode.Walking);
+                //var pathUp = await _pathingService.GetPathToLocation(client.Game, worldObject.Location.Add(0, -6), MovementMode.Walking);
+                //var pathDown = await _pathingService.GetPathToLocation(client.Game, worldObject.Location.Add(0, 6), MovementMode.Walking);
                 if (pathLeft.Count < pathRight.Count)
                 {
-                    Log.Debug($"same location, wwing to left");
+                    Log.Information($"same location, wwing to left {pathLeft.Count}");
                     wwDirection = new Point((ushort)(client.Game.Me.Location.X - 6), client.Game.Me.Location.Y);
                 }
                 else
                 {
-                    Log.Debug($"same location, wwing to right");
+                    Log.Information($"same location, wwing to right {pathRight.Count}");
                     wwDirection = new Point((ushort)(client.Game.Me.Location.X + 6), client.Game.Me.Location.Y);
                 }
             }

@@ -261,7 +261,6 @@ namespace ConsoleBot.Pickit
             {
                 return true;
             }
-            */
 
             if (item.Sockets > 0)
             {
@@ -275,6 +274,7 @@ namespace ConsoleBot.Pickit
                     return true;
                 }
             }
+            */
 
             return false;
         }

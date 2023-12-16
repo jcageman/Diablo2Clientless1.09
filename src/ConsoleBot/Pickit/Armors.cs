@@ -151,10 +151,12 @@ namespace ConsoleBot.Pickit
                     return true;
                 }
 
+                /*
                 if (item.Name == ItemName.ScaleMail && item.Quality == QualityType.Unique)
                 {
                     return true;
                 }
+                */
 
                 if (item.Name == ItemName.GothicPlate && item.Quality == QualityType.Unique)
                 {
