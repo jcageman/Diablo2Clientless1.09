@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Runtime.Serialization;
 
 namespace D2NG.Core.Exceptions
 {
-    [Serializable]
     public class ChatValidationException : Exception
     {
         public ChatValidationException()
@@ -11,14 +9,6 @@ namespace D2NG.Core.Exceptions
         }
 
         public ChatValidationException(string message) : base(message)
-        {
-        }
-
-        public ChatValidationException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-
-        protected ChatValidationException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }

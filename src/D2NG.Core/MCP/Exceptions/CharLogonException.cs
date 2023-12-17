@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Runtime.Serialization;
 
 namespace D2NG.Core.MCP.Exceptions
 {
-    [Serializable]
     public class CharLogonException : Exception
     {
         public CharLogonException()
@@ -11,14 +9,6 @@ namespace D2NG.Core.MCP.Exceptions
         }
 
         public CharLogonException(string message) : base(message)
-        {
-        }
-
-        public CharLogonException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-
-        protected CharLogonException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }

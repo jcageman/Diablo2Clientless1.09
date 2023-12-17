@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Runtime.Serialization;
 
 namespace D2NG.Core.D2GS.Exceptions
 {
-    [Serializable]
     public class D2GSDisconnectedException : Exception
     {
         public D2GSDisconnectedException()
@@ -11,14 +9,6 @@ namespace D2NG.Core.D2GS.Exceptions
         }
 
         public D2GSDisconnectedException(string message) : base(message)
-        {
-        }
-
-        public D2GSDisconnectedException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-
-        protected D2GSDisconnectedException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }

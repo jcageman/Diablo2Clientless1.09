@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Runtime.Serialization;
 
 namespace D2NG.Core.BNCS.Exceptions
 {
-    [Serializable]
     public class LogonFailedException : Exception
     {
         public LogonFailedException()
@@ -11,14 +9,6 @@ namespace D2NG.Core.BNCS.Exceptions
         }
 
         public LogonFailedException(string message) : base(message)
-        {
-        }
-
-        public LogonFailedException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-
-        protected LogonFailedException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }

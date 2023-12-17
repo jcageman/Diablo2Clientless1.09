@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Runtime.Serialization;
 
 namespace D2NG.Core.BNCS.Exceptions
 {
-    [Serializable]
     public class UnknownAuthCheckResultException : Exception
     {
         public UnknownAuthCheckResultException()
@@ -11,14 +9,6 @@ namespace D2NG.Core.BNCS.Exceptions
         }
 
         public UnknownAuthCheckResultException(string message) : base(message)
-        {
-        }
-
-        public UnknownAuthCheckResultException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-
-        protected UnknownAuthCheckResultException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }

@@ -46,18 +46,18 @@
         </MudText>
     </MudItem>
 </MudGrid>
-<MudDataGrid @ref="Datagrid" Items="@MuleItems" Sortable=false Filterable=false>
+<MudDataGrid @ref="Datagrid" T="MuleItem" Items="@MuleItems" Filterable=false>
     <ToolBarContent>
         <MudText Typo="Typo.h6">Mule Items</MudText>
         <MudSpacer />
     </ToolBarContent>
     <Columns>
-        <Column T="MuleItem" Field="AccountName" Title="Account"/>
-        <Column T="MuleItem" Field="CharacterName" Title="Character"/>
-        <Column T="MuleItem" Field="ItemName" Title="Type"/>
-        <Column T="MuleItem" Field="QualityType" Title="Quality"/>
-        <Column T="MuleItem" Field="StatString" Title="Stats"/>
-        <Column T="MuleItem" Field="SortedStat" Title="SortedStat"/>
+        <PropertyColumn  Property="x => x.AccountName" Title="Account"/>
+        <PropertyColumn  Property="x => x.CharacterName" Title="Character"/>
+        <PropertyColumn  Property="x => x.ItemName" Title="Type"/>
+        <PropertyColumn  Property="x => x.QualityType" Title="Quality"/>
+        <PropertyColumn  Property="x => x.StatString" Title="Stats"/>
+        <PropertyColumn  Property="x => x.SortedStat" Title="SortedStat"/>
     </Columns>
     <PagerContent>
         <MudDataGridPager T="MuleItem" />
@@ -173,7 +173,7 @@
         {
             muleItem.SortedStat = muleItem.Stats.Find(s => s.Type == value)?.Value ?? 0;
         }
-        Datagrid.SetSortAsync(SortDirection.Descending, m => m.SortedStat, "SortedStat").AndForget();
+        Datagrid.SetSortAsync("SortedStat", SortDirection.Descending, m => m.SortedStat).AndForget();
     }
 
     private Task<IEnumerable<string>> SearchStatType(string value)

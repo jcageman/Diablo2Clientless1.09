@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Runtime.Serialization;
 
 namespace D2NG.Core.Exceptions
 {
-    [Serializable]
     public class UnableToConnectException : Exception
     {
         public UnableToConnectException()
@@ -11,14 +9,6 @@ namespace D2NG.Core.Exceptions
         }
 
         public UnableToConnectException(string message) : base(message)
-        {
-        }
-
-        public UnableToConnectException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-
-        protected UnableToConnectException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }

@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Runtime.Serialization;
 
 namespace D2NG.Core.BNCS.Exceptions
 {
-    [Serializable]
     public class AuthCheckResponseException : Exception
     {
         public AuthCheckResponseException()
@@ -11,14 +9,6 @@ namespace D2NG.Core.BNCS.Exceptions
         }
 
         public AuthCheckResponseException(string message) : base(message)
-        {
-        }
-
-        public AuthCheckResponseException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-
-        protected AuthCheckResponseException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }
