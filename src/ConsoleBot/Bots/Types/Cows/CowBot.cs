@@ -611,10 +611,12 @@ namespace ConsoleBot.Bots.Types.Cows
             var (targetLocation, tokenSource) = FollowTasks[client.Game.Me.Name.ToLower()];
             if (targetLocation == null || (targetLocation.Distance(location) > 10 && client.Game.Me.Location.Distance(location) < 1000))
             {
-                tokenSource?.Cancel();
                 var newSource = new CancellationTokenSource();
-                FollowTasks[client.Game.Me.Name.ToLower()] = (location, newSource);
-                await MoveToLocation(client, location, newSource.Token);
+                if(FollowTasks.TryUpdate(client.Game.Me.Name.ToLower(), (location, newSource), (targetLocation, tokenSource)))
+                {
+                    tokenSource?.Cancel();
+                    await MoveToLocation(client, location, newSource.Token);
+                }
             }
         }
 

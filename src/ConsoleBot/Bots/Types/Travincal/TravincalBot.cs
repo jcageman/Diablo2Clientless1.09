@@ -120,7 +120,11 @@ namespace ConsoleBot.Bots.Types.Travincal
                 return false;
             }
 
-            await _townManagementService.PerformTownTasks(client, townManagementOptions);
+            townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
+            if (townTaskResult.ShouldMule)
+            {
+                NeedsMule = true;
+            }
 
             Log.Information("Successfully finished game");
             return true;
