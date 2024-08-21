@@ -49,7 +49,7 @@ namespace ConsoleBot.Helpers
             {
                 if (!GeneralHelpers.TryWithTimeout((retryCount) =>
                  {
-                     return game.Items.Values.Any(i => i.Container == ContainerType.MiscTab && i.Name == ItemName.Arrows);
+                     return game.Items.Values.Any(i => i.IsInMerchantTab() && i.Name == ItemName.Arrows);
                  }, TimeSpan.FromSeconds(3)))
                 {
                     Log.Warning($"Did not find arrows at {npc.NPCCode} {game.Me.Location}");
@@ -58,7 +58,7 @@ namespace ConsoleBot.Helpers
                 }
 
                 Log.Information($"Refreshing arrows at {npc.NPCCode} {game.Me.Location}");
-                var arrows = game.Items.Values.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Name == ItemName.Arrows);
+                var arrows = game.Items.Values.FirstOrDefault(i => i.IsInMerchantTab() && i.Name == ItemName.Arrows);
                 var numberOfArrows = game.Inventory.Items.Count(i => i.Name == ItemName.Arrows);
                 while (numberOfArrows < 5 && game.Inventory.FindFreeSpace(arrows) != null)
                 {
@@ -421,8 +421,8 @@ namespace ConsoleBot.Helpers
 
             if (!GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                healingPotion = game.Items.Values.Where(i => i.Container == ContainerType.MiscTab && i.Type.StartsWith("hp")).OrderByDescending(i => (int)i.Type.Last()).FirstOrDefault();
-                manaPotion = game.Items.Values.Where(i => i.Container == ContainerType.MiscTab && i.Type.StartsWith("mp")).OrderByDescending(i => (int)i.Type.Last()).FirstOrDefault();
+                healingPotion = game.Items.Values.Where(i => i.IsInMerchantTab() && i.Type.StartsWith("hp")).OrderByDescending(i => (int)i.Type.Last()).FirstOrDefault();
+                manaPotion = game.Items.Values.Where(i => i.IsInMerchantTab() && i.Type.StartsWith("mp")).OrderByDescending(i => (int)i.Type.Last()).FirstOrDefault();
                 return healingPotion != null && manaPotion != null;
             }, TimeSpan.FromSeconds(3)))
             {
@@ -446,14 +446,14 @@ namespace ConsoleBot.Helpers
             }
 
             var tomeOfTownPortal = game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeOfTownPortal);
-            var scrollOfTownPortal = game.Items.Values.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Name == ItemName.ScrollofTownPortal);
+            var scrollOfTownPortal = game.Items.Values.FirstOrDefault(i => i.IsInMerchantTab() && i.Name == ItemName.ScrollofTownPortal);
             if (tomeOfTownPortal != null && scrollOfTownPortal != null && tomeOfTownPortal.Amount < 100)
             {
                 game.BuyItem(npc, scrollOfTownPortal, true);
             }
 
             var tomeOfIdentify = game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeofIdentify);
-            var scrollOfIdentify = game.Items.Values.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Name == ItemName.ScrollofIdentify);
+            var scrollOfIdentify = game.Items.Values.FirstOrDefault(i => i.IsInMerchantTab() && i.Name == ItemName.ScrollofIdentify);
             if (tomeOfIdentify != null && scrollOfIdentify != null && tomeOfIdentify.Amount < 100)
             {
                 game.BuyItem(npc, scrollOfIdentify, true);
@@ -483,7 +483,7 @@ namespace ConsoleBot.Helpers
             {
                 foreach (var additionalBuy in options.ItemsToBuy)
                 {
-                    var additionalItem = game.Items.Values.FirstOrDefault(i => i.Container == ContainerType.MiscTab && i.Name == additionalBuy.Key);
+                    var additionalItem = game.Items.Values.FirstOrDefault(i => i.IsInMerchantTab() && i.Name == additionalBuy.Key);
                     for (var i = 0; i < additionalBuy.Value; ++i)
                     {
                         game.BuyItem(npc, additionalItem, false);
@@ -538,7 +538,7 @@ namespace ConsoleBot.Helpers
 
         private static void BuyMagicItemsAtMerchant(Game game, WorldObject npc)
         {
-            var merchantItemsToBuy = game.Items.Values.Where(i => i.Container == ContainerType.ArmorTab && Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
+            var merchantItemsToBuy = game.Items.Values.Where(i => i.IsInMerchantTab() && Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
             if (merchantItemsToBuy.Count > 0)
             {
                 foreach (Item item in merchantItemsToBuy)

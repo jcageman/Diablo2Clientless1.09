@@ -319,5 +319,13 @@ namespace D2NG.Core.D2GS.Items
 
             return fullDescription;
         }
+
+        public bool IsInMerchantTab()
+        {
+            return Container is ContainerType.ArmorTab
+                || Container is ContainerType.WeaponTab
+                || Container is ContainerType.WeaponTab2
+                || Container is ContainerType.MiscTab;
+        }
     }
 }

@@ -630,8 +630,7 @@ namespace D2NG.Core
 
         private void RemoveNPCItems()
         {
-            var npcContainerTypes = new HashSet<ContainerType>() { ContainerType.ArmorTab, ContainerType.MiscTab, ContainerType.WeaponTab, ContainerType.WeaponTab2 };
-            var npcItems = Data.Items.Where((p) => npcContainerTypes.Contains(p.Value.Container));
+            var npcItems = Data.Items.Where((p) => p.Value.IsInMerchantTab());
             foreach (var npcItem in npcItems)
             {
                 Data.Items.TryRemove(npcItem.Key, out var value);
