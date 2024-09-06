@@ -115,13 +115,22 @@
             {
                 muleItem.StatString = (@MarkupString)string.Join(", ", muleItem.Stats.Select(k => $"{k.Type} : {k.Value}"));
             }
+            UpdateSorting();
             await InvokeAsync(() => StateHasChanged());
         }
         catch(OperationCanceledException)
         {
 
         }
+    }
 
+    private void UpdateSorting()
+    {
+        foreach (var muleItem in MuleItems)
+        {
+            muleItem.SortedStat = muleItem.Stats.Find(s => s.Type == sortedStatValue)?.Value ?? 0;
+        }
+        Datagrid.SetSortAsync("SortedStat", SortDirection.Descending, m => m.SortedStat).AndForget();
     }
 
     protected async Task UpdateMules(MouseEventArgs e)
@@ -169,11 +178,7 @@
     private void SortOnStatValue(string value)
     {
         sortedStatValue = value;
-        foreach(var muleItem in MuleItems)
-        {
-            muleItem.SortedStat = muleItem.Stats.Find(s => s.Type == value)?.Value ?? 0;
-        }
-        Datagrid.SetSortAsync("SortedStat", SortDirection.Descending, m => m.SortedStat).AndForget();
+        UpdateSorting();
     }
 
     private Task<IEnumerable<string>> SearchStatType(string value)
