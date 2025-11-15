@@ -1,12 +1,12 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 namespace D2NG.Navigation.Services.MapApi;
 
 public class BaseSessionDto
 {
-    [JsonProperty("mapid")]
+    [JsonPropertyName("mapid")]
     public int MapId { get; set; }
 
-    [JsonProperty("difficulty")]
+    [JsonPropertyName("difficulty")]
     public int Difficulty { get; set; }
 }

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using System;
 using System.Net.Http;
+using System.Net.Http.Json;
 using System.Threading.Tasks;
 
 namespace D2NG.Navigation.Services.MapApi;
@@ -72,9 +73,7 @@ public class MapApiService : IMapApiService
     private async Task<AreaMap> GetAreaFromApi(uint mapId, Difficulty difficulty, Area area)
     {
         var client = _httpClientFactory.CreateClient();
-        var response = await client.GetAsync($"{_mapConfiguration.ApiUrl}/maps?mapid={mapId}&area={area}&difficulty={difficulty}");
-
-        var areaDto = await response.Content.ReadAsAsync<AreaMapDto>();
+        var areaDto = await client.GetFromJsonAsync<AreaMapDto>($"{_mapConfiguration.ApiUrl}/maps?mapid={mapId}&area={area}&difficulty={difficulty}");
         return areaDto.MapFromDto();
     }
 }
