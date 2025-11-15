@@ -31,8 +31,7 @@
     <PackageVersion Include="Stateless" Version="5.20.0" />
     <PackageVersion Include="Telegram.Bot" Version="22.7.5" />
     <PackageVersion Include="Telegram.Bot.Extensions.Polling" Version="1.0.2" />
-    <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.0" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 </Project>
