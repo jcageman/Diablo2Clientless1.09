@@ -5,7 +5,7 @@
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/jcageman/D2NG.svg)
 
 ## Building the project
-This project builds with .NET 8 and can be built by running `dotnet build` on the command line from the root of the Solution.
+This project builds with .NET 10 and can be built by running `dotnet build` on the command line from the root of the Solution.
 
 ## Functionality
 Initially based on https://github.com/dkuwahara/D2NG, but now with a lot more features.
