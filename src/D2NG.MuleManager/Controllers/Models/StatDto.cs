@@ -1,8 +1,7 @@
-﻿namespace D2NG.MuleManager.Controllers.Models
+﻿namespace D2NG.MuleManager.Controllers.Models;
+
+public class StatDto
 {
-    public class StatDto
-    {
-        public string Type { get; set; }
-        public int Value { get; set; }
-    }
+    public string Type { get; set; }
+    public int Value { get; set; }
 }

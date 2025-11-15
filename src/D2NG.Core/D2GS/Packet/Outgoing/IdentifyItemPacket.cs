@@ -2,22 +2,21 @@
 using D2NG.Core.D2GS.Objects;
 using System;
 
-namespace D2NG.Core.D2GS.Packet.Outgoing
+namespace D2NG.Core.D2GS.Packet.Outgoing;
+
+internal class IdentifyItemPacket : D2gsPacket
 {
-    internal class IdentifyItemPacket : D2gsPacket
-    {
-        public IdentifyItemPacket(Item identifyItem, Item itemToIdentify) :
-            base(
-                BuildPacket(
-                    (byte)OutGoingPacket.IdentifyItem,
-                    BitConverter.GetBytes(itemToIdentify.Id),
-                    BitConverter.GetBytes(identifyItem.Id)
-                )
+    public IdentifyItemPacket(Item identifyItem, Item itemToIdentify) :
+        base(
+            BuildPacket(
+                (byte)OutGoingPacket.IdentifyItem,
+                BitConverter.GetBytes(itemToIdentify.Id),
+                BitConverter.GetBytes(identifyItem.Id)
             )
-        {
-        }
-        public IdentifyItemPacket(byte[] packet) : base(packet)
-        {
-        }
+        )
+    {
+    }
+    public IdentifyItemPacket(byte[] packet) : base(packet)
+    {
     }
 }

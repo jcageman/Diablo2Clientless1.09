@@ -1,12 +1,11 @@
-﻿namespace D2NG.Core.Packet
-{
-    public class Packet
-    {
-        public byte[] Raw { get; }
+﻿namespace D2NG.Core.Packet;
 
-        public Packet(byte[] packet)
-        {
-            Raw = packet;
-        }
+public class Packet
+{
+    public byte[] Raw { get; }
+
+    public Packet(byte[] packet)
+    {
+        Raw = packet;
     }
 }

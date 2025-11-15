@@ -9,73 +9,72 @@ using System;
 using System.Net.Http;
 using System.Threading.Tasks;
 
-namespace D2NG.Navigation.Services.MapApi
+namespace D2NG.Navigation.Services.MapApi;
+
+public class MapApiService : IMapApiService
 {
-    public class MapApiService : IMapApiService
+    private const string MapApiKey = "mapapi";
+    private readonly MapConfiguration _mapConfiguration;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IMemoryCache _cache;
+
+    public MapApiService(IOptions<MapConfiguration> config, IHttpClientFactory httpClientFactory, IMemoryCache cache)
     {
-        private const string MapApiKey = "mapapi";
-        private readonly MapConfiguration _mapConfiguration;
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IMemoryCache _cache;
+        _mapConfiguration = config.Value ?? throw new ArgumentNullException(nameof(config), $"MapApiService constructor fails due to MapConfiguration being null");
+        _httpClientFactory = httpClientFactory;
+        _cache = cache;
+    }
+    public async Task<AreaMap> GetArea(uint mapId, Difficulty difficulty, Area area)
+    {
+        var areaMap = _cache.GetOrCreate(GetMapApiKey(mapId, difficulty, area), (cacheEntry) =>
+        {
+            cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(5);
+            var (_, mapId, difficulty, area) = (Tuple<string, uint, Difficulty, Area>)cacheEntry.Key;
+            return new AsyncLazy<AreaMap>(async () => await GetAreaFromApi(mapId, difficulty, area));
+        });
 
-        public MapApiService(IOptions<MapConfiguration> config, IHttpClientFactory httpClientFactory, IMemoryCache cache)
+        return await areaMap.Value;
+    }
+
+    public async Task<Area?> GetAreaFromLocation(uint mapId, Difficulty difficulty, Point point, Act act, Area? hintArea)
+    {
+        if (hintArea != null && hintArea != Area.None)
         {
-            _mapConfiguration = config.Value ?? throw new ArgumentNullException(nameof(config), $"MapApiService constructor fails due to MapConfiguration being null");
-            _httpClientFactory = httpClientFactory;
-            _cache = cache;
-        }
-        public async Task<AreaMap> GetArea(uint mapId, Difficulty difficulty, Area area)
-        {
-            var areaMap = _cache.GetOrCreate(GetMapApiKey(mapId, difficulty, area), (cacheEntry) =>
+            var area = await GetArea(mapId, difficulty, hintArea.Value);
+            if (area.TryMapToPointInMap(point, out var _))
             {
-                cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(5);
-                var (_, mapId, difficulty, area) = (Tuple<string, uint, Difficulty, Area>)cacheEntry.Key;
-                return new AsyncLazy<AreaMap>(async () => await GetAreaFromApi(mapId, difficulty, area));
-            });
-
-            return await areaMap.Value;
+                return hintArea;
+            }
         }
 
-        public async Task<Area?> GetAreaFromLocation(uint mapId, Difficulty difficulty, Point point, Act act, Area? hintArea)
+        foreach (var area in (Area[])Enum.GetValues(typeof(Area)))
         {
-            if (hintArea != null && hintArea != Area.None)
+            if(area == Area.None || act != area.MapToAct())
             {
-                var area = await GetArea(mapId, difficulty, hintArea.Value);
-                if (area.TryMapToPointInMap(point, out var _))
-                {
-                    return hintArea;
-                }
+                continue;
             }
 
-            foreach (var area in (Area[])Enum.GetValues(typeof(Area)))
+            var areaMap = await GetArea(mapId, difficulty, area);
+            if (areaMap.TryMapToPointInMap(point, out var _))
             {
-                if(area == Area.None || act != area.MapToAct())
-                {
-                    continue;
-                }
-
-                var areaMap = await GetArea(mapId, difficulty, area);
-                if (areaMap.TryMapToPointInMap(point, out var _))
-                {
-                    return area;
-                }
+                return area;
             }
-
-            return null;
         }
 
-        private static Tuple<string, uint, Difficulty, Area> GetMapApiKey(uint mapId, Difficulty difficulty, Area area)
-        {
-            return Tuple.Create(MapApiKey, mapId, difficulty, area);
-        }
+        return null;
+    }
 
-        private async Task<AreaMap> GetAreaFromApi(uint mapId, Difficulty difficulty, Area area)
-        {
-            var client = _httpClientFactory.CreateClient();
-            var response = await client.GetAsync($"{_mapConfiguration.ApiUrl}/maps?mapid={mapId}&area={area}&difficulty={difficulty}");
+    private static Tuple<string, uint, Difficulty, Area> GetMapApiKey(uint mapId, Difficulty difficulty, Area area)
+    {
+        return Tuple.Create(MapApiKey, mapId, difficulty, area);
+    }
 
-            var areaDto = await response.Content.ReadAsAsync<AreaMapDto>();
-            return areaDto.MapFromDto();
-        }
+    private async Task<AreaMap> GetAreaFromApi(uint mapId, Difficulty difficulty, Area area)
+    {
+        var client = _httpClientFactory.CreateClient();
+        var response = await client.GetAsync($"{_mapConfiguration.ApiUrl}/maps?mapid={mapId}&area={area}&difficulty={difficulty}");
+
+        var areaDto = await response.Content.ReadAsAsync<AreaMapDto>();
+        return areaDto.MapFromDto();
     }
 }

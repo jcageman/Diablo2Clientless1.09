@@ -2,22 +2,21 @@
 using D2NG.Core.D2GS.Players;
 using System;
 
-namespace D2NG.Core.D2GS.Packet.Outgoing
+namespace D2NG.Core.D2GS.Packet.Outgoing;
+
+internal class PartyRequestPacket : D2gsPacket
 {
-    internal class PartyRequestPacket : D2gsPacket
-    {
-        public PartyRequestPacket(PartyRequestType requestType, Player player) :
-            base(
-                BuildPacket(
-                    (byte)OutGoingPacket.InvitePlayer,
-                    new byte[] { (byte)requestType },
-                    BitConverter.GetBytes(player.Id)
-                )
+    public PartyRequestPacket(PartyRequestType requestType, Player player) :
+        base(
+            BuildPacket(
+                (byte)OutGoingPacket.InvitePlayer,
+                new byte[] { (byte)requestType },
+                BitConverter.GetBytes(player.Id)
             )
-        {
-        }
-        public PartyRequestPacket(byte[] packet) : base(packet)
-        {
-        }
+        )
+    {
+    }
+    public PartyRequestPacket(byte[] packet) : base(packet)
+    {
     }
 }

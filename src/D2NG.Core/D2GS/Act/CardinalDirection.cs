@@ -1,10 +1,9 @@
-﻿namespace D2NG.Core.D2GS.Act
+﻿namespace D2NG.Core.D2GS.Act;
+
+public enum CardinalDirection
 {
-    public enum CardinalDirection
-    {
-        North,
-        East,
-        South,
-        West
-    }
+    North,
+    East,
+    South,
+    West
 }

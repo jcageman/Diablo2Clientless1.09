@@ -1,15 +1,14 @@
 ﻿using System;
 
-namespace D2NG.Core.Exceptions
-{
-    public class UnableToConnectException : Exception
-    {
-        public UnableToConnectException()
-        {
-        }
+namespace D2NG.Core.Exceptions;
 
-        public UnableToConnectException(string message) : base(message)
-        {
-        }
+public class UnableToConnectException : Exception
+{
+    public UnableToConnectException()
+    {
+    }
+
+    public UnableToConnectException(string message) : base(message)
+    {
     }
 }

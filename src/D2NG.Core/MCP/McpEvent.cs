@@ -4,35 +4,34 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace D2NG.Core.MCP
+namespace D2NG.Core.MCP;
+
+internal class McpEvent : IDisposable
 {
-    internal class McpEvent : IDisposable
+    private readonly ManualResetEvent _event = new ManualResetEvent(false);
+
+    public McpPacket _packet;
+
+    public void Reset()
     {
-        private readonly ManualResetEvent _event = new ManualResetEvent(false);
+        _event.Reset();
+        _packet = null;
+    }
 
-        public McpPacket _packet;
+    public async Task<McpPacket> WaitForPacket(int millisecondsTimeout)
+    {
+        await _event.AsTask(TimeSpan.FromMilliseconds(millisecondsTimeout));
+        return _packet!;
+    }
 
-        public void Reset()
-        {
-            _event.Reset();
-            _packet = null;
-        }
+    public void Set(McpPacket packet)
+    {
+        _packet = packet;
+        _event.Set();
+    }
 
-        public async Task<McpPacket> WaitForPacket(int millisecondsTimeout)
-        {
-            await _event.AsTask(TimeSpan.FromMilliseconds(millisecondsTimeout));
-            return _packet!;
-        }
-
-        public void Set(McpPacket packet)
-        {
-            _packet = packet;
-            _event.Set();
-        }
-
-        public void Dispose()
-        {
-            _event.Dispose();
-        }
+    public void Dispose()
+    {
+        _event.Dispose();
     }
 }

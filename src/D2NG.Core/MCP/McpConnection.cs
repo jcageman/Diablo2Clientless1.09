@@ -2,50 +2,49 @@
 using System;
 using System.Collections.Generic;
 
-namespace D2NG.Core.MCP
+namespace D2NG.Core.MCP;
+
+internal class McpConnection : Connection
 {
-    internal class McpConnection : Connection
+    internal event EventHandler<McpPacket> PacketReceived;
+
+    internal event EventHandler<McpPacket> PacketSent;
+
+    internal override byte[] ReadPacket()
     {
-        internal event EventHandler<McpPacket> PacketReceived;
-
-        internal event EventHandler<McpPacket> PacketSent;
-
-        internal override byte[] ReadPacket()
+        List<byte> buffer;
+        do
         {
-            List<byte> buffer;
-            do
-            {
-                buffer = new List<byte>();
-                // Get the first 3 bytes, packet type and length
-                ReadUpTo(ref buffer, 3);
-                short packetLength = BitConverter.ToInt16(buffer.ToArray(), 0);
+            buffer = new List<byte>();
+            // Get the first 3 bytes, packet type and length
+            ReadUpTo(ref buffer, 3);
+            short packetLength = BitConverter.ToInt16(buffer.ToArray(), 0);
 
-                // Read the rest of the packet and return it
-                ReadUpTo(ref buffer, packetLength);
-            } while (buffer[2] == 0x00);
+            // Read the rest of the packet and return it
+            ReadUpTo(ref buffer, packetLength);
+        } while (buffer[2] == 0x00);
 
-            PacketReceived?.Invoke(this, new McpPacket(buffer.ToArray()));
-            return buffer.ToArray();
-        }
+        PacketReceived?.Invoke(this, new McpPacket(buffer.ToArray()));
+        return buffer.ToArray();
+    }
 
-        private void ReadUpTo(ref List<byte> buffer, int count)
+    private void ReadUpTo(ref List<byte> buffer, int count)
+    {
+        while (buffer.Count < count)
         {
-            while (buffer.Count < count)
-            {
-                byte temp = (byte)_stream.ReadByte();
-                buffer.Add(temp);
-            }
+            byte temp = (byte)_stream.ReadByte();
+            buffer.Add(temp);
         }
+    }
 
-        internal override void WritePacket(byte[] packet)
-        {
-            _stream.Write(packet, 0, packet.Length);
-            PacketSent?.Invoke(this, new McpPacket(packet));
-        }
+    internal override void WritePacket(byte[] packet)
+    {
+        _stream.Write(packet, 0, packet.Length);
+        PacketSent?.Invoke(this, new McpPacket(packet));
+    }
 
-        internal override void Initialize()
-        {
-            _stream.WriteByte(0x01);
-        }
+    internal override void Initialize()
+    {
+        _stream.WriteByte(0x01);
     }
 }

@@ -1,9 +1,8 @@
-﻿namespace D2NG.Core.D2GS.Items.Containers
+﻿namespace D2NG.Core.D2GS.Items.Containers;
+
+public class Inventory : Container
 {
-    public class Inventory : Container
+    public Inventory() : base(10, 8)
     {
-        public Inventory() : base(10, 8)
-        {
-        }
     }
 }

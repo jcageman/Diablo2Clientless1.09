@@ -2,78 +2,77 @@
 using System;
 using System.Linq;
 
-namespace PacketSniffer
+namespace PacketSniffer;
+
+public class SnifferNetworkStream : INetworkStream
 {
-    public class SnifferNetworkStream : INetworkStream
+    private byte[] packet;
+
+    public SnifferNetworkStream(byte[] packet)
     {
-        private byte[] packet;
+        this.packet = packet ?? throw new ArgumentNullException("packet");
+    }
 
-        public SnifferNetworkStream(byte[] packet)
+    public bool CanWrite
+    {
+        get
         {
-            this.packet = packet ?? throw new ArgumentNullException("packet");
+            return false;
+        }
+    }
+
+    public bool DataAvailable
+    {
+        get
+        {
+            return true;
+        }
+    }
+
+    public void Close()
+    {
+    }
+
+    public void Write(byte[] buffer, int offset, int size)
+    {
+    }
+
+    public void WriteByte(byte value)
+    {
+    }
+
+    public int Read(byte[] buffer, int offset, int size)
+    {
+        var readSize = Math.Min(packet.Length, size);
+        Array.Copy(packet, 0, buffer, offset, size);
+        packet = packet.Skip(size).ToArray();
+        return readSize;
+    }
+
+    public int ReadByte()
+    {
+        if (packet.Length == 0)
+        {
+            return -1;
         }
 
-        public bool CanWrite
-        {
-            get
-            {
-                return false;
-            }
-        }
+        var firstByte = packet[0];
+        packet = packet.Skip(1).ToArray();
+        return firstByte;
+    }
 
-        public bool DataAvailable
-        {
-            get
-            {
-                return true;
-            }
-        }
+    public void AddBytes(byte[] additionalBytes)
+    {
+        packet = packet.Concat(additionalBytes).ToArray();
+    }
 
-        public void Close()
-        {
-        }
+    public void SetBytes(byte[] bytes)
+    {
+        packet = bytes;
+    }
 
-        public void Write(byte[] buffer, int offset, int size)
-        {
-        }
-
-        public void WriteByte(byte value)
-        {
-        }
-
-        public int Read(byte[] buffer, int offset, int size)
-        {
-            var readSize = Math.Min(packet.Length, size);
-            Array.Copy(packet, 0, buffer, offset, size);
-            packet = packet.Skip(size).ToArray();
-            return readSize;
-        }
-
-        public int ReadByte()
-        {
-            if (packet.Length == 0)
-            {
-                return -1;
-            }
-
-            var firstByte = packet[0];
-            packet = packet.Skip(1).ToArray();
-            return firstByte;
-        }
-
-        public void AddBytes(byte[] additionalBytes)
-        {
-            packet = packet.Concat(additionalBytes).ToArray();
-        }
-
-        public void SetBytes(byte[] bytes)
-        {
-            packet = bytes;
-        }
-
-        public byte[] GetBytes()
-        {
-            return packet;
-        }
+    public byte[] GetBytes()
+    {
+        return packet;
     }
 }

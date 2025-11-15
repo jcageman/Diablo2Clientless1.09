@@ -5,14 +5,13 @@ using D2NG.MuleManager.Services.MuleManager.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace D2NG.MuleManager.Services.MuleManager
+namespace D2NG.MuleManager.Services.MuleManager;
+
+public interface IMuleManagerRepository
 {
-    public interface IMuleManagerRepository
-    {
-        Task UpdateCharacter(MuleManagerAccount account, Character character, List<MuleItemDb> muleItems);
+    Task UpdateCharacter(MuleManagerAccount account, Character character, List<MuleItemDb> muleItems);
 
-        Task<List<MuleItemDb>> GetAllItemsOfCharacter(MuleManagerAccount account, Character character);
+    Task<List<MuleItemDb>> GetAllItemsOfCharacter(MuleManagerAccount account, Character character);
 
-        Task<List<MuleItemDb>> GetAllItems(QualityType? qualityType, ItemName? itemName, StatType[] statTypes, ClassificationType? classificationType);
-    }
+    Task<List<MuleItemDb>> GetAllItems(QualityType? qualityType, ItemName? itemName, StatType[] statTypes, ClassificationType? classificationType);
 }

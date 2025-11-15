@@ -1,54 +1,53 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 
-namespace D2NG.Core.DataManager
+namespace D2NG.Core.DataManager;
+
+class PlainTextDataType
 {
-    class PlainTextDataType
+    private readonly List<string[]> m_lines;
+
+    public PlainTextDataType(string file)
     {
-        private readonly List<string[]> m_lines;
+        m_lines = new List<string[]>();
+        var lines = new List<string>();
 
-        public PlainTextDataType(string file)
+        using (StreamReader r = new StreamReader(file))
         {
-            m_lines = new List<string[]>();
-            var lines = new List<string>();
-
-            using (StreamReader r = new StreamReader(file))
+            string line;
+            while ((line = r.ReadLine()) != null)
             {
-                string line;
-                while ((line = r.ReadLine()) != null)
-                {
-                    lines.Add(line);
-                }
-            }
-
-            foreach (string line in lines)
-            {
-                string[] tokens = line.Split('|');
-                m_lines.Add(tokens);
+                lines.Add(line);
             }
         }
 
-        public bool Get(int offset, out string output)
+        foreach (string line in lines)
         {
-            if (offset < 0 || offset >= m_lines.Count)
-            {
-                output = "";
-                return false;
-            }
-            string[] line = m_lines[offset];
-            output = line.Length == 0 ? "" : line[0];
-            return true;
+            string[] tokens = line.Split('|');
+            m_lines.Add(tokens);
         }
+    }
 
-        public bool Get(int offset, out string[] output)
+    public bool Get(int offset, out string output)
+    {
+        if (offset < 0 || offset >= m_lines.Count)
         {
-            if (offset < 0 || offset >= m_lines.Count)
-            {
-                output = null;
-                return false;
-            }
-            output = m_lines[offset];
-            return true;
+            output = "";
+            return false;
         }
+        string[] line = m_lines[offset];
+        output = line.Length == 0 ? "" : line[0];
+        return true;
+    }
+
+    public bool Get(int offset, out string[] output)
+    {
+        if (offset < 0 || offset >= m_lines.Count)
+        {
+            output = null;
+            return false;
+        }
+        output = m_lines[offset];
+        return true;
     }
 }

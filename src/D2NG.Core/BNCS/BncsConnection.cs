@@ -5,69 +5,68 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 
-namespace D2NG.Core.BNCS
+namespace D2NG.Core.BNCS;
+
+class BncsConnection : Connection
 {
-    class BncsConnection : Connection
+    /**
+     * Default port used to connected to BNCS
+     */
+    public static readonly int DefaultPort = 6112;
+
+    /**
+     * Events on send and receive
+     */
+    internal event EventHandler<BncsPacket> PacketReceived;
+
+    internal event EventHandler<BncsPacket> PacketSent;
+
+    public void Connect(string realm)
     {
-        /**
-         * Default port used to connected to BNCS
-         */
-        public static readonly int DefaultPort = 6112;
+        var server = Dns.GetHostAddresses(realm).First();
+        Connect(server, DefaultPort);
+    }
 
-        /**
-         * Events on send and receive
-         */
-        internal event EventHandler<BncsPacket> PacketReceived;
-
-        internal event EventHandler<BncsPacket> PacketSent;
-
-        public void Connect(string realm)
+    internal override byte[] ReadPacket()
+    {
+        List<byte> buffer;
+        do
         {
-            var server = Dns.GetHostAddresses(realm).First();
-            Connect(server, DefaultPort);
-        }
+            buffer = new List<byte>();
+            // Get the first 4 bytes, packet type and length
+            ReadUpTo(ref buffer, 4);
+            short packetLength = BitConverter.ToInt16(buffer.ToArray(), 2);
 
-        internal override byte[] ReadPacket()
+            // Read the rest of the packet and return it
+            ReadUpTo(ref buffer, packetLength);
+        } while (buffer[1] == 0x00);
+
+        var packet = new BncsPacket(buffer.ToArray());
+        PacketReceived?.Invoke(this, packet);
+        return buffer.ToArray();
+    }
+
+    private void ReadUpTo(ref List<byte> bncsBuffer, int count)
+    {
+        while (bncsBuffer.Count < count)
         {
-            List<byte> buffer;
-            do
+            var temp = _stream.ReadByte();
+            if (temp == -1)
             {
-                buffer = new List<byte>();
-                // Get the first 4 bytes, packet type and length
-                ReadUpTo(ref buffer, 4);
-                short packetLength = BitConverter.ToInt16(buffer.ToArray(), 2);
-
-                // Read the rest of the packet and return it
-                ReadUpTo(ref buffer, packetLength);
-            } while (buffer[1] == 0x00);
-
-            var packet = new BncsPacket(buffer.ToArray());
-            PacketReceived?.Invoke(this, packet);
-            return buffer.ToArray();
-        }
-
-        private void ReadUpTo(ref List<byte> bncsBuffer, int count)
-        {
-            while (bncsBuffer.Count < count)
-            {
-                var temp = _stream.ReadByte();
-                if (temp == -1)
-                {
-                    throw new BncsPacketException("End of Stream");
-                }
-                bncsBuffer.Add((byte)temp);
+                throw new BncsPacketException("End of Stream");
             }
+            bncsBuffer.Add((byte)temp);
         }
+    }
 
-        internal override void WritePacket(byte[] packet)
-        {
-            _stream.Write(packet, 0, packet.Length);
-            PacketSent?.Invoke(this, new BncsPacket(packet));
-        }
+    internal override void WritePacket(byte[] packet)
+    {
+        _stream.Write(packet, 0, packet.Length);
+        PacketSent?.Invoke(this, new BncsPacket(packet));
+    }
 
-        internal override void Initialize()
-        {
-            _stream.WriteByte(0x01);
-        }
+    internal override void Initialize()
+    {
+        _stream.WriteByte(0x01);
     }
 }

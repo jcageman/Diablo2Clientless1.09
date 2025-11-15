@@ -4,55 +4,54 @@ using D2NG.Core.D2GS.Helpers;
 using D2NG.Core.D2GS.Objects;
 using System.Collections.Generic;
 
-namespace D2NG.Core.D2GS.Packet.Incoming
+namespace D2NG.Core.D2GS.Packet.Incoming;
+
+public class AssignNpcPacket : D2gsPacket
 {
-    public class AssignNpcPacket : D2gsPacket
+    public AssignNpcPacket(D2gsPacket packet) : base(packet.Raw)
     {
-        public AssignNpcPacket(D2gsPacket packet) : base(packet.Raw)
+        var reader = new BitReader(packet.Raw);
+        var id = (InComingPacket)reader.ReadByte();
+        if (InComingPacket.AssignNPC2 != id && InComingPacket.AssignNPC1 != id)
         {
-            var reader = new BitReader(packet.Raw);
-            var id = (InComingPacket)reader.ReadByte();
-            if (InComingPacket.AssignNPC2 != id && InComingPacket.AssignNPC1 != id)
+            throw new D2GSPacketException("Invalid Packet Id");
+        }
+        EntityId = reader.ReadUInt32();
+        UniqueCode = (NPCCode)reader.ReadUInt16();
+        Location = new Point(reader.ReadUInt16(), reader.ReadUInt16());
+        LifePercentage = reader.ReadByte() / 1.28;
+        if (id == InComingPacket.AssignNPC2)
+        {
+            reader.ReadByte(); //unknown
+            IsBoss = reader.ReadBit();
+            IsBossMinion = reader.ReadBit();
+            IsChampion = reader.ReadBit();
+            for (var i = 0; i < 5; ++i)
             {
-                throw new D2GSPacketException("Invalid Packet Id");
+                reader.ReadBit(); // unknown
             }
-            EntityId = reader.ReadUInt32();
-            UniqueCode = (NPCCode)reader.ReadUInt16();
-            Location = new Point(reader.ReadUInt16(), reader.ReadUInt16());
-            LifePercentage = reader.ReadByte() / 1.28;
-            if (id == InComingPacket.AssignNPC2)
+
+            for (var i = 0; i < 23; ++i)
             {
-                reader.ReadByte(); //unknown
-                IsBoss = reader.ReadBit();
-                IsBossMinion = reader.ReadBit();
-                IsChampion = reader.ReadBit();
-                for (var i = 0; i < 5; ++i)
-                {
-                    reader.ReadBit(); // unknown
-                }
+                reader.ReadByte(); // unknown
+            }
 
-                for (var i = 0; i < 23; ++i)
+            for (var i = 0; i < 9; ++i)
+            {
+                var property = (MonsterEnchantment)reader.ReadByte();
+                if (property != MonsterEnchantment.None)
                 {
-                    reader.ReadByte(); // unknown
-                }
-
-                for (var i = 0; i < 9; ++i)
-                {
-                    var property = (MonsterEnchantment)reader.ReadByte();
-                    if (property != MonsterEnchantment.None)
-                    {
-                        MonsterEnchantments.Add(property);
-                    }
+                    MonsterEnchantments.Add(property);
                 }
             }
         }
-        public uint EntityId { get; }
-        public NPCCode UniqueCode { get; }
-        public Point Location { get; }
-        public bool IsBoss { get; } = false;
-        public bool IsBossMinion { get; } = false;
-        public bool IsChampion { get; } = false;
-        public double LifePercentage { get; }
-        public HashSet<MonsterEnchantment> MonsterEnchantments { get; } = new HashSet<MonsterEnchantment>();
     }
+    public uint EntityId { get; }
+    public NPCCode UniqueCode { get; }
+    public Point Location { get; }
+    public bool IsBoss { get; } = false;
+    public bool IsBossMinion { get; } = false;
+    public bool IsChampion { get; } = false;
+    public double LifePercentage { get; }
+    public HashSet<MonsterEnchantment> MonsterEnchantments { get; } = new HashSet<MonsterEnchantment>();
 }

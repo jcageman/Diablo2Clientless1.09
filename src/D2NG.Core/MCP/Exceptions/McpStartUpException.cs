@@ -1,15 +1,14 @@
 ﻿using System;
 
-namespace D2NG.Core.MCP.Exceptions
-{
-    public class McpStartUpException : Exception
-    {
-        public McpStartUpException()
-        {
-        }
+namespace D2NG.Core.MCP.Exceptions;
 
-        public McpStartUpException(string message) : base(message)
-        {
-        }
+public class McpStartUpException : Exception
+{
+    public McpStartUpException()
+    {
+    }
+
+    public McpStartUpException(string message) : base(message)
+    {
     }
 }

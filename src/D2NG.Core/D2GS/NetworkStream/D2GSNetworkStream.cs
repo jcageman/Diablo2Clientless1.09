@@ -1,56 +1,55 @@
 ﻿using System;
 
-namespace D2NG.Core.D2GS.NetworkStream
+namespace D2NG.Core.D2GS.NetworkStream;
+
+public class D2GSNetworkStream : INetworkStream
 {
-    public class D2GSNetworkStream : INetworkStream
+    private System.Net.Sockets.NetworkStream stream;
+
+    public D2GSNetworkStream(System.Net.Sockets.NetworkStream ns)
     {
-        private System.Net.Sockets.NetworkStream stream;
+        if (ns == null) throw new ArgumentNullException("ns");
+        stream = ns;
+    }
 
-        public D2GSNetworkStream(System.Net.Sockets.NetworkStream ns)
+    public bool CanWrite
+    {
+        get
         {
-            if (ns == null) throw new ArgumentNullException("ns");
-            stream = ns;
+            return stream.CanWrite;
         }
+    }
 
-        public bool CanWrite
+    public bool DataAvailable
+    {
+        get
         {
-            get
-            {
-                return stream.CanWrite;
-            }
+            return stream.DataAvailable;
         }
+    }
 
-        public bool DataAvailable
-        {
-            get
-            {
-                return stream.DataAvailable;
-            }
-        }
+    public void Close()
+    {
+        stream.Close();
+    }
 
-        public void Close()
-        {
-            stream.Close();
-        }
+    public void Write(byte[] buffer, int offset, int size)
+    {
+        stream.Write(buffer, offset, size);
+    }
 
-        public void Write(byte[] buffer, int offset, int size)
-        {
-            stream.Write(buffer, offset, size);
-        }
+    public void WriteByte(byte value)
+    {
+        stream.WriteByte(value);
+    }
 
-        public void WriteByte(byte value)
-        {
-            stream.WriteByte(value);
-        }
+    public int Read(byte[] buffer, int offset, int size)
+    {
+        return stream.Read(buffer, offset, size);
+    }
 
-        public int Read(byte[] buffer, int offset, int size)
-        {
-            return stream.Read(buffer, offset, size);
-        }
-
-        public int ReadByte()
-        {
-            return stream.ReadByte();
-        }
+    public int ReadByte()
+    {
+        return stream.ReadByte();
     }
 }

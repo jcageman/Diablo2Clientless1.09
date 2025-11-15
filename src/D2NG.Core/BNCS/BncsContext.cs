@@ -1,11 +1,10 @@
-﻿namespace D2NG.Core.BNCS
+﻿namespace D2NG.Core.BNCS;
+
+public class BncsContext
 {
-    public class BncsContext
-    {
-        public uint ClientToken { get; set; }
-        public uint ServerToken { get; set; }
-        public string Username { get; internal set; }
-        public string KeyOwner { get; internal set; }
-        public string Gamefolder { get; internal set; }
-    }
+    public uint ClientToken { get; set; }
+    public uint ServerToken { get; set; }
+    public string Username { get; internal set; }
+    public string KeyOwner { get; internal set; }
+    public string Gamefolder { get; internal set; }
 }

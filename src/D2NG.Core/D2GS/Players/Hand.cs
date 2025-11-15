@@ -1,8 +1,7 @@
-﻿namespace D2NG.Core.D2GS.Players
+﻿namespace D2NG.Core.D2GS.Players;
+
+public enum Hand
 {
-    public enum Hand
-    {
-        Right = 0x00,
-        Left = 0x01
-    }
+    Right = 0x00,
+    Left = 0x01
 }

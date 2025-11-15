@@ -1,9 +1,8 @@
-﻿namespace D2NG.Navigation.Services.MapApi
-{
-    public class PointDto
-    {
-        public int X { get; set; }
+﻿namespace D2NG.Navigation.Services.MapApi;
 
-        public int Y { get; set; }
-    }
+public class PointDto
+{
+    public int X { get; set; }
+
+    public int Y { get; set; }
 }

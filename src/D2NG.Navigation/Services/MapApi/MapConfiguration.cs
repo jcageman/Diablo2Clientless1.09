@@ -1,11 +1,10 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace D2NG.Navigation.Services.MapApi
+namespace D2NG.Navigation.Services.MapApi;
+
+public class MapConfiguration
 {
-    public class MapConfiguration
-    {
-        [Required]
-        [Url]
-        public string ApiUrl { get; set; }
-    }
+    [Required]
+    [Url]
+    public string ApiUrl { get; set; }
 }

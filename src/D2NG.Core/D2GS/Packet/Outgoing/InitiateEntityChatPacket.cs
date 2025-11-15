@@ -1,19 +1,18 @@
 ﻿using D2NG.Core.D2GS.Objects;
 using System;
 
-namespace D2NG.Core.D2GS.Packet.Outgoing
+namespace D2NG.Core.D2GS.Packet.Outgoing;
+
+internal class InitiateEntityChatPacket : D2gsPacket
 {
-    internal class InitiateEntityChatPacket : D2gsPacket
-    {
-        public InitiateEntityChatPacket(Entity entity) :
-            base(
-                BuildPacket(
-                    (byte)OutGoingPacket.InitiateEntityChat,
-                    BitConverter.GetBytes((uint)0x01),
-                    BitConverter.GetBytes(entity.Id)
-                )
+    public InitiateEntityChatPacket(Entity entity) :
+        base(
+            BuildPacket(
+                (byte)OutGoingPacket.InitiateEntityChat,
+                BitConverter.GetBytes((uint)0x01),
+                BitConverter.GetBytes(entity.Id)
             )
-        {
-        }
+        )
+    {
     }
 }

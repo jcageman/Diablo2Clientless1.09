@@ -1,10 +1,9 @@
-﻿namespace D2NG.Core.D2GS.Items
+﻿namespace D2NG.Core.D2GS.Items;
+
+public enum VersionType
 {
-    public enum VersionType
-    {
-        classic = 0,
-        classic110 = 2,
-        lod = 100,
-        lod110 = 101
-    }
+    classic = 0,
+    classic110 = 2,
+    lod = 100,
+    lod110 = 101
 }

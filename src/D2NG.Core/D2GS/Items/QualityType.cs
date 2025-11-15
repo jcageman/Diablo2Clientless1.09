@@ -1,15 +1,14 @@
-﻿namespace D2NG.Core.D2GS.Items
+﻿namespace D2NG.Core.D2GS.Items;
+
+public enum QualityType
 {
-    public enum QualityType
-    {
-        NotApplicable,
-        Inferior,
-        Normal,
-        Superior,
-        Magical,
-        Set,
-        Rare,
-        Unique,
-        Crafted
-    }
+    NotApplicable,
+    Inferior,
+    Normal,
+    Superior,
+    Magical,
+    Set,
+    Rare,
+    Unique,
+    Crafted
 }

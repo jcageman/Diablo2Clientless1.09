@@ -1,7 +1,6 @@
-﻿namespace D2NG.Navigation.Services.MapApi
+﻿namespace D2NG.Navigation.Services.MapApi;
+
+public class SessionDto : BaseSessionDto
 {
-    public class SessionDto : BaseSessionDto
-    {
-        public string Id { get; set; }
-    }
+    public string Id { get; set; }
 }

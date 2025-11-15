@@ -1,10 +1,9 @@
-﻿namespace D2NG.Core.D2GS.Items
+﻿namespace D2NG.Core.D2GS.Items;
+
+public enum ClassType
 {
-    public enum ClassType
-    {
-        NotApplicable,
-        Normal,
-        Exceptional,
-        Elite
-    }
+    NotApplicable,
+    Normal,
+    Exceptional,
+    Elite
 }

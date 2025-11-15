@@ -1,14 +1,13 @@
-﻿namespace D2NG.Core.BNCS.Packet
+﻿namespace D2NG.Core.BNCS.Packet;
+
+internal class LeaveGamePacket : BncsPacket
 {
-    internal class LeaveGamePacket : BncsPacket
-    {
-        public LeaveGamePacket() :
-            base(
-                BuildPacket(
-                    Sid.LEAVEGAME
-                )
+    public LeaveGamePacket() :
+        base(
+            BuildPacket(
+                Sid.LEAVEGAME
             )
-        {
-        }
+        )
+    {
     }
 }

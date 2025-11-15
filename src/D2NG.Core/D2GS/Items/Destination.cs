@@ -1,12 +1,11 @@
-﻿namespace D2NG.Core.D2GS.Items
+﻿namespace D2NG.Core.D2GS.Items;
+
+public enum Destination
 {
-    public enum Destination
-    {
-        unspecified = 0,
-        equipment = 1,
-        belt = 2,
-        ground = 3,
-        cursor = 4,
-        item = 6,
-    }
+    unspecified = 0,
+    equipment = 1,
+    belt = 2,
+    ground = 3,
+    cursor = 4,
+    item = 6,
 }

@@ -1,8 +1,7 @@
-﻿namespace D2NG.Navigation.Services.Pathing
+﻿namespace D2NG.Navigation.Services.Pathing;
+
+public enum MovementMode
 {
-    public enum MovementMode
-    {
-        Teleport,
-        Walking
-    }
+    Teleport,
+    Walking
 }

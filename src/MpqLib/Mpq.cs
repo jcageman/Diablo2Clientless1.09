@@ -32,23 +32,23 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace MpqLib
+namespace MpqLib;
+
+public interface MpqResource
 {
-    public interface MpqResource
+    void ReadFromStream(Stream stream);
+}
+
+public abstract class Mpq : IDisposable
+{
+    Dictionary<string, object> cached_resources;
+
+    protected Mpq()
     {
-        void ReadFromStream(Stream stream);
+        cached_resources = new Dictionary<string, object>();
     }
 
-    public abstract class Mpq : IDisposable
-    {
-        Dictionary<string, object> cached_resources;
-
-        protected Mpq()
-        {
-            cached_resources = new Dictionary<string, object>();
-        }
-
-        public abstract Stream GetStreamForResource(string path);
+    public abstract Stream GetStreamForResource(string path);
 
 #if false
 		protected Type GetTypeFromResourcePath (string path)
@@ -126,137 +126,136 @@ namespace MpqLib
 			return res;
 		}
 #endif
-        public virtual void Dispose()
-        {
-        }
+    public virtual void Dispose()
+    {
+    }
+}
+
+public class MpqContainer : Mpq
+{
+    List<Mpq> mpqs;
+
+    public MpqContainer()
+    {
+        mpqs = new List<Mpq>();
     }
 
-    public class MpqContainer : Mpq
+    public void Add(Mpq mpq)
     {
-        List<Mpq> mpqs;
-
-        public MpqContainer()
-        {
-            mpqs = new List<Mpq>();
-        }
-
-        public void Add(Mpq mpq)
-        {
-            if (mpq == null)
-                return;
-            mpqs.Add(mpq);
-        }
-
-        public void Remove(Mpq mpq)
-        {
-            if (mpq == null)
-                return;
-            mpqs.Remove(mpq);
-        }
-
-        public void Clear()
-        {
-            mpqs.Clear();
-        }
-
-        public override void Dispose()
-        {
-            foreach (Mpq mpq in mpqs)
-                mpq.Dispose();
-        }
-
-        public override Stream GetStreamForResource(string path)
-        {
-            foreach (Mpq mpq in mpqs)
-            {
-                Stream s = mpq.GetStreamForResource(path);
-                if (s != null)
-                    return s;
-            }
-
-            Console.WriteLine("returning null stream for resource: {0}", path);
-            return null;
-        }
+        if (mpq == null)
+            return;
+        mpqs.Add(mpq);
     }
 
-    public class MpqDirectory : Mpq
+    public void Remove(Mpq mpq)
     {
-        Dictionary<string, string> file_hash;
-        string mpq_dir_path;
-
-        public MpqDirectory(string path)
-        {
-            mpq_dir_path = path;
-            file_hash = new Dictionary<string, string>();
-
-            RecurseDirectoryTree(mpq_dir_path);
-        }
-
-        string ConvertBackSlashes(string path)
-        {
-            while (path.IndexOf('\\') != -1)
-                path = path.Replace('\\', Path.DirectorySeparatorChar);
-
-            return path;
-        }
-
-        public override Stream GetStreamForResource(string path)
-        {
-            string rebased_path = ConvertBackSlashes(Path.Combine(mpq_dir_path, path));
-
-            if (file_hash.ContainsKey(rebased_path.ToLower()))
-            {
-                string real_path = file_hash[rebased_path.ToLower()];
-                if (real_path != null)
-                {
-                    Console.WriteLine("using {0}", real_path);
-                    return File.OpenRead(real_path);
-                }
-            }
-            return null;
-        }
-
-        void RecurseDirectoryTree(string path)
-        {
-            string[] files = Directory.GetFiles(path);
-            foreach (string f in files)
-            {
-                string platform_path = ConvertBackSlashes(f);
-                file_hash.Add(f.ToLower(), platform_path);
-            }
-
-            string[] directories = Directory.GetDirectories(path);
-            foreach (string d in directories)
-            {
-                RecurseDirectoryTree(d);
-            }
-        }
+        if (mpq == null)
+            return;
+        mpqs.Remove(mpq);
     }
 
-    public class MpqArchiveReader : Mpq
+    public void Clear()
     {
-        MpqArchive mpq;
+        mpqs.Clear();
+    }
 
-        public MpqArchiveReader(string path)
-        {
-            mpq = new MpqArchive(path);
-        }
-
-        public override Stream GetStreamForResource(string path)
-        {
-            try
-            {
-                return mpq.OpenFile(path);
-            }
-            catch (FileNotFoundException)
-            {
-                return null;
-            }
-        }
-
-        public override void Dispose()
-        {
+    public override void Dispose()
+    {
+        foreach (Mpq mpq in mpqs)
             mpq.Dispose();
+    }
+
+    public override Stream GetStreamForResource(string path)
+    {
+        foreach (Mpq mpq in mpqs)
+        {
+            Stream s = mpq.GetStreamForResource(path);
+            if (s != null)
+                return s;
         }
+
+        Console.WriteLine("returning null stream for resource: {0}", path);
+        return null;
+    }
+}
+
+public class MpqDirectory : Mpq
+{
+    Dictionary<string, string> file_hash;
+    string mpq_dir_path;
+
+    public MpqDirectory(string path)
+    {
+        mpq_dir_path = path;
+        file_hash = new Dictionary<string, string>();
+
+        RecurseDirectoryTree(mpq_dir_path);
+    }
+
+    string ConvertBackSlashes(string path)
+    {
+        while (path.IndexOf('\\') != -1)
+            path = path.Replace('\\', Path.DirectorySeparatorChar);
+
+        return path;
+    }
+
+    public override Stream GetStreamForResource(string path)
+    {
+        string rebased_path = ConvertBackSlashes(Path.Combine(mpq_dir_path, path));
+
+        if (file_hash.ContainsKey(rebased_path.ToLower()))
+        {
+            string real_path = file_hash[rebased_path.ToLower()];
+            if (real_path != null)
+            {
+                Console.WriteLine("using {0}", real_path);
+                return File.OpenRead(real_path);
+            }
+        }
+        return null;
+    }
+
+    void RecurseDirectoryTree(string path)
+    {
+        string[] files = Directory.GetFiles(path);
+        foreach (string f in files)
+        {
+            string platform_path = ConvertBackSlashes(f);
+            file_hash.Add(f.ToLower(), platform_path);
+        }
+
+        string[] directories = Directory.GetDirectories(path);
+        foreach (string d in directories)
+        {
+            RecurseDirectoryTree(d);
+        }
+    }
+}
+
+public class MpqArchiveReader : Mpq
+{
+    MpqArchive mpq;
+
+    public MpqArchiveReader(string path)
+    {
+        mpq = new MpqArchive(path);
+    }
+
+    public override Stream GetStreamForResource(string path)
+    {
+        try
+        {
+            return mpq.OpenFile(path);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    public override void Dispose()
+    {
+        mpq.Dispose();
     }
 }

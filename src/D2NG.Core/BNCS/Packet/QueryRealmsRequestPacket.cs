@@ -1,10 +1,9 @@
-﻿namespace D2NG.Core.BNCS.Packet
+﻿namespace D2NG.Core.BNCS.Packet;
+
+public class QueryRealmsRequestPacket : BncsPacket
 {
-    public class QueryRealmsRequestPacket : BncsPacket
+    public QueryRealmsRequestPacket() :
+        base(BuildPacket(Sid.QUERYREALMS2))
     {
-        public QueryRealmsRequestPacket() :
-            base(BuildPacket(Sid.QUERYREALMS2))
-        {
-        }
     }
 }

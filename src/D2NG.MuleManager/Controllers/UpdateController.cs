@@ -4,40 +4,39 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 
-namespace D2NG.MuleManager.Controllers
+namespace D2NG.MuleManager.Controllers;
+
+[ApiController]
+[Route("/items")]
+public class UpdateController : ControllerBase
 {
-    [ApiController]
-    [Route("/items")]
-    public class UpdateController : ControllerBase
+
+    private readonly IMuleManagerService _muleManagerService;
+    private readonly IMuleManagerRepository _muleManagerRepository;
+
+    public UpdateController(
+        IMuleManagerService muleManagerService,
+        IMuleManagerRepository muleManagerRepository)
     {
+        _muleManagerService = muleManagerService;
+        _muleManagerRepository = muleManagerRepository;
+    }
 
-        private readonly IMuleManagerService _muleManagerService;
-        private readonly IMuleManagerRepository _muleManagerRepository;
-
-        public UpdateController(
-            IMuleManagerService muleManagerService,
-            IMuleManagerRepository muleManagerRepository)
+    [HttpPut]
+    public async Task<IActionResult> UpdateAll()
+    {
+        if(await _muleManagerService.UpdateAllAccounts())
         {
-            _muleManagerService = muleManagerService;
-            _muleManagerRepository = muleManagerRepository;
+            return Ok();
         }
 
-        [HttpPut]
-        public async Task<IActionResult> UpdateAll()
-        {
-            if(await _muleManagerService.UpdateAllAccounts())
-            {
-                return Ok();
-            }
+        return new StatusCodeResult(StatusCodes.Status500InternalServerError);
+    }
 
-            return new StatusCodeResult(StatusCodes.Status500InternalServerError);
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> GetAllItems([FromQuery] QualityType? qualityType, [FromQuery] ItemName? itemName, [FromQuery] StatType[] statTypes, [FromQuery] ClassificationType? classification)
-        {
-            var items = await _muleManagerRepository.GetAllItems(qualityType, itemName, statTypes, classification);
-            return Ok(items.MapToDto());
-        }
+    [HttpGet]
+    public async Task<IActionResult> GetAllItems([FromQuery] QualityType? qualityType, [FromQuery] ItemName? itemName, [FromQuery] StatType[] statTypes, [FromQuery] ClassificationType? classification)
+    {
+        var items = await _muleManagerRepository.GetAllItems(qualityType, itemName, statTypes, classification);
+        return Ok(items.MapToDto());
     }
 }

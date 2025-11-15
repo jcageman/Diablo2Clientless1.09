@@ -1,21 +1,20 @@
-﻿namespace D2NG.Core.D2GS.Items.Containers
-{
-    public class Stash : Container
-    {
-        public Stash() : base(10, 10)
-        {
-        }
+﻿namespace D2NG.Core.D2GS.Items.Containers;
 
-        protected override Point GetItemLocation(Item item)
+public class Stash : Container
+{
+    public Stash() : base(10, 10)
+    {
+    }
+
+    protected override Point GetItemLocation(Item item)
+    {
+        if (item.Container == ContainerType.Stash)
         {
-            if (item.Container == ContainerType.Stash)
-            {
-                return item.Location;
-            }
-            else
-            { // stash2 starts at 8-9.
-                return new Point(item.Location.X, (ushort)(item.Location.Y + 8));
-            }
+            return item.Location;
+        }
+        else
+        { // stash2 starts at 8-9.
+            return new Point(item.Location.X, (ushort)(item.Location.Y + 8));
         }
     }
 }

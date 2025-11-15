@@ -1,9 +1,8 @@
-﻿namespace D2NG.Core.D2GS.Enums
+﻿namespace D2NG.Core.D2GS.Enums;
+
+public enum Difficulty : byte
 {
-    public enum Difficulty : byte
-    {
-        Normal = 0x00,
-        Nightmare = 0x01,
-        Hell = 0x02
-    }
+    Normal = 0x00,
+    Nightmare = 0x01,
+    Hell = 0x02
 }

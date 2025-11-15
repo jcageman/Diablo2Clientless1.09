@@ -1,15 +1,14 @@
 ﻿using System;
 
-namespace D2NG.Core.MCP.Exceptions
-{
-    public class McpPacketException : Exception
-    {
-        public McpPacketException()
-        {
-        }
+namespace D2NG.Core.MCP.Exceptions;
 
-        public McpPacketException(string message) : base(message)
-        {
-        }
+public class McpPacketException : Exception
+{
+    public McpPacketException()
+    {
+    }
+
+    public McpPacketException(string message) : base(message)
+    {
     }
 }

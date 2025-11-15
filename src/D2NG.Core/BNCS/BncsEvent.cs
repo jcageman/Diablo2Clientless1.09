@@ -2,39 +2,38 @@
 using System;
 using System.Threading;
 
-namespace D2NG.Core.BNCS
+namespace D2NG.Core.BNCS;
+
+class BncsEvent : IDisposable
 {
-    class BncsEvent : IDisposable
+    private readonly ManualResetEvent _event = new ManualResetEvent(false);
+
+    private BncsPacket _packet;
+
+    public void Reset()
     {
-        private readonly ManualResetEvent _event = new ManualResetEvent(false);
+        _event.Reset();
+    }
 
-        private BncsPacket _packet;
-
-        public void Reset()
+    public BncsPacket WaitForPacket(int millisecondsTimeout)
+    {
+        bool result = _event.WaitOne(millisecondsTimeout);
+        if (!result)
         {
-            _event.Reset();
+            return null;
         }
 
-        public BncsPacket WaitForPacket(int millisecondsTimeout)
-        {
-            bool result = _event.WaitOne(millisecondsTimeout);
-            if (!result)
-            {
-                return null;
-            }
+        return _packet;
+    }
 
-            return _packet;
-        }
+    public void Set(BncsPacket packet)
+    {
+        _packet = packet;
+        _event.Set();
+    }
 
-        public void Set(BncsPacket packet)
-        {
-            _packet = packet;
-            _event.Set();
-        }
-
-        public void Dispose()
-        {
-            _event.Dispose();
-        }
+    public void Dispose()
+    {
+        _event.Dispose();
     }
 }
