@@ -3,7 +3,7 @@ jobs:
   checkout_code:
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:10.0
-      - image: circleci/postgres:9.4.12-alpine
+      - image: circleci/docker@2.2.0
     working_directory: ~/project
     steps:
       - checkout
