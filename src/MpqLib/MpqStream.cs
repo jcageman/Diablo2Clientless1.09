@@ -165,7 +165,7 @@ namespace MpqLib
             lock (mStream)
             {
                 mStream.Seek(offset, SeekOrigin.Begin);
-                mStream.Read(data, 0, toread);
+                mStream.ReadExactly(data, 0, toread);
             }
 
             if (mBlock.IsEncrypted && mBlock.FileSize > 3)

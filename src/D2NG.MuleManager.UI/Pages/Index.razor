@@ -41,7 +41,7 @@
             Filtered Stats: 
                 @foreach (string statType in FilteredStatTypes)
                 {
-                    <MudChip Color="Color.Primary" OnClose="chip => Closed(chip, statType)">@statType</MudChip>
+                <MudChip T="string" Color="Color.Primary" OnClose="Closed">@statType</MudChip>
                 }
         </MudText>
     </MudItem>
@@ -74,9 +74,10 @@
     private string classificationValue { get; set; }
     private HashSet<string> FilteredStatTypes = new HashSet<string>();
 
-    void Closed(MudChip chip, string chipValue) {
-        FilteredStatTypes.Remove(chipValue);
-        RefreshMules().AndForget();
+    void Closed(MudChip<string> chip)
+    {
+        FilteredStatTypes.Remove(chip.Value);
+        RefreshMules().CatchAndLog();
     }
 
     protected async Task RefreshMules()
@@ -130,7 +131,7 @@
         {
             muleItem.SortedStat = muleItem.Stats.Find(s => s.Type == sortedStatValue)?.Value ?? 0;
         }
-        Datagrid.SetSortAsync("SortedStat", SortDirection.Descending, m => m.SortedStat).AndForget();
+        Datagrid.SetSortAsync("SortedStat", SortDirection.Descending, m => m.SortedStat).CatchAndLog();
     }
 
     protected async Task UpdateMules(MouseEventArgs e)
@@ -144,7 +145,7 @@
         if(!string.IsNullOrEmpty(value))
         {
             qualityTypeValue = value;
-            RefreshMules().AndForget();
+            RefreshMules().CatchAndLog();
         }
     }
 
@@ -153,7 +154,7 @@
         if(!string.IsNullOrEmpty(value))
         {
             FilteredStatTypes.Add(value);
-            RefreshMules().AndForget();
+            RefreshMules().CatchAndLog();
         }
     }
 
@@ -162,7 +163,7 @@
         if(!string.IsNullOrEmpty(value))
         {
             itemNameValue = value;
-            RefreshMules().AndForget();
+            RefreshMules().CatchAndLog();
         }
     }
 
@@ -171,7 +172,7 @@
         if (!string.IsNullOrEmpty(value))
         {
             classificationValue = value;
-            RefreshMules().AndForget();
+            RefreshMules().CatchAndLog();
         }
     }
 
@@ -181,7 +182,7 @@
         UpdateSorting();
     }
 
-    private Task<IEnumerable<string>> SearchStatType(string value)
+    private Task<IEnumerable<string>> SearchStatType(string value, CancellationToken ct)
     {
         // if text is null or empty, show complete list
         if (string.IsNullOrEmpty(value))
@@ -190,7 +191,7 @@
         return Task.FromResult<IEnumerable<string>>(Enum.GetNames(typeof(StatType)).Where(s => s.Contains(value, StringComparison.InvariantCultureIgnoreCase)));
     }
 
-    private Task<IEnumerable<string>> SearchItemNames(string value)
+    private Task<IEnumerable<string>> SearchItemNames(string value, CancellationToken ct)
     {
         // if text is null or empty, show complete list
         if (string.IsNullOrEmpty(value))
@@ -208,7 +209,7 @@
         }
     }
 
-    private Task<IEnumerable<string>> SearchClassification(string value)
+    private Task<IEnumerable<string>> SearchClassification(string value, CancellationToken ct)
     {
         // if text is null or empty, show complete list
         if (string.IsNullOrEmpty(value))

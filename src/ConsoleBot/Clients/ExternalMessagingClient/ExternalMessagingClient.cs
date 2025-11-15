@@ -81,7 +81,7 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
 
         public async Task SendMessage(string message)
         {
-            await _telegramBotClient.SendTextMessageAsync(new Telegram.Bot.Types.ChatId(_externalConfiguration.TelegramChatId), message);
+            await _telegramBotClient.SendMessage(new ChatId(_externalConfiguration.TelegramChatId), message);
         }
 
         private void HandleChatEvent(Client client, BncsPacket obj)
