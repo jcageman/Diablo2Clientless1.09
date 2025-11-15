@@ -34,11 +34,11 @@ namespace ConsoleBot.Pickit
                 {
                     case ItemName.DemonhideSash:
                         return item.Ethereal;
-                    //case ItemName.MeshBelt:
-                    //    return !item.Ethereal;
-                    //case ItemName.WarBelt: 
-                    //case ItemName.VampirefangBelt:
-                    //    return item.Ethereal;
+                        //case ItemName.MeshBelt:
+                        //    return !item.Ethereal;
+                        //case ItemName.WarBelt: 
+                        //case ItemName.VampirefangBelt:
+                        //    return item.Ethereal;
                 }
             }
 

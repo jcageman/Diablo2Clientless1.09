@@ -202,7 +202,7 @@ namespace ConsoleBot.Pickit
                 return false;
             }
 
-            if(self.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] >= 86)
+            if (self.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] >= 86)
             {
                 if (item.Name == ItemName.Boots || item.Name == ItemName.HeavyBoots)
                 {
@@ -293,7 +293,7 @@ namespace ConsoleBot.Pickit
 
             if (isExpansion
                 && item.Location.Y >= 4
-                && (item.Classification == ClassificationType.SmallCharm || item.Classification == ClassificationType.LargeCharm|| item.Classification == ClassificationType.GrandCharm))
+                && (item.Classification == ClassificationType.SmallCharm || item.Classification == ClassificationType.LargeCharm || item.Classification == ClassificationType.GrandCharm))
             {
                 return false;
             }
@@ -303,12 +303,12 @@ namespace ConsoleBot.Pickit
 
         public static bool SendItemToKeepToExternalClient(Item item)
         {
-            if(item.Name == ItemName.Ring && item.Quality == QualityType.Unique)
+            if (item.Name == ItemName.Ring && item.Quality == QualityType.Unique)
             {
                 return false;
             }
 
-            if(item.Classification == ClassificationType.Gem)
+            if (item.Classification == ClassificationType.Gem)
             {
                 return false;
             }

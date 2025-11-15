@@ -6,8 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Marten" Version="8.15.4" />
-    <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.2" />
+    <PackageReference Include="Marten" />
+    <PackageReference Include="Serilog.Extensions.Logging" />
   </ItemGroup>
 
   <ItemGroup>

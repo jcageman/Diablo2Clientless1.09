@@ -14,12 +14,12 @@ namespace ConsoleBot.Pickit
 
         public static bool ShouldPickupItemExpansion(Item item)
         {
-            if(item.Quality == QualityType.Rare && item.Classification == ClassificationType.SorceressOrb)
+            if (item.Quality == QualityType.Rare && item.Classification == ClassificationType.SorceressOrb)
             {
                 return true;
             }
 
-            if(item.Name == ItemName.SwirlingCrystal && item.Quality == QualityType.Unique)
+            if (item.Name == ItemName.SwirlingCrystal && item.Quality == QualityType.Unique)
             {
                 return true;
             }
@@ -38,7 +38,7 @@ namespace ConsoleBot.Pickit
 
             if (item.Classification == ClassificationType.SorceressOrb
             && item.GetValueToSkillTab(SkillTab.SorceressLightningSpells)
-            + item.GetValueToSkill(Skill.EnergyShield)>= 6)
+            + item.GetValueToSkill(Skill.EnergyShield) >= 6)
             {
                 return true;
             }
