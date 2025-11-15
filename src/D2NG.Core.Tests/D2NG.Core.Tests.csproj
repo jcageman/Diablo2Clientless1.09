@@ -3,6 +3,7 @@
   <PropertyGroup>
 	<OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
+	<TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
   
   <ItemGroup>
