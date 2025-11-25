@@ -95,7 +95,7 @@ public class MpqStream : Stream
         lock (mStream)
         {
             mStream.Seek(mBlock.FilePos, SeekOrigin.Begin);
-            BinaryReader br = new BinaryReader(mStream);
+            BinaryReader br = new(mStream);
             for (int i = 0; i < blockposcount; i++)
                 mBlockPositions[i] = br.ReadUInt32();
         }
@@ -399,7 +399,7 @@ public class MpqStream : Stream
 #if WITH_BZIP
     private static byte[] BZip2Decompress(Stream Data, int ExpectedLength)
     {
-        MemoryStream output = new MemoryStream();
+        MemoryStream output = new();
         BZip2.Decompress(Data, output, true);
         return output.ToArray();
     }
@@ -407,7 +407,7 @@ public class MpqStream : Stream
 
     private static byte[] PKDecompress(Stream Data, int ExpectedLength)
     {
-        PKLibDecompress pk = new PKLibDecompress(Data);
+        PKLibDecompress pk = new(Data);
         return pk.Explode(ExpectedLength);
     }
 

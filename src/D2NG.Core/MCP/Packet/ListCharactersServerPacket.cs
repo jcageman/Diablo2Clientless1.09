@@ -24,7 +24,7 @@ public class ListCharactersServerPacket : McpPacket
         var test2 = reader.ReadUInt32();
         var totalReturned = reader.ReadUInt16();
 
-        Characters = new List<Character>();
+        Characters = [];
         for (int x = 0; x < totalReturned; x++)
         {
             var characterName = reader.ReadNullTerminatedString();

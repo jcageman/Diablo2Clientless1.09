@@ -5,7 +5,7 @@ namespace ConsoleBot.Pickit
 {
     public static class Runes
     {
-        private static readonly HashSet<ItemName> wantedRunes = new HashSet<ItemName> {
+        private static readonly HashSet<ItemName> wantedRunes = [
             ItemName.SolRune,
             ItemName.NefRune,
             ItemName.LemRune,
@@ -21,7 +21,7 @@ namespace ConsoleBot.Pickit
             ItemName.BerRune,
             ItemName.JahRune,
             ItemName.ChamRune,
-            ItemName.ZodRune};
+            ItemName.ZodRune];
         public static bool ShouldPickupItemExpansion(Item item)
         {
             return wantedRunes.Contains(item.Name);

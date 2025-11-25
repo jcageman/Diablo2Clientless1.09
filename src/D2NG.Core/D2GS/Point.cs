@@ -54,7 +54,7 @@ public class Point
         return Math.Pow(X - other.X, 2.0) + Math.Pow(Y - other.Y, 2.0);
     }
 
-    private ushort Lerp(ushort first, ushort second, float alpha)
+    private static ushort Lerp(ushort first, ushort second, float alpha)
     {
         return (ushort)(first * (1 - alpha) + second * alpha);
     }

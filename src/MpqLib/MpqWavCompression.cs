@@ -68,9 +68,9 @@ public class MpqWavCompression
         int[] Array1 = new int[] { 0x2c, 0x2c };
         int[] Array2 = new int[ChannelCount];
 
-        BinaryReader input = new BinaryReader(Data);
-        MemoryStream outputstream = new MemoryStream();
-        BinaryWriter output = new BinaryWriter(outputstream);
+        BinaryReader input = new(Data);
+        MemoryStream outputstream = new();
+        BinaryWriter output = new(outputstream);
 
         input.ReadByte();
         byte shift = input.ReadByte();

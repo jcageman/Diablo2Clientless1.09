@@ -11,10 +11,10 @@ namespace D2NG.Core.Tests.D2GS;
 
 public class GameConnectionTests
 {
-    private GameServerConnection CreateGameServerConnection(string packet)
+    private static GameServerConnection CreateGameServerConnection(string packet)
     {
         var byteArray = packet.StringToByteArray();
-        Mock<INetworkStream> mockedStream = new Mock<INetworkStream>();
+        Mock<INetworkStream> mockedStream = new();
         mockedStream.Setup(x => x.ReadByte()).Returns(() =>
         {
             if (byteArray.Length == 0)

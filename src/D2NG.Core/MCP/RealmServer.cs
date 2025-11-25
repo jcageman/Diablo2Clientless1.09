@@ -18,11 +18,11 @@ public class RealmServer
     protected ConcurrentDictionary<Mcp, Action<McpPacket>> PacketSentEventHandlers { get; } = new ConcurrentDictionary<Mcp, Action<McpPacket>>();
     public ushort RequestId { get; private set; } = 0x02;
 
-    private readonly McpEvent CharLogonEvent = new McpEvent();
-    private readonly McpEvent CreateGameEvent = new McpEvent();
-    private readonly McpEvent ListCharactersEvent = new McpEvent();
-    private readonly McpEvent StartupEvent = new McpEvent();
-    private readonly McpEvent JoinGameEvent = new McpEvent();
+    private readonly McpEvent CharLogonEvent = new();
+    private readonly McpEvent CreateGameEvent = new();
+    private readonly McpEvent ListCharactersEvent = new();
+    private readonly McpEvent StartupEvent = new();
+    private readonly McpEvent JoinGameEvent = new();
 
     private Thread _listener;
 
@@ -110,7 +110,7 @@ public class RealmServer
         var packet = await ListCharactersEvent.WaitForPacket(5000);
         if(packet == null)
         {
-            return new List<Character>();
+            return [];
         }
         var response = new ListCharactersServerPacket(packet.Raw);
         return response.Characters;

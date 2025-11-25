@@ -73,7 +73,7 @@ public class MpqArchive : IDisposable
         if (LocateMpqHeader() == false)
             throw new MpqParserException("Unable to find MPQ header");
 
-        BinaryReader br = new BinaryReader(mStream);
+        BinaryReader br = new(mStream);
 
         mBlockSize = 0x200 << mHeader.BlockSize;
 
@@ -82,7 +82,7 @@ public class MpqArchive : IDisposable
         byte[] hashdata = br.ReadBytes((int)(mHeader.HashTableSize * MpqHash.Size));
         DecryptTable(hashdata, "(hash table)");
 
-        BinaryReader br2 = new BinaryReader(new MemoryStream(hashdata));
+        BinaryReader br2 = new(new MemoryStream(hashdata));
         mHashes = new MpqHash[mHeader.HashTableSize];
 
         for (int i = 0; i < mHeader.HashTableSize; i++)
@@ -103,7 +103,7 @@ public class MpqArchive : IDisposable
 
     private bool LocateMpqHeader()
     {
-        BinaryReader br = new BinaryReader(mStream);
+        BinaryReader br = new(mStream);
 
         // In .mpq files the header will be at the start of the file
         // In .exe files, it will be at a multiple of 0x200
@@ -380,10 +380,10 @@ public class MpqArchive : IDisposable
 
                     using (stm)
                     {
-                        using (StreamReader reader = new StreamReader(stm))
+                        using (StreamReader reader = new(stm))
                         {
                             string data;
-                            List<FileInfo> files = new List<FileInfo>();
+                            List<FileInfo> files = [];
 
                             while ((data = reader.ReadLine()) != null)
                             {
@@ -392,7 +392,7 @@ public class MpqArchive : IDisposable
                                 MpqBlock block = mBlocks[hash.BlockIndex];
 
                                 // initialize and add new FileInfo
-                                FileInfo fi = new FileInfo();
+                                FileInfo fi = new();
                                 fi.Name = data;
                                 fi.Flags = block.Flags;
                                 fi.UncompressedSize = block.FileSize;

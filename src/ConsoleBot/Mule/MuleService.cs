@@ -359,11 +359,11 @@ namespace ConsoleBot.Mule
             return movedItems;
         }
 
-        private List<Item> GetItemsToTrade(Container muleInventory, List<Item> tradeableItems)
+        private static List<Item> GetItemsToTrade(Container muleInventory, List<Item> tradeableItems)
         {
             if (!muleInventory.HasAnyFreeSpace())
             {
-                return new List<Item>();
+                return [];
             }
 
             var itemsToTrade = new List<Item>();

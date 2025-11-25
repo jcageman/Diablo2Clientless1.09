@@ -6,19 +6,19 @@ namespace ConsoleBot.Pickit
 {
     public static class Armors
     {
-        private static readonly HashSet<ItemName> casterArmors = new HashSet<ItemName> {
+        private static readonly HashSet<ItemName> casterArmors = [
             ItemName.QuiltedArmor, ItemName.LeatherArmor, ItemName.HardLeatherArmor, ItemName.StuddedLeather, ItemName.RingMail, ItemName.ScaleMail,
             ItemName.ChainMail, ItemName.BreastPlate, ItemName.SplintMail, ItemName.LightPlate, ItemName.GhostArmor, ItemName.SerpentskinArmor,
-            ItemName.DemonhideArmor, ItemName.TrellisedArmor, ItemName.LinkedMail, ItemName.MagePlate };
+            ItemName.DemonhideArmor, ItemName.TrellisedArmor, ItemName.LinkedMail, ItemName.MagePlate ];
 
-        private static readonly HashSet<ItemName> defArmors = new HashSet<ItemName> {
-            ItemName.OrnatePlate, ItemName.ChaosArmor, ItemName.EmbossedPlate, ItemName.SharktoothArmor, ItemName.TemplarCoat, ItemName.MagePlate, ItemName.RussetArmor};
+        private static readonly HashSet<ItemName> defArmors = [
+            ItemName.OrnatePlate, ItemName.ChaosArmor, ItemName.EmbossedPlate, ItemName.SharktoothArmor, ItemName.TemplarCoat, ItemName.MagePlate, ItemName.RussetArmor];
 
-        private static readonly HashSet<ItemName> socketedLightArmors = new HashSet<ItemName> {
+        private static readonly HashSet<ItemName> socketedLightArmors = [
             ItemName.QuiltedArmor, ItemName.LeatherArmor, ItemName.HardLeatherArmor, ItemName.StuddedLeather, ItemName.RingMail, ItemName.LightPlate,
             ItemName.GhostArmor, ItemName.SerpentskinArmor, ItemName.DemonhideArmor, ItemName.TrellisedArmor, ItemName.LinkedMail, ItemName.MagePlate,
             ItemName.DuskShroud, ItemName.Wyrmhide, ItemName.ScarabHusk, ItemName.WireFleece, ItemName.DiamondMail, ItemName.ArchonPlate, ItemName.KrakenShell,
-            ItemName.HellforgePlate, ItemName.LacqueredPlate, ItemName.ShadowPlate,ItemName.SacredArmor};
+            ItemName.HellforgePlate, ItemName.LacqueredPlate, ItemName.ShadowPlate,ItemName.SacredArmor];
         public static bool ShouldPickupItemClassic(Item item)
         {
             if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)

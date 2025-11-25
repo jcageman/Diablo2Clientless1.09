@@ -32,7 +32,7 @@ internal class AssignLevelWarpPacket : D2gsPacket
     }
 
     public WarpData AsWarpData()
-        => new WarpData
+        => new()
         {
             EntityId = EntityId,
             Location = Location,

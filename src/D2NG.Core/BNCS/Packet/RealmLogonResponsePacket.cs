@@ -18,7 +18,7 @@ public class RealmLogonResponsePacket : BncsPacket
 
     public RealmLogonResponsePacket(byte[] packet) : base(packet)
     {
-        BinaryReader reader = new BinaryReader(new MemoryStream(packet), Encoding.ASCII);
+        BinaryReader reader = new(new MemoryStream(packet), Encoding.ASCII);
         if (PrefixByte != reader.ReadByte())
         {
             throw new BncsPacketException("Not a valid BNCS Packet");
@@ -34,7 +34,7 @@ public class RealmLogonResponsePacket : BncsPacket
         McpCookie = reader.ReadUInt32();
         McpStatus = reader.ReadUInt32();
 
-        McpChunk = new List<byte>();
+        McpChunk = [];
 
         for (int i = 0; i < 2; i++)
         {

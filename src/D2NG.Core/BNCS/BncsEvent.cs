@@ -6,7 +6,7 @@ namespace D2NG.Core.BNCS;
 
 class BncsEvent : IDisposable
 {
-    private readonly ManualResetEvent _event = new ManualResetEvent(false);
+    private readonly ManualResetEvent _event = new(false);
 
     private BncsPacket _packet;
 

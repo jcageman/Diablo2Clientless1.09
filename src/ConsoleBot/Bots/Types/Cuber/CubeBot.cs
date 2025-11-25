@@ -27,8 +27,8 @@ namespace ConsoleBot.Bots.Types.Cuber
         private readonly IPathingService _pathingService;
         private readonly ITownManagementService _townManagementService;
 
-        private TaskCompletionSource<bool> ItemDropped = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        private TaskCompletionSource<bool> NextGame = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private TaskCompletionSource<bool> ItemDropped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private TaskCompletionSource<bool> NextGame = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public CubeBot(
             IOptions<BotConfiguration> config,

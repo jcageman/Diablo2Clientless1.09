@@ -32,7 +32,7 @@ class BncsConnection : Connection
         List<byte> buffer;
         do
         {
-            buffer = new List<byte>();
+            buffer = [];
             // Get the first 4 bytes, packet type and length
             ReadUpTo(ref buffer, 4);
             short packetLength = BitConverter.ToInt16(buffer.ToArray(), 2);

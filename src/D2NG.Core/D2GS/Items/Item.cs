@@ -9,10 +9,10 @@ public class Item
 {
     public Item()
     {
-        Prefixes = new List<uint>();
-        Suffixes = new List<uint>();
+        Prefixes = [];
+        Suffixes = [];
         Sockets = 0;
-        Properties = new Dictionary<StatType, ItemProperty>();
+        Properties = [];
     }
 
     public EntityType EntityType { get; set; }

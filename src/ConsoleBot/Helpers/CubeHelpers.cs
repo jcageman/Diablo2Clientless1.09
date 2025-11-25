@@ -13,7 +13,7 @@ namespace ConsoleBot.Helpers
 {
     public static class CubeHelpers
     {
-        static HashSet<ItemName> flawlessGems = new HashSet<ItemName> { ItemName.FlawlessAmethyst, ItemName.FlawlessDiamond, ItemName.FlawlessEmerald, ItemName.FlawlessRuby, ItemName.FlawlessSapphire, ItemName.FlawlessSkull, ItemName.FlawlessTopaz };
+        static HashSet<ItemName> flawlessGems = [ItemName.FlawlessAmethyst, ItemName.FlawlessDiamond, ItemName.FlawlessEmerald, ItemName.FlawlessRuby, ItemName.FlawlessSapphire, ItemName.FlawlessSkull, ItemName.FlawlessTopaz];
 
         public static bool AnyGemsToTransmuteInStash(Game game)
         {

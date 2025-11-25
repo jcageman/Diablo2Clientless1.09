@@ -14,7 +14,7 @@ public class ChatEventPacket : BncsPacket
     public string Text { get; }
     public ChatEventPacket(byte[] packet) : base(packet)
     {
-        BinaryReader reader = new BinaryReader(new MemoryStream(packet), Encoding.ASCII);
+        BinaryReader reader = new(new MemoryStream(packet), Encoding.ASCII);
         if (PrefixByte != reader.ReadByte())
         {
             throw new BncsPacketException("Not a valid BNCS Packet");

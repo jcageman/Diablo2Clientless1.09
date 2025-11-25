@@ -53,7 +53,7 @@ public class TeleportPather
     }
 
 
-    private void AddToListAtIndex(List<Point> list, Point point, int index)
+    private static void AddToListAtIndex(List<Point> list, Point point, int index)
     {
         if (index < list.Count)
         {
@@ -72,8 +72,10 @@ public class TeleportPather
     public Path GetTeleportPath(Point fromLocation, Point toLocation)
     {
         MakeDistanceTable(toLocation);
-        var path = new List<Point>();
-        path.Add(fromLocation);
+        var path = new List<Point>
+        {
+            fromLocation
+        };
         int idxPath = 1;
 
         var bestMove = new BestMove
@@ -154,7 +156,7 @@ public class TeleportPather
                 if (!IsValidIndex(x, y))
                     continue;
 
-                Point p = new Point((ushort)x, (ushort)y);
+                Point p = new((ushort)x, (ushort)y);
 
                 if (m_distanceMatrix[p.X, p.Y] < value && CalculateDistance(p, position) <= TpRange)
                 {
@@ -196,7 +198,7 @@ public class TeleportPather
         }
     }
 
-    int GetRedundancy(List<Point> currentPath, int idxPath, Point position)
+    static int GetRedundancy(List<Point> currentPath, int idxPath, Point position)
     {
         // step redundancy check
         for (int i = 1; i < idxPath; i++)

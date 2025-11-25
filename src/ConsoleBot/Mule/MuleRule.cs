@@ -6,6 +6,6 @@ namespace ConsoleBot.Mule
     public class MuleRule
     {
         [Required]
-        public List<MuleFilter> MatchesAll { get; set; } = new List<MuleFilter>();
+        public List<MuleFilter> MatchesAll { get; set; } = [];
     }
 }

@@ -6,8 +6,8 @@ namespace ConsoleBot.Pickit
 {
     public static class Boots
     {
-        private static readonly HashSet<ItemName> casterBoots = new HashSet<ItemName> {
-            ItemName.Boots, ItemName.HeavyBoots, ItemName.ChainBoots, ItemName.LightPlatedBoots, ItemName.DemonhideBoots, ItemName.SharkskinBoots };
+        private static readonly HashSet<ItemName> casterBoots = [
+            ItemName.Boots, ItemName.HeavyBoots, ItemName.ChainBoots, ItemName.LightPlatedBoots, ItemName.DemonhideBoots, ItemName.SharkskinBoots ];
         public static bool ShouldPickupItemClassic(Item item)
         {
             if (item.Quality == QualityType.Rare)

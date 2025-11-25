@@ -23,7 +23,7 @@ internal class BattleNetChatServer
 
     protected ConcurrentDictionary<Sid, Action<BncsPacket>> PacketSentEventHandlers { get; } = new ConcurrentDictionary<Sid, Action<BncsPacket>>();
 
-    private readonly StateMachine<State, Trigger> _machine = new StateMachine<State, Trigger>(State.NotConnected);
+    private readonly StateMachine<State, Trigger> _machine = new(State.NotConnected);
 
     private readonly StateMachine<State, Trigger>.TriggerWithParameters<string> _connectTrigger;
     private readonly StateMachine<State, Trigger>.TriggerWithParameters<string, string> _loginTrigger;
@@ -56,12 +56,12 @@ internal class BattleNetChatServer
 
     public BncsContext Context { get; private set; }
 
-    private readonly BncsEvent AuthCheckEvent = new BncsEvent();
-    private readonly BncsEvent AuthInfoEvent = new BncsEvent();
-    private readonly BncsEvent EnterChatEvent = new BncsEvent();
-    private readonly BncsEvent LogonEvent = new BncsEvent();
-    private readonly BncsEvent ListRealmsEvent = new BncsEvent();
-    private readonly BncsEvent RealmLogonEvent = new BncsEvent();
+    private readonly BncsEvent AuthCheckEvent = new();
+    private readonly BncsEvent AuthInfoEvent = new();
+    private readonly BncsEvent EnterChatEvent = new();
+    private readonly BncsEvent LogonEvent = new();
+    private readonly BncsEvent ListRealmsEvent = new();
+    private readonly BncsEvent RealmLogonEvent = new();
 
     internal BattleNetChatServer()
     {

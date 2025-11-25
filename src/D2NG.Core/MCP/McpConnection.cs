@@ -15,7 +15,7 @@ internal class McpConnection : Connection
         List<byte> buffer;
         do
         {
-            buffer = new List<byte>();
+            buffer = [];
             // Get the first 3 bytes, packet type and length
             ReadUpTo(ref buffer, 3);
             short packetLength = BitConverter.ToInt16(buffer.ToArray(), 0);

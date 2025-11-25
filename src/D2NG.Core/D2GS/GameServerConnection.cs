@@ -145,7 +145,7 @@ internal class GameServerConnection : Connection
         return buffer;
     }
 
-    int GetChatPacketSize(ArraySegment<byte> input)
+    static int GetChatPacketSize(ArraySegment<byte> input)
     {
         if (input.Count < 12)
             throw new D2GSPacketException("Unable to determine packet size");

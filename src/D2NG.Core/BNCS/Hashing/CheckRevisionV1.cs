@@ -226,15 +226,18 @@ public static class CheckRevisionV1
     #endregion
 
     #region constants
-    private static readonly Dictionary<char, Operator> Operations = new Dictionary<char, Operator> {
+    private static readonly Dictionary<char, Operator> Operations = new()
+    {
         {'+', Add}, {'-', Subtract}, {'*', Multiply}, {'/', Divide}, {'|', Or}, {'&', And}, {'^', Xor}
     };
 
-    private static readonly Dictionary<int, OpCode> Ldargs = new Dictionary<int, OpCode> {
+    private static readonly Dictionary<int, OpCode> Ldargs = new()
+    {
         {0, OpCodes.Ldarg_0}, {1, OpCodes.Ldarg_1}, {2, OpCodes.Ldarg_2}, {3, OpCodes.Ldarg_3}
     };
 
-    private static readonly Dictionary<char, OpCode> Operators = new Dictionary<char, OpCode> {
+    private static readonly Dictionary<char, OpCode> Operators = new()
+    {
         {'+', OpCodes.Add}, {'-', OpCodes.Sub}, {'*', OpCodes.Mul}, {'/', OpCodes.Div},
         {'|', OpCodes.Or}, {'&', OpCodes.And}, {'^', OpCodes.Xor}
     };

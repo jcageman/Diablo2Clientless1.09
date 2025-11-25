@@ -24,7 +24,7 @@ public class Player
     public double LifePercentage { get; set; } = 100.0;
 
 
-    public List<Summon> Summons { get; internal set; } = new List<Summon>();
+    public List<Summon> Summons { get; internal set; } = [];
 
     public ConcurrentDictionary<DirectoryType, Item> Equipment { get; set; } = new ConcurrentDictionary<DirectoryType, Item>();
 

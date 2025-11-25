@@ -18,9 +18,9 @@ public class WorldObject : Entity
 
     public uint TownPortalOwnerId { get; internal set; }
 
-    public HashSet<EntityEffect> Effects { get; internal set; } = new HashSet<EntityEffect>();
+    public HashSet<EntityEffect> Effects { get; internal set; } = [];
 
-    public HashSet<MonsterEnchantment> MonsterEnchantments { get; internal set; } = new HashSet<MonsterEnchantment>();
+    public HashSet<MonsterEnchantment> MonsterEnchantments { get; internal set; } = [];
 
     public WorldObject(EntityType objectType, uint objectId, EntityCode objectCode, Point location, EntityState state, byte interactionType)
     {

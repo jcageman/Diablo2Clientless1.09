@@ -53,5 +53,5 @@ public class AssignNpcPacket : D2gsPacket
     public bool IsBossMinion { get; } = false;
     public bool IsChampion { get; } = false;
     public double LifePercentage { get; }
-    public HashSet<MonsterEnchantment> MonsterEnchantments { get; } = new HashSet<MonsterEnchantment>();
+    public HashSet<MonsterEnchantment> MonsterEnchantments { get; } = [];
 }

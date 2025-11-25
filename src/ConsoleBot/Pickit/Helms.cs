@@ -7,9 +7,9 @@ namespace ConsoleBot.Pickit
 {
     public static class Helms
     {
-        private static readonly HashSet<ItemName> desirableHelms = new HashSet<ItemName> {
+        private static readonly HashSet<ItemName> desirableHelms = [
             ItemName.Cap, ItemName.SkullCap, ItemName.GreatHelm, ItemName.Crown, ItemName.Mask, ItemName.BoneHelm,
-            ItemName.WarHat, ItemName.DeathMask, ItemName.GrimHelm };
+            ItemName.WarHat, ItemName.DeathMask, ItemName.GrimHelm ];
         public static bool ShouldPickupItemExpansion(Item item)
         {
             if (item.Quality == QualityType.Unique)

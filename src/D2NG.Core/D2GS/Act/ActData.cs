@@ -12,15 +12,15 @@ class ActData
     public uint MapId { get; set; }
     public Area Area { get; set; }
 
-    private readonly ConcurrentDictionary<Act, List<Tile>> _tiles = new ConcurrentDictionary<Act, List<Tile>>();
+    private readonly ConcurrentDictionary<Act, List<Tile>> _tiles = new();
     private readonly ConcurrentDictionary<Act, ConcurrentDictionary<(uint, EntityType), WorldObject>> _worldObjects
-        = new ConcurrentDictionary<Act, ConcurrentDictionary<(uint, EntityType), WorldObject>>();
+        = new();
     private readonly ConcurrentDictionary<Act, ConcurrentDictionary<EntityCode, ConcurrentBag<WorldObject>>> _worldObjectsByEntityCode
-        = new ConcurrentDictionary<Act, ConcurrentDictionary<EntityCode, ConcurrentBag<WorldObject>>>();
+        = new();
 
-    private readonly ConcurrentDictionary<Act, ConcurrentDictionary<uint, List<WarpData>>> _warps = new ConcurrentDictionary<Act, ConcurrentDictionary<uint, List<WarpData>>>();
+    private readonly ConcurrentDictionary<Act, ConcurrentDictionary<uint, List<WarpData>>> _warps = new();
 
-    public List<Tile> Tiles { get => _tiles.GetOrAdd(Act, new List<Tile>()); }
+    public List<Tile> Tiles { get => _tiles.GetOrAdd(Act, []); }
 
     public ConcurrentDictionary<(uint, EntityType), WorldObject> WorldObjects { get => _worldObjects.GetOrAdd(Act, new ConcurrentDictionary<(uint, EntityType), WorldObject>()); }
 
@@ -95,7 +95,7 @@ class ActData
         {
             WorldObjectsByEntityCode.AddOrUpdate(
 value.Code,
-(newCode => new ConcurrentBag<WorldObject> { }),
+(newCode => []),
 (existingCode, existingObjects) => new ConcurrentBag<WorldObject>(existingObjects.Where(o => o.Id != value.Id || o.Type != value.Type)));
         }
     }
@@ -103,12 +103,12 @@ value.Code,
     internal void AddWorldObject(WorldObject obj)
     {
         WorldObjects[(obj.Id, obj.Type)] = obj;
-        WorldObjectsByEntityCode.AddOrUpdate(obj.Code, (newCode => new ConcurrentBag<WorldObject> { obj }), (existingCode, existingObjects) => { existingObjects.Add(obj); return existingObjects; });
+        WorldObjectsByEntityCode.AddOrUpdate(obj.Code, (newCode => [obj]), (existingCode, existingObjects) => { existingObjects.Add(obj); return existingObjects; });
     }
 
     internal void AddWarp(AssignLevelWarpPacket packet)
     {
-        Warps.GetOrAdd(packet.WarpId, new List<WarpData>()).Add(packet.AsWarpData());
+        Warps.GetOrAdd(packet.WarpId, []).Add(packet.AsWarpData());
     }
 
     internal void HandleMapRevealPacket(MapRevealPacket p)

@@ -64,7 +64,7 @@ public class PathingService : IPathingService
             return GetPath(mapId, difficulty, area, map, movementMode, fromLocation, objectPoints.First().Add(xOffset, yOffset));
         }
 
-        return new List<Point>();
+        return [];
     }
 
     public async Task<List<Point>> GetPathToObject(uint mapId, Difficulty difficulty, Area area, Point fromLocation, EntityCode entityCode, MovementMode movementMode)
@@ -75,7 +75,7 @@ public class PathingService : IPathingService
             return GetPath(mapId, difficulty, area, map, movementMode, fromLocation, objectPoints.First());
         }
 
-        return new List<Point>();
+        return [];
     }
 
     public async Task<List<Point>> GetPathToNPC(uint mapId, Difficulty difficulty, Area area, Point fromLocation, NPCCode npcCode,
@@ -87,7 +87,7 @@ public class PathingService : IPathingService
             return GetPath(mapId, difficulty, area, map, movementMode, fromLocation, points.First());
         }
 
-        return new List<Point>();
+        return [];
     }
 
     public async Task<List<Point>> GetPathFromWaypointToArea(uint mapId, Difficulty difficulty, Area area,
@@ -119,7 +119,7 @@ public class PathingService : IPathingService
             return GetPath(mapId, difficulty, area, map, movementMode, objectPoints.First(), toLocation);
         }
 
-        return new List<Point>();
+        return [];
     }
 
 
@@ -127,7 +127,7 @@ public class PathingService : IPathingService
     {
         if (!map.TryMapToPointInMap(fromLocation, out var fromPosition) || !map.TryMapToPointInMap(toLocation, out var toPosition))
         {
-            return new List<Point>();
+            return [];
         }
 
         if (movementMode == MovementMode.Teleport)
@@ -150,14 +150,14 @@ public class PathingService : IPathingService
             var fromGridPosition = new GridPosition(fromPosition.X, fromPosition.Y);
             var toGridPosition = new GridPosition(toPosition.X, toPosition.Y);
             var path = pathFinder.FindPath(fromGridPosition, toGridPosition, grid);
-            var endPosition = path.Edges.LastOrDefault()?.End.Position;
+            var endPosition = path.Edges.Count > 0 ? path.Edges[^1]?.End.Position : null;
             if (endPosition.HasValue && map.MapToPoint(endPosition.Value) == toLocation)
             {
                 return path.Edges.Where((p, i) => i % 3 == 0 || i == path.Edges.Count - 1).Select(e => map.MapToPoint(e.End.Position)).ToList();
             }
         }
 
-        return new List<Point>();
+        return [];
     }
 
     public async Task<bool> IsNavigatablePointInArea(uint mapId, Difficulty difficulty, Area area, Point currentLocation)

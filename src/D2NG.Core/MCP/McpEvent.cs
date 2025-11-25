@@ -8,7 +8,7 @@ namespace D2NG.Core.MCP;
 
 internal class McpEvent : IDisposable
 {
-    private readonly ManualResetEvent _event = new ManualResetEvent(false);
+    private readonly ManualResetEvent _event = new(false);
 
     public McpPacket _packet;
 

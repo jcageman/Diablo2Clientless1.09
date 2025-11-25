@@ -32,8 +32,8 @@ namespace ConsoleBot.Bots.Types.Baal
         private readonly BaalConfiguration _baalConfig;
         private uint? BoClientPlayerId;
         private uint? PortalClientPlayerId;
-        private ConcurrentDictionary<string, bool> ShouldFollow = new ConcurrentDictionary<string, bool>();
-        private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new ConcurrentDictionary<string, (Point, CancellationTokenSource)>();
+        private ConcurrentDictionary<string, bool> ShouldFollow = new();
+        private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new();
 
         public BaalBot(IOptions<BotConfiguration> config, IOptions<BaalConfiguration> baalconfig,
             IExternalMessagingClient externalMessagingClient, IPathingService pathingService,

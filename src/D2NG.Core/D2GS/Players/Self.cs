@@ -24,7 +24,7 @@ public class Self : Player
 
     public double WalkingSpeedMultiplier { get; set; } = 1.0;
     public uint LastSelectedWaypointId { get; internal set; }
-    public ConcurrentBag<Waypoint> AllowedWaypoints { get; internal set; } = new ConcurrentBag<Waypoint>();
+    public ConcurrentBag<Waypoint> AllowedWaypoints { get; internal set; } = [];
     internal Self(AssignPlayerPacket assignPlayer) : base(assignPlayer)
     {
     }

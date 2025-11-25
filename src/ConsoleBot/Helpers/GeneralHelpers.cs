@@ -19,7 +19,7 @@ namespace ConsoleBot.Helpers
             int retryCount = 0;
             while ((!success) && (elapsed < timeout))
             {
-                Stopwatch sw = new Stopwatch();
+                Stopwatch sw = new();
                 sw.Start();
                 success = action(retryCount);
                 if(!success)
@@ -41,7 +41,7 @@ namespace ConsoleBot.Helpers
             int retryCount = 0;
             while ((!success) && (elapsed < timeout))
             {
-                Stopwatch sw = new Stopwatch();
+                Stopwatch sw = new();
                 sw.Start();
                 success = await action(retryCount);
                 if (!success)

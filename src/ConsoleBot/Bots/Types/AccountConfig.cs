@@ -16,9 +16,9 @@ namespace ConsoleBot.Bots.Types
         public string Character { get; set; }
 
 
-        public List<int> HealthSlots = new List<int> { 0, 1 };
+        public List<int> HealthSlots = [0, 1];
 
-        public List<int> ManaSlots = new List<int> { 2, 3 };
+        public List<int> ManaSlots = [2, 3];
 
         public bool ResurrectMerc { get; set; } = true;
 

@@ -235,8 +235,8 @@ public class MpqHuffman
         LinkedNode tail = BuildList(sPrime[comptype]);
         LinkedNode head = BuildTree(tail);
 
-        MemoryStream outputstream = new MemoryStream();
-        BitStream bitstream = new BitStream(Data);
+        MemoryStream outputstream = new();
+        BitStream bitstream = new(Data);
         int decoded;
         do
         {
@@ -300,7 +300,7 @@ public class MpqHuffman
             LinkedNode child1 = current.Prev;
             if (child1 == null) break;
 
-            LinkedNode parent = new LinkedNode(0, child0.Weight + child1.Weight);
+            LinkedNode parent = new(0, child0.Weight + child1.Weight);
             parent.Child0 = child0;
             child0.Parent = parent;
             child1.Parent = parent;
@@ -316,10 +316,10 @@ public class MpqHuffman
         LinkedNode parent = Tail;
         LinkedNode result = Tail.Prev; // This will be the new tail after the tree is updated
 
-        LinkedNode temp = new LinkedNode(parent.DecompressedValue, parent.Weight);
+        LinkedNode temp = new(parent.DecompressedValue, parent.Weight);
         temp.Parent = parent;
 
-        LinkedNode newnode = new LinkedNode(Decomp, 0);
+        LinkedNode newnode = new(Decomp, 0);
         newnode.Parent = parent;
 
         parent.Child0 = newnode;

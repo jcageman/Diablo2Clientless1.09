@@ -30,11 +30,11 @@ namespace ConsoleBot.Bots
         protected readonly IMuleService _muleService;
         protected readonly IPathingService _pathingService;
         private readonly MultiClientConfiguration _multiClientConfig;
-        protected TaskCompletionSource<bool> NextGame = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        private ConcurrentDictionary<string, ManualResetEvent> PlayersInGame = new ConcurrentDictionary<string, ManualResetEvent>();
-        protected HashSet<string> ClientsNeedingMule = new HashSet<string>();
-        private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new ConcurrentDictionary<uint, Item>();
-        private readonly ConcurrentDictionary<uint, Item> _pickitPotionsOnGround = new ConcurrentDictionary<uint, Item>();
+        protected TaskCompletionSource<bool> NextGame = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly ConcurrentDictionary<string, ManualResetEvent> PlayersInGame = new();
+        protected HashSet<string> ClientsNeedingMule = [];
+        private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new();
+        private readonly ConcurrentDictionary<uint, Item> _pickitPotionsOnGround = new();
 
         public MultiClientBotBase(IOptions<BotConfiguration> config, IOptions<MultiClientConfiguration> multiClientConfig,
             IExternalMessagingClient externalMessagingClient, IMuleService muleService, IPathingService pathingService)
@@ -307,7 +307,7 @@ namespace ConsoleBot.Bots
             return true;
         }
 
-        private void HandleEventMessage(Client client, EventNotifyPacket eventNotifyPacket)
+        private static void HandleEventMessage(Client client, EventNotifyPacket eventNotifyPacket)
         {
             if (eventNotifyPacket.PlayerRelationType == PlayerRelationType.InvitesYouToParty)
             {
@@ -360,7 +360,7 @@ namespace ConsoleBot.Bots
                 _pickitItemsOnGround.TryAdd(item.Id, item);
             }
         }
-        private void PutRejuvenationOnPickitList(Client client, Item item)
+        private void PutRejuvenationOnPickitList(Item item)
         {
             if (item.IsPotion && item.Ground)
             {
@@ -478,7 +478,7 @@ namespace ConsoleBot.Bots
                         }, TimeSpan.FromSeconds(0.2));
                     }, TimeSpan.FromSeconds(3)))
                     {
-                        PutRejuvenationOnPickitList(client, item);
+                        PutRejuvenationOnPickitList(item);
                     }
                 }
             }

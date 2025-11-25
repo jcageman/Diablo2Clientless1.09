@@ -29,5 +29,5 @@ internal class WaypointMenuPacket : D2gsPacket
     }
 
     public uint WaypointId { get; }
-    public HashSet<Waypoint> AllowedWaypoints { get; } = new HashSet<Waypoint>();
+    public HashSet<Waypoint> AllowedWaypoints { get; } = [];
 }

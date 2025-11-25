@@ -248,14 +248,14 @@ namespace ConsoleBot.Bots.Types.Travincal
             return true;
         }
 
-        private List<WorldObject> GetCouncilMembers(Game game)
+        private static List<WorldObject> GetCouncilMembers(Game game)
         {
             var councilMembers = game.GetNPCsByCode(NPCCode.CouncilMember1);
             councilMembers.AddRange(game.GetNPCsByCode(NPCCode.CouncilMember2));
             return councilMembers;
         }
 
-        private bool BarbBo(Game game)
+        private static bool BarbBo(Game game)
         {
             if(!GeneralHelpers.TryWithTimeout((retryCount) =>
             {

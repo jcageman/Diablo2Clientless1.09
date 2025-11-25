@@ -223,7 +223,7 @@ public class Game
             return entities.ToList();
         }
 
-        return new List<WorldObject>();
+        return [];
     }
 
     public List<WorldObject> GetNPCsByCode(NPCCode npcCode)

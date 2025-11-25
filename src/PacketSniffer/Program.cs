@@ -13,11 +13,11 @@ namespace PacketSniffer;
 
 class Program
 {
-    public static ConcurrentDictionary<int, GameServerConnection> gameServerConnections = new ConcurrentDictionary<int, GameServerConnection>();
+    public static ConcurrentDictionary<int, GameServerConnection> gameServerConnections = new();
 
-    public static BncsConnection bncsConnection = new BncsConnection();
+    public static BncsConnection bncsConnection = new();
 
-    public static McpConnection mcpConnection = new McpConnection();
+    public static McpConnection mcpConnection = new();
     static void Main(string[] args)
     {
         bncsConnection._stream = new SnifferNetworkStream(new byte[] { });

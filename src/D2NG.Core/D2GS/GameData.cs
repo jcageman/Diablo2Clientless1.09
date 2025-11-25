@@ -67,7 +67,7 @@ internal class GameData
 
     public Item CursorItem { get; internal set; }
 
-    public List<Player> Players { get; internal set; } = new List<Player>();
+    public List<Player> Players { get; internal set; } = [];
 
     public ConcurrentDictionary<uint, Item> Items { get; private set; } = new ConcurrentDictionary<uint, Item>();
 

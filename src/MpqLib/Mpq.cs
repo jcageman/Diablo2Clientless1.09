@@ -45,7 +45,7 @@ public abstract class Mpq : IDisposable
 
     protected Mpq()
     {
-        cached_resources = new Dictionary<string, object>();
+        cached_resources = [];
     }
 
     public abstract Stream GetStreamForResource(string path);
@@ -137,7 +137,7 @@ public class MpqContainer : Mpq
 
     public MpqContainer()
     {
-        mpqs = new List<Mpq>();
+        mpqs = [];
     }
 
     public void Add(Mpq mpq)
@@ -187,12 +187,12 @@ public class MpqDirectory : Mpq
     public MpqDirectory(string path)
     {
         mpq_dir_path = path;
-        file_hash = new Dictionary<string, string>();
+        file_hash = [];
 
         RecurseDirectoryTree(mpq_dir_path);
     }
 
-    string ConvertBackSlashes(string path)
+    static string ConvertBackSlashes(string path)
     {
         while (path.IndexOf('\\') != -1)
             path = path.Replace('\\', Path.DirectorySeparatorChar);

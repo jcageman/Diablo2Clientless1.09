@@ -9,10 +9,10 @@ class PlainTextDataType
 
     public PlainTextDataType(string file)
     {
-        m_lines = new List<string[]>();
+        m_lines = [];
         var lines = new List<string>();
 
-        using (StreamReader r = new StreamReader(file))
+        using (StreamReader r = new(file))
         {
             string line;
             while ((line = r.ReadLine()) != null)

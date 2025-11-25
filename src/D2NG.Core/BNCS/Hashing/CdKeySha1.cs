@@ -201,9 +201,11 @@ public class CdKeySha1 : CdKey
         Product = values[0] >> 0X0A;
         Public = BitConverter.GetBytes(((values[0] & 0x03FF) << 0x10) | (int)((uint)values[1] >> 0x10));
 
-        var priv = new List<byte>();
-        priv.Add((byte)((values[1] & 0x00FF) >> 0));
-        priv.Add((byte)((values[1] & 0xFF00) >> 8));
+        var priv = new List<byte>
+        {
+            (byte)((values[1] & 0x00FF) >> 0),
+            (byte)((values[1] & 0xFF00) >> 8)
+        };
         priv.AddRange(BitConverter.GetBytes(values[2]));
         priv.AddRange(BitConverter.GetBytes(values[3]));
         Private = priv.ToArray();

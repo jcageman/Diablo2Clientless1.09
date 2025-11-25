@@ -278,8 +278,10 @@ internal class ParseItemPacket : D2gsPacket
 
         if (item.IsPersonalised)
         {
-            var personalisedName = new List<byte>();
-            personalisedName.Add(reader.ReadByte());
+            var personalisedName = new List<byte>
+            {
+                reader.ReadByte()
+            };
             while (personalisedName.Last() != 0x00)
             {
                 personalisedName.Add(reader.ReadByte()); // 16 characters of 7 bits each for the name of the ear to process later

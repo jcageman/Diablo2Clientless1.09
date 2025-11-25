@@ -15,11 +15,11 @@ namespace ConsoleBot.Helpers
 {
     public static class NPCHelpers
     {
-        private static readonly HashSet<NPCCode> FriendlyNPCs = new HashSet<NPCCode> { 
+        private static readonly HashSet<NPCCode> FriendlyNPCs = [ 
             NPCCode.MephistoGhost, NPCCode.ATrap1, NPCCode.ATrap2, NPCCode.ATrap3, NPCCode.ATrap4,
             NPCCode.ATrap5, NPCCode.ATrap6, NPCCode.ATrap7, NPCCode.Hydra1, NPCCode.Hydra2, NPCCode.Hydra3, NPCCode.CompellingOrb,
             NPCCode.ClayGolem, NPCCode.BloodGolem, NPCCode.FireGolem, NPCCode.IronGolem, NPCCode.Valkyrie,
-            NPCCode.Act1Npc, NPCCode.Guard, NPCCode.BaalThrone, NPCCode.BaalTentacle1, NPCCode.BaalTentacle2, NPCCode.BaalTentacle3, NPCCode.BaalTentacle4, NPCCode.BaalTentacle5};
+            NPCCode.Act1Npc, NPCCode.Guard, NPCCode.BaalThrone, NPCCode.BaalTentacle1, NPCCode.BaalTentacle2, NPCCode.BaalTentacle3, NPCCode.BaalTentacle4, NPCCode.BaalTentacle5];
         public static WorldObject GetUniqueNPC(Game game, NPCCode npcCode)
         {
             return game.GetNPCsByCode(npcCode).FirstOrDefault();

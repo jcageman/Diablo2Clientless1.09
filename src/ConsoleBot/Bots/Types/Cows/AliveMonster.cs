@@ -12,6 +12,6 @@ namespace ConsoleBot.Bots.Types.Cows
         public double LifePercentage { get; set; } = 100;
 
         public NPCCode NPCCode { get; set; }
-        public HashSet<MonsterEnchantment> MonsterEnchantments { get; set; } = new HashSet<MonsterEnchantment>();
+        public HashSet<MonsterEnchantment> MonsterEnchantments { get; set; } = [];
 }
 }

@@ -97,7 +97,7 @@ struct MpqHash
 
     public static MpqHash InvalidHash()
     {
-        MpqHash invalid = new MpqHash();
+        MpqHash invalid = new();
         invalid.Name1 = uint.MaxValue;
         invalid.Name2 = uint.MaxValue;
         return invalid;

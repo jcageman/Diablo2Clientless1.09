@@ -526,7 +526,7 @@ namespace ConsoleBot.Bots.Types.Assist
             return true;
         }
 
-        private async Task<bool> PickupNearbyItems(Client client)
+        private static async Task<bool> PickupNearbyItems(Client client)
         {
             var pickupItems = client.Game.Items.Values
                 .Where(i => i.Ground

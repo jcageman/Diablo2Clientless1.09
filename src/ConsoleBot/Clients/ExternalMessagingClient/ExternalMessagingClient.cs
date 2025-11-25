@@ -19,7 +19,7 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
     {
         private readonly ExternalMessagingConfiguration _externalConfiguration;
         private readonly ITelegramBotClient _telegramBotClient;
-        private readonly List<Client> _clients = new List<Client>();
+        private readonly List<Client> _clients = [];
 
         public ExternalMessagingClient(IOptions<ExternalMessagingConfiguration> externalConfiguration)
         {
@@ -73,7 +73,7 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
             return Task.CompletedTask;
         }
 
-        Task HandleExceptionAsync(Exception exception)
+        static Task HandleExceptionAsync(Exception exception)
         {
             Log.Information($"Exception received: {exception}");
             return Task.CompletedTask;

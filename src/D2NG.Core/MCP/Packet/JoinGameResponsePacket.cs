@@ -37,7 +37,7 @@ internal class JoinGameResponsePacket : McpPacket
         Validate(Result);
     }
 
-    private void Validate(uint result)
+    private static void Validate(uint result)
     {
         switch (result)
         {

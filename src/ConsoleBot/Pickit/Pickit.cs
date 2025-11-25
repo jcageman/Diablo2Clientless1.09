@@ -10,7 +10,7 @@ namespace ConsoleBot.Pickit
     public static class Pickit
     {
         private static readonly Dictionary<ClassificationType, (Func<Item, bool> classicFunction, Func<Item, bool> expansionFunction)> PickupRules
-    = new Dictionary<ClassificationType, (Func<Item, bool> classicFunction, Func<Item, bool> expansionFunction)>
+    = new()
     {
        {ClassificationType.AmazonBow, (Weapons.ShouldPickupItemClassic, Weapons.ShouldPickupItemExpansion) },
         {ClassificationType.AmazonJavelin, (Weapons.ShouldPickupItemClassic, Weapons.ShouldPickupItemExpansion) },
@@ -55,7 +55,7 @@ namespace ConsoleBot.Pickit
     };
 
         private static readonly Dictionary<ClassificationType, (Func<Item, bool> classicFunction, Func<Item, bool> expansionFunction)> KeepRules
-    = new Dictionary<ClassificationType, (Func<Item, bool> classicFunction, Func<Item, bool> expansionFunction)>
+    = new()
     {
         {ClassificationType.AmazonBow, (Weapons.ShouldKeepItemClassic, Weapons.ShouldKeepItemExpansion) },
         {ClassificationType.AmazonJavelin, (Weapons.ShouldKeepItemClassic, Weapons.ShouldKeepItemExpansion) },

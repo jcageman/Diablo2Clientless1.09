@@ -116,7 +116,7 @@ namespace ConsoleBot.Attack
             return path.Count != 0;
         }
 
-        private List<Point> GetNearbyMonsters(List<Point> enemies, Point location, double distance)
+        private static List<Point> GetNearbyMonsters(List<Point> enemies, Point location, double distance)
         {
             return enemies.Where(p => p.Distance(location) < distance).ToList();
 
@@ -404,7 +404,7 @@ namespace ConsoleBot.Attack
             {
                 if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != Skill.Salvation)
                 {
-                    Log.Information($"Changing to {Skill.Salvation} due to monster with {string.Join(",", enemyLightningEnhancedMultiShot?.MonsterEnchantments)} or convicted player");
+                    Log.Information($"Changing to {Skill.Salvation} due to monster with {string.Join(",", enemyLightningEnhancedMultiShot?.MonsterEnchantments ?? [])} or convicted player");
                     client.Game.ChangeSkill(Skill.Salvation, Hand.Right);
                 }
             }
@@ -467,7 +467,7 @@ namespace ConsoleBot.Attack
             return true;
         }
 
-        private async Task<bool> NecromancerAssist(Client client, Player player)
+        private static async Task<bool> NecromancerAssist(Client client, Player player)
         {
             var me = client.Game.Me;
             if (me.Mana > 20 && me.HasSkill(Skill.BoneArmor) && !client.Game.Me.Effects.ContainsKey(EntityEffect.Bonearmor))

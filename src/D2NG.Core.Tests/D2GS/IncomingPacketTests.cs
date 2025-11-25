@@ -85,7 +85,7 @@ public class IncomingPacketTests
         Assert.Equal(NPCCode.VileHunter, packet.UniqueCode);
         Assert.Equal(new Point(7959, 8313), packet.Location);
         Assert.Equal(39.84375, packet.LifePercentage);
-        Assert.Equal(new HashSet<MonsterEnchantment> { MonsterEnchantment.ExtraFast, MonsterEnchantment.LightningEnchanted, MonsterEnchantment.Teleportation }, packet.MonsterEnchantments);
+        Assert.Equal([MonsterEnchantment.ExtraFast, MonsterEnchantment.LightningEnchanted, MonsterEnchantment.Teleportation], packet.MonsterEnchantments);
     }
 
     [Fact]

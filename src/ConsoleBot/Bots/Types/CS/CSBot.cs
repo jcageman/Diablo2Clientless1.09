@@ -30,7 +30,7 @@ namespace ConsoleBot.Bots.Types.CS
         private readonly ITownManagementService _townManagementService;
         private readonly IAttackService _attackService;
         private readonly IMapApiService _mapApiService;
-        private CsState _state = new CsState();
+        private CsState _state = new();
 
         public CSBot(
             IOptions<BotConfiguration> config,

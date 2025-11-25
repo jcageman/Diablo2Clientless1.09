@@ -25,7 +25,7 @@ internal class AssignObjectPacket : D2gsPacket
     }
 
     public WorldObject AsWorldObject()
-        => new WorldObject(EntityType, EntityId, ObjectCode, Location, State, InteractionType);
+        => new(EntityType, EntityId, ObjectCode, Location, State, InteractionType);
 
     public EntityType EntityType { get; }
     public uint EntityId { get; }

@@ -7,19 +7,19 @@ namespace ConsoleBot.Pickit
 {
     public static class Weapons
     {
-        private static readonly HashSet<ItemName> desirableExceptionalWeapons = new HashSet<ItemName> { ItemName.MarteldeFer, ItemName.BattleHammer, ItemName.Lance, ItemName.ExecutionerSword, ItemName.Naga };
+        private static readonly HashSet<ItemName> desirableExceptionalWeapons = [ItemName.MarteldeFer, ItemName.BattleHammer, ItemName.Lance, ItemName.ExecutionerSword, ItemName.Naga];
 
-        private static readonly HashSet<ItemName> interestingExceptionalWeapons = new HashSet<ItemName> { ItemName.AncientAxe, ItemName.Tabar, ItemName.GothicSword, ItemName.BecDeCorbin, ItemName.GrimScythe, ItemName.Zweihander };
+        private static readonly HashSet<ItemName> interestingExceptionalWeapons = [ItemName.AncientAxe, ItemName.Tabar, ItemName.GothicSword, ItemName.BecDeCorbin, ItemName.GrimScythe, ItemName.Zweihander];
 
-        private static readonly HashSet<ItemName> desirableBows = new HashSet<ItemName> { ItemName.DoubleBow, ItemName.RuneBow };
+        private static readonly HashSet<ItemName> desirableBows = [ItemName.DoubleBow, ItemName.RuneBow];
 
-        private static readonly HashSet<ItemName> eliteSwords = new HashSet<ItemName> { ItemName.PhaseBlade, ItemName.ConquestSword, ItemName.CrypticSword, ItemName.MythicalSword,
-            ItemName.ChampionSword, ItemName.ColossusSword, ItemName.ColossusBlade};
+        private static readonly HashSet<ItemName> eliteSwords = [ ItemName.PhaseBlade, ItemName.ConquestSword, ItemName.CrypticSword, ItemName.MythicalSword,
+            ItemName.ChampionSword, ItemName.ColossusSword, ItemName.ColossusBlade];
 
-        private static readonly HashSet<ItemName> eliteMercWeapons = new HashSet<ItemName> { ItemName.GhostSpear, ItemName.WarPike, ItemName.ColossusVoulge, ItemName.Thresher, ItemName.CrypticAxe, ItemName.GreatPoleaxe, ItemName.GiantThresher };
+        private static readonly HashSet<ItemName> eliteMercWeapons = [ItemName.GhostSpear, ItemName.WarPike, ItemName.ColossusVoulge, ItemName.Thresher, ItemName.CrypticAxe, ItemName.GreatPoleaxe, ItemName.GiantThresher];
 
 
-        private static readonly HashSet<ItemName> boWeapons = new HashSet<ItemName> { ItemName.CrystalSword, ItemName.Dagger, ItemName.ShortSpear, ItemName.ThrowingSpear, ItemName.ThrowingKnife, ItemName.ThrowingAxe, ItemName.ThrowingKnife, ItemName.BalancedKnife };
+        private static readonly HashSet<ItemName> boWeapons = [ItemName.CrystalSword, ItemName.Dagger, ItemName.ShortSpear, ItemName.ThrowingSpear, ItemName.ThrowingKnife, ItemName.ThrowingAxe, ItemName.ThrowingKnife, ItemName.BalancedKnife];
 
         public static bool ShouldPickupItemExpansion(Item item)
         {

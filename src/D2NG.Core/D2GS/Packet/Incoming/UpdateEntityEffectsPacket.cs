@@ -28,5 +28,5 @@ public class UpdateEntityEffectsPacket : D2gsPacket
 
     public EntityType EntityType { get; }
     public uint EntityId { get; }
-    public HashSet<EntityEffect> EntityEffects { get; } = new HashSet<EntityEffect>();
+    public HashSet<EntityEffect> EntityEffects { get; } = [];
 }

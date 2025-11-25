@@ -19,12 +19,12 @@ namespace ConsoleBot.Bots.Types.Cows
     {
         private readonly List<Client> _killingClients;
         private readonly IMapApiService mapApiService;
-        private readonly ConcurrentDictionary<uint, AliveMonster> _aliveMonsters = new ConcurrentDictionary<uint, AliveMonster>();
-        private readonly ConcurrentDictionary<Point, Point> _usedClusters = new ConcurrentDictionary<Point, Point>();
-        private readonly ConcurrentDictionary<Point, Point> _busyClusters = new ConcurrentDictionary<Point, Point>();
-        private readonly ConcurrentDictionary<Point, Point> _cowClusters = new ConcurrentDictionary<Point, Point>();
-        private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new ConcurrentDictionary<uint, Item>();
-        private readonly ConcurrentDictionary<uint, Item> _pickitPotionsOnGround = new ConcurrentDictionary<uint, Item>();
+        private readonly ConcurrentDictionary<uint, AliveMonster> _aliveMonsters = new();
+        private readonly ConcurrentDictionary<Point, Point> _usedClusters = new();
+        private readonly ConcurrentDictionary<Point, Point> _busyClusters = new();
+        private readonly ConcurrentDictionary<Point, Point> _cowClusters = new();
+        private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new();
+        private readonly ConcurrentDictionary<uint, Item> _pickitPotionsOnGround = new();
         private bool IsActive = false;
         public CowManager(List<Client> killingclients, List<Client> listeningClients, IMapApiService mapApiService)
         {
@@ -78,7 +78,7 @@ namespace ConsoleBot.Bots.Types.Cows
             return result.OrderBy(p => p.X).ThenBy(p => p.Y).ToList();
         }
 
-        private int? GetNearestLocationToEdge(int[] locations, bool leftToRight)
+        private static int? GetNearestLocationToEdge(int[] locations, bool leftToRight)
         {
             var startX = leftToRight ? 0 : locations.Length - 1;
             int x = startX;

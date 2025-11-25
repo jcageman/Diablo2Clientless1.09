@@ -195,7 +195,7 @@ namespace ConsoleBot.Bots.Types.Mephisto
             return true;
         }
 
-        private bool PickupNearbyItems(Client client)
+        private static bool PickupNearbyItems(Client client)
         {
             var pickupItems = client.Game.Items.Values.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
             Log.Information($"Killed Mephisto, picking up {pickupItems.Count()} items ");

@@ -36,8 +36,8 @@ namespace ConsoleBot.Bots.Types.Cows
         private readonly IMapApiService _mapApiService;
         private readonly CowConfiguration _cowconfig;
         private uint? BoClientPlayerId;
-        private ConcurrentDictionary<string, bool> ShouldFollow = new ConcurrentDictionary<string, bool>();
-        private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new ConcurrentDictionary<string, (Point, CancellationTokenSource)>();
+        private ConcurrentDictionary<string, bool> ShouldFollow = new();
+        private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new();
         private CowManager _cowManager;
         public CowBot(IOptions<BotConfiguration> config, IOptions<CowConfiguration> cowconfig,
             IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
@@ -710,7 +710,7 @@ namespace ConsoleBot.Bots.Types.Cows
             while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
             {
                 var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-                var cowsNearLead = leadPlayer != null ? cowManager.GetNearbyAliveMonsters(leadPlayer.Location, 20.0, 10) : new List<AliveMonster>();
+                var cowsNearLead = leadPlayer != null ? cowManager.GetNearbyAliveMonsters(leadPlayer.Location, 20.0, 10) : [];
                 if (leadPlayer != null && leadPlayer.Location != currentCluster && cowsNearLead.Any() && leadPlayer.Location.Distance(client.Game.Me.Location) > 20)
                 {
                     if (cowsNearLead.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)))

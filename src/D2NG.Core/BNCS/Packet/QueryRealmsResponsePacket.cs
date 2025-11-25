@@ -8,11 +8,11 @@ namespace D2NG.Core.BNCS.Packet;
 
 public class QueryRealmsResponsePacket : BncsPacket
 {
-    public List<string> Realms { get; } = new List<string>();
+    public List<string> Realms { get; } = [];
 
     public QueryRealmsResponsePacket(byte[] packet) : base(packet)
     {
-        BinaryReader reader = new BinaryReader(new MemoryStream(packet), Encoding.ASCII);
+        BinaryReader reader = new(new MemoryStream(packet), Encoding.ASCII);
         if (PrefixByte != reader.ReadByte())
         {
             throw new BncsPacketException("Not a valid BNCS Packet");

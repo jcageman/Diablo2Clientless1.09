@@ -29,17 +29,17 @@ public class Belt : Container
         }
     }
 
-    private bool IsHealthPotion(Item item)
+    private static bool IsHealthPotion(Item item)
     {
         return item.Classification == ClassificationType.HealthPotion;
     }
 
-    private bool IsManaPotion(Item item)
+    private static bool IsManaPotion(Item item)
     {
         return item.Classification == ClassificationType.ManaPotion;
     }
 
-    private bool IsRejuvenationPotion(Item item)
+    private static bool IsRejuvenationPotion(Item item)
     {
         return item.Classification == ClassificationType.RejuvenationPotion;
     }
