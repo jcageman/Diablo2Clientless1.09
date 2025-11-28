@@ -149,7 +149,7 @@ public class Game
             return;
         }
 
-        Log.Information("Leaving game");
+        Log.Debug("Leaving game");
         try
         {
             await _gameServer.LeaveGame();

@@ -80,18 +80,18 @@ namespace ConsoleBot.Bots.Types.CS
 
             if (IsTeleportClient(client))
             {
-                Log.Information($"Client {client.Game.Me.Name} Taking waypoint to {Waypoint.RiverOfFlame}");
+                Log.Debug($"Client {client.Game.Me.Name} Taking waypoint to {Waypoint.RiverOfFlame}");
                 if (!await _townManagementService.TakeWaypoint(client, Waypoint.RiverOfFlame))
                 {
-                    Log.Warning($"Client {client.Game.Me.Name} Taking waypoint failed at location {client.Game.Me.Location}");
+                    Log.Debug($"Client {client.Game.Me.Name} Taking waypoint failed at location {client.Game.Me.Location}");
                     return false;
                 }
 
-                Log.Information($"Client {client.Game.Me.Name} Teleporting to {Area.ChaosSanctuary}");
+                Log.Debug($"Client {client.Game.Me.Name} Teleporting to {Area.ChaosSanctuary}");
                 var pathToChaos = await _pathingService.GetPathToObjectWithOffset(client.Game.MapId, Difficulty.Normal, Area.RiverOfFlame, client.Game.Me.Location, EntityCode.WaypointAct4Levels, -6, -319, MovementMode.Teleport);
                 if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToChaos, MovementMode.Teleport))
                 {
-                    Log.Warning($"Client {client.Game.Me.Name} Teleporting to {Area.ChaosSanctuary} warp failed at location {client.Game.Me.Location}");
+                    Log.Debug($"Client {client.Game.Me.Name} Teleporting to {Area.ChaosSanctuary} warp failed at location {client.Game.Me.Location}");
                     return false;
                 }
 
@@ -101,14 +101,14 @@ namespace ConsoleBot.Bots.Types.CS
                     return await client.Game.TeleportToLocationAsync(goalLocation);
                 }, TimeSpan.FromSeconds(5)))
                 {
-                    Log.Warning($"Client {client.Game.Me.Name} Teleporting to location within {Area.ChaosSanctuary} failed at location {client.Game.Me.Location}");
+                    Log.Debug($"Client {client.Game.Me.Name} Teleporting to location within {Area.ChaosSanctuary} failed at location {client.Game.Me.Location}");
                     return false;
                 }
 
                 var pathToDiabloStar = await _pathingService.GetPathToObject(client.Game.MapId, Difficulty.Normal, Area.ChaosSanctuary, client.Game.Me.Location, EntityCode.DiabloStar, MovementMode.Teleport);
                 if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToDiabloStar, MovementMode.Teleport))
                 {
-                    Log.Warning($"Client {client.Game.Me.Name} Teleporting to {EntityCode.DiabloStar} failed at location {client.Game.Me.Location}");
+                    Log.Debug($"Client {client.Game.Me.Name} Teleporting to {EntityCode.DiabloStar} failed at location {client.Game.Me.Location}");
                     return false;
                 }
 
@@ -117,7 +117,7 @@ namespace ConsoleBot.Bots.Types.CS
                     return await _townManagementService.TakeTownPortalToTown(client);
                 }, TimeSpan.FromSeconds(5)))
                 {
-                    Log.Warning($"Client {client.Game.Me.Name} Taking townportal to town failed");
+                    Log.Debug($"Client {client.Game.Me.Name} Taking townportal to town failed");
                     return false;
                 }
             }
@@ -150,7 +150,7 @@ namespace ConsoleBot.Bots.Types.CS
                 {
                     if (client.Game.IsInTown() && _state.TeleportId != null)
                     {
-                        Log.Information($"Client {client.Game.Me.Name} taking town portal to chaos");
+                        Log.Debug($"Client {client.Game.Me.Name} taking town portal to chaos");
                         var teleportPlayer = client.Game.Players.FirstOrDefault(p => p.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.OrdinalIgnoreCase));
                         if (teleportPlayer == null || !await _townManagementService.TakeTownPortalToArea(client, teleportPlayer, Area.ChaosSanctuary))
                         {
@@ -163,7 +163,7 @@ namespace ConsoleBot.Bots.Types.CS
                     return false;
                 }, TimeSpan.FromSeconds(10)))
                 {
-                    Log.Warning($"Client {client.Game.Me.Name} Taking townportal to {Area.ChaosSanctuary} failed");
+                    Log.Debug($"Client {client.Game.Me.Name} Taking townportal to {Area.ChaosSanctuary} failed");
                     return false;
                 }
 
@@ -184,7 +184,7 @@ namespace ConsoleBot.Bots.Types.CS
                 await Task.Delay(100);
                 if (_state.TeleportHasChanged(ownState) && !client.Game.IsInTown())
                 {
-                    Log.Information($"Client {client.Game.Me.Name} Taking town portal to town");
+                    Log.Debug($"Client {client.Game.Me.Name} Taking town portal to town");
                     if (!await _townManagementService.TakeTownPortalToTown(client))
                     {
                         continue;
@@ -194,7 +194,7 @@ namespace ConsoleBot.Bots.Types.CS
                 var newTeleportId = _state.TeleportId;
                 if (client.Game.IsInTown() && newTeleportId != null && newTeleportId != ownState.TeleportId)
                 {
-                    Log.Information($"Client {client.Game.Me.Name} taking town portal to chaos {ownState.TeleportId} --> {newTeleportId}");
+                    Log.Debug($"Client {client.Game.Me.Name} taking town portal to chaos {ownState.TeleportId} --> {newTeleportId}");
                     var teleportPlayer = client.Game.Players.FirstOrDefault(p => p.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.OrdinalIgnoreCase));
                     if (teleportPlayer == null || !await _townManagementService.TakeTownPortalToArea(client, teleportPlayer, Area.ChaosSanctuary))
                     {
@@ -536,7 +536,7 @@ namespace ConsoleBot.Bots.Types.CS
 
         private async Task<bool> MoveKillingLocationIfFar(Client client, CsState csState)
         {
-            Log.Information($"Kill location {csState.KillLocation}");
+            Log.Debug($"Kill location {csState.KillLocation}");
             WorldObject boss = null;
             if (!await GeneralHelpers.TryWithTimeout(async (_) =>
             {
@@ -555,7 +555,7 @@ namespace ConsoleBot.Bots.Types.CS
             var walkingPathToBosses = await _pathingService.GetPathToLocation(client.Game, boss.Location, MovementMode.Walking);
             if (walkingPathToBosses.Zip(walkingPathToBosses.Skip(1), (p1, p2) => p1.Distance(p2)).Sum() > 25)
             {
-                Log.Information($"Bosses are far from usual location, moving location {client.Game.Me.Name}");
+                Log.Debug($"Bosses are far from usual location, moving location {client.Game.Me.Name}");
                 var pathToBosses = await _pathingService.GetPathToLocation(client.Game, boss.Location, MovementMode.Teleport);
                 if (await MovementHelpers.TakePathOfLocations(client.Game, pathToBosses, MovementMode.Teleport))
                 {
@@ -587,7 +587,7 @@ namespace ConsoleBot.Bots.Types.CS
             var pathToLeftSeal = await _pathingService.GetPathToLocation(client.Game, leftSealKillLocation, MovementMode.Teleport);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToLeftSeal, MovementMode.Teleport))
             {
-                Log.Warning($"Teleporting to {EntityCode.LeftSeal1} failed at location {client.Game.Me.Location}");
+                Log.Debug($"Teleporting to {EntityCode.LeftSeal1} failed at location {client.Game.Me.Location}");
                 return false;
             }
 
@@ -599,7 +599,7 @@ namespace ConsoleBot.Bots.Types.CS
             var myPortal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
             csState.TeleportId = myPortal.Id;
             csState.KillLocation = leftSealKillLocation;
-            Log.Information($"Kill location {csState.KillLocation} with left seal kill {leftSealKillLocation}");
+            Log.Debug($"Kill location {csState.KillLocation} with left seal kill {leftSealKillLocation}");
             if (!await GeneralHelpers.TryWithTimeout(async (_) =>
             {
                 return await client.Game.TeleportToLocationAsync(leftSeal1);

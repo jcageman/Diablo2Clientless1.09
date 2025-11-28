@@ -431,7 +431,7 @@ namespace ConsoleBot.Helpers
 
             var inventoryItemsToSell = game.Inventory.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
             var cubeItemsToSell = game.Cube.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
-            Log.Information($"Selling {inventoryItemsToSell.Count} inventory items and {cubeItemsToSell.Count} cube items");
+            Log.Debug($"Selling {inventoryItemsToSell.Count} inventory items and {cubeItemsToSell.Count} cube items");
 
             foreach (Item item in inventoryItemsToSell)
             {

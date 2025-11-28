@@ -150,7 +150,7 @@ internal class BattleNetChatServer : IDisposable
 
     public bool ConnectTo(string realm, string keyOwner, string gamefolder)
     {
-        Log.Information($"Connecting to {realm}");
+        Log.Debug($"Connecting to {realm}");
 
         Context = new BncsContext
         {
@@ -166,7 +166,7 @@ internal class BattleNetChatServer : IDisposable
             Log.Warning($"Failed connecting to {realm}");
             return false;
         }
-        Log.Information($"Connected to {realm}");
+        Log.Debug($"Connected to {realm}");
         return true;
     }
 

@@ -66,7 +66,7 @@ public class Client
             Log.Warning($"Logged failed as {username}");
             return null;
         }
-        Log.Information($"Logged in as {username}");
+        Log.Debug($"Logged in as {username}");
         _userName = username;
         if (!await RealmLogon())
         {
@@ -82,7 +82,7 @@ public class Client
     /// <param name="character">Character with name matching one of the account characters</param>
     public async Task SelectCharacter(Character character)
     {
-        Log.Information($"Selecting {character.Name}");
+        Log.Debug($"Selecting {character.Name}");
         await Mcp.CharLogon(character);
         _character = character;
         Game.SelectCharacter(character);

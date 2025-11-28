@@ -122,7 +122,7 @@ namespace ConsoleBot.Helpers
         {
             if (points.Count == 0)
             {
-                Log.Warning($"Walk path of length 0 found, something went wrong while client at location: {game.Me.Location}");
+                Log.Debug($"Walk path of length 0 found, something went wrong while client at location: {game.Me.Location}");
                 return true;
             }
 
