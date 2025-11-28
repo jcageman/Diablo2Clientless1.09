@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace ConsoleBot.Clients.ExternalMessagingClient
 {
-    internal class DummyMessagingClient : IExternalMessagingClient
+    internal sealed class DummyMessagingClient : IExternalMessagingClient
     {
         public void RegisterClient(Client client)
         {

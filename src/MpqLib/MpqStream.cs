@@ -46,8 +46,8 @@ namespace MpqLib;
 /// </summary>
 public class MpqStream : Stream
 {
-    private Stream mStream;
-    private int mBlockSize;
+    private readonly Stream mStream;
+    private readonly int mBlockSize;
 
     private MpqBlock mBlock;
     private uint[] mBlockPositions;
@@ -229,20 +229,20 @@ public class MpqStream : Stream
         // NOP
     }
 
-    public override long Seek(long Offset, SeekOrigin Origin)
+    public override long Seek(long offset, SeekOrigin origin)
     {
         long target;
 
-        switch (Origin)
+        switch (origin)
         {
             case SeekOrigin.Begin:
-                target = Offset;
+                target = offset;
                 break;
             case SeekOrigin.Current:
-                target = Position + Offset;
+                target = Position + offset;
                 break;
             case SeekOrigin.End:
-                target = Length + Offset;
+                target = Length + offset;
                 break;
             default:
                 throw new ArgumentException("Origin", "Invalid SeekOrigin");
@@ -258,22 +258,22 @@ public class MpqStream : Stream
         return mPosition;
     }
 
-    public override void SetLength(long Value)
+    public override void SetLength(long value)
     {
         throw new NotSupportedException("SetLength is not supported");
     }
 
-    public override int Read(byte[] Buffer, int Offset, int Count)
+    public override int Read(byte[] buffer, int offset, int count)
     {
-        int toread = Count;
+        int toread = count;
         int readtotal = 0;
 
         while (toread > 0)
         {
-            int read = ReadInternal(Buffer, Offset, toread);
+            int read = ReadInternal(buffer, offset, toread);
             if (read == 0) break;
             readtotal += read;
-            Offset += read;
+            offset += read;
             toread -= read;
         }
         return readtotal;
@@ -319,7 +319,7 @@ public class MpqStream : Stream
         }
     }
 
-    public override void Write(byte[] Buffer, int Offset, int Count)
+    public override void Write(byte[] buffer, int offset, int count)
     {
         throw new NotSupportedException("Writing is not supported");
     }
@@ -335,7 +335,7 @@ public class MpqStream : Stream
 		 */
     private static byte[] DecompressMulti(byte[] Input, int OutputLength)
     {
-        Stream sinput = new MemoryStream(Input);
+        var sinput = new MemoryStream(Input);
 
         byte comptype = (byte)sinput.ReadByte();
 
@@ -416,7 +416,7 @@ public class MpqStream : Stream
     {
         // This assumes that Zlib won't be used in combination with another compression type
         byte[] Output = new byte[ExpectedLength];
-        Stream s = new InflaterInputStream(Data);
+        var s = new InflaterInputStream(Data);
         int Offset = 0;
         while (true)
         {

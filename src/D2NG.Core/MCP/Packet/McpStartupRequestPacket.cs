@@ -13,7 +13,7 @@ internal class McpStartupRequestPacket : McpPacket
             BitConverter.GetBytes(mcpStatus),
             mcpChunk,
             Encoding.ASCII.GetBytes(mcpUniqueName),
-            new byte[] { 0 }
+            [0]
             )
         )
     {

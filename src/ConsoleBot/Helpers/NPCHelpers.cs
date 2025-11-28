@@ -285,7 +285,7 @@ namespace ConsoleBot.Helpers
 
             var deckhardCainCode = GetDeckardCainForAct(game.Act);
 
-            var result1 = GeneralHelpers.TryWithTimeout((retryCount) => game.GetNPCsByCode(deckhardCainCode).Any(), TimeSpan.FromSeconds(2));
+            var result1 = GeneralHelpers.TryWithTimeout((retryCount) => game.GetNPCsByCode(deckhardCainCode).Count != 0, TimeSpan.FromSeconds(2));
             if (!result1)
             {
                 return false;
@@ -421,8 +421,8 @@ namespace ConsoleBot.Helpers
 
             if (!GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                healingPotion = game.Items.Values.Where(i => i.IsInMerchantTab() && i.Type.StartsWith("hp")).OrderByDescending(i => (int)i.Type.Last()).FirstOrDefault();
-                manaPotion = game.Items.Values.Where(i => i.IsInMerchantTab() && i.Type.StartsWith("mp")).OrderByDescending(i => (int)i.Type.Last()).FirstOrDefault();
+                healingPotion = game.Items.Values.Where(i => i.IsInMerchantTab() && i.Type.StartsWith("hp", StringComparison.OrdinalIgnoreCase)).OrderByDescending(i => (int)i.Type.Last()).FirstOrDefault();
+                manaPotion = game.Items.Values.Where(i => i.IsInMerchantTab() && i.Type.StartsWith("mp", StringComparison.OrdinalIgnoreCase)).OrderByDescending(i => (int)i.Type.Last()).FirstOrDefault();
                 return healingPotion != null && manaPotion != null;
             }, TimeSpan.FromSeconds(3)))
             {

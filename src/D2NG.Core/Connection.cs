@@ -6,7 +6,7 @@ using System.Net.Sockets;
 
 namespace D2NG.Core;
 
-internal abstract class Connection
+internal abstract class Connection : System.IDisposable
 {
     protected enum State
     {
@@ -59,5 +59,10 @@ internal abstract class Connection
         _state = State.NotConnected;
         _tcpClient.Close();
         _stream.Close();
+    }
+
+    public void Dispose()
+    {
+        throw new System.NotImplementedException();
     }
 }

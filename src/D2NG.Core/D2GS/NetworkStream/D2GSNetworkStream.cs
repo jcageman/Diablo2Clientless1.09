@@ -4,11 +4,11 @@ namespace D2NG.Core.D2GS.NetworkStream;
 
 public class D2GSNetworkStream : INetworkStream
 {
-    private System.Net.Sockets.NetworkStream stream;
+    private readonly System.Net.Sockets.NetworkStream stream;
 
     public D2GSNetworkStream(System.Net.Sockets.NetworkStream ns)
     {
-        if (ns == null) throw new ArgumentNullException("ns");
+        ArgumentNullException.ThrowIfNull(ns);
         stream = ns;
     }
 

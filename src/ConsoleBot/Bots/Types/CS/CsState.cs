@@ -2,7 +2,7 @@
 
 namespace ConsoleBot.Bots.Types.CS
 {
-    internal class CsState
+    internal sealed class CsState
     {
         public uint? TeleportId { get; set; }
 

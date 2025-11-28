@@ -49,7 +49,7 @@ public enum MpqFileFlags : uint
     Exists = 0x80000000
 }
 
-struct MpqHeader
+internal struct MpqHeader
 {
     public uint ID; // Signature.  Should be 0x1a51504d
     public uint DataOffset; // Offset of the first file
@@ -78,7 +78,7 @@ struct MpqHeader
     }
 }
 
-struct MpqHash
+internal struct MpqHash
 {
     public uint Name1;
     public uint Name2;
@@ -97,22 +97,18 @@ struct MpqHash
 
     public static MpqHash InvalidHash()
     {
-        MpqHash invalid = new();
-        invalid.Name1 = uint.MaxValue;
-        invalid.Name2 = uint.MaxValue;
+        MpqHash invalid = new()
+        {
+            Name1 = uint.MaxValue,
+            Name2 = uint.MaxValue
+        };
         return invalid;
     }
 
-    public bool IsValid
-    {
-        get
-        {
-            return Name1 != uint.MaxValue && Name2 != uint.MaxValue;
-        }
-    }
+    public readonly bool IsValid => Name1 != uint.MaxValue && Name2 != uint.MaxValue;
 }
 
-struct MpqBlock
+internal struct MpqBlock
 {
     public uint FilePos;
     public uint CompressedSize;
@@ -129,19 +125,7 @@ struct MpqBlock
         Flags = (MpqFileFlags)br.ReadUInt32();
     }
 
-    public bool IsEncrypted
-    {
-        get
-        {
-            return (Flags & MpqFileFlags.Encrypted) != 0;
-        }
-    }
+    public readonly bool IsEncrypted => (Flags & MpqFileFlags.Encrypted) != 0;
 
-    public bool IsCompressed
-    {
-        get
-        {
-            return (Flags & MpqFileFlags.Compressed) != 0;
-        }
-    }
+    public readonly bool IsCompressed => (Flags & MpqFileFlags.Compressed) != 0;
 }

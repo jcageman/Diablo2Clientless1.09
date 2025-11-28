@@ -17,7 +17,7 @@ public static class ByteHelpers
 
     public static string ByteArrayToString(this byte[] ba)
     {
-        return BitConverter.ToString(ba).Replace("-", "");
+        return Convert.ToHexString(ba);
     }
 
     public static string HexStringToByteString(this string hex)

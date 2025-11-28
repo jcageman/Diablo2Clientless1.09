@@ -7,7 +7,7 @@ using System.Net;
 
 namespace D2NG.Core.BNCS;
 
-class BncsConnection : Connection
+internal class BncsConnection : Connection
 {
     /**
      * Default port used to connected to BNCS

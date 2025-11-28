@@ -13,7 +13,7 @@ namespace ConsoleBot.Helpers
 {
     public static class CubeHelpers
     {
-        static HashSet<ItemName> flawlessGems = [ItemName.FlawlessAmethyst, ItemName.FlawlessDiamond, ItemName.FlawlessEmerald, ItemName.FlawlessRuby, ItemName.FlawlessSapphire, ItemName.FlawlessSkull, ItemName.FlawlessTopaz];
+        private static readonly HashSet<ItemName> flawlessGems = [ItemName.FlawlessAmethyst, ItemName.FlawlessDiamond, ItemName.FlawlessEmerald, ItemName.FlawlessRuby, ItemName.FlawlessSapphire, ItemName.FlawlessSkull, ItemName.FlawlessTopaz];
 
         public static bool AnyGemsToTransmuteInStash(Game game)
         {
@@ -46,13 +46,13 @@ namespace ConsoleBot.Helpers
                 return;
             }
 
-            if (game.Cube.Items.Any())
+            if (game.Cube.Items.Count != 0)
             {
                 return;
             }
 
             var stashes = game.GetEntityByCode(EntityCode.Stash);
-            if (!stashes.Any())
+            if (stashes.Count == 0)
             {
                 return;
             }
@@ -107,7 +107,7 @@ namespace ConsoleBot.Helpers
             Log.Information($"Moved {flawlessName} to inventory for transmuting");
 
             var remainingGems = flawlessGemsInInventory;
-            while (remainingGems.Count() > 2)
+            while (remainingGems.Count > 2)
             {
                 Log.Information($"Transmuting 3 {flawlessName} to perfect");
                 var gemsToTransmute = remainingGems.Take(3);

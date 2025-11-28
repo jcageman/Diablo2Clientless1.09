@@ -35,9 +35,9 @@ namespace MpqLib;
 /// <summary>
 /// A utility class for reading groups of bits from a stream
 /// </summary>
-internal class BitStream
+internal sealed class BitStream
 {
-    private Stream mStream;
+    private readonly Stream mStream;
     private int mCurrent;
     private int mBitCount;
 
@@ -52,7 +52,7 @@ internal class BitStream
     public int ReadBits(int BitCount)
     {
         if (BitCount > 16)
-            throw new ArgumentOutOfRangeException("BitCount", "Maximum BitCount is 16");
+            throw new ArgumentOutOfRangeException(nameof(BitCount), "Maximum BitCount is 16");
         if (EnsureBits(BitCount) == false) return -1;
         int result = mCurrent & (0xffff >> (16 - BitCount));
         WasteBits(BitCount);

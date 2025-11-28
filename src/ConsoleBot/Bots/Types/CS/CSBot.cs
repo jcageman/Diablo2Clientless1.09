@@ -58,9 +58,9 @@ namespace ConsoleBot.Bots.Types.CS
             _state = new CsState();
         }
 
-        protected override async Task<bool> PrepareForRun(Client client, AccountConfig accountConfig)
+        protected override async Task<bool> PrepareForRun(Client client, AccountConfig account)
         {
-            var townManagementOptions = new TownManagementOptions(accountConfig, Act.Act4);
+            var townManagementOptions = new TownManagementOptions(account, Act.Act4);
 
             await GeneralHelpers.TryWithTimeout(
                 async (_) =>
@@ -151,7 +151,7 @@ namespace ConsoleBot.Bots.Types.CS
                     if (client.Game.IsInTown() && _state.TeleportId != null)
                     {
                         Log.Information($"Client {client.Game.Me.Name} taking town portal to chaos");
-                        var teleportPlayer = client.Game.Players.FirstOrDefault(p => p.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.CurrentCultureIgnoreCase));
+                        var teleportPlayer = client.Game.Players.FirstOrDefault(p => p.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.OrdinalIgnoreCase));
                         if (teleportPlayer == null || !await _townManagementService.TakeTownPortalToArea(client, teleportPlayer, Area.ChaosSanctuary))
                         {
                             return false;
@@ -195,7 +195,7 @@ namespace ConsoleBot.Bots.Types.CS
                 if (client.Game.IsInTown() && newTeleportId != null && newTeleportId != ownState.TeleportId)
                 {
                     Log.Information($"Client {client.Game.Me.Name} taking town portal to chaos {ownState.TeleportId} --> {newTeleportId}");
-                    var teleportPlayer = client.Game.Players.FirstOrDefault(p => p.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.CurrentCultureIgnoreCase));
+                    var teleportPlayer = client.Game.Players.FirstOrDefault(p => p.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.OrdinalIgnoreCase));
                     if (teleportPlayer == null || !await _townManagementService.TakeTownPortalToArea(client, teleportPlayer, Area.ChaosSanctuary))
                     {
                         Log.Warning($"Client {client.Game.Me.Name} failed to take town portal");
@@ -224,7 +224,7 @@ namespace ConsoleBot.Bots.Types.CS
 
         private bool IsTeleportClient(Client client)
         {
-            return client.Game.Me.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.CurrentCultureIgnoreCase);
+            return client.Game.Me.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task<bool> TaxiCs(Client client, AccountConfig account)
@@ -310,8 +310,10 @@ namespace ConsoleBot.Bots.Types.CS
         private async Task<bool> WaitForBo(Client client, AccountConfig account, Func<Task> action)
         {
             var initialLocation = client.Game.Me.Location;
-            var csState = new CsState();
-            csState.KillLocation = initialLocation;
+            var csState = new CsState
+            {
+                KillLocation = initialLocation
+            };
             var stopWatch = new Stopwatch();
             var random = new Random();
             stopWatch.Start();
@@ -783,7 +785,7 @@ namespace ConsoleBot.Bots.Types.CS
 
         private Func<Task> GetPaladinKillAction(Client client, AccountConfig account)
         {
-            Func<Task> action = async () =>
+            async Task action()
             {
                 var enemies = NPCHelpers.GetNearbyNPCs(client, _state.KillLocation, 50, 50);
                 var nearest = enemies.FirstOrDefault(e => e.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique));
@@ -803,7 +805,7 @@ namespace ConsoleBot.Bots.Types.CS
                 {
                     await _attackService.AssistPlayer(client, nearbyPlayer);
                 }
-            };
+            }
             return action;
         }
 
@@ -894,12 +896,12 @@ namespace ConsoleBot.Bots.Types.CS
 
         private Func<Task> GetNecromancerKillAction(Client client, AccountConfig account)
         {
-            Func<Task> action = async () =>
+            async Task action()
             {
                 var nearbyPlayer = client.Game.Players
                 .Where(p => p.Id != client.Game.Me.Id && p.Location != null && p.Class == CharacterClass.Paladin)
                 .OrderBy(p => p.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
-                if(nearbyPlayer != null)
+                if (nearbyPlayer != null)
                 {
                     await _attackService.AssistPlayer(client, nearbyPlayer);
                 }
@@ -911,7 +913,7 @@ namespace ConsoleBot.Bots.Types.CS
                     await PickupItemsAndPotions(client, account, 20);
                 }
 
-            };
+            }
             return action;
         }
 

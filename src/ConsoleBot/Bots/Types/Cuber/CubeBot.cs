@@ -28,7 +28,7 @@ namespace ConsoleBot.Bots.Types.Cuber
         private readonly ITownManagementService _townManagementService;
 
         private TaskCompletionSource<bool> ItemDropped = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private TaskCompletionSource<bool> NextGame = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> NextGame = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public CubeBot(
             IOptions<BotConfiguration> config,
@@ -86,7 +86,7 @@ namespace ConsoleBot.Bots.Types.Cuber
 
             while(!NextGame.Task.IsCompleted)
             {
-                if (client.Game.Cube.Items.Any())
+                if (client.Game.Cube.Items.Count != 0)
                 {
                     if (!InventoryHelpers.MoveCubeItemsToInventory(client.Game))
                     {

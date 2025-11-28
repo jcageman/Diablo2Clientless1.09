@@ -12,7 +12,7 @@ internal class BuyItemPacket : D2gsPacket
                 (byte)OutGoingPacket.BuyItem,
                 BitConverter.GetBytes(entity.Id),
                 BitConverter.GetBytes(item.Id),
-                new byte[] { (byte)(gamble ? 0x02 : 0x00), 0x00, 0x00, (byte)(buyStack ? 0x80 : 0x00) },
+                [(byte)(gamble ? 0x02 : 0x00), 0x00, 0x00, (byte)(buyStack ? 0x80 : 0x00)],
                 BitConverter.GetBytes((uint)0x00)
             )
         )

@@ -60,7 +60,7 @@ namespace ConsoleBot.Helpers
             }
 
             var selectedCharacter = characters.FirstOrDefault(c =>
-                c.Name.Equals(accountCharacter.Character, StringComparison.CurrentCultureIgnoreCase));
+                c.Name.Equals(accountCharacter.Character, StringComparison.OrdinalIgnoreCase));
             if (selectedCharacter == null)
             {
                 throw new CharacterNotFoundException(accountCharacter.Character);

@@ -29,7 +29,7 @@ namespace ConsoleBot.Attack
             _mapApiService = mapApiService;
         }
 
-        internal class Line
+        internal sealed class Line
         {
             public Point StartPoint { get; set; }
 

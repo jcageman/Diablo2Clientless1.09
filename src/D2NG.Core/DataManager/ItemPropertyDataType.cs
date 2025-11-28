@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace D2NG.Core.DataManager;
 
-class ItemPropertyDataType
+internal class ItemPropertyDataType
 {
     public List<ItemPropertyEntry> ItemProperties { get; }
 

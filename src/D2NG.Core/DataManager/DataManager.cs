@@ -4,7 +4,7 @@ using System.Reflection;
 
 namespace D2NG.Core.DataManager;
 
-class DataManager
+internal class DataManager
 {
     private static DataManager sm_instance;
 
@@ -12,10 +12,7 @@ class DataManager
     {
         get
         {
-            if (sm_instance == null)
-            {
-                sm_instance = new DataManager();
-            }
+            sm_instance ??= new DataManager();
             return sm_instance;
         }
     }
@@ -37,7 +34,7 @@ class DataManager
     public DataManager()
     {
         String[] fileNames =
-        {
+        [
             "experience.txt",
             "magical_prefixes.txt",
             "magical_suffixes.txt",
@@ -49,7 +46,7 @@ class DataManager
             "super_uniques.txt",
             "item_properties.txt",
             "skills.txt"
-        };
+        ];
 
         string assemblyFile = (
         new Uri(Assembly.GetExecutingAssembly().Location)

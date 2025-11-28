@@ -24,7 +24,7 @@ namespace ConsoleBot.Bots.Types.Assist
 {
     public class AssistBot : IBotInstance
     {
-        private bool ShouldStop = false;
+        private bool ShouldStop;
         private readonly BotConfiguration _config;
         private readonly IExternalMessagingClient _externalMessagingClient;
         private readonly IPathingService _pathingService;
@@ -115,7 +115,7 @@ namespace ConsoleBot.Bots.Types.Assist
                         accountAndClient.Item3.GoNextLevel = true;
                         Log.Information($"{accountAndClient.Item1.Character} Going to next level");
                     }
-                    else if (chatPacket.Message.StartsWith("towp"))
+                    else if (chatPacket.Message.StartsWith("towp", StringComparison.OrdinalIgnoreCase))
                     {
                         var parsedMessage = chatPacket.Message[5..];
                         if (Enum.TryParse<Waypoint>(parsedMessage, out var waypoint))
@@ -178,12 +178,7 @@ namespace ConsoleBot.Bots.Types.Assist
 
         private bool IsHostClient(AccountConfig accountCharacter)
         {
-            return accountCharacter.Character.Equals(_assistConfig.HostCharacterName, StringComparison.CurrentCultureIgnoreCase);
-        }
-
-        private bool IsLeadClient(AccountConfig accountCharacter)
-        {
-            return accountCharacter.Character.Equals(_assistConfig.LeadCharacterName, StringComparison.CurrentCultureIgnoreCase);
+            return accountCharacter.Character.Equals(_assistConfig.HostCharacterName, StringComparison.OrdinalIgnoreCase);
         }
 
         private static async Task LeaveGameAndDisconnectWithAllClients(List<Client> clients)
@@ -348,7 +343,7 @@ namespace ConsoleBot.Bots.Types.Assist
 
         }
 
-        async Task<bool> AssistLeadClient(Client client, AccountConfig account, AssistBotClientState state)
+        private async Task<bool> AssistLeadClient(Client client, AccountConfig account, AssistBotClientState state)
         {
             var movementMode = GetMovementMode(client.Game);
             if (state.GoNextLevel)
@@ -539,7 +534,7 @@ namespace ConsoleBot.Bots.Types.Assist
 
             if (pickupItems.Count > 0)
             {
-                Log.Information($"Killed Nearby monsters, picking up {pickupItems.Count()} items ");
+                Log.Information($"Killed Nearby monsters, picking up {pickupItems.Count} items ");
             }
 
             foreach (var item in pickupItems)
@@ -736,18 +731,18 @@ namespace ConsoleBot.Bots.Types.Assist
             return true;
         }
 
-        Player GetLeadPlayer(Client client)
+        private Player GetLeadPlayer(Client client)
         {
-            return client.Game.Players.FirstOrDefault(p => p.Name.Equals(_assistConfig.LeadCharacterName, StringComparison.CurrentCultureIgnoreCase));
+            return client.Game.Players.FirstOrDefault(p => p.Name.Equals(_assistConfig.LeadCharacterName, StringComparison.OrdinalIgnoreCase));
         }
 
-        static void NewPlayerJoinGame(Client client, PlayerInGamePacket playerInGamePacket)
+        private static void NewPlayerJoinGame(Client client, PlayerInGamePacket playerInGamePacket)
         {
             var relevantPlayer = client.Game.Players.Where(p => p.Id == playerInGamePacket.Id).FirstOrDefault();
             client.Game.InvitePlayer(relevantPlayer);
         }
 
-        static void HandleEventMessage(Client client, EventNotifyPacket eventNotifyPacket)
+        private static void HandleEventMessage(Client client, EventNotifyPacket eventNotifyPacket)
         {
             if (eventNotifyPacket.PlayerRelationType == PlayerRelationType.InvitesYouToParty)
             {

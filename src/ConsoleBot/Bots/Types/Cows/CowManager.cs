@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 
 namespace ConsoleBot.Bots.Types.Cows
 {
-    internal class CowManager
+    internal sealed class CowManager
     {
         private readonly List<Client> _killingClients;
         private readonly IMapApiService mapApiService;
@@ -25,7 +25,7 @@ namespace ConsoleBot.Bots.Types.Cows
         private readonly ConcurrentDictionary<Point, Point> _cowClusters = new();
         private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new();
         private readonly ConcurrentDictionary<uint, Item> _pickitPotionsOnGround = new();
-        private bool IsActive = false;
+        private bool IsActive;
         public CowManager(List<Client> killingclients, List<Client> listeningClients, IMapApiService mapApiService)
         {
             _killingClients = killingclients;
@@ -253,7 +253,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 return true;
             }
 
-            return IsActive && !_busyClusters.Values.Any() && _cowClusters.IsEmpty;
+            return IsActive && _busyClusters.Values.Count == 0 && _cowClusters.IsEmpty;
         }
 
         public void PutItemOnPickitList(Client client, Item item)
@@ -266,7 +266,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }
         }
 
-        public void PutPotionOnPickitList(Client client, Item item)
+        public void PutPotionOnPickitList(Item item)
         {
             if (item.IsPotion && item.Ground)
             {

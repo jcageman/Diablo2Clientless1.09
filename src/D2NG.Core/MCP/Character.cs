@@ -16,7 +16,7 @@ public class Character
         Name = name;
         _stats = stats;
         Stats = _stats.ToPrintString();
-        var flagsBits = new BitArray(new byte[] { _stats[26] });
+        var flagsBits = new BitArray([_stats[26]]);
         IsHardCore = flagsBits[2];
         IsExpansion = flagsBits[5];
     }
@@ -25,7 +25,7 @@ public class Character
 
     public uint Level { get => _stats[25]; }
 
-    public string FlagsString { get => ToBitString(new BitArray(new byte[] { _stats[26] })); }
+    public string FlagsString { get => ToBitString(new BitArray([_stats[26]])); }
 
     public bool IsHardCore { get; private set; }
     public bool IsExpansion { get; private set; }

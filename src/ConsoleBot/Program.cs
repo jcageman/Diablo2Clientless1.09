@@ -16,7 +16,7 @@ using System.Threading.Tasks;
 
 namespace ConsoleBot
 {
-    internal class Program
+    internal sealed class Program
     {
         private readonly IBotFactory _botConfigurationFactory;
 

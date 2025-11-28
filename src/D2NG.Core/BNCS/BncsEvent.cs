@@ -4,7 +4,7 @@ using System.Threading;
 
 namespace D2NG.Core.BNCS;
 
-class BncsEvent : IDisposable
+internal class BncsEvent : IDisposable
 {
     private readonly ManualResetEvent _event = new(false);
 

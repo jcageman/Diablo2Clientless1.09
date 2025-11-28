@@ -12,7 +12,7 @@ namespace D2NG.Core.D2GS;
 internal class GameServerConnection : Connection
 {
     internal static readonly short[] PacketSizes =
-    {
+    [
         1, 8, 1, 12, 1, 1, 1, 6, 6, 11, 6, 6, 9, 13, 12, 16,
         16, 9, 26, 14, 18, 11, 0, 0, 15, 2, 2, 3, 5, 3, 4, 6,
         10, 12, 12, 13, 90, 90, 0, 40, 103,97, 15, 0, 8, 0, 0, 0,
@@ -25,7 +25,7 @@ internal class GameServerConnection : Connection
         13, 26, 6, 8, 0, 13, 9, 1, 7, 16, 24, 7, 0, 0, 7, 8,
         10, 7, 8, 24, 3, 8, 0, 7, 1, 7, 0, 7, 0, 0, 0, 0,
         1
-    };
+    ];
 
     public int InstanceId { get; }
 
@@ -57,7 +57,7 @@ internal class GameServerConnection : Connection
 
     internal void WritePacket(OutGoingPacket packet)
     {
-        WritePacket(new byte[] { (byte)packet });
+        WritePacket([(byte)packet]);
     }
 
     internal override byte[] ReadPacket()
@@ -106,7 +106,7 @@ internal class GameServerConnection : Connection
         do
         {
             var packetType = output[index];
-            var packetTypeHex = "0x" + BitConverter.ToString(new byte[] { packetType });
+            var packetTypeHex = "0x" + BitConverter.ToString([packetType]);
 
             var packetSize = GetPacketSize(new ArraySegment<byte>(output, index, output.Length - index));
             var packet = new ArraySegment<byte>(output, index, packetSize).ToArray();
@@ -145,7 +145,7 @@ internal class GameServerConnection : Connection
         return buffer;
     }
 
-    static int GetChatPacketSize(ArraySegment<byte> input)
+    private static int GetChatPacketSize(ArraySegment<byte> input)
     {
         if (input.Count < 12)
             throw new D2GSPacketException("Unable to determine packet size");
@@ -175,7 +175,7 @@ internal class GameServerConnection : Connection
     }
 
     // This was taken from Redvex according to qqbot source
-    int GetPacketSize(ArraySegment<byte> input)
+    private static int GetPacketSize(ArraySegment<byte> input)
     {
         byte identifier = input[0];
 

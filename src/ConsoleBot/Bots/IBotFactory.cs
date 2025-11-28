@@ -1,6 +1,6 @@
 ﻿namespace ConsoleBot.Bots
 {
-    interface IBotFactory
+    internal interface IBotFactory
     {
         IBotInstance CreateBot(string botType);
     }

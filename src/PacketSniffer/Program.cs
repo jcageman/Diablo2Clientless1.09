@@ -11,21 +11,21 @@ using System.IO;
 
 namespace PacketSniffer;
 
-class Program
+internal sealed class Program
 {
     public static ConcurrentDictionary<int, GameServerConnection> gameServerConnections = new();
 
     public static BncsConnection bncsConnection = new();
 
     public static McpConnection mcpConnection = new();
-    static void Main(string[] args)
+    private static void Main()
     {
-        bncsConnection._stream = new SnifferNetworkStream(new byte[] { });
+        bncsConnection._stream = new SnifferNetworkStream([]);
         bncsConnection.PacketReceived += (obj, eventArgs) =>
         {
             IncomingBNCSPackets.HandleIncomingPacket(eventArgs);
         };
-        mcpConnection._stream = new SnifferNetworkStream(new byte[] { });
+        mcpConnection._stream = new SnifferNetworkStream([]);
         mcpConnection.PacketReceived += (obj, eventArgs) =>
         {
             IncomingMCPPackets.HandleIncomingPacket(eventArgs);
@@ -115,8 +115,10 @@ class Program
             {
                 if(!gameServerConnections.TryGetValue(tcpPacket.DestinationPort, out var gameServerConnection))
                 {
-                    gameServerConnection = new GameServerConnection(gameServerConnections.Count);
-                    gameServerConnection._stream = new SnifferNetworkStream(new byte[] { });
+                    gameServerConnection = new GameServerConnection(gameServerConnections.Count)
+                    {
+                        _stream = new SnifferNetworkStream([])
+                    };
                     gameServerConnection.PacketReceived += (obj, eventArgs) =>
                     {
                         IncomingD2GSPackets.HandleIncomingPacket(eventArgs);

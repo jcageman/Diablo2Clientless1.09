@@ -11,12 +11,12 @@ public class Level
     public string Name { get; set; }
     public int Type { get; set; }
 
-    public Level(int w, int h, int _x, int _y, String s, int t)
+    public Level(int w, int h, int x, int y, string s, int t)
     {
         Width = w;
         Height = h;
-        X = _x;
-        Y = _y;
+        X = x;
+        Y = y;
         Name = s;
         Type = t;
     }

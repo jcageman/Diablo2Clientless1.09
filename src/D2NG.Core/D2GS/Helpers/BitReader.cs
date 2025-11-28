@@ -50,7 +50,7 @@ internal class BitReader
     {
         if (length > 32)
         {
-            throw new ArgumentOutOfRangeException("length", "BitReader cannot return more than 32 bits");
+            throw new ArgumentOutOfRangeException(nameof(length), "BitReader cannot return more than 32 bits");
         }
         return ReadBitsLittleEndian(length);
     }

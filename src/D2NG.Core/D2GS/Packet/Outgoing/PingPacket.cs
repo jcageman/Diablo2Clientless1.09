@@ -9,7 +9,7 @@ internal class PingPacket : D2gsPacket
             BuildPacket(
                 (byte)OutGoingPacket.Ping,
                 BitConverter.GetBytes(Environment.TickCount),
-                new byte[] { 0x00, 0x00, 0x00, 0x00 }
+                [0x00, 0x00, 0x00, 0x00]
             )
         )
     {

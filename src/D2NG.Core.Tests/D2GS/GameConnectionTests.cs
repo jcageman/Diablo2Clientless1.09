@@ -34,12 +34,14 @@ public class GameConnectionTests
             return readSize;
         });
 
-        var gameServerConnection = new GameServerConnection(0);
-        gameServerConnection._stream = mockedStream.Object;
+        var gameServerConnection = new GameServerConnection(0)
+        {
+            _stream = mockedStream.Object
+        };
         return gameServerConnection;
     }
 
-    private void GameServerConnectionBaseTest(string hexString, List<byte> expected)
+    private static void GameServerConnectionBaseTest(string hexString, List<byte> expected)
     {
         var gameServerConnection = CreateGameServerConnection(hexString);
 

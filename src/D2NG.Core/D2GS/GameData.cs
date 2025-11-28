@@ -17,10 +17,7 @@ internal class GameData
 {
     internal GameData(GameFlags gameFlags, Character clientCharacter)
     {
-        if (clientCharacter == null)
-        {
-            throw new ArgumentNullException(nameof(clientCharacter));
-        }
+        ArgumentNullException.ThrowIfNull(clientCharacter);
 
         Flags = gameFlags;
         Act = new ActData();
@@ -50,7 +47,7 @@ internal class GameData
         });
     }
 
-    private Lazy<double> _walkingSpeedMultiplier;
+    private readonly Lazy<double> _walkingSpeedMultiplier;
 
     public Character ClientCharacter { get; }
     public GameFlags Flags { get; }
@@ -84,10 +81,7 @@ internal class GameData
     {
         if (packet.Name == ClientCharacter.Name && packet.Class == ClientCharacter.Class)
         {
-            if (Me == null)
-            {
-                Me = new Self(packet);
-            }
+            Me ??= new Self(packet);
 
             Me.Location = packet.Location;
             Me.Area = Act.Area;
@@ -122,10 +116,7 @@ internal class GameData
     internal void AssignMerc(AssignMercPacket packet)
     {
         var player = Players.Where(p => p.Id == packet.PlayerEntityId).FirstOrDefault();
-        if (player != null)
-        {
-            player.MercId = packet.MercEntityId;
-        }
+        player?.MercId = packet.MercEntityId;
 
         if (packet.PlayerEntityId == Me.Id)
         {
@@ -143,10 +134,7 @@ internal class GameData
         if (packet.EntityType == EntityType.Player)
         {
             var player = Players.Where(p => p.Id == packet.EntityId).FirstOrDefault();
-            if (player != null)
-            {
-                player.AddEffect(packet);
-            }
+            player?.AddEffect(packet);
 
             if (packet.EntityId == Me.Id)
             {
@@ -164,10 +152,7 @@ internal class GameData
         if (packet.EntityType == EntityType.Player)
         {
             var player = Players.Where(p => p.Id == packet.EntityId).FirstOrDefault();
-            if (player != null)
-            {
-                player.Effects.TryAdd(packet.Effect, packet.Effect);
-            }
+            player?.Effects.TryAdd(packet.Effect, packet.Effect);
 
             if (packet.EntityId == Me.Id)
             {
@@ -185,10 +170,7 @@ internal class GameData
         if (packet.EntityType == EntityType.Player)
         {
             var player = Players.Where(p => p.Id == packet.EntityId).FirstOrDefault();
-            if (player != null)
-            {
-                player.UpdateEffects(packet.EntityEffects);
-            }
+            player?.UpdateEffects(packet.EntityEffects);
 
             if (packet.EntityId == Me.Id)
             {
@@ -205,10 +187,7 @@ internal class GameData
     internal void PlayerCorpseAssign(CorpseAssignPacket packet)
     {
         var player = Players.Where(p => p.Id == packet.PlayerId).FirstOrDefault();
-        if (player != null)
-        {
-            player.CorpseId = packet.CorpseId;
-        }
+        player?.CorpseId = packet.CorpseId;
 
         if (Me?.Id == packet.PlayerId)
         {
@@ -385,7 +364,7 @@ internal class GameData
     internal void UpdateWaypointInfo(WaypointMenuPacket packet)
     {
         Me.LastSelectedWaypointId = packet.WaypointId;
-        Me.AllowedWaypoints = new ConcurrentBag<Waypoint>(packet.AllowedWaypoints);
+        Me.AllowedWaypoints = [.. packet.AllowedWaypoints];
     }
 
     internal void ItemUpdate(ParseItemPacket packet)

@@ -21,7 +21,7 @@ namespace ConsoleBot.Mule
 {
     public class MuleService : IMuleService
     {
-        static int GameCount = 0;
+        private static int GameCount;
 
         private readonly BotConfiguration _botConfig;
         private readonly MuleConfiguration _muleConfig;
@@ -55,7 +55,7 @@ namespace ConsoleBot.Mule
             foreach (var account in _muleConfig.Accounts)
             {
                 List<Item> muleItems = GetMuleItems(client, account);
-                if (!muleItems.Any())
+                if (muleItems.Count == 0)
                 {
                     continue;
                 }
@@ -120,7 +120,7 @@ namespace ConsoleBot.Mule
                         }
 
                         var itemsToTrade = GetItemsToTrade(muleClient.Game.Inventory, muleItems);
-                        if (!itemsToTrade.Any())
+                        if (itemsToTrade.Count == 0)
                         {
                             break;
                         }
@@ -138,7 +138,7 @@ namespace ConsoleBot.Mule
 
                         var itemIdsToTrade = itemsToTrade.Select(i => i.Id).ToHashSet();
                         itemsToTrade = client.Game.Inventory.Items.Where(i => itemIdsToTrade.Contains(i.Id)).ToList();
-                        if (!itemsToTrade.Any())
+                        if (itemsToTrade.Count == 0)
                         {
                             break;
                         }
@@ -149,7 +149,7 @@ namespace ConsoleBot.Mule
                             await Task.Delay(TimeSpan.FromSeconds(5));
                         }
                         muleItems = GetMuleItems(client, account);
-                        if (!muleItems.Any())
+                        if (muleItems.Count == 0)
                         {
                             break;
                         }
@@ -211,7 +211,7 @@ namespace ConsoleBot.Mule
         private async Task<List<string>> GetAccountCharactersForMule(MuleAccount account)
         {
             var characterNames = account.IncludedCharacters.Select(c => c.ToLower()).ToList();
-            if (!characterNames.Any())
+            if (characterNames.Count == 0)
             {
                 var client = new Client();
                 var connect = client.Connect(

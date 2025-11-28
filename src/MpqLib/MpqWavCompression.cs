@@ -40,7 +40,7 @@ public class MpqWavCompression
     { }
 
     private static readonly int[] sLookup =
-    {
+    [
         0x0007, 0x0008, 0x0009, 0x000A, 0x000B, 0x000C, 0x000D, 0x000E,
         0x0010, 0x0011, 0x0013, 0x0015, 0x0017, 0x0019, 0x001C, 0x001F,
         0x0022, 0x0025, 0x0029, 0x002D, 0x0032, 0x0037, 0x003C, 0x0042,
@@ -53,19 +53,19 @@ public class MpqWavCompression
         0x1BDC, 0x1EA5, 0x21B6, 0x2515, 0x28CA, 0x2CDF, 0x315B, 0x364B,
         0x3BB9, 0x41B2, 0x4844, 0x4F7E, 0x5771, 0x602F, 0x69CE, 0x7462,
         0x7FFF
-    };
+    ];
 
     private static readonly int[] sLookup2 =
-    {
+    [
         -1, 0, -1, 4, -1, 2, -1, 6,
         -1, 1, -1, 5, -1, 3, -1, 7,
         -1, 1, -1, 5, -1, 3, -1, 7,
         -1, 2, -1, 4, -1, 6, -1, 8
-    };
+    ];
 
     public static byte[] Decompress(Stream Data, int ChannelCount)
     {
-        int[] Array1 = new int[] { 0x2c, 0x2c };
+        int[] Array1 = [0x2c, 0x2c];
         int[] Array2 = new int[ChannelCount];
 
         BinaryReader input = new(Data);

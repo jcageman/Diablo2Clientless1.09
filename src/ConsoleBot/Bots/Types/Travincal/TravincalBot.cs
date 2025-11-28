@@ -243,7 +243,7 @@ namespace ConsoleBot.Bots.Types.Travincal
 
                     await _attackService.AssistPlayer(client, client.Game.Me);
                 }
-            } while (aliveMembers.Any());
+            } while (aliveMembers.Count != 0);
 
             return true;
         }

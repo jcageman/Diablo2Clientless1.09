@@ -1,12 +1,13 @@
 ﻿using D2NG.Core.D2GS.Items;
+using System;
 using System.Collections.Generic;
 
 namespace ConsoleBot.Pickit
 {
     public static class GoldItems
     {
-        static HashSet<ItemName> flawlessGems = [ItemName.FlawlessAmethyst, ItemName.FlawlessDiamond, ItemName.FlawlessEmerald, ItemName.FlawlessRuby, ItemName.FlawlessSapphire, ItemName.FlawlessSkull, ItemName.FlawlessTopaz];
-        static HashSet<ItemName> perfectGems = [ItemName.PerfectAmethyst, ItemName.PerfectDiamond, ItemName.PerfectEmerald, ItemName.PerfectRuby, ItemName.PerfectSapphire, ItemName.PerfectSkull, ItemName.PerfectTopaz];
+        private static readonly HashSet<ItemName> flawlessGems = [ItemName.FlawlessAmethyst, ItemName.FlawlessDiamond, ItemName.FlawlessEmerald, ItemName.FlawlessRuby, ItemName.FlawlessSapphire, ItemName.FlawlessSkull, ItemName.FlawlessTopaz];
+        private static readonly HashSet<ItemName> perfectGems = [ItemName.PerfectAmethyst, ItemName.PerfectDiamond, ItemName.PerfectEmerald, ItemName.PerfectRuby, ItemName.PerfectSapphire, ItemName.PerfectSkull, ItemName.PerfectTopaz];
         public static bool ShouldPickupItem(Item item)
         {
             if (item.Classification == ClassificationType.Essence)
@@ -39,7 +40,7 @@ namespace ConsoleBot.Pickit
             //Exceptional & elite armors are worth it
             if ((item.Quality == QualityType.Magical || item.Quality == QualityType.Normal)
                 && item.Classification == ClassificationType.Armor
-                && (item.Type.StartsWith("x") || item.Type.StartsWith("u")))
+                && (item.Type.StartsWith("x", StringComparison.OrdinalIgnoreCase) || item.Type.StartsWith("u", StringComparison.OrdinalIgnoreCase)))
             {
                 return true;
             }

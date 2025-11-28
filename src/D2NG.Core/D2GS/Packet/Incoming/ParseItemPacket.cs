@@ -145,7 +145,7 @@ internal class ParseItemPacket : D2gsPacket
         }
         code_bytes[3] = 0;
 
-        item.Type = Encoding.ASCII.GetString(code_bytes).Substring(0, 3).ToLower();
+        item.Type = Encoding.ASCII.GetString(code_bytes)[..3].ToLower();
 
         var entry = DataManager.DataManager.Instance.ItemData.Get(item.Type);
         if (entry == null)
@@ -301,7 +301,7 @@ internal class ParseItemPacket : D2gsPacket
         else if (item.IsArmor || item.IsWeapon)
         {
             item.MaximumDurability = (byte)reader.Read(8);
-            item.IsIndestructible = item.MaximumDurability == 0 ? true : false;
+            item.IsIndestructible = item.MaximumDurability == 0;
             if(!item.IsIndestructible)
             {
                 item.Durability = (byte)reader.Read(8);
@@ -338,14 +338,14 @@ internal class ParseItemPacket : D2gsPacket
         }
 
         //Seems the packet never contains all skills property, simply all skills listed, for ease of use we store allskills
-        if (item.Properties.ContainsKey(StatType.PaladinSkills)
+        if (item.Properties.TryGetValue(StatType.PaladinSkills, out ItemProperty value)
             && item.Properties.ContainsKey(StatType.NecromancerSkills)
             && item.Properties.ContainsKey(StatType.SorceressSkills)
             && item.Properties.ContainsKey(StatType.BarbarianSkills)
             && item.Properties.ContainsKey(StatType.DruidSkills)
             && item.Properties.ContainsKey(StatType.AssassinSkills))
         {
-            item.Properties.Add(StatType.AllSkills, new ItemProperty() { Type = StatType.AllSkills, Value = item.Properties[StatType.PaladinSkills].Value });
+            item.Properties.Add(StatType.AllSkills, new ItemProperty() { Type = StatType.AllSkills, Value = value.Value });
         }
     }
 

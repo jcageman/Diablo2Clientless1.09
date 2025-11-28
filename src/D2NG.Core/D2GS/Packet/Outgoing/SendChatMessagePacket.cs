@@ -8,9 +8,9 @@ internal class SendChatMessagePacket : D2gsPacket
         base(
             BuildPacket(
                 (byte)OutGoingPacket.Chat,
-                new byte[] { 0x01, 0x00 },
+                [0x01, 0x00],
                 Encoding.ASCII.GetBytes($"{message}\0"),
-                new byte[] { 0x00, 0x00 }
+                [0x00, 0x00]
             )
         )
     {

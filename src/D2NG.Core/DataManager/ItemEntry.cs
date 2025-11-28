@@ -3,7 +3,7 @@ using System;
 
 namespace D2NG.Core.DataManager;
 
-class ItemEntry
+internal class ItemEntry
 {
     public ItemName Name;
     public string Type;

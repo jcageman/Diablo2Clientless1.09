@@ -34,14 +34,14 @@ using System.IO;
 
 namespace MpqLib;
 
-public interface MpqResource
+public interface IMpqResource
 {
     void ReadFromStream(Stream stream);
 }
 
 public abstract class Mpq : IDisposable
 {
-    Dictionary<string, object> cached_resources;
+    private readonly Dictionary<string, object> cached_resources;
 
     protected Mpq()
     {
@@ -128,12 +128,13 @@ public abstract class Mpq : IDisposable
 #endif
     public virtual void Dispose()
     {
+        GC.SuppressFinalize(this);
     }
 }
 
 public class MpqContainer : Mpq
 {
-    List<Mpq> mpqs;
+    private readonly List<Mpq> mpqs;
 
     public MpqContainer()
     {
@@ -161,8 +162,10 @@ public class MpqContainer : Mpq
 
     public override void Dispose()
     {
+        base.Dispose();
         foreach (Mpq mpq in mpqs)
             mpq.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public override Stream GetStreamForResource(string path)
@@ -181,8 +184,8 @@ public class MpqContainer : Mpq
 
 public class MpqDirectory : Mpq
 {
-    Dictionary<string, string> file_hash;
-    string mpq_dir_path;
+    private readonly Dictionary<string, string> file_hash;
+    private readonly string mpq_dir_path;
 
     public MpqDirectory(string path)
     {
@@ -192,9 +195,9 @@ public class MpqDirectory : Mpq
         RecurseDirectoryTree(mpq_dir_path);
     }
 
-    static string ConvertBackSlashes(string path)
+    private static string ConvertBackSlashes(string path)
     {
-        while (path.IndexOf('\\') != -1)
+        while (path.Contains('\\'))
             path = path.Replace('\\', Path.DirectorySeparatorChar);
 
         return path;
@@ -216,7 +219,7 @@ public class MpqDirectory : Mpq
         return null;
     }
 
-    void RecurseDirectoryTree(string path)
+    private void RecurseDirectoryTree(string path)
     {
         string[] files = Directory.GetFiles(path);
         foreach (string f in files)
@@ -235,7 +238,7 @@ public class MpqDirectory : Mpq
 
 public class MpqArchiveReader : Mpq
 {
-    MpqArchive mpq;
+    private readonly MpqArchive mpq;
 
     public MpqArchiveReader(string path)
     {
@@ -256,6 +259,8 @@ public class MpqArchiveReader : Mpq
 
     public override void Dispose()
     {
+        base.Dispose();
         mpq.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

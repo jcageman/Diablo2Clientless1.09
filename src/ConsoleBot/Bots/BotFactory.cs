@@ -21,7 +21,7 @@ namespace ConsoleBot.Bots
 
             var botNames = botInstances.Select(b => b.GetName()).ToList();
             var duplicateNames = botNames.GroupBy(b => b).Where(g => g.Count() > 1).ToList();
-            if (duplicateNames.Any())
+            if (duplicateNames.Count != 0)
             {
                 var duplicateNamesStr = string.Join(", ", duplicateNames);
                 throw new NotSupportedException($"One or more bots have been registered with an already existing name. Duplicate names: {duplicateNamesStr}");

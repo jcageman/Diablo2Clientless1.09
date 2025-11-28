@@ -64,7 +64,7 @@ public class Tile
 
     public override bool Equals(object obj)
     {
-        return !(obj is Tile tile) ? false : X == tile.X && Y == tile.Y && Area == tile.Area;
+        return obj is Tile tile && X == tile.X && Y == tile.Y && Area == tile.Area;
     }
 
     public bool Contains(Point p) =>
@@ -95,7 +95,7 @@ public class Tile
     private const int MAX_TILE_SIZE = 14;
 
     private static readonly Level[] Levels =
-    {
+    [
         new(0, 0, 0, 0, "Null", 0),
         new(56, 40, -1, -1, "Rogue Encampment", 2),
         new(80, 80, -1, -1, "Blood Moor", 3),
@@ -229,7 +229,7 @@ public class Tile
         new(200, 200, 2500, 2684, "The Worldstone Keep Level 3", 1),
         new(40, 52, 3000, 1000, "Throne of Destruction", 2),
         new(55, 55, 3000, 1152, "The Worldstone Chamber", 2)
-    };
+    ];
 
     private static readonly int[,] Mazes = {
         { 0, 0 },

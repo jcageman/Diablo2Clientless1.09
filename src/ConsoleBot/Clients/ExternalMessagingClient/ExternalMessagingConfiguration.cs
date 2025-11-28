@@ -10,6 +10,6 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
         [Required]
         public int TelegramChatId { get; set; }
 
-        public bool ReceiveMessages { get; set; } = false;
+        public bool ReceiveMessages { get; set; }
     }
 }

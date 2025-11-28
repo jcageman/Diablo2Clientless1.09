@@ -20,7 +20,7 @@ public class Player
     public Act.Act? Act { get; set; }
     public ConcurrentDictionary<EntityEffect, EntityEffect> Effects { get; private set; } = new ConcurrentDictionary<EntityEffect, EntityEffect>();
 
-    public double BattleOrdersLifePercentage = 0.0;
+    public double BattleOrdersLifePercentage;
     public double LifePercentage { get; set; } = 100.0;
 
 

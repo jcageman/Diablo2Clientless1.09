@@ -10,7 +10,7 @@ internal class PartyRequestPacket : D2gsPacket
         base(
             BuildPacket(
                 (byte)OutGoingPacket.InvitePlayer,
-                new byte[] { (byte)requestType },
+                [(byte)requestType],
                 BitConverter.GetBytes(player.Id)
             )
         )

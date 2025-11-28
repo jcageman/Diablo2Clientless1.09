@@ -10,12 +10,12 @@ using System.Threading.Tasks;
 
 namespace D2NG.Core.MCP;
 
-public class RealmServer
+public sealed class RealmServer : IDisposable
 {
     private McpConnection Connection { get; } = new McpConnection();
 
-    protected ConcurrentDictionary<Mcp, Action<McpPacket>> PacketReceivedEventHandlers { get; } = new ConcurrentDictionary<Mcp, Action<McpPacket>>();
-    protected ConcurrentDictionary<Mcp, Action<McpPacket>> PacketSentEventHandlers { get; } = new ConcurrentDictionary<Mcp, Action<McpPacket>>();
+    private ConcurrentDictionary<Mcp, Action<McpPacket>> PacketReceivedEventHandlers { get; } = new ConcurrentDictionary<Mcp, Action<McpPacket>>();
+    private ConcurrentDictionary<Mcp, Action<McpPacket>> PacketSentEventHandlers { get; } = new ConcurrentDictionary<Mcp, Action<McpPacket>>();
     public ushort RequestId { get; private set; } = 0x02;
 
     private readonly McpEvent CharLogonEvent = new();
@@ -147,4 +147,9 @@ public class RealmServer
 
     internal void OnSentPacketEvent(Mcp type, Action<McpPacket> handler)
         => PacketSentEventHandlers.AddOrUpdate(type, handler, (t, h) => h += handler);
+
+    public void Dispose()
+    {
+        throw new NotImplementedException();
+    }
 }

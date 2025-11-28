@@ -25,9 +25,9 @@ public class MapApiService : IMapApiService
         _httpClientFactory = httpClientFactory;
         _cache = cache;
     }
-    public async Task<AreaMap> GetArea(uint mapId, Difficulty difficulty, Area area)
+    public async Task<AreaMap> GetArea(uint mapId, Difficulty difficulty, Area areaId)
     {
-        var areaMap = _cache.GetOrCreate(GetMapApiKey(mapId, difficulty, area), (cacheEntry) =>
+        var areaMap = _cache.GetOrCreate(GetMapApiKey(mapId, difficulty, areaId), (cacheEntry) =>
         {
             cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(5);
             var (_, mapId, difficulty, area) = (Tuple<string, uint, Difficulty, Area>)cacheEntry.Key;
@@ -48,7 +48,7 @@ public class MapApiService : IMapApiService
             }
         }
 
-        foreach (var area in (Area[])Enum.GetValues(typeof(Area)))
+        foreach (var area in Enum.GetValues<Area>())
         {
             if(area == Area.None || act != area.MapToAct())
             {

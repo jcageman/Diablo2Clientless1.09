@@ -39,7 +39,7 @@ public class OutGoingPacketTests
     [Fact]
     public void ClickButtonPacketGold1()
     {
-        byte[] expected = new byte[] { 0x4F, 0x14, 0x00, 0x1E, 0x00, 0x06, 0xE6 };
+        byte[] expected = [0x4F, 0x14, 0x00, 0x1E, 0x00, 0x06, 0xE6];
         var packet = new ClickButtonPacket(ClickType.MoveGoldFromInventoryToStash, 2024966);
 
         Assert.Equal(7, packet.Raw.Length);
@@ -49,7 +49,7 @@ public class OutGoingPacketTests
     [Fact]
     public void ClickButtonPacketGold2()
     {
-        byte[] expected = new byte[] { 0x4F, 0x14, 0x00, 0x03, 0x00, 0xBA, 0x8A };
+        byte[] expected = [0x4F, 0x14, 0x00, 0x03, 0x00, 0xBA, 0x8A];
         var packet = new ClickButtonPacket(ClickType.MoveGoldFromInventoryToStash, 232122);
 
         Assert.Equal(7, packet.Raw.Length);
@@ -58,7 +58,7 @@ public class OutGoingPacketTests
     [Fact]
     public void RepairPacket()
     {
-        byte[] expected = new byte[] { 0x35, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80 };
+        byte[] expected = [0x35, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80];
         var packet = new RepairPacket(new WorldObject(EntityType.NPC, 16, 0, new Point(0, 0), EntityState.Alive, 0));
 
         Assert.Equal(17, packet.Raw.Length);

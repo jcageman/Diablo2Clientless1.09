@@ -45,7 +45,7 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
             client.OnReceivedPacketEvent(InComingPacket.ReceiveChat, (packet) => HandleChatMessageEvent(client, packet));
         }
 
-        Task HandleUpdateAsync(Update update)
+        private Task HandleUpdateAsync(Update update)
         {
             if (update.Message is Message message)
             {
@@ -55,14 +55,14 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
                 var client = _clients.FirstOrDefault(c => message.Text.StartsWith(c.LoggedInUserName() + " ", StringComparison.InvariantCultureIgnoreCase));
                 if (client != null)
                 {
-                    var modifiedText = message.Text.Substring(client.LoggedInUserName().Length + 1);
-                    if (modifiedText.StartsWith("/w") || modifiedText.StartsWith("/msg"))
+                    var modifiedText = message.Text[(client.LoggedInUserName().Length + 1)..];
+                    if (modifiedText.StartsWith("/w", StringComparison.OrdinalIgnoreCase) || modifiedText.StartsWith("/msg", StringComparison.OrdinalIgnoreCase))
                     {
                         client.Chat.Send(modifiedText);
                     }
-                    else if (modifiedText.StartsWith("/chat"))
+                    else if (modifiedText.StartsWith("/chat", StringComparison.OrdinalIgnoreCase))
                     {
-                        client.Chat.Send(modifiedText.Substring(5));
+                        client.Chat.Send(modifiedText[5..]);
                     }
                     else if (client.Game.IsInGame())
                     {
@@ -73,7 +73,7 @@ namespace ConsoleBot.Clients.ExternalMessagingClient
             return Task.CompletedTask;
         }
 
-        static Task HandleExceptionAsync(Exception exception)
+        private static Task HandleExceptionAsync(Exception exception)
         {
             Log.Information($"Exception received: {exception}");
             return Task.CompletedTask;

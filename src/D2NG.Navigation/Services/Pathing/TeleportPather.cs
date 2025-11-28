@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace D2NG.Navigation.Services.Pathing;
 
-enum PathingResult
+internal enum PathingResult
 {
     Failed = 0,     // Failed, error occurred or no available path
     DestinationNotReachedYet,      // Path OK, destination not reached yet
@@ -198,7 +198,7 @@ public class TeleportPather
         }
     }
 
-    static int GetRedundancy(List<Point> currentPath, int idxPath, Point position)
+    private static int GetRedundancy(List<Point> currentPath, int idxPath, Point position)
     {
         // step redundancy check
         for (int i = 1; i < idxPath; i++)

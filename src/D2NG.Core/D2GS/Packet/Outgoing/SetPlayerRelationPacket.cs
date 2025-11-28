@@ -9,7 +9,7 @@ internal class SetPlayerRelationPacket : D2gsPacket
         base(
             BuildPacket(
                 (byte)OutGoingPacket.SetPlayerRelation,
-                new byte[] { 0x01, 0x01 },
+                [0x01, 0x01],
                 BitConverter.GetBytes(player.Id)
             )
         )

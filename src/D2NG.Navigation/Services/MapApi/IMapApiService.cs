@@ -7,7 +7,7 @@ namespace D2NG.Navigation.Services.MapApi;
 
 public interface IMapApiService
 {
-    public Task<AreaMap> GetArea(uint mapId, Difficulty difficulty, Area areaId);
+    Task<AreaMap> GetArea(uint mapId, Difficulty difficulty, Area areaId);
 
-    public Task<Area?> GetAreaFromLocation(uint mapId, Difficulty difficulty, Point point, Act act, Area? hintArea);
+    Task<Area?> GetAreaFromLocation(uint mapId, Difficulty difficulty, Point point, Act act, Area? hintArea);
 }

@@ -18,7 +18,7 @@ public class MuleManagerService : IMuleManagerService
 {
     private readonly MuleManagerConfiguration _configuration;
     private readonly IMuleManagerRepository _muleManagerRepository;
-    static int SeedCount = 0;
+    private static int SeedCount;
 
     public MuleManagerService(IOptions<MuleManagerConfiguration> configuration, IMuleManagerRepository muleManagerRepository)
     {
@@ -84,7 +84,7 @@ public class MuleManagerService : IMuleManagerService
             async (_) =>
             {
                 await Task.Delay(100);
-                return client.Game.Stash.Items.Any();
+                return client.Game.Stash.Items.Count != 0;
             }, TimeSpan.FromSeconds(5));
 
             await Task.Delay(TimeSpan.FromSeconds(0.5));
@@ -106,7 +106,7 @@ public class MuleManagerService : IMuleManagerService
         return true;
     }
 
-    static int GenerateSeed()
+    private static int GenerateSeed()
     {
         return (int)((DateTime.Now.Ticks << 4) +
                        (Interlocked.Increment(ref SeedCount)));

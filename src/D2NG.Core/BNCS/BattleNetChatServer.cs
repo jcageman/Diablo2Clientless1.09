@@ -11,7 +11,7 @@ using System.Threading;
 
 namespace D2NG.Core.BNCS;
 
-internal class BattleNetChatServer
+internal class BattleNetChatServer : IDisposable
 {
     private const string RealmLogonPassword = "password";
 
@@ -30,7 +30,7 @@ internal class BattleNetChatServer
     private readonly StateMachine<State, Trigger>.TriggerWithParameters<uint, string> _joinChannelTrigger;
     private readonly StateMachine<State, Trigger>.TriggerWithParameters<string> _chatCommandTrigger;
 
-    enum State
+    private enum State
     {
         NotConnected,
         Connected,
@@ -41,7 +41,7 @@ internal class BattleNetChatServer
         InChat
     }
 
-    enum Trigger
+    private enum Trigger
     {
         Connect,
         Disconnect,
@@ -254,7 +254,7 @@ internal class BattleNetChatServer
         var exeversion = ((fvi.FileMajorPart << 24) | (fvi.FileMinorPart << 16) | (fvi.FileBuildPart << 8) | 0);
 
         //var checkVersionHash = CheckRevisionV1.FastComputeHash(packet.FormulaString, mpqFile, gameFile, bnetFile, d2File);
-        var checkVersionHash = BitConverter.ToUInt32(new byte[] { 218, 18, 86, 73 });
+        var checkVersionHash = BitConverter.ToUInt32([218, 18, 86, 73]);
         AuthCheckEvent.Reset();
         Connection.WritePacket(new AuthCheckRequestPacket(
             Context.ClientToken,
@@ -315,5 +315,10 @@ internal class BattleNetChatServer
     {
         Connection.Terminate();
         _machine.Fire(Trigger.Disconnect);
+    }
+
+    public void Dispose()
+    {
+        throw new NotImplementedException();
     }
 }

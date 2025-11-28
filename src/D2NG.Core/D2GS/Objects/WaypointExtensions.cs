@@ -7,7 +7,7 @@ namespace D2NG.Core.D2GS.Objects;
 
 public static class WaypointExtensions
 {
-    private static readonly IDictionary<Waypoint, Area> WaypointToArea = new Dictionary<Waypoint, Area>()
+    private static readonly Dictionary<Waypoint, Area> WaypointToArea = new()
     {
         { Waypoint.RogueEncampment, Area.RogueEncampment },
         { Waypoint.ColdPlains , Area.ColdPlains },
@@ -50,7 +50,7 @@ public static class WaypointExtensions
         { Waypoint.TheWorldStoneKeepLevel2 , Area.TheWorldStoneKeepLevel2 }
     };
 
-    private static readonly IDictionary<Area, Waypoint> AreaToWaypoint = WaypointToArea.ToDictionary(x => x.Value, x => x.Key);
+    private static readonly Dictionary<Area, Waypoint> AreaToWaypoint = WaypointToArea.ToDictionary(x => x.Value, x => x.Key);
 
     public static Area ToArea(this Waypoint waypoint)
     {

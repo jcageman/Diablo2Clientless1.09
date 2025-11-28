@@ -172,10 +172,7 @@ public class Client
 
     private async Task<bool> RealmLogon()
     {
-        if (_mcpRealm is null)
-        {
-            _mcpRealm = Bncs.ListMcpRealms()?.First();
-        }
+        _mcpRealm ??= Bncs.ListMcpRealms()?.First();
 
         if (_mcpRealm == null)
         {

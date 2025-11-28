@@ -18,7 +18,7 @@ internal class WaypointMenuPacket : D2gsPacket
         }
         WaypointId = reader.ReadUInt32();
         _ = reader.ReadUInt16();
-        foreach (Waypoint waypoint in Enum.GetValues(typeof(Waypoint)))
+        foreach (Waypoint waypoint in Enum.GetValues<Waypoint>())
         {
             if (reader.ReadBit())
             {

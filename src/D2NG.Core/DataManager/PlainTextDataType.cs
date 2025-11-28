@@ -3,7 +3,7 @@ using System.IO;
 
 namespace D2NG.Core.DataManager;
 
-class PlainTextDataType
+internal class PlainTextDataType
 {
     private readonly List<string[]> m_lines;
 

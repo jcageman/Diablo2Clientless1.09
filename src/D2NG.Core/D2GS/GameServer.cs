@@ -17,7 +17,7 @@ internal class GameServer : IDisposable
 {
     private const ushort Port = 4000;
 
-    private bool InGame = false;
+    private bool InGame;
 
     private static int instanceCounter;
     private readonly int InstanceId;
@@ -117,10 +117,7 @@ internal class GameServer : IDisposable
             Connection.Terminate();
         }
         
-        if(_listener != null)
-        {
-            _listener.Join();
-        }
+        _listener?.Join();
     }
 
     public async Task LeaveGame()

@@ -36,8 +36,8 @@ namespace ConsoleBot.Bots.Types.Cows
         private readonly IMapApiService _mapApiService;
         private readonly CowConfiguration _cowconfig;
         private uint? BoClientPlayerId;
-        private ConcurrentDictionary<string, bool> ShouldFollow = new();
-        private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new();
+        private readonly ConcurrentDictionary<string, bool> ShouldFollow = new();
+        private readonly ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new();
         private CowManager _cowManager;
         public CowBot(IOptions<BotConfiguration> config, IOptions<CowConfiguration> cowconfig,
             IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
@@ -59,10 +59,10 @@ namespace ConsoleBot.Bots.Types.Cows
             return "cows";
         }
 
-        protected override void PostInitializeClient(Client client, AccountConfig account)
+        protected override void PostInitializeClient(Client client, AccountConfig accountCharacter)
         {
-            ShouldFollow.TryAdd(account.Character.ToLower(), false);
-            FollowTasks.TryAdd(account.Character.ToLower(), (null, new CancellationTokenSource()));
+            ShouldFollow.TryAdd(accountCharacter.Character.ToLower(), false);
+            FollowTasks.TryAdd(accountCharacter.Character.ToLower(), (null, new CancellationTokenSource()));
             client.OnReceivedPacketEvent(InComingPacket.EntityMove, async (packet) =>
             {
                 var entityMovePacket = new EntityMovePacket(packet);
@@ -94,7 +94,7 @@ namespace ConsoleBot.Bots.Types.Cows
         {
             var townManagementOptions = new TownManagementOptions(account, Act.Act1);
 
-            var isPortalCharacter = _cowconfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.InvariantCultureIgnoreCase);
+            var isPortalCharacter = _cowconfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.OrdinalIgnoreCase);
             if (isPortalCharacter)
             {
                 var tomesOfTp = client.Game.Inventory.Items.Count(i => i.Name == ItemName.TomeOfTownPortal);
@@ -175,7 +175,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
         protected override async Task<bool> PerformRun(Client client, AccountConfig account)
         {
-            var isPortalCharacter = _cowconfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.InvariantCultureIgnoreCase);
+            var isPortalCharacter = _cowconfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.OrdinalIgnoreCase);
             if (isPortalCharacter)
             {
                 if (!await ArrangeBoAtCata2(client))
@@ -194,7 +194,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }
             else
             {
-                var portalPlayer = client.Game.Players.Single(p => _cowconfig.PortalCharacterName.Equals(p.Name, StringComparison.InvariantCultureIgnoreCase));
+                var portalPlayer = client.Game.Players.Single(p => _cowconfig.PortalCharacterName.Equals(p.Name, StringComparison.OrdinalIgnoreCase));
                 if (!await GetBoAtCata2(client, portalPlayer))
                 {
                     NextGame.TrySetResult(true);
@@ -395,7 +395,7 @@ namespace ConsoleBot.Bots.Types.Cows
 
             var lowestQuantity = tomesOfTp.OrderBy(i => i.Amount).First();
             var droppedItems = new List<Item>();
-            if (game.Cube.Items.Any())
+            if (game.Cube.Items.Count != 0)
             {
                 if (!InventoryHelpers.MoveCubeItemsToInventory(game))
                 {
@@ -413,7 +413,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }
 
             var freeSpaceTownPortal = game.Cube.FindFreeSpace(lowestQuantity);
-            if (game.Cube.Items.Any() || freeSpaceTownPortal == null)
+            if (game.Cube.Items.Count != 0 || freeSpaceTownPortal == null)
             {
                 Log.Error($"Something wrong with cube for transmute town portal");
                 return false;
@@ -635,7 +635,7 @@ namespace ConsoleBot.Bots.Types.Cows
             ShouldFollow[client.Game.Me.Name.ToLower()] = follow;
         }
 
-        async Task GetTaskForClient(Client client, AccountConfig account, CowManager cowManager)
+        private async Task GetTaskForClient(Client client, AccountConfig account, CowManager cowManager)
         {
             if (client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] < 50 && !client.Game.Me.HasSkill(Skill.Teleport))
             {
@@ -686,7 +686,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }
         }
 
-        async Task StaticSorcClient(Client client, AccountConfig account, CowManager cowManager)
+        private async Task StaticSorcClient(Client client, AccountConfig account, CowManager cowManager)
         {
             Log.Information($"Starting Sorc Client {client.Game.Me.Name}");
             ElapsedEventHandler staticFieldAction = (sender, args) =>
@@ -711,7 +711,7 @@ namespace ConsoleBot.Bots.Types.Cows
             {
                 var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
                 var cowsNearLead = leadPlayer != null ? cowManager.GetNearbyAliveMonsters(leadPlayer.Location, 20.0, 10) : [];
-                if (leadPlayer != null && leadPlayer.Location != currentCluster && cowsNearLead.Any() && leadPlayer.Location.Distance(client.Game.Me.Location) > 20)
+                if (leadPlayer != null && leadPlayer.Location != currentCluster && cowsNearLead.Count != 0 && leadPlayer.Location.Distance(client.Game.Me.Location) > 20)
                 {
                     if (cowsNearLead.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)))
                     {
@@ -775,7 +775,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 }
 
                 var nearbyAliveCows = cowManager.GetNearbyAliveMonsters(client, 30.0, 10);
-                if (((double)client.Game.Me.Life) / client.Game.Me.MaxLife <= 0.5 && nearbyAliveCows.Any())
+                if (((double)client.Game.Me.Life) / client.Game.Me.MaxLife <= 0.5 && nearbyAliveCows.Count != 0)
                 {
                     executeStaticField.Stop();
                     executeNova.Stop();
@@ -920,7 +920,7 @@ namespace ConsoleBot.Bots.Types.Cows
             return await _attackService.MoveToNearbySafeSpot(client, nearbyMonsters, toLocation, MovementMode.Teleport, minDistance, maxDistance);
         }
 
-        async Task BasicIdleClient(Client client, CowManager cowManager)
+        private async Task BasicIdleClient(Client client, CowManager cowManager)
         {
             Log.Information($"Starting Basic idle Client {client.Game.Me.Name}");
             while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
@@ -930,7 +930,7 @@ namespace ConsoleBot.Bots.Types.Cows
             Log.Information($"Stopped Idle Client {client.Game.Me.Name}");
         }
 
-        async Task BasicFollowClient(Client client, AccountConfig account, CowManager cowManager)
+        private async Task BasicFollowClient(Client client, AccountConfig account, CowManager cowManager)
         {
             SetShouldFollowLead(client, true);
 
@@ -955,7 +955,7 @@ namespace ConsoleBot.Bots.Types.Cows
                     }
                 }
 
-                if (!cowManager.GetNearbyAliveMonsters(client, 20, 1).Any())
+                if (cowManager.GetNearbyAliveMonsters(client, 20, 1).Count == 0)
                 {
                     await PickupItemsAndPotions(client, account, 25);
                     SetShouldFollowLead(client, true);
@@ -965,7 +965,7 @@ namespace ConsoleBot.Bots.Types.Cows
             }
         }
 
-        async Task BarbClient(Client client, AccountConfig account, CowManager cowManager, bool shouldBo)
+        private async Task BarbClient(Client client, AccountConfig account, CowManager cowManager, bool shouldBo)
         {
             Log.Information($"Starting BoBarb Client {client.Game.Me.Name}");
             if (shouldBo)
@@ -987,7 +987,7 @@ namespace ConsoleBot.Bots.Types.Cows
                 }
 
                 var nearbyMonsters = cowManager.GetNearbyAliveMonsters(client, 20, 1);
-                if (!nearbyMonsters.Any())
+                if (nearbyMonsters.Count == 0)
                 {
                     await PickupItemsAndPotions(client, account, 15);
                 }

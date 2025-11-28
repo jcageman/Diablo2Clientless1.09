@@ -20,7 +20,7 @@ namespace ConsoleBot.TownManagement
     {
         private readonly IPathingService _pathingService;
         private readonly IExternalMessagingClient _externalMessagingClient;
-        private static int isAnyClientGambling = 0;
+        private static int isAnyClientGambling;
 
         public TownManagementService(IPathingService pathingService, IExternalMessagingClient externalMessagingClient)
         {

@@ -9,14 +9,17 @@ namespace ConsoleBot.Helpers
 
         public ExecuteAtInterval(ElapsedEventHandler eventHandler, TimeSpan interval)
         {
-            _timer = new Timer(interval.TotalMilliseconds);
-            _timer.AutoReset = true;
+            _timer = new Timer(interval.TotalMilliseconds)
+            {
+                AutoReset = true
+            };
             _timer.Elapsed += eventHandler;
         }
 
         public void Dispose()
         {
             ((IDisposable)_timer).Dispose();
+            GC.SuppressFinalize(this);
         }
 
         public void Start()

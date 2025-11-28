@@ -1,5 +1,6 @@
 ﻿namespace D2NG.Core.D2GS.Items;
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1708:Identifiers should differ by more than case", Justification = "<Pending>")]
 public enum ItemName
 {
     Cap,

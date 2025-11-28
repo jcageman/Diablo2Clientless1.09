@@ -47,36 +47,32 @@ public static class CheckRevisionV1
 
         using (var dll = new MemoryStream(mpq))
         {
-            using (var arch = new MpqLib.MpqArchive(dll))
+            using var arch = new MpqLib.MpqArchive(dll);
+            string listfile = Path.GetTempFileName();
+            using (var sw = new StreamWriter(File.OpenWrite(listfile)))
+                sw.WriteLine(fileName);
+            arch.ExternalListFile = listfile;
+            var f = arch.Files.FirstOrDefault((file) => file.Name == fileName);
+            using var stream = arch.OpenFile(fileName);
+            byte[] bytes = new byte[f.UncompressedSize];
+            stream.BlockRead(bytes);
+            int index = -1;
+            for (int i = 0; i < bytes.Length; i++)
             {
-                string listfile = Path.GetTempFileName();
-                using (var sw = new StreamWriter(File.OpenWrite(listfile)))
-                    sw.WriteLine(fileName);
-                arch.ExternalListFile = listfile;
-                var f = arch.Files.FirstOrDefault((file) => file.Name == fileName);
-                using (var stream = arch.OpenFile(fileName))
+                if ((bytes[i] == 0x81 && bytes[i + 1] == 0x30))
                 {
-                    byte[] bytes = new byte[f.UncompressedSize];
-                    stream.BlockRead(bytes);
-                    int index = -1;
-                    for (int i = 0; i < bytes.Length; i++)
-                    {
-                        if ((bytes[i] == 0x81 && bytes[i + 1] == 0x30))
-                        {
-                            index = i + 2;
-                            break;
-                        }
-                        else if ((bytes[i] == 0x81 && bytes[i + 1] == 0x75) && bytes[i + 2] == 0xCC)
-                        {
-                            index = i + 3;
-                            break;
-                        }
-                    }
-                    if (index != -1)
-                    {
-                        constant = BitConverter.ToUInt32(bytes, index);
-                    }
+                    index = i + 2;
+                    break;
                 }
+                else if ((bytes[i] == 0x81 && bytes[i + 1] == 0x75) && bytes[i + 2] == 0xCC)
+                {
+                    index = i + 3;
+                    break;
+                }
+            }
+            if (index != -1)
+            {
+                constant = BitConverter.ToUInt32(bytes, index);
             }
         }
 
@@ -99,8 +95,8 @@ public static class CheckRevisionV1
     private static FileHasher BuildFileHasher(IEnumerable<FormulaOp> ops)
     {
         var uintType = typeof(uint).MakeByRefType();
-        var method = new DynamicMethod("HashFile", typeof(void), new[] { uintType, uintType, uintType, uintType, typeof(byte[]) });
-        var touint32 = typeof(BitConverter).GetMethod("ToUInt32", new[] { typeof(byte[]), typeof(int) });
+        var method = new DynamicMethod("HashFile", typeof(void), [uintType, uintType, uintType, uintType, typeof(byte[])]);
+        var touint32 = typeof(BitConverter).GetMethod("ToUInt32", [typeof(byte[]), typeof(int)]);
 
         var gen = method.GetILGenerator();
 
@@ -185,7 +181,7 @@ public static class CheckRevisionV1
         }
     }
 
-    private static IEnumerable<FormulaOp> BuildFormula(string formula, ref uint[] values)
+    private static List<FormulaOp> BuildFormula(string formula, ref uint[] values)
     {
         var ops = new List<FormulaOp>();
         string[] tokens = formula.Split(' ');

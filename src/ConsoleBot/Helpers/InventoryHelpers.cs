@@ -54,7 +54,7 @@ namespace ConsoleBot.Helpers
         public static MoveItemResult StashItemsAndGold(Game game, List<Item> items, int gold)
         {
             var stashes = game.GetEntityByCode(EntityCode.Stash);
-            if (!stashes.Any())
+            if (stashes.Count == 0)
             {
                 Log.Error($"{game.Me.Name}: No stash found");
                 return MoveItemResult.Failed;
@@ -119,7 +119,7 @@ namespace ConsoleBot.Helpers
         public static MoveItemResult MoveStashItemsToInventory(Game game, List<Item> items)
         {
             var stashes = game.GetEntityByCode(EntityCode.Stash);
-            if (!stashes.Any())
+            if (stashes.Count == 0)
             {
                 Log.Error($"{game.Me.Name}: No stash found");
                 return MoveItemResult.Failed;

@@ -6,6 +6,6 @@ namespace ConsoleBot.Mule
 {
     public interface IMuleService
     {
-        public Task<bool> MuleItemsForClient(Client client);
+        Task<bool> MuleItemsForClient(Client client);
     }
 }

@@ -225,11 +225,14 @@ namespace ConsoleBot.Bots.Types.Pindle
             var revCountInInventory = client.Game.Inventory.Items.Count(i => i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion);
             if (revCountInInventory < 5)
             {
-                var revs = client.Game.Items.Values.Where(i => i.Ground && (i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
-                Log.Information($"Killed Pindle, picking up {revs.Count()} rev potions since only {revCountInInventory} in inventory");
+                var revs = client.Game.Items.Values
+                    .Where(i => i.Ground && (i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion))
+                    .OrderBy(n => n.Location.Distance(client.Game.Me.Location))
+                    .ToList();
+                Log.Information($"Killed Pindle, picking up {revs.Count} rev potions since only {revCountInInventory} in inventory");
                 pickupItems.AddRange(revs);
             }
-            Log.Information($"Killed Pindle, picking up {pickupItems.Count()} items ");
+            Log.Information($"Killed Pindle, picking up {pickupItems.Count} items ");
             foreach (var item in pickupItems)
             {
                 if (item.Location.Distance(client.Game.Me.Location) > 30)

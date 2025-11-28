@@ -12,7 +12,7 @@ internal class RepairPacket : D2gsPacket
                 (byte)OutGoingPacket.Repair,
                 BitConverter.GetBytes(entity.Id),
                 Enumerable.Repeat<byte>(0x00, 11).ToArray(),
-                new byte[] { 0x80 }
+                [0x80]
             )
         )
     {

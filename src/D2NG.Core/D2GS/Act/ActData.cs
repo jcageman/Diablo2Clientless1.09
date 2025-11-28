@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace D2NG.Core.D2GS.Act;
 
-class ActData
+internal class ActData
 {
     public Act Act { get; set; }
     public uint MapId { get; set; }
@@ -38,10 +38,7 @@ class ActData
     internal void UpdateNPCLocation(uint entityId, Point location)
     {
         var npc = WorldObjects[(entityId, EntityType.NPC)];
-        if (npc != null)
-        {
-            npc.Location = location;
-        }
+        npc?.Location = location;
     }
 
     internal void UpdateObjectState(ObjectStatePacket packet)
@@ -70,9 +67,11 @@ class ActData
 
     internal void AddNPC(AssignNpcPacket packet)
     {
-        var npc = new WorldObject(EntityType.NPC, packet.EntityId, 0, packet.Location, EntityState.Alive, 0);
-        npc.NPCCode = packet.UniqueCode;
-        npc.MonsterEnchantments = packet.MonsterEnchantments;
+        var npc = new WorldObject(EntityType.NPC, packet.EntityId, 0, packet.Location, EntityState.Alive, 0)
+        {
+            NPCCode = packet.UniqueCode,
+            MonsterEnchantments = packet.MonsterEnchantments
+        };
         AddWorldObject(npc);
     }
 
@@ -96,7 +95,7 @@ class ActData
             WorldObjectsByEntityCode.AddOrUpdate(
 value.Code,
 (newCode => []),
-(existingCode, existingObjects) => new ConcurrentBag<WorldObject>(existingObjects.Where(o => o.Id != value.Id || o.Type != value.Type)));
+(existingCode, existingObjects) => [.. existingObjects.Where(o => o.Id != value.Id || o.Type != value.Type)]);
         }
     }
 

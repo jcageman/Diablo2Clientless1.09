@@ -49,9 +49,9 @@ public class AssignNpcPacket : D2gsPacket
     public uint EntityId { get; }
     public NPCCode UniqueCode { get; }
     public Point Location { get; }
-    public bool IsBoss { get; } = false;
-    public bool IsBossMinion { get; } = false;
-    public bool IsChampion { get; } = false;
+    public bool IsBoss { get; }
+    public bool IsBossMinion { get; }
+    public bool IsChampion { get; }
     public double LifePercentage { get; }
     public HashSet<MonsterEnchantment> MonsterEnchantments { get; } = [];
 }

@@ -5,7 +5,7 @@ using System.Text;
 
 namespace D2NG.Core.MCP.Packet;
 
-class McpStartupResponsePacket : McpPacket
+internal class McpStartupResponsePacket : McpPacket
 {
     public McpStartupResponsePacket(byte[] packet) : base(packet)
     {

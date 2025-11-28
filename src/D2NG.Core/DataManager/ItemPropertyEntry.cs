@@ -2,7 +2,7 @@
 
 namespace D2NG.Core.DataManager;
 
-class ItemPropertyEntry
+internal class ItemPropertyEntry
 {
     public string Name { get; }
 

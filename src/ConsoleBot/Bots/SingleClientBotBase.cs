@@ -17,7 +17,7 @@ namespace ConsoleBot.Bots
         protected readonly BotConfiguration _config;
         protected readonly IExternalMessagingClient _externalMessagingClient;
         protected readonly IMuleService _muleService;
-        protected bool NeedsMule = false;
+        protected bool NeedsMule;
 
         public SingleClientBotBase(
             BotConfiguration config,

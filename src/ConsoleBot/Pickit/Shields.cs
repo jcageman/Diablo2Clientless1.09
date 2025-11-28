@@ -6,7 +6,7 @@ namespace ConsoleBot.Pickit
 {
     public static class Shields
     {
-        static HashSet<ItemName> DesirableShields = [ItemName.BoneShield, ItemName.GrimShield, ItemName.SpikedShield, ItemName.BarbedShield];
+        private static readonly HashSet<ItemName> DesirableShields = [ItemName.BoneShield, ItemName.GrimShield, ItemName.SpikedShield, ItemName.BarbedShield];
 
         public static bool ShouldPickupItemExpansion(Item item)
         {

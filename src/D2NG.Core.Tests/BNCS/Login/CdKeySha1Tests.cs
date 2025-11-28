@@ -15,9 +15,9 @@ public class CdKeySha1Tests : CdKeySha1
     public void TestMaskingBytes()
     {
         int[] priv =
-        {
+        [
             53, -4, 41, 65, -24, 76, -124, 36, 12, 42
-        };
+        ];
         Assert.Equal(9993, Product);
         Assert.Equal(BitConverter.GetBytes(18067384), Public);
         Assert.Equal(priv.Select(v => (byte)v), Private);

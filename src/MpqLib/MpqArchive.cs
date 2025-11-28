@@ -35,7 +35,7 @@ namespace MpqLib;
 
 public class MpqArchive : IDisposable
 {
-    private Stream mStream;
+    private readonly Stream mStream;
 
     private MpqHeader mHeader;
     private long mHeaderOffset;
@@ -43,7 +43,7 @@ public class MpqArchive : IDisposable
     private MpqHash[] mHashes;
     private MpqBlock[] mBlocks;
 
-    private static uint[] sStormBuffer;
+    private static readonly uint[] sStormBuffer;
 
     static MpqArchive()
     {
@@ -64,8 +64,8 @@ public class MpqArchive : IDisposable
 
     public void Dispose()
     {
-        if (mStream != null)
-            mStream.Close();
+        mStream?.Close();
+        GC.SuppressFinalize(this);
     }
 
     private void Init()
@@ -329,15 +329,15 @@ public class MpqArchive : IDisposable
 
     public class FileInfo
     {
-        public string Name;
-        public long CompressedSize;
-        public long UncompressedSize;
-        public MpqFileFlags Flags;
+        public string Name { get; set; }
+        public long CompressedSize { get; set; }
+        public long UncompressedSize { get; set; }
+        public MpqFileFlags Flags { get; set; }
         public override string ToString() { return Name; }
         public static implicit operator string(FileInfo fi) { return fi.ToString(); }
     }
 
-    string _ExternalListFile = null;
+    private string _ExternalListFile;
 
     /// <summary>
     /// Gets or sets the external list file. This setting overrides any list file contained in the archive
@@ -357,7 +357,6 @@ public class MpqArchive : IDisposable
     }
 
     protected FileInfo[] _Files;
-
     /// <summary>
     /// Returns a collection of file infos for the archive. The archive must contain "ListFileName" (default "(listfile)") for this to work.
     /// </summary>
@@ -380,29 +379,29 @@ public class MpqArchive : IDisposable
 
                     using (stm)
                     {
-                        using (StreamReader reader = new(stm))
+                        using StreamReader reader = new(stm);
+                        string data;
+                        List<FileInfo> files = [];
+
+                        while ((data = reader.ReadLine()) != null)
                         {
-                            string data;
-                            List<FileInfo> files = [];
+                            MpqHash hash = GetHashEntry(data);
+                            if (!hash.IsValid) continue;
+                            MpqBlock block = mBlocks[hash.BlockIndex];
 
-                            while ((data = reader.ReadLine()) != null)
+                            // initialize and add new FileInfo
+                            FileInfo fi = new()
                             {
-                                MpqHash hash = GetHashEntry(data);
-                                if (!hash.IsValid) continue;
-                                MpqBlock block = mBlocks[hash.BlockIndex];
+                                Name = data,
+                                Flags = block.Flags,
+                                UncompressedSize = block.FileSize,
+                                CompressedSize = block.CompressedSize
+                            };
 
-                                // initialize and add new FileInfo
-                                FileInfo fi = new();
-                                fi.Name = data;
-                                fi.Flags = block.Flags;
-                                fi.UncompressedSize = block.FileSize;
-                                fi.CompressedSize = block.CompressedSize;
-
-                                files.Add(fi);
-                            }
-
-                            _Files = files.ToArray();
+                            files.Add(fi);
                         }
+
+                        _Files = files.ToArray();
                     }
                 }
 

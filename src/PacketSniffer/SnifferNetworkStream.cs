@@ -10,7 +10,7 @@ public class SnifferNetworkStream : INetworkStream
 
     public SnifferNetworkStream(byte[] packet)
     {
-        this.packet = packet ?? throw new ArgumentNullException("packet");
+        this.packet = packet ?? throw new ArgumentNullException(nameof(packet));
     }
 
     public bool CanWrite

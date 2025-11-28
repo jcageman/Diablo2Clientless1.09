@@ -57,7 +57,7 @@ namespace ConsoleBot.Bots.Types
             var requiredSlots = new HashSet<int> { 0, 1, 2, 3 };
             requiredSlots.ExceptWith(ManaSlots);
             requiredSlots.ExceptWith(HealthSlots);
-            if (requiredSlots.Any())
+            if (requiredSlots.Count != 0)
             {
                 throw new ValidationException($"{nameof(HealthSlots)} + {nameof(ManaSlots)} are missing some values {string.Join(",", requiredSlots)}");
             }

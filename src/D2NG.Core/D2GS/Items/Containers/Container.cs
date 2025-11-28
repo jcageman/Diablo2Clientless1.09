@@ -12,7 +12,9 @@ public class Container
 
     protected bool[,] Buffer { get; set; }
 
+#pragma warning disable IDE1006 // Naming Styles
     protected ConcurrentDictionary<uint, Item> _items { get; set; } = new ConcurrentDictionary<uint, Item>();
+#pragma warning restore IDE1006 // Naming Styles
 
     public List<Item> Items { get => _items.Values.ToList(); }
 

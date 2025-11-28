@@ -32,8 +32,8 @@ namespace ConsoleBot.Bots.Types.Baal
         private readonly BaalConfiguration _baalConfig;
         private uint? BoClientPlayerId;
         private uint? PortalClientPlayerId;
-        private ConcurrentDictionary<string, bool> ShouldFollow = new();
-        private ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new();
+        private readonly ConcurrentDictionary<string, bool> ShouldFollow = new();
+        private readonly ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new();
 
         public BaalBot(IOptions<BotConfiguration> config, IOptions<BaalConfiguration> baalconfig,
             IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
@@ -83,9 +83,9 @@ namespace ConsoleBot.Bots.Types.Baal
             });
         }
 
-        protected override async Task<bool> PrepareForRun(Client client, AccountConfig accountConfig)
+        protected override async Task<bool> PrepareForRun(Client client, AccountConfig account)
         {
-            var townManagementOptions = new TownManagementOptions(accountConfig,  Act.Act5);
+            var townManagementOptions = new TownManagementOptions(account,  Act.Act5);
 
             if(client.Game.Act == Act.Act5)
             {
@@ -97,7 +97,7 @@ namespace ConsoleBot.Bots.Types.Baal
                 }, TimeSpan.FromSeconds(2)); 
             }
 
-            var isPortalCharacter = _baalConfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.InvariantCultureIgnoreCase);
+            var isPortalCharacter = _baalConfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.OrdinalIgnoreCase);
             var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
             if (townTaskResult.ShouldMule)
             {
@@ -151,7 +151,7 @@ namespace ConsoleBot.Bots.Types.Baal
             }
 
             BoClientPlayerId = boClient.Game.Me.Id;
-            var portalClient = clients.First(c => _baalConfig.PortalCharacterName.Equals(c.Game.Me.Name, StringComparison.InvariantCultureIgnoreCase));
+            var portalClient = clients.First(c => _baalConfig.PortalCharacterName.Equals(c.Game.Me.Name, StringComparison.OrdinalIgnoreCase));
             PortalClientPlayerId = portalClient.Game.Me.Id;
             return Task.CompletedTask;
         }
@@ -529,7 +529,7 @@ namespace ConsoleBot.Bots.Types.Baal
             ShouldFollow[client.Game.Me.Name.ToLower()] = follow;
         }
 
-        async Task GetTaskForWave(Client client, AccountConfig account)
+        private async Task GetTaskForWave(Client client, AccountConfig account)
         {
             if (client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] < 50 && !client.Game.Me.HasSkill(Skill.Teleport))
             {
@@ -569,7 +569,7 @@ namespace ConsoleBot.Bots.Types.Baal
             }
         }
 
-        async Task GetTaskForBaal(Client client, AccountConfig account)
+        private async Task GetTaskForBaal(Client client, AccountConfig account)
         {
             var portalPlayer = client.Game.Players.FirstOrDefault(p => p.Id == PortalClientPlayerId);
             if (portalPlayer == null)
@@ -624,7 +624,7 @@ namespace ConsoleBot.Bots.Types.Baal
             await PickupItemsAndPotions(client, account, 100);
         }
 
-        async Task StaticSorcClient(Client client, AccountConfig account)
+        private async Task StaticSorcClient(Client client, AccountConfig account)
         {
             Log.Information($"Starting Sorc Client {client.Game.Me.Name}");
             Point baalThrone = null;
@@ -664,7 +664,7 @@ namespace ConsoleBot.Bots.Types.Baal
                 }
 
                 var nearbyMonsters = NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 10, 50).Where(m => baalThrone == null || baalThrone.Distance(m.Location) < 50).ToList();
-                if (nearbyMonsters.Any())
+                if (nearbyMonsters.Count != 0)
                 {
                     runStopWatch.Restart();
                 }
@@ -675,7 +675,7 @@ namespace ConsoleBot.Bots.Types.Baal
 
                 var boPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
                 var portalPlayer = client.Game.Players.FirstOrDefault(p => p.Id == PortalClientPlayerId);
-                var monstersNearBoClient = boPlayer != null ? NPCHelpers.GetNearbyNPCs(client, boPlayer.Location, 10, 20) : new List<WorldObject>();
+                var monstersNearBoClient = boPlayer != null ? NPCHelpers.GetNearbyNPCs(client, boPlayer.Location, 10, 20) : [];
                 if (boPlayer != null && monstersNearBoClient.Any() && boPlayer.Location.Distance(client.Game.Me.Location) > 20)
                 {
                     Log.Information($"{client.Game.Me.Name}, bo client in danger, moving to bo client");
@@ -710,7 +710,7 @@ namespace ConsoleBot.Bots.Types.Baal
                     continue;
                 }
 
-                if(nearbyMonsters.Any()
+                if(nearbyMonsters.Count != 0
                     && client.Game.Me.Id == PortalClientPlayerId 
                     && client.Game.Me.Location.Distance(nearbyMonsters.First().Location) > 30)
                 {
@@ -730,12 +730,12 @@ namespace ConsoleBot.Bots.Types.Baal
                     }
                 }
 
-                if (nearbyMonsters.Any())
+                if (nearbyMonsters.Count != 0)
                 {
                     var assistPlayer = client.Game.Players.FirstOrDefault(p => p.Id == PortalClientPlayerId) ?? client.Game.Me;
                     await _attackService.AssistPlayer(client, assistPlayer);
                 }
-                else if(!client.Game.GetNPCsByCode(NPCCode.BaalThrone).Any() && baalThrone != null && client.Game.Me.Location.Distance(baalThrone) < 30)
+                else if(client.Game.GetNPCsByCode(NPCCode.BaalThrone).Count == 0 && baalThrone != null && client.Game.Me.Location.Distance(baalThrone) < 30)
                 {
                     Log.Information($"Waves done, moving on {client.Game.Me.Name}");
                     break;
@@ -754,7 +754,7 @@ namespace ConsoleBot.Bots.Types.Baal
             Log.Information($"Finished with Sorc Client {client.Game.Me.Name}");
         }
 
-        async Task BasicIdleClient(Client client)
+        private async Task BasicIdleClient(Client client)
         {
             Log.Information($"Starting Basic idle Client {client.Game.Me.Name}");
             while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(2)), NextGame.Task) && client.Game.IsInGame())
@@ -764,7 +764,7 @@ namespace ConsoleBot.Bots.Types.Baal
             Log.Information($"Stopped Idle Client {client.Game.Me.Name}");
         }
 
-        async Task BasicPalaClient(Client client, AccountConfig account)
+        private async Task BasicPalaClient(Client client, AccountConfig account)
         {
             SetShouldFollowLead(client, true);
 
@@ -797,7 +797,7 @@ namespace ConsoleBot.Bots.Types.Baal
             }
         }
 
-        async Task BarbClient(Client client, AccountConfig account)
+        private async Task BarbClient(Client client, AccountConfig account)
         {
             Log.Information($"Starting BoBarb Client {client.Game.Me.Name}");
             bool shouldBo = client.Game.Me.Id == BoClientPlayerId;

@@ -26,13 +26,13 @@ public class AuthCheckRequestPacket : BncsPacket
                 KeyCount,
                 Enumerable.Repeat(new byte[] { 0 }, 76).SelectMany(a => a),
                 Encoding.ASCII.GetBytes(info),
-                new byte[] { 0 },
+                [0],
                 Encoding.ASCII.GetBytes(keyOwner),
-                new byte[] { 0 }
+                [0]
             )
         )
     {
-        Log.Verbose(BitConverter.ToString(Raw).Replace("-", ""));
+        Log.Verbose(Convert.ToHexString(Raw));
         Log.Verbose($"Writing AuthCheck\n" +
             $"\tType: {Type}\n" +
             $"\tClient Token: {clientToken}\n" +

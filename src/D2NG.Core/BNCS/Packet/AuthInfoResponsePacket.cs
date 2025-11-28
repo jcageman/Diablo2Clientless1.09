@@ -54,12 +54,12 @@ public class AuthInfoResponsePacket : BncsPacket
         if (zero == -1)
         {
             zero = packet.Length;
-            output = packet.Substring(offset, zero - offset);
+            output = packet[offset..zero];
             offset = 0;
         }
         else
         {
-            output = packet.Substring(offset, zero - offset);
+            output = packet[offset..zero];
             offset = zero + 1;
         }
         return output;

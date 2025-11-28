@@ -6,12 +6,12 @@ using System.IO;
 
 namespace D2NG.Core.DataManager;
 
-class ItemDataType
+internal class ItemDataType
 {
     public Dictionary<string, ItemEntry> Items { get; }
 
-    private static Dictionary<string, ClassificationType> classificationMap = GetClassificationMap();
-    private static Dictionary<string, ItemName> itemNameMap = GetItemNameMap();
+    private static readonly Dictionary<string, ClassificationType> classificationMap = GetClassificationMap();
+    private static readonly Dictionary<string, ItemName> itemNameMap = GetItemNameMap();
 
     public ItemDataType(string file)
     {

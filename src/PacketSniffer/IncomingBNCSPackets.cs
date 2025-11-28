@@ -9,7 +9,7 @@ public static class IncomingBNCSPackets
 {
     public static void HandleIncomingPacket(BncsPacket eventArgs)
     {
-        if (!Enum.IsDefined(typeof(Sid), eventArgs.Type))
+        if (!Enum.IsDefined(eventArgs.Type))
         {
             Log.Information($"Received unknown BNCS packet of type: 0x{(byte)eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
             return;
