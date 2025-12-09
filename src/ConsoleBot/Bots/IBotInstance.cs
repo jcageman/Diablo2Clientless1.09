@@ -1,10 +1,9 @@
 ﻿using System.Threading.Tasks;
 
-namespace ConsoleBot.Bots
+namespace ConsoleBot.Bots;
+
+public interface IBotInstance
 {
-    public interface IBotInstance
-    {
-        string GetName();
-        Task Run();
-    }
+    string GetName();
+    Task Run();
 }

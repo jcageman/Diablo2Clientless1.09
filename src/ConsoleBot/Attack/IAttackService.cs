@@ -5,14 +5,13 @@ using D2NG.Navigation.Services.Pathing;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace ConsoleBot.Attack
+namespace ConsoleBot.Attack;
+
+public interface IAttackService
 {
-    public interface IAttackService
-    {
-        Task<bool> AssistPlayer(Client client, Player player);
-        Task<bool> IsInLineOfSight(Client client, Point fromLocation, Point toLocation);
-        Task<bool> IsInLineOfSight(Client client, Point toLocation);
-        Task<bool> IsVisitable(Client client, Point point);
-        Task<bool> MoveToNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, MovementMode movementMode, double minDistance = 0, double maxDistance = 30);
-    }
+    Task<bool> AssistPlayer(Client client, Player player);
+    Task<bool> IsInLineOfSight(Client client, Point fromLocation, Point toLocation);
+    Task<bool> IsInLineOfSight(Client client, Point toLocation);
+    Task<bool> IsVisitable(Client client, Point point);
+    Task<bool> MoveToNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, MovementMode movementMode, double minDistance = 0, double maxDistance = 30);
 }

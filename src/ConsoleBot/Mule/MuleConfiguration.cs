@@ -1,11 +1,10 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace ConsoleBot.Mule
+namespace ConsoleBot.Mule;
+
+public class MuleConfiguration
 {
-    public class MuleConfiguration
-    {
-        [Required]
-        public List<MuleAccount> Accounts { get; set; }
-    }
+    [Required]
+    public List<MuleAccount> Accounts { get; set; }
 }

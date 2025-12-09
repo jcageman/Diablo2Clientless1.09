@@ -2,21 +2,20 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace ConsoleBot.Bots
+namespace ConsoleBot.Bots;
+
+public class MultiClientConfiguration
 {
-    public class MultiClientConfiguration
+    public bool ShouldCreateGames { get; set; } = true;
+    public List<AccountConfig> Accounts { get; set; }
+
+    public virtual void Validate()
     {
-        public bool ShouldCreateGames { get; set; } = true;
-        public List<AccountConfig> Accounts { get; set; }
-
-        public virtual void Validate()
+        if (Accounts == null)
         {
-            if (Accounts == null)
-            {
-                throw new ValidationException($"{nameof(Accounts)} is required on multi-client configuration");
-            }
-
-            Accounts.ForEach(a => a.Validate());
+            throw new ValidationException($"{nameof(Accounts)} is required on multi-client configuration");
         }
+
+        Accounts.ForEach(a => a.Validate());
     }
 }

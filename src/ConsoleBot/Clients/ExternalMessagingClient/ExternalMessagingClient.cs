@@ -13,100 +13,99 @@ using Telegram.Bot.Extensions.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 
-namespace ConsoleBot.Clients.ExternalMessagingClient
+namespace ConsoleBot.Clients.ExternalMessagingClient;
+
+public class ExternalMessagingClient : IExternalMessagingClient
 {
-    public class ExternalMessagingClient : IExternalMessagingClient
+    private readonly ExternalMessagingConfiguration _externalConfiguration;
+    private readonly ITelegramBotClient _telegramBotClient;
+    private readonly List<Client> _clients = [];
+
+    public ExternalMessagingClient(IOptions<ExternalMessagingConfiguration> externalConfiguration)
     {
-        private readonly ExternalMessagingConfiguration _externalConfiguration;
-        private readonly ITelegramBotClient _telegramBotClient;
-        private readonly List<Client> _clients = [];
-
-        public ExternalMessagingClient(IOptions<ExternalMessagingConfiguration> externalConfiguration)
+        _externalConfiguration = externalConfiguration.Value ?? throw new ArgumentNullException(nameof(externalConfiguration), $"ExternalMessagingClient constructor fails due to {nameof(externalConfiguration)} being null");
+        _telegramBotClient = new TelegramBotClient(_externalConfiguration.TelegramApiKey);
+        if(_externalConfiguration.ReceiveMessages)
         {
-            _externalConfiguration = externalConfiguration.Value ?? throw new ArgumentNullException(nameof(externalConfiguration), $"ExternalMessagingClient constructor fails due to {nameof(externalConfiguration)} being null");
-            _telegramBotClient = new TelegramBotClient(_externalConfiguration.TelegramApiKey);
-            if(_externalConfiguration.ReceiveMessages)
+            var receiverOptions = new ReceiverOptions
             {
-                var receiverOptions = new ReceiverOptions
-                {
-                };
-                _telegramBotClient.StartReceiving(
-                    (botClient, update, token) => HandleUpdateAsync(update),
-                    (botClient, exception, token) => HandleExceptionAsync(exception),
-                    receiverOptions
-                );
-            }
+            };
+            _telegramBotClient.StartReceiving(
+                (botClient, update, token) => HandleUpdateAsync(update),
+                (botClient, exception, token) => HandleExceptionAsync(exception),
+                receiverOptions
+            );
         }
+    }
 
-        public void RegisterClient(Client client)
-        {
-            _clients.Add(client);
-            client.OnReceivedPacketEvent(Sid.CHATEVENT, (packet) => HandleChatEvent(client, packet));
-            client.OnReceivedPacketEvent(InComingPacket.ReceiveChat, (packet) => HandleChatMessageEvent(client, packet));
-        }
+    public void RegisterClient(Client client)
+    {
+        _clients.Add(client);
+        client.OnReceivedPacketEvent(Sid.CHATEVENT, (packet) => HandleChatEvent(client, packet));
+        client.OnReceivedPacketEvent(InComingPacket.ReceiveChat, (packet) => HandleChatMessageEvent(client, packet));
+    }
 
-        private Task HandleUpdateAsync(Update update)
+    private Task HandleUpdateAsync(Update update)
+    {
+        if (update.Message is Message message)
         {
-            if (update.Message is Message message)
+            if (message == null || message.Type != MessageType.Text) return Task.CompletedTask;
+
+            Log.Information($"Text received: {message.Text}");
+            var client = _clients.FirstOrDefault(c => message.Text.StartsWith(c.LoggedInUserName() + " ", StringComparison.InvariantCultureIgnoreCase));
+            if (client != null)
             {
-                if (message == null || message.Type != MessageType.Text) return Task.CompletedTask;
-
-                Log.Information($"Text received: {message.Text}");
-                var client = _clients.FirstOrDefault(c => message.Text.StartsWith(c.LoggedInUserName() + " ", StringComparison.InvariantCultureIgnoreCase));
-                if (client != null)
+                var modifiedText = message.Text[(client.LoggedInUserName().Length + 1)..];
+                if (modifiedText.StartsWith("/w", StringComparison.OrdinalIgnoreCase) || modifiedText.StartsWith("/msg", StringComparison.OrdinalIgnoreCase))
                 {
-                    var modifiedText = message.Text[(client.LoggedInUserName().Length + 1)..];
-                    if (modifiedText.StartsWith("/w", StringComparison.OrdinalIgnoreCase) || modifiedText.StartsWith("/msg", StringComparison.OrdinalIgnoreCase))
-                    {
-                        client.Chat.Send(modifiedText);
-                    }
-                    else if (modifiedText.StartsWith("/chat", StringComparison.OrdinalIgnoreCase))
-                    {
-                        client.Chat.Send(modifiedText[5..]);
-                    }
-                    else if (client.Game.IsInGame())
-                    {
-                        client.Game.SendInGameMessage(modifiedText);
-                    }
+                    client.Chat.Send(modifiedText);
                 }
-            }
-            return Task.CompletedTask;
-        }
-
-        private static Task HandleExceptionAsync(Exception exception)
-        {
-            Log.Information($"Exception received: {exception}");
-            return Task.CompletedTask;
-        }
-
-        public async Task SendMessage(string message)
-        {
-            await _telegramBotClient.SendMessage(new ChatId(_externalConfiguration.TelegramChatId), message);
-        }
-
-        private void HandleChatEvent(Client client, BncsPacket obj)
-        {
-            var packet = new ChatEventPacket(obj.Raw);
-            if (packet.Eid != Eid.SHOWUSER && packet.Eid != Eid.USERFLAGS && !packet.Username.Contains(client.LoggedInUserName()))
-            {
-                Log.Debug(packet.RenderText());
-                if (packet.Eid == Eid.WHISPER || packet.Eid == Eid.TALK)
+                else if (modifiedText.StartsWith("/chat", StringComparison.OrdinalIgnoreCase))
                 {
-                    SendMessage($"To {client.LoggedInUserName()} :" + packet.RenderText()).Wait();
+                    client.Chat.Send(modifiedText[5..]);
+                }
+                else if (client.Game.IsInGame())
+                {
+                    client.Game.SendInGameMessage(modifiedText);
                 }
             }
         }
+        return Task.CompletedTask;
+    }
 
-        private void HandleChatMessageEvent(Client client, D2gsPacket obj)
+    private static Task HandleExceptionAsync(Exception exception)
+    {
+        Log.Information($"Exception received: {exception}");
+        return Task.CompletedTask;
+    }
+
+    public async Task SendMessage(string message)
+    {
+        await _telegramBotClient.SendMessage(new ChatId(_externalConfiguration.TelegramChatId), message);
+    }
+
+    private void HandleChatEvent(Client client, BncsPacket obj)
+    {
+        var packet = new ChatEventPacket(obj.Raw);
+        if (packet.Eid != Eid.SHOWUSER && packet.Eid != Eid.USERFLAGS && !packet.Username.Contains(client.LoggedInUserName()))
         {
-            var packet = new ChatPacket(obj);
-            if (packet.ChatType != 0x04)
+            Log.Debug(packet.RenderText());
+            if (packet.Eid == Eid.WHISPER || packet.Eid == Eid.TALK)
             {
-                Log.Debug(packet.RenderText());
-                if (packet.CharacterName != client.Game.Me?.Name)
-                {
-                    SendMessage($"To {client.LoggedInUserName()} :" + packet.RenderText()).Wait();
-                }
+                SendMessage($"To {client.LoggedInUserName()} :" + packet.RenderText()).Wait();
+            }
+        }
+    }
+
+    private void HandleChatMessageEvent(Client client, D2gsPacket obj)
+    {
+        var packet = new ChatPacket(obj);
+        if (packet.ChatType != 0x04)
+        {
+            Log.Debug(packet.RenderText());
+            if (packet.CharacterName != client.Game.Me?.Name)
+            {
+                SendMessage($"To {client.LoggedInUserName()} :" + packet.RenderText()).Wait();
             }
         }
     }

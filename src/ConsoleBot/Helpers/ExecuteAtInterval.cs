@@ -1,40 +1,39 @@
 ﻿using System;
 using System.Timers;
 
-namespace ConsoleBot.Helpers
+namespace ConsoleBot.Helpers;
+
+public class ExecuteAtInterval : IDisposable
 {
-    public class ExecuteAtInterval : IDisposable
+    private readonly Timer _timer;
+
+    public ExecuteAtInterval(ElapsedEventHandler eventHandler, TimeSpan interval)
     {
-        private readonly Timer _timer;
-
-        public ExecuteAtInterval(ElapsedEventHandler eventHandler, TimeSpan interval)
+        _timer = new Timer(interval.TotalMilliseconds)
         {
-            _timer = new Timer(interval.TotalMilliseconds)
-            {
-                AutoReset = true
-            };
-            _timer.Elapsed += eventHandler;
-        }
+            AutoReset = true
+        };
+        _timer.Elapsed += eventHandler;
+    }
 
-        public void Dispose()
-        {
-            ((IDisposable)_timer).Dispose();
-            GC.SuppressFinalize(this);
-        }
+    public void Dispose()
+    {
+        ((IDisposable)_timer).Dispose();
+        GC.SuppressFinalize(this);
+    }
 
-        public void Start()
-        {
-            _timer.Start();
-        }
+    public void Start()
+    {
+        _timer.Start();
+    }
 
-        public bool IsRunning()
-        {
-            return _timer.Enabled;
-        }
+    public bool IsRunning()
+    {
+        return _timer.Enabled;
+    }
 
-        public void Stop()
-        {
-            _timer.Stop();
-        }
+    public void Stop()
+    {
+        _timer.Stop();
     }
 }
