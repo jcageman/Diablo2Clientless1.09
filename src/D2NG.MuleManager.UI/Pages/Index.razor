@@ -41,7 +41,7 @@
             Filtered Stats: 
                 @foreach (string statType in FilteredStatTypes)
                 {
-                <MudChip T="string" Color="Color.Primary" OnClose="Closed">@statType</MudChip>
+                <MudChip T="string" Color="Color.Primary" OnClose="Closed" Value="@statType"/>
                 }
         </MudText>
     </MudItem>
