@@ -17,235 +17,234 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ConsoleBot.Bots.Types.Mephisto
+namespace ConsoleBot.Bots.Types.Mephisto;
+
+public class MephistoBot : SingleClientBotBase, IBotInstance
 {
-    public class MephistoBot : SingleClientBotBase, IBotInstance
+    private readonly IPathingService _pathingService;
+    private readonly ITownManagementService _townManagementService;
+
+    public MephistoBot(
+        IOptions<BotConfiguration> config,
+        IOptions<MephistoConfiguration> mephconfig,
+        IExternalMessagingClient externalMessagingClient,
+        IPathingService pathingService,
+        IMuleService muleService,
+        ITownManagementService townManagementService) : base(config.Value, mephconfig.Value, externalMessagingClient, muleService)
     {
-        private readonly IPathingService _pathingService;
-        private readonly ITownManagementService _townManagementService;
+        _pathingService = pathingService;
+        _townManagementService = townManagementService;
+    }
 
-        public MephistoBot(
-            IOptions<BotConfiguration> config,
-            IOptions<MephistoConfiguration> mephconfig,
-            IExternalMessagingClient externalMessagingClient,
-            IPathingService pathingService,
-            IMuleService muleService,
-            ITownManagementService townManagementService) : base(config.Value, mephconfig.Value, externalMessagingClient, muleService)
+    public string GetName()
+    {
+        return "mephisto";
+    }
+
+    public async Task Run()
+    {
+        var client = new Client();
+        _externalMessagingClient.RegisterClient(client);
+        await CreateGameLoop(client);
+    }
+
+    protected override async Task<bool> RunSingleGame(Client client)
+    {
+        if (client.Game.Me.Class != CharacterClass.Sorceress)
         {
-            _pathingService = pathingService;
-            _townManagementService = townManagementService;
+            throw new NotSupportedException("Only sorceress is supported on Mephisto");
         }
 
-        public string GetName()
+        var townManagementOptions = new TownManagementOptions(_accountConfig, Act.Act3);
+
+        var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
+        if (townTaskResult.ShouldMule)
         {
-            return "mephisto";
+            NeedsMule = true;
+            return true;
         }
 
-        public async Task Run()
+        Log.Information("Taking DuranceOfHateLevel2 Waypoint");
+        if (!await _townManagementService.TakeWaypoint(client, Waypoint.DuranceOfHateLevel2))
         {
-            var client = new Client();
-            _externalMessagingClient.RegisterClient(client);
-            await CreateGameLoop(client);
+            Log.Information("Taking DuranceOfHateLevel2 waypoint failed");
+            return false;
         }
 
-        protected override async Task<bool> RunSingleGame(Client client)
+        if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
         {
-            if (client.Game.Me.Class != CharacterClass.Sorceress)
+            client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
+        }
+
+        var path2 = await _pathingService.GetPathFromWaypointToArea(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel2, Waypoint.DuranceOfHateLevel2, Area.DuranceOfHateLevel3, MovementMode.Teleport);
+        if (!await MovementHelpers.TakePathOfLocations(client.Game, path2, MovementMode.Teleport))
+        {
+            Log.Warning($"Teleporting to DuranceOfHateLevel3 warp failed at location {client.Game.Me.Location}");
+            return false;
+        }
+
+        var warp = client.Game.GetNearestWarp();
+        if (warp == null || warp.Location.Distance(client.Game.Me.Location) > 20)
+        {
+            Log.Warning($"Warp not close enough at location {warp?.Location} while at location {client.Game.Me.Location}");
+            return false;
+        }
+
+        Log.Information($"Taking warp to Durance 3");
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+        {
+            if (warp.Location.Distance(client.Game.Me.Location) > 5 && !await client.Game.TeleportToLocationAsync(warp.Location))
             {
-                throw new NotSupportedException("Only sorceress is supported on Mephisto");
+                Log.Debug($"Teleport to {warp.Location} failing retrying at location: {client.Game.Me.Location}");
+                return false;
+            }
+            else
+            {
+                await client.Game.MoveToAsync(warp.Location);
             }
 
-            var townManagementOptions = new TownManagementOptions(_accountConfig, Act.Act3);
+            return client.Game.TakeWarp(warp) && client.Game.Area == Area.DuranceOfHateLevel3;
+        }, TimeSpan.FromSeconds(4)))
+        {
+            Log.Warning($"Teleport failed at location: {client.Game.Me.Location}");
+            return false;
+        }
 
-            var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
-            if (townTaskResult.ShouldMule)
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+        {
+            client.Game.RequestUpdate(client.Game.Me.Id);
+            var isValidPoint = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel3, client.Game.Me.Location);
+            return isValidPoint;
+        }, TimeSpan.FromSeconds(3.5)))
+        {
+            Log.Error("Checking whether moved to area failed");
+            return false;
+        }
+
+        Log.Information($"Teleporting to Mephisto");
+        var path3 = await _pathingService.GetPathToLocation(client.Game, new Point(17566, 8070), MovementMode.Teleport);
+        if (!await MovementHelpers.TakePathOfLocations(client.Game, path3, MovementMode.Teleport))
+        {
+            Log.Warning($"Teleporting to Mephisto failed at location {client.Game.Me.Location}");
+            return false;
+        }
+
+        if (!GeneralHelpers.TryWithTimeout((_) => client.Game.GetNPCsByCode(NPCCode.Mephisto).Count > 0, TimeSpan.FromSeconds(2)))
+        {
+            Log.Warning($"Finding Mephisto failed while at location {client.Game.Me.Location}");
+            return false;
+        }
+
+        var mephisto = client.Game.GetNPCsByCode(NPCCode.Mephisto).Single();
+        Log.Information($"Killing Mephisto");
+        if (!GeneralHelpers.TryWithTimeout((retryCount) =>
             {
-                NeedsMule = true;
+                if (!client.Game.IsInGame())
+                {
+                    return true;
+                }
+
+                if (mephisto.Location.Distance(client.Game.Me.Location) < 30 && (!client.Game.ClientCharacter.IsExpansion || mephisto.LifePercentage > 50))
+                {
+                    client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
+                }
+
+                if(mephisto.Location.Distance(client.Game.Me.Location) > 20)
+                {
+                    var teleportLocation = client.Game.Me.Location.GetPointBeforePointInSameDirection(mephisto.Location, 15);
+                    client.Game.TeleportToLocation(teleportLocation);
+                }
+
+                Thread.Sleep(200);
+                if (retryCount % 5 == 0)
+                {
+                    client.Game.UseRightHandSkillOnEntity(Skill.FrozenOrb, mephisto);
+                }
+
+                return mephisto.LifePercentage < 30;
+            },
+            TimeSpan.FromSeconds(50)))
+        {
+            Log.Warning($"Killing Mephisto failed at location {client.Game.Me.Location}");
+            return false;
+        }
+
+        if (!GeneralHelpers.TryWithTimeout((_) =>
+        {
+            client.Game.UseRightHandSkillOnEntity(Skill.FrozenOrb, mephisto);
+
+            if (!client.Game.IsInGame())
+            {
                 return true;
             }
 
-            Log.Information("Taking DuranceOfHateLevel2 Waypoint");
-            if (!await _townManagementService.TakeWaypoint(client, Waypoint.DuranceOfHateLevel2))
+            return GeneralHelpers.TryWithTimeout((_) => mephisto.State == EntityState.Dead || mephisto.State == EntityState.Dieing,
+                TimeSpan.FromSeconds(0.7));
+        }, TimeSpan.FromSeconds(50)))
+        {
+            Log.Warning($"Killing Mephisto failed at location {client.Game.Me.Location}");
+            return false;
+        }
+
+        if (!PickupNearbyItems(client))
+        {
+            Log.Warning($"Failed to pickup items at location {client.Game.Me.Location}");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool PickupNearbyItems(Client client)
+    {
+        var pickupItems = client.Game.Items.Values.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
+        Log.Information($"Killed Mephisto, picking up {pickupItems.Count()} items ");
+        foreach (var item in pickupItems)
+        {
+            if (item.Location.Distance(client.Game.Me.Location) > 30)
             {
-                Log.Information("Taking DuranceOfHateLevel2 waypoint failed");
+                Log.Warning($"Skipped {item} since it's at location {item.Location}, while player at {client.Game.Me.Location}");
+                continue;
+            }
+
+            if (!client.Game.IsInGame())
+            {
                 return false;
             }
 
-            if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Thunderstorm) && client.Game.Me.HasSkill(Skill.ThunderStorm))
+            InventoryHelpers.MoveInventoryItemsToCube(client.Game);
+            if (client.Game.Inventory.FindFreeSpace(item) == null)
             {
-                client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
+                Log.Warning($"Skipped {item.GetFullDescription()} since inventory is full");
+                continue;
             }
 
-            var path2 = await _pathingService.GetPathFromWaypointToArea(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel2, Waypoint.DuranceOfHateLevel2, Area.DuranceOfHateLevel3, MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, path2, MovementMode.Teleport))
+            if (!GeneralHelpers.TryWithTimeout((retryCount =>
             {
-                Log.Warning($"Teleporting to DuranceOfHateLevel3 warp failed at location {client.Game.Me.Location}");
-                return false;
-            }
-
-            var warp = client.Game.GetNearestWarp();
-            if (warp == null || warp.Location.Distance(client.Game.Me.Location) > 20)
-            {
-                Log.Warning($"Warp not close enough at location {warp?.Location} while at location {client.Game.Me.Location}");
-                return false;
-            }
-
-            Log.Information($"Taking warp to Durance 3");
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                if (warp.Location.Distance(client.Game.Me.Location) > 5 && !await client.Game.TeleportToLocationAsync(warp.Location))
+                if (client.Game.Me.Location.Distance(item.Location) >= 5)
                 {
-                    Log.Debug($"Teleport to {warp.Location} failing retrying at location: {client.Game.Me.Location}");
+                    client.Game.TeleportToLocation(item.Location);
+                    client.Game.MoveTo(item.Location);
                     return false;
                 }
                 else
                 {
-                    await client.Game.MoveToAsync(warp.Location);
-                }
-
-                return client.Game.TakeWarp(warp) && client.Game.Area == Area.DuranceOfHateLevel3;
-            }, TimeSpan.FromSeconds(4)))
-            {
-                Log.Warning($"Teleport failed at location: {client.Game.Me.Location}");
-                return false;
-            }
-
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                client.Game.RequestUpdate(client.Game.Me.Id);
-                var isValidPoint = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel3, client.Game.Me.Location);
-                return isValidPoint;
-            }, TimeSpan.FromSeconds(3.5)))
-            {
-                Log.Error("Checking whether moved to area failed");
-                return false;
-            }
-
-            Log.Information($"Teleporting to Mephisto");
-            var path3 = await _pathingService.GetPathToLocation(client.Game, new Point(17566, 8070), MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, path3, MovementMode.Teleport))
-            {
-                Log.Warning($"Teleporting to Mephisto failed at location {client.Game.Me.Location}");
-                return false;
-            }
-
-            if (!GeneralHelpers.TryWithTimeout((_) => client.Game.GetNPCsByCode(NPCCode.Mephisto).Count > 0, TimeSpan.FromSeconds(2)))
-            {
-                Log.Warning($"Finding Mephisto failed while at location {client.Game.Me.Location}");
-                return false;
-            }
-
-            var mephisto = client.Game.GetNPCsByCode(NPCCode.Mephisto).Single();
-            Log.Information($"Killing Mephisto");
-            if (!GeneralHelpers.TryWithTimeout((retryCount) =>
-                {
-                    if (!client.Game.IsInGame())
+                    client.Game.MoveTo(item.Location);
+                    client.Game.PickupItem(item);
+                    Thread.Sleep(50);
+                    if (client.Game.Inventory.FindItemById(item.Id) == null && !item.IsGold)
                     {
-                        return true;
-                    }
-
-                    if (mephisto.Location.Distance(client.Game.Me.Location) < 30 && (!client.Game.ClientCharacter.IsExpansion || mephisto.LifePercentage > 50))
-                    {
-                        client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
-                    }
-
-                    if(mephisto.Location.Distance(client.Game.Me.Location) > 20)
-                    {
-                        var teleportLocation = client.Game.Me.Location.GetPointBeforePointInSameDirection(mephisto.Location, 15);
-                        client.Game.TeleportToLocation(teleportLocation);
-                    }
-
-                    Thread.Sleep(200);
-                    if (retryCount % 5 == 0)
-                    {
-                        client.Game.UseRightHandSkillOnEntity(Skill.FrozenOrb, mephisto);
-                    }
-
-                    return mephisto.LifePercentage < 30;
-                },
-                TimeSpan.FromSeconds(50)))
-            {
-                Log.Warning($"Killing Mephisto failed at location {client.Game.Me.Location}");
-                return false;
-            }
-
-            if (!GeneralHelpers.TryWithTimeout((_) =>
-            {
-                client.Game.UseRightHandSkillOnEntity(Skill.FrozenOrb, mephisto);
-
-                if (!client.Game.IsInGame())
-                {
-                    return true;
-                }
-
-                return GeneralHelpers.TryWithTimeout((_) => mephisto.State == EntityState.Dead || mephisto.State == EntityState.Dieing,
-                    TimeSpan.FromSeconds(0.7));
-            }, TimeSpan.FromSeconds(50)))
-            {
-                Log.Warning($"Killing Mephisto failed at location {client.Game.Me.Location}");
-                return false;
-            }
-
-            if (!PickupNearbyItems(client))
-            {
-                Log.Warning($"Failed to pickup items at location {client.Game.Me.Location}");
-                return false;
-            }
-
-            return true;
-        }
-
-        private static bool PickupNearbyItems(Client client)
-        {
-            var pickupItems = client.Game.Items.Values.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
-            Log.Information($"Killed Mephisto, picking up {pickupItems.Count()} items ");
-            foreach (var item in pickupItems)
-            {
-                if (item.Location.Distance(client.Game.Me.Location) > 30)
-                {
-                    Log.Warning($"Skipped {item} since it's at location {item.Location}, while player at {client.Game.Me.Location}");
-                    continue;
-                }
-
-                if (!client.Game.IsInGame())
-                {
-                    return false;
-                }
-
-                InventoryHelpers.MoveInventoryItemsToCube(client.Game);
-                if (client.Game.Inventory.FindFreeSpace(item) == null)
-                {
-                    Log.Warning($"Skipped {item.GetFullDescription()} since inventory is full");
-                    continue;
-                }
-
-                if (!GeneralHelpers.TryWithTimeout((retryCount =>
-                {
-                    if (client.Game.Me.Location.Distance(item.Location) >= 5)
-                    {
-                        client.Game.TeleportToLocation(item.Location);
-                        client.Game.MoveTo(item.Location);
                         return false;
                     }
-                    else
-                    {
-                        client.Game.MoveTo(item.Location);
-                        client.Game.PickupItem(item);
-                        Thread.Sleep(50);
-                        if (client.Game.Inventory.FindItemById(item.Id) == null && !item.IsGold)
-                        {
-                            return false;
-                        }
-                    }
-
-                    return true;
-                }), TimeSpan.FromSeconds(3)))
-                {
-                    Log.Warning($"Picking up item {item.GetFullDescription()} at location {item.Location} from location {client.Game.Me.Location} failed");
                 }
-            }
 
-            return true;
+                return true;
+            }), TimeSpan.FromSeconds(3)))
+            {
+                Log.Warning($"Picking up item {item.GetFullDescription()} at location {item.Location} from location {client.Game.Me.Location} failed");
+            }
         }
+
+        return true;
     }
 }

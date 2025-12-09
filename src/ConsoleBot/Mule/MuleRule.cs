@@ -1,11 +1,10 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace ConsoleBot.Mule
+namespace ConsoleBot.Mule;
+
+public class MuleRule
 {
-    public class MuleRule
-    {
-        [Required]
-        public List<MuleFilter> MatchesAll { get; set; } = [];
-    }
+    [Required]
+    public List<MuleFilter> MatchesAll { get; set; } = [];
 }

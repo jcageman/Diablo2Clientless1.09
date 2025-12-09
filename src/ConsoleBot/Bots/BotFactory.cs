@@ -4,39 +4,38 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Linq;
 
-namespace ConsoleBot.Bots
+namespace ConsoleBot.Bots;
+
+public class BotFactory : IBotFactory
 {
-    public class BotFactory : IBotFactory
+    private readonly IServiceProvider _serviceProvider;
+
+    public BotFactory(IServiceProvider serviceProvider)
     {
-        private readonly IServiceProvider _serviceProvider;
+        _serviceProvider = serviceProvider;
+    }
+    public IBotInstance CreateBot(string botType)
+    {
+        var botInstances = _serviceProvider.GetServices<IBotInstance>();
 
-        public BotFactory(IServiceProvider serviceProvider)
+
+        var botNames = botInstances.Select(b => b.GetName()).ToList();
+        var duplicateNames = botNames.GroupBy(b => b).Where(g => g.Count() > 1).ToList();
+        if (duplicateNames.Count != 0)
         {
-            _serviceProvider = serviceProvider;
+            var duplicateNamesStr = string.Join(", ", duplicateNames);
+            throw new NotSupportedException($"One or more bots have been registered with an already existing name. Duplicate names: {duplicateNamesStr}");
+
         }
-        public IBotInstance CreateBot(string botType)
+        foreach (var botInstance in botInstances)
         {
-            var botInstances = _serviceProvider.GetServices<IBotInstance>();
-
-
-            var botNames = botInstances.Select(b => b.GetName()).ToList();
-            var duplicateNames = botNames.GroupBy(b => b).Where(g => g.Count() > 1).ToList();
-            if (duplicateNames.Count != 0)
+            if(botInstance.GetName() == botType)
             {
-                var duplicateNamesStr = string.Join(", ", duplicateNames);
-                throw new NotSupportedException($"One or more bots have been registered with an already existing name. Duplicate names: {duplicateNamesStr}");
-
+                return botInstance;
             }
-            foreach (var botInstance in botInstances)
-            {
-                if(botInstance.GetName() == botType)
-                {
-                    return botInstance;
-                }
-            }
-
-            var availableNames = string.Join(", ", botNames);
-            throw new NotSupportedException($"{nameof(botType)} contains not supported type {botType}, it should be one of the following: {availableNames}");
         }
+
+        var availableNames = string.Join(", ", botNames);
+        throw new NotSupportedException($"{nameof(botType)} contains not supported type {botType}, it should be one of the following: {availableNames}");
     }
 }

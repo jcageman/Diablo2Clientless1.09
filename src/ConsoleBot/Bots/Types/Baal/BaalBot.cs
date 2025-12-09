@@ -23,465 +23,182 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ConsoleBot.Bots.Types.Baal
+namespace ConsoleBot.Bots.Types.Baal;
+
+public class BaalBot : MultiClientBotBase
 {
-    public class BaalBot : MultiClientBotBase
+    private readonly ITownManagementService _townManagementService;
+    private readonly IAttackService _attackService;
+    private readonly BaalConfiguration _baalConfig;
+    private uint? BoClientPlayerId;
+    private uint? PortalClientPlayerId;
+    private readonly ConcurrentDictionary<string, bool> ShouldFollow = new();
+    private readonly ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new();
+
+    public BaalBot(IOptions<BotConfiguration> config, IOptions<BaalConfiguration> baalconfig,
+        IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
+        ITownManagementService townManagementService,
+        IAttackService attackService,
+        IMuleService muleService
+        ) : base(config, baalconfig, externalMessagingClient, muleService, pathingService)
     {
-        private readonly ITownManagementService _townManagementService;
-        private readonly IAttackService _attackService;
-        private readonly BaalConfiguration _baalConfig;
-        private uint? BoClientPlayerId;
-        private uint? PortalClientPlayerId;
-        private readonly ConcurrentDictionary<string, bool> ShouldFollow = new();
-        private readonly ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new();
+        _townManagementService = townManagementService;
+        _attackService = attackService;
+        _baalConfig = baalconfig.Value;
+    }
 
-        public BaalBot(IOptions<BotConfiguration> config, IOptions<BaalConfiguration> baalconfig,
-            IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
-            ITownManagementService townManagementService,
-            IAttackService attackService,
-            IMuleService muleService
-            ) : base(config, baalconfig, externalMessagingClient, muleService, pathingService)
+    public override string GetName()
+    {
+        return "baal";
+    }
+
+    protected override void PostInitializeClient(Client client, AccountConfig accountCharacter)
+    {
+        ShouldFollow.TryAdd(accountCharacter.Character.ToLower(), false);
+        FollowTasks.TryAdd(accountCharacter.Character.ToLower(), (null, new CancellationTokenSource()));
+        client.OnReceivedPacketEvent(InComingPacket.EntityMove, async (packet) =>
         {
-            _townManagementService = townManagementService;
-            _attackService = attackService;
-            _baalConfig = baalconfig.Value;
-        }
-
-        public override string GetName()
-        {
-            return "baal";
-        }
-
-        protected override void PostInitializeClient(Client client, AccountConfig accountCharacter)
-        {
-            ShouldFollow.TryAdd(accountCharacter.Character.ToLower(), false);
-            FollowTasks.TryAdd(accountCharacter.Character.ToLower(), (null, new CancellationTokenSource()));
-            client.OnReceivedPacketEvent(InComingPacket.EntityMove, async (packet) =>
+            var entityMovePacket = new EntityMovePacket(packet);
+            if (entityMovePacket.UnitType == EntityType.Player && entityMovePacket.UnitId == PortalClientPlayerId && ShouldFollowLeadClient(client))
             {
-                var entityMovePacket = new EntityMovePacket(packet);
-                if (entityMovePacket.UnitType == EntityType.Player && entityMovePacket.UnitId == PortalClientPlayerId && ShouldFollowLeadClient(client))
-                {
-                    await FollowToLocation(client, entityMovePacket.MoveToLocation);
-                }
-            });
-
-            client.OnReceivedPacketEvent(InComingPacket.ReassignPlayer, async (packet) =>
-            {
-                var reassignPlayerPacket = new ReassignPlayerPacket(packet);
-                if (reassignPlayerPacket.UnitType == EntityType.Player && reassignPlayerPacket.UnitId == PortalClientPlayerId && ShouldFollowLeadClient(client))
-                {
-                    await FollowToLocation(client, reassignPlayerPacket.Location);
-                }
-            });
-            client.OnReceivedPacketEvent(InComingPacket.PartyAutomapInfo, async (packet) =>
-            {
-                var partyAutomapInfoPacket = new PartyAutomapInfoPacket(packet);
-                if (partyAutomapInfoPacket.Id == PortalClientPlayerId && ShouldFollowLeadClient(client))
-                {
-                    await FollowToLocation(client, partyAutomapInfoPacket.Location);
-                }
-            });
-        }
-
-        protected override async Task<bool> PrepareForRun(Client client, AccountConfig account)
-        {
-            var townManagementOptions = new TownManagementOptions(account,  Act.Act5);
-
-            if(client.Game.Act == Act.Act5)
-            {
-                var sellNpc = NPCHelpers.GetSellNPC(client.Game.Act);
-                GeneralHelpers.TryWithTimeout((retryCount) =>
-                {
-                    var uniqueNPC = NPCHelpers.GetUniqueNPC(client.Game, sellNpc);
-                    return uniqueNPC != null;
-                }, TimeSpan.FromSeconds(2)); 
+                await FollowToLocation(client, entityMovePacket.MoveToLocation);
             }
+        });
 
-            var isPortalCharacter = _baalConfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.OrdinalIgnoreCase);
-            var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
-            if (townTaskResult.ShouldMule)
+        client.OnReceivedPacketEvent(InComingPacket.ReassignPlayer, async (packet) =>
+        {
+            var reassignPlayerPacket = new ReassignPlayerPacket(packet);
+            if (reassignPlayerPacket.UnitType == EntityType.Player && reassignPlayerPacket.UnitId == PortalClientPlayerId && ShouldFollowLeadClient(client))
             {
-                ClientsNeedingMule.Add(client.LoggedInUserName());
+                await FollowToLocation(client, reassignPlayerPacket.Location);
             }
-            if (!townTaskResult.Succes)
+        });
+        client.OnReceivedPacketEvent(InComingPacket.PartyAutomapInfo, async (packet) =>
+        {
+            var partyAutomapInfoPacket = new PartyAutomapInfoPacket(packet);
+            if (partyAutomapInfoPacket.Id == PortalClientPlayerId && ShouldFollowLeadClient(client))
+            {
+                await FollowToLocation(client, partyAutomapInfoPacket.Location);
+            }
+        });
+    }
+
+    protected override async Task<bool> PrepareForRun(Client client, AccountConfig account)
+    {
+        var townManagementOptions = new TownManagementOptions(account,  Act.Act5);
+
+        if(client.Game.Act == Act.Act5)
+        {
+            var sellNpc = NPCHelpers.GetSellNPC(client.Game.Act);
+            GeneralHelpers.TryWithTimeout((retryCount) =>
+            {
+                var uniqueNPC = NPCHelpers.GetUniqueNPC(client.Game, sellNpc);
+                return uniqueNPC != null;
+            }, TimeSpan.FromSeconds(2)); 
+        }
+
+        var isPortalCharacter = _baalConfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.OrdinalIgnoreCase);
+        var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
+        if (townTaskResult.ShouldMule)
+        {
+            ClientsNeedingMule.Add(client.LoggedInUserName());
+        }
+        if (!townTaskResult.Succes)
+        {
+            return false;
+        }
+
+        if (isPortalCharacter)
+        {
+            if (!await CreateThroneRoomTp(client))
             {
                 return false;
             }
-
-            if (isPortalCharacter)
+        }
+        else
+        {
+            var tpLocation = new Point(5100, 5025);
+            var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+            var pathBack = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.Harrogath, client.Game.Me.Location, tpLocation, movementMode);
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBack, movementMode))
             {
-                if (!await CreateThroneRoomTp(client))
-                {
-                    return false;
-                }
+                Log.Warning($"Client {client.Game.Me.Name} {movementMode} back failed at {client.Game.Me.Location}");
+                return false;
             }
-            else
-            {
-                var tpLocation = new Point(5100, 5025);
-                var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
-                var pathBack = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.Harrogath, client.Game.Me.Location, tpLocation, movementMode);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBack, movementMode))
-                {
-                    Log.Warning($"Client {client.Game.Me.Name} {movementMode} back failed at {client.Game.Me.Location}");
-                    return false;
-                }
-            }
-
-            return true;
         }
 
-        protected override Task PostInitializeAllJoined(List<Client> clients)
+        return true;
+    }
+
+    protected override Task PostInitializeAllJoined(List<Client> clients)
+    {
+        var boClient = clients.Aggregate((agg, client) =>
         {
-            var boClient = clients.Aggregate((agg, client) =>
+            var boClient = client.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0);
+            var boAgg = agg?.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0) ?? 0;
+            if (boClient > 0 && boClient > boAgg)
             {
-                var boClient = client.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0);
-                var boAgg = agg?.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0) ?? 0;
-                if (boClient > 0 && boClient > boAgg)
-                {
-                    return client;
-                }
-
-                return agg;
-            });
-
-            if (boClient == null)
-            {
-                Log.Error($"Expected at least bo barb in game");
-                return Task.CompletedTask;
+                return client;
             }
 
-            BoClientPlayerId = boClient.Game.Me.Id;
-            var portalClient = clients.First(c => _baalConfig.PortalCharacterName.Equals(c.Game.Me.Name, StringComparison.OrdinalIgnoreCase));
-            PortalClientPlayerId = portalClient.Game.Me.Id;
+            return agg;
+        });
+
+        if (boClient == null)
+        {
+            Log.Error($"Expected at least bo barb in game");
             return Task.CompletedTask;
         }
 
-        protected override async Task<bool> PerformRun(Client client, AccountConfig account)
+        BoClientPlayerId = boClient.Game.Me.Id;
+        var portalClient = clients.First(c => _baalConfig.PortalCharacterName.Equals(c.Game.Me.Name, StringComparison.OrdinalIgnoreCase));
+        PortalClientPlayerId = portalClient.Game.Me.Id;
+        return Task.CompletedTask;
+    }
+
+    protected override async Task<bool> PerformRun(Client client, AccountConfig account)
+    {
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                return await _townManagementService.TakeTownPortalToArea(client, client.Game.Players.First(p => p.Id == PortalClientPlayerId), Area.ThroneOfDestruction);
-            }, TimeSpan.FromSeconds(30)))
-            {
-                Log.Warning($"Client {client.Game.Me.Name} stopped waiting throne run to start");
-                NextGame.TrySetResult(true);
-                return false;
-            }
-
-            if (client.Game.Me.Id == PortalClientPlayerId && !await _townManagementService.CreateTownPortal(client))
-            {
-                NextGame.TrySetResult(true);
-                return false;
-            }
-
-            if (!await SetupBo(client))
-            {
-                NextGame.TrySetResult(true);
-                return false;
-            }
-
-            await GetTaskForWave(client, account);
-
-            if(!client.Game.IsInGame())
-            {
-                NextGame.TrySetResult(true);
-                return false;
-            }
-
-            if (client.Game.Me.Id == PortalClientPlayerId)
-            {
-                if (!await CreateBaalPortal(client))
-                {
-                    NextGame.TrySetResult(true);
-                    return false;
-                }
-                Log.Information($"Client {client.Game.Me.Name} created baal portal");
-            }
-            else
-            {
-                if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                {
-                    await Task.Delay(100);
-                    return await _townManagementService.TakeTownPortalToTown(client);
-                }, TimeSpan.FromSeconds(10)))
-                {
-                    Log.Warning($"Client {client.Game.Me.Name} moving to town failed");
-                    NextGame.TrySetResult(true);
-                }
-            }
-
-            await GetTaskForBaal(client, account);
-            return true;
+            return await _townManagementService.TakeTownPortalToArea(client, client.Game.Players.First(p => p.Id == PortalClientPlayerId), Area.ThroneOfDestruction);
+        }, TimeSpan.FromSeconds(30)))
+        {
+            Log.Warning($"Client {client.Game.Me.Name} stopped waiting throne run to start");
+            NextGame.TrySetResult(true);
+            return false;
         }
 
-        private async Task<bool> CreateBaalPortal(Client client)
+        if (client.Game.Me.Id == PortalClientPlayerId && !await _townManagementService.CreateTownPortal(client))
         {
-            var baalPortal = client.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                await Task.Delay(100);
-                baalPortal = client.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
-                if (baalPortal == null)
-                {
-                    return false;
-                }
-                var pathBaalPortal = await _pathingService.GetPathToLocation(client.Game, baalPortal.Location, MovementMode.Teleport);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBaalPortal, MovementMode.Teleport))
-                {
-                    Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} to {EntityCode.BaalPortal} failed at {client.Game.Me.Location}");
-                }
-
-                return true;
-            }, TimeSpan.FromSeconds(10)))
-            {
-                Log.Warning($"Client {client.Game.Me.Name} finding and moving to {EntityCode.BaalPortal} failed at {client.Game.Me.Location}");
-                return false;
-            }
-
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                await client.Game.MoveToAsync(baalPortal);
-
-                if (retryCount > 0 && retryCount % 5 == 0)
-                {
-                    client.Game.RequestUpdate(client.Game.Me.Id);
-                }
-
-                client.Game.InteractWithEntity(baalPortal);
-                return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                {
-                    await Task.Delay(50);
-                    return client.Game.Area == Area.TheWorldStoneChamber;
-                }, TimeSpan.FromSeconds(0.5));
-            }, TimeSpan.FromSeconds(10)))
-            {
-                return false;
-            }
-
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                if (retryCount > 0 && retryCount % 5 == 0)
-                {
-                    client.Game.RequestUpdate(client.Game.Me.Id);
-                }
-
-                await Task.Delay(100);
-
-                return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.TheWorldStoneChamber, client.Game.Me.Location);
-            }, TimeSpan.FromSeconds(10)))
-            {
-                return false;
-            }
-
-            var pathBaal = await _pathingService.GetPathToNPC(client.Game, NPCCode.Baal, MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBaal, MovementMode.Teleport))
-            {
-                Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} to {NPCCode.Baal} failed at {client.Game.Me.Location}");
-            }
-
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                var baal = NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 1, 200).FirstOrDefault();
-                if (baal == null)
-                {
-                    return false;
-                }
-                if (baal.Location.Distance(client.Game.Me.Location) > 10)
-                {
-                    pathBaal = await _pathingService.GetPathToLocation(client.Game, baal.Location, MovementMode.Teleport);
-                    if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBaal, MovementMode.Teleport))
-                    {
-                        Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} to {NPCCode.Baal} failed at {client.Game.Me.Location}");
-                        return false;
-                    }
-                }
-
-                return true;
-            }, TimeSpan.FromSeconds(10)))
-            {
-                Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} close to {NPCCode.Baal} failed at {client.Game.Me.Location}");
-                return false;
-            }
-
-            if (!await _townManagementService.CreateTownPortal(client))
-            {
-                return false;
-            }
-
-            return true;
+            NextGame.TrySetResult(true);
+            return false;
         }
 
-        private async Task<bool> SetupBo(Client client)
+        if (!await SetupBo(client))
         {
-            if (client.Game.Me.Id == BoClientPlayerId)
-            {
-                await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(0.1));
-                    if (retryCount % 5 == 0)
-                    {
-                        foreach (var player in client.Game.Players.Where(p => p.Location?.Distance(client.Game.Me.Location) < 10))
-                        {
-                            client.Game.RequestUpdate(player.Id);
-                        }
-                    }
-                    return await ClassHelpers.CastAllShouts(client);
-                }, TimeSpan.FromSeconds(15));
-            }
-            else
-            {
-                var random = new Random();
-                await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                {
-                    var boPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-                    if (boPlayer != null)
-                    {
-                        var randomPointNear = boPlayer.Location.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5));
-                        await client.Game.MoveToAsync(randomPointNear);
-                    }
-
-                    await Task.Delay(TimeSpan.FromSeconds(0.1));
-                    return !ClassHelpers.IsMissingShouts(client.Game.Me);
-                }, TimeSpan.FromSeconds(15));
-            }
-
-            return true;
+            NextGame.TrySetResult(true);
+            return false;
         }
 
-        private async Task<bool> CreateThroneRoomTp(Client client)
+        await GetTaskForWave(client, account);
+
+        if(!client.Game.IsInGame())
         {
-            var game = client.Game;
-            if (!await _townManagementService.TakeWaypoint(client, Waypoint.TheWorldStoneKeepLevel2))
+            NextGame.TrySetResult(true);
+            return false;
+        }
+
+        if (client.Game.Me.Id == PortalClientPlayerId)
+        {
+            if (!await CreateBaalPortal(client))
             {
-                Log.Information($"Taking {client.Game.Act} waypoint failed");
+                NextGame.TrySetResult(true);
                 return false;
             }
-
-            var pathToWorldStone3 = await _pathingService.GetPathFromWaypointToArea(client.Game.MapId, Difficulty.Normal, Area.TheWorldStoneKeepLevel2, Waypoint.TheWorldStoneKeepLevel2, Area.TheWorldStoneKeepLevel3, MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToWorldStone3.SkipLast(1).ToList(), MovementMode.Teleport))
-            {
-                Log.Error($"Teleporting to {Area.TheWorldStoneKeepLevel3}  failed");
-                return false;
-            }
-
-            var warp1 = client.Game.GetNearestWarp();
-            if (warp1 == null)
-            {
-                Log.Warning($"Warp not found while at location {client.Game.Me.Location}");
-                return false;
-            }
-
-            var teleportLocation = warp1.Location;
-            if(await _attackService.IsVisitable(client, warp1.Location.Add(-30, 0)))
-            {
-                teleportLocation = warp1.Location.Add(-30, 0);
-            }
-            else if (await _attackService.IsVisitable(client, warp1.Location.Add(30, 0)))
-            {
-                teleportLocation = warp1.Location.Add(30, 0);
-            }
-            else if (await _attackService.IsVisitable(client, warp1.Location.Add(0, 30)))
-            {
-                teleportLocation = warp1.Location.Add(0, 30);
-            }
-            else if (await _attackService.IsVisitable(client, warp1.Location.Add(0, -30)))
-            {
-                teleportLocation = warp1.Location.Add(0, -30);
-            }
-
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                var pathtoTeleportLocation = await _pathingService.GetPathToLocation(client.Game, teleportLocation, MovementMode.Teleport);
-                if(pathtoTeleportLocation.Count != 0 && !await MovementHelpers.TakePathOfLocations(client.Game, pathtoTeleportLocation, MovementMode.Teleport))
-                {
-                    return false;
-                }
-
-                await Task.Delay(TimeSpan.FromSeconds(0.5));
-
-                return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                {
-                    if (warp1.Location.Distance(client.Game.Me.Location) > 30)
-                    {
-                        return false;
-                    }
-
-                    if (warp1.Location.Distance(client.Game.Me.Location) > 5 && !await game.TeleportToLocationAsync(warp1.Location))
-                    {
-                        return false;
-                    }
-
-                    if (warp1.Location.Distance(client.Game.Me.Location) < 5)
-                    {
-                        await client.Game.MoveToAsync(warp1.Location);
-                    }
-
-                    return client.Game.TakeWarp(warp1) && client.Game.Area == Area.TheWorldStoneKeepLevel3;
-                }, TimeSpan.FromSeconds(3.5));
-            }, TimeSpan.FromSeconds(4)))
-            {
-                Log.Warning($"Taking warp with teleport location {teleportLocation} failed at location: {game.Me.Location} with warp at {warp1.Location}");
-                return false;
-            }
-
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                client.Game.RequestUpdate(client.Game.Me.Id);
-                var isValidPoint = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.TheWorldStoneKeepLevel3, client.Game.Me.Location);
-                return isValidPoint;
-            }, TimeSpan.FromSeconds(3.5)))
-            {
-                Log.Error("Checking whether moved to area failed");
-                return false;
-            }
-
-            var pathToThroneRoom = await _pathingService.GetPathToArea(client.Game, Area.ThroneOfDestruction, MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToThroneRoom, MovementMode.Teleport))
-            {
-                Log.Error($"Teleporting to {Area.ThroneOfDestruction}  failed");
-                return false;
-            }
-
-            var warp2 = client.Game.GetNearestWarp();
-            if (warp2 == null || warp2.Location.Distance(client.Game.Me.Location) > 20)
-            {
-                Log.Warning($"Warp not close enough at location {warp2?.Location} while at location {client.Game.Me.Location}");
-                return false;
-            }
-
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                if (warp2.Location.Distance(client.Game.Me.Location) > 5 && !await game.TeleportToLocationAsync(warp2.Location))
-                {
-                    Log.Debug($"Teleport to {warp2.Location} failing retrying at location: {game.Me.Location}");
-                    return false;
-                }
-
-                return client.Game.TakeWarp(warp2) && client.Game.Area == Area.ThroneOfDestruction;
-            }, TimeSpan.FromSeconds(4)))
-            {
-                Log.Warning($"Teleport failed at location: {game.Me.Location}");
-                return false;
-            }
-
-            if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                client.Game.RequestUpdate(client.Game.Me.Id);
-                var isValidPoint = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.ThroneOfDestruction, client.Game.Me.Location);
-                return isValidPoint;
-            }, TimeSpan.FromSeconds(3.5)))
-            {
-                Log.Error("Checking whether moved to area failed");
-                return false;
-            }
-
-            var pathToThrone = await _pathingService.GetPathToObjectWithOffset(client.Game, EntityCode.BaalPortal, 27, 65, MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToThrone, MovementMode.Teleport))
-            {
-                Log.Error($"Teleporting to {Area.ThroneOfDestruction} starting location failed");
-                return false;
-            }
-
+            Log.Information($"Client {client.Game.Me.Name} created baal portal");
+        }
+        else
+        {
             if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
             {
                 await Task.Delay(100);
@@ -491,118 +208,381 @@ namespace ConsoleBot.Bots.Types.Baal
                 Log.Warning($"Client {client.Game.Me.Name} moving to town failed");
                 NextGame.TrySetResult(true);
             }
+        }
 
-            Log.Information("Got to starting location");
+        await GetTaskForBaal(client, account);
+        return true;
+    }
+
+    private async Task<bool> CreateBaalPortal(Client client)
+    {
+        var baalPortal = client.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+        {
+            await Task.Delay(100);
+            baalPortal = client.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
+            if (baalPortal == null)
+            {
+                return false;
+            }
+            var pathBaalPortal = await _pathingService.GetPathToLocation(client.Game, baalPortal.Location, MovementMode.Teleport);
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBaalPortal, MovementMode.Teleport))
+            {
+                Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} to {EntityCode.BaalPortal} failed at {client.Game.Me.Location}");
+            }
 
             return true;
-        }
-
-        private async Task FollowToLocation(Client client, Point location)
+        }, TimeSpan.FromSeconds(10)))
         {
-            if (!client.Game.IsInGame())
-            {
-                return;
-            }
-
-            var (targetLocation, tokenSource) = FollowTasks[client.Game.Me.Name.ToLower()];
-            if (targetLocation == null || (targetLocation.Distance(location) > 10 && client.Game.Me.Location.Distance(location) < 1000))
-            {
-                tokenSource?.Cancel();
-                var newSource = new CancellationTokenSource();
-                FollowTasks[client.Game.Me.Name.ToLower()] = (location, newSource);
-                await MoveToLocation(client, location, newSource.Token);
-            }
-        }
-
-        private bool ShouldFollowLeadClient(Client client)
-        {
-            if (ShouldFollow.TryGetValue(client.Game.Me.Name.ToLower(), out var shouldFollow))
-            {
-                return shouldFollow;
-            };
-
+            Log.Warning($"Client {client.Game.Me.Name} finding and moving to {EntityCode.BaalPortal} failed at {client.Game.Me.Location}");
             return false;
         }
 
-        private void SetShouldFollowLead(Client client, bool follow)
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
-            ShouldFollow[client.Game.Me.Name.ToLower()] = follow;
+            await client.Game.MoveToAsync(baalPortal);
+
+            if (retryCount > 0 && retryCount % 5 == 0)
+            {
+                client.Game.RequestUpdate(client.Game.Me.Id);
+            }
+
+            client.Game.InteractWithEntity(baalPortal);
+            return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                await Task.Delay(50);
+                return client.Game.Area == Area.TheWorldStoneChamber;
+            }, TimeSpan.FromSeconds(0.5));
+        }, TimeSpan.FromSeconds(10)))
+        {
+            return false;
         }
 
-        private async Task GetTaskForWave(Client client, AccountConfig account)
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
-            if (client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] < 50 && !client.Game.Me.HasSkill(Skill.Teleport))
+            if (retryCount > 0 && retryCount % 5 == 0)
             {
+                client.Game.RequestUpdate(client.Game.Me.Id);
+            }
+
+            await Task.Delay(100);
+
+            return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.TheWorldStoneChamber, client.Game.Me.Location);
+        }, TimeSpan.FromSeconds(10)))
+        {
+            return false;
+        }
+
+        var pathBaal = await _pathingService.GetPathToNPC(client.Game, NPCCode.Baal, MovementMode.Teleport);
+        if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBaal, MovementMode.Teleport))
+        {
+            Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} to {NPCCode.Baal} failed at {client.Game.Me.Location}");
+        }
+
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+        {
+            var baal = NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 1, 200).FirstOrDefault();
+            if (baal == null)
+            {
+                return false;
+            }
+            if (baal.Location.Distance(client.Game.Me.Location) > 10)
+            {
+                pathBaal = await _pathingService.GetPathToLocation(client.Game, baal.Location, MovementMode.Teleport);
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBaal, MovementMode.Teleport))
+                {
+                    Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} to {NPCCode.Baal} failed at {client.Game.Me.Location}");
+                    return false;
+                }
+            }
+
+            return true;
+        }, TimeSpan.FromSeconds(10)))
+        {
+            Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} close to {NPCCode.Baal} failed at {client.Game.Me.Location}");
+            return false;
+        }
+
+        if (!await _townManagementService.CreateTownPortal(client))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task<bool> SetupBo(Client client)
+    {
+        if (client.Game.Me.Id == BoClientPlayerId)
+        {
+            await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(0.1));
+                if (retryCount % 5 == 0)
+                {
+                    foreach (var player in client.Game.Players.Where(p => p.Location?.Distance(client.Game.Me.Location) < 10))
+                    {
+                        client.Game.RequestUpdate(player.Id);
+                    }
+                }
+                return await ClassHelpers.CastAllShouts(client);
+            }, TimeSpan.FromSeconds(15));
+        }
+        else
+        {
+            var random = new Random();
+            await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                var boPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
+                if (boPlayer != null)
+                {
+                    var randomPointNear = boPlayer.Location.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5));
+                    await client.Game.MoveToAsync(randomPointNear);
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(0.1));
+                return !ClassHelpers.IsMissingShouts(client.Game.Me);
+            }, TimeSpan.FromSeconds(15));
+        }
+
+        return true;
+    }
+
+    private async Task<bool> CreateThroneRoomTp(Client client)
+    {
+        var game = client.Game;
+        if (!await _townManagementService.TakeWaypoint(client, Waypoint.TheWorldStoneKeepLevel2))
+        {
+            Log.Information($"Taking {client.Game.Act} waypoint failed");
+            return false;
+        }
+
+        var pathToWorldStone3 = await _pathingService.GetPathFromWaypointToArea(client.Game.MapId, Difficulty.Normal, Area.TheWorldStoneKeepLevel2, Waypoint.TheWorldStoneKeepLevel2, Area.TheWorldStoneKeepLevel3, MovementMode.Teleport);
+        if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToWorldStone3.SkipLast(1).ToList(), MovementMode.Teleport))
+        {
+            Log.Error($"Teleporting to {Area.TheWorldStoneKeepLevel3}  failed");
+            return false;
+        }
+
+        var warp1 = client.Game.GetNearestWarp();
+        if (warp1 == null)
+        {
+            Log.Warning($"Warp not found while at location {client.Game.Me.Location}");
+            return false;
+        }
+
+        var teleportLocation = warp1.Location;
+        if(await _attackService.IsVisitable(client, warp1.Location.Add(-30, 0)))
+        {
+            teleportLocation = warp1.Location.Add(-30, 0);
+        }
+        else if (await _attackService.IsVisitable(client, warp1.Location.Add(30, 0)))
+        {
+            teleportLocation = warp1.Location.Add(30, 0);
+        }
+        else if (await _attackService.IsVisitable(client, warp1.Location.Add(0, 30)))
+        {
+            teleportLocation = warp1.Location.Add(0, 30);
+        }
+        else if (await _attackService.IsVisitable(client, warp1.Location.Add(0, -30)))
+        {
+            teleportLocation = warp1.Location.Add(0, -30);
+        }
+
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+        {
+            var pathtoTeleportLocation = await _pathingService.GetPathToLocation(client.Game, teleportLocation, MovementMode.Teleport);
+            if(pathtoTeleportLocation.Count != 0 && !await MovementHelpers.TakePathOfLocations(client.Game, pathtoTeleportLocation, MovementMode.Teleport))
+            {
+                return false;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(0.5));
+
+            return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            {
+                if (warp1.Location.Distance(client.Game.Me.Location) > 30)
+                {
+                    return false;
+                }
+
+                if (warp1.Location.Distance(client.Game.Me.Location) > 5 && !await game.TeleportToLocationAsync(warp1.Location))
+                {
+                    return false;
+                }
+
+                if (warp1.Location.Distance(client.Game.Me.Location) < 5)
+                {
+                    await client.Game.MoveToAsync(warp1.Location);
+                }
+
+                return client.Game.TakeWarp(warp1) && client.Game.Area == Area.TheWorldStoneKeepLevel3;
+            }, TimeSpan.FromSeconds(3.5));
+        }, TimeSpan.FromSeconds(4)))
+        {
+            Log.Warning($"Taking warp with teleport location {teleportLocation} failed at location: {game.Me.Location} with warp at {warp1.Location}");
+            return false;
+        }
+
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+        {
+            client.Game.RequestUpdate(client.Game.Me.Id);
+            var isValidPoint = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.TheWorldStoneKeepLevel3, client.Game.Me.Location);
+            return isValidPoint;
+        }, TimeSpan.FromSeconds(3.5)))
+        {
+            Log.Error("Checking whether moved to area failed");
+            return false;
+        }
+
+        var pathToThroneRoom = await _pathingService.GetPathToArea(client.Game, Area.ThroneOfDestruction, MovementMode.Teleport);
+        if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToThroneRoom, MovementMode.Teleport))
+        {
+            Log.Error($"Teleporting to {Area.ThroneOfDestruction}  failed");
+            return false;
+        }
+
+        var warp2 = client.Game.GetNearestWarp();
+        if (warp2 == null || warp2.Location.Distance(client.Game.Me.Location) > 20)
+        {
+            Log.Warning($"Warp not close enough at location {warp2?.Location} while at location {client.Game.Me.Location}");
+            return false;
+        }
+
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+        {
+            if (warp2.Location.Distance(client.Game.Me.Location) > 5 && !await game.TeleportToLocationAsync(warp2.Location))
+            {
+                Log.Debug($"Teleport to {warp2.Location} failing retrying at location: {game.Me.Location}");
+                return false;
+            }
+
+            return client.Game.TakeWarp(warp2) && client.Game.Area == Area.ThroneOfDestruction;
+        }, TimeSpan.FromSeconds(4)))
+        {
+            Log.Warning($"Teleport failed at location: {game.Me.Location}");
+            return false;
+        }
+
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+        {
+            client.Game.RequestUpdate(client.Game.Me.Id);
+            var isValidPoint = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.ThroneOfDestruction, client.Game.Me.Location);
+            return isValidPoint;
+        }, TimeSpan.FromSeconds(3.5)))
+        {
+            Log.Error("Checking whether moved to area failed");
+            return false;
+        }
+
+        var pathToThrone = await _pathingService.GetPathToObjectWithOffset(client.Game, EntityCode.BaalPortal, 27, 65, MovementMode.Teleport);
+        if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToThrone, MovementMode.Teleport))
+        {
+            Log.Error($"Teleporting to {Area.ThroneOfDestruction} starting location failed");
+            return false;
+        }
+
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+        {
+            await Task.Delay(100);
+            return await _townManagementService.TakeTownPortalToTown(client);
+        }, TimeSpan.FromSeconds(10)))
+        {
+            Log.Warning($"Client {client.Game.Me.Name} moving to town failed");
+            NextGame.TrySetResult(true);
+        }
+
+        Log.Information("Got to starting location");
+
+        return true;
+    }
+
+    private async Task FollowToLocation(Client client, Point location)
+    {
+        if (!client.Game.IsInGame())
+        {
+            return;
+        }
+
+        var (targetLocation, tokenSource) = FollowTasks[client.Game.Me.Name.ToLower()];
+        if (targetLocation == null || (targetLocation.Distance(location) > 10 && client.Game.Me.Location.Distance(location) < 1000))
+        {
+            tokenSource?.Cancel();
+            var newSource = new CancellationTokenSource();
+            FollowTasks[client.Game.Me.Name.ToLower()] = (location, newSource);
+            await MoveToLocation(client, location, newSource.Token);
+        }
+    }
+
+    private bool ShouldFollowLeadClient(Client client)
+    {
+        if (ShouldFollow.TryGetValue(client.Game.Me.Name.ToLower(), out var shouldFollow))
+        {
+            return shouldFollow;
+        };
+
+        return false;
+    }
+
+    private void SetShouldFollowLead(Client client, bool follow)
+    {
+        ShouldFollow[client.Game.Me.Name.ToLower()] = follow;
+    }
+
+    private async Task GetTaskForWave(Client client, AccountConfig account)
+    {
+        if (client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] < 50 && !client.Game.Me.HasSkill(Skill.Teleport))
+        {
+            await BasicIdleClient(client);
+            return;
+        }
+
+        switch (client.Game.Me.Class)
+        {
+            case CharacterClass.Amazon:
                 await BasicIdleClient(client);
-                return;
-            }
 
-            switch (client.Game.Me.Class)
-            {
-                case CharacterClass.Amazon:
+                break;
+            case CharacterClass.Sorceress:
+                if (client.Game.Me.HasSkill(Skill.StaticField))
+                {
+                    await StaticSorcClient(client, account);
+                }
+                else
+                {
                     await BasicIdleClient(client);
+                }
+                break;
+            case CharacterClass.Necromancer:
+                await BasicIdleClient(client);
+                break;
+            case CharacterClass.Paladin:
+                await BasicPalaClient(client, account);
+                break;
+            case CharacterClass.Barbarian:
+                await BarbClient(client, account);
+                break;
+            case CharacterClass.Druid:
+            case CharacterClass.Assassin:
+                await BasicIdleClient(client);
+                break;
+        }
+    }
 
-                    break;
-                case CharacterClass.Sorceress:
-                    if (client.Game.Me.HasSkill(Skill.StaticField))
-                    {
-                        await StaticSorcClient(client, account);
-                    }
-                    else
-                    {
-                        await BasicIdleClient(client);
-                    }
-                    break;
-                case CharacterClass.Necromancer:
-                    await BasicIdleClient(client);
-                    break;
-                case CharacterClass.Paladin:
-                    await BasicPalaClient(client, account);
-                    break;
-                case CharacterClass.Barbarian:
-                    await BarbClient(client, account);
-                    break;
-                case CharacterClass.Druid:
-                case CharacterClass.Assassin:
-                    await BasicIdleClient(client);
-                    break;
-            }
+    private async Task GetTaskForBaal(Client client, AccountConfig account)
+    {
+        var portalPlayer = client.Game.Players.FirstOrDefault(p => p.Id == PortalClientPlayerId);
+        if (portalPlayer == null)
+        {
+            NextGame.TrySetResult(true);
+            return;
         }
 
-        private async Task GetTaskForBaal(Client client, AccountConfig account)
+        switch (client.Game.Me.Class)
         {
-            var portalPlayer = client.Game.Players.FirstOrDefault(p => p.Id == PortalClientPlayerId);
-            if (portalPlayer == null)
-            {
-                NextGame.TrySetResult(true);
-                return;
-            }
-
-            switch (client.Game.Me.Class)
-            {
-                case CharacterClass.Sorceress:
-                    if (client.Game.Me.HasSkill(Skill.StaticField))
-                    {
-                        if (client.Game.Area != Area.TheWorldStoneChamber && !await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-                        {
-                            await Task.Delay(100);
-                            return await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.TheWorldStoneChamber);
-                        }, TimeSpan.FromSeconds(30)))
-                        {
-                            Log.Warning($"Client {client.Game.Me.Name} stopped waiting for baal portal");
-                            NextGame.TrySetResult(true);
-                            return;
-                        }
-
-                        await StaticSorcClient(client, account);
-                        NextGame.TrySetResult(true);
-                    }
-                    else
-                    {
-                        await NextGame.Task;
-                    }
-                    break;
-                case CharacterClass.Paladin:
+            case CharacterClass.Sorceress:
+                if (client.Game.Me.HasSkill(Skill.StaticField))
+                {
                     if (client.Game.Area != Area.TheWorldStoneChamber && !await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                     {
                         await Task.Delay(100);
@@ -613,223 +593,242 @@ namespace ConsoleBot.Bots.Types.Baal
                         NextGame.TrySetResult(true);
                         return;
                     }
-                    await BasicPalaClient(client, account);
-                    break;
-                default:
-                    await NextGame.Task;
-                    break;
-            }
 
-            await Task.Delay(1000);
-            await PickupItemsAndPotions(client, account, 100);
-        }
-
-        private async Task StaticSorcClient(Client client, AccountConfig account)
-        {
-            Log.Information($"Starting Sorc Client {client.Game.Me.Name}");
-            Point baalThrone = null;
-            var runStopWatch = new Stopwatch();
-            runStopWatch.Start();
-
-            var random = new Random();
-            while (!await IsNextGame() && client.Game.IsInGame())
-            {
-                if (runStopWatch.Elapsed > TimeSpan.FromSeconds(50))
-                {
-                    Log.Warning($"Client {client.Game.Me.Name} waiting too long going next game");
+                    await StaticSorcClient(client, account);
                     NextGame.TrySetResult(true);
-                    break;
-                }
-
-                if(NPCHelpers.GetNearbySuperUniques(client).Any(w => w.NPCCode == NPCCode.Baal && (w.State == EntityState.Dead || w.State == EntityState.Dieing)))
-                {
-                    Log.Information($"Client {client.Game.Me.Name} baal is dead going next game");
-                    NextGame.TrySetResult(true);
-                    break;
-                }
-
-                var baalPortal = client.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
-                if (baalThrone == null)
-                {
-                    baalThrone = client.Game.GetNPCsByCode(NPCCode.BaalThrone).FirstOrDefault()?.Location;
-                }
-                else if(client.Game.Me.Location.Distance(baalThrone) > 60 && baalPortal != null)
-                {
-                    var pathToThrone = await _pathingService.GetPathToLocation(client.Game, baalPortal.Location.Add(0, 30), MovementMode.Teleport);
-                    if (pathToThrone.Count > 0)
-                    {
-                        Log.Information($"Client {client.Game.Me.Name} teleporting nearby {EntityCode.BaalPortal}");
-                        await MovementHelpers.TakePathOfLocations(client.Game, pathToThrone.ToList(), MovementMode.Teleport);
-                    }
-                }
-
-                var nearbyMonsters = NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 10, 50).Where(m => baalThrone == null || baalThrone.Distance(m.Location) < 50).ToList();
-                if (nearbyMonsters.Count != 0)
-                {
-                    runStopWatch.Restart();
                 }
                 else
                 {
-                    await PickupItemsAndPotions(client, account, 30);
+                    await NextGame.Task;
                 }
+                break;
+            case CharacterClass.Paladin:
+                if (client.Game.Area != Area.TheWorldStoneChamber && !await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                {
+                    await Task.Delay(100);
+                    return await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.TheWorldStoneChamber);
+                }, TimeSpan.FromSeconds(30)))
+                {
+                    Log.Warning($"Client {client.Game.Me.Name} stopped waiting for baal portal");
+                    NextGame.TrySetResult(true);
+                    return;
+                }
+                await BasicPalaClient(client, account);
+                break;
+            default:
+                await NextGame.Task;
+                break;
+        }
 
-                var boPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-                var portalPlayer = client.Game.Players.FirstOrDefault(p => p.Id == PortalClientPlayerId);
-                var monstersNearBoClient = boPlayer != null ? NPCHelpers.GetNearbyNPCs(client, boPlayer.Location, 10, 20) : [];
-                if (boPlayer != null && monstersNearBoClient.Any() && boPlayer.Location.Distance(client.Game.Me.Location) > 20)
-                {
-                    Log.Information($"{client.Game.Me.Name}, bo client in danger, moving to bo client");
+        await Task.Delay(1000);
+        await PickupItemsAndPotions(client, account, 100);
+    }
 
-                    var teleportPath = await _pathingService.GetPathToLocation(client.Game, monstersNearBoClient.First().Location, MovementMode.Teleport);
-                    if (teleportPath.Count > 0)
-                    {
-                        Log.Information($"Client {client.Game.Me.Name} teleporting at {monstersNearBoClient.First().Location}");
-                        await MovementHelpers.TakePathOfLocations(client.Game, teleportPath.ToList(), MovementMode.Teleport);
-                    }
-                    await _attackService.AssistPlayer(client, boPlayer);
-                    continue;
-                }
+    private async Task StaticSorcClient(Client client, AccountConfig account)
+    {
+        Log.Information($"Starting Sorc Client {client.Game.Me.Name}");
+        Point baalThrone = null;
+        var runStopWatch = new Stopwatch();
+        runStopWatch.Start();
 
-                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.BattleOrders))
-                {
-                    Log.Information($"Lost bo on client {client.Game.Me.Name}, moving to barb for bo");
-                    if (boPlayer != null)
-                    {
-                        if (boPlayer.Location.Distance(client.Game.Me.Location) > 10)
-                        {
-                            var teleportPathLead = await _pathingService.GetPathToLocation(client.Game, boPlayer.Location, MovementMode.Teleport);
-                            await MovementHelpers.TakePathOfLocations(client.Game, teleportPathLead.ToList(), MovementMode.Teleport);
-                        }
-                        else
-                        {
-                            var randomPointNear = boPlayer.Location.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5));
-                            await client.Game.TeleportToLocationAsync(randomPointNear);
-                        }
-                    }
+        var random = new Random();
+        while (!await IsNextGame() && client.Game.IsInGame())
+        {
+            if (runStopWatch.Elapsed > TimeSpan.FromSeconds(50))
+            {
+                Log.Warning($"Client {client.Game.Me.Name} waiting too long going next game");
+                NextGame.TrySetResult(true);
+                break;
+            }
 
-                    continue;
-                }
+            if(NPCHelpers.GetNearbySuperUniques(client).Any(w => w.NPCCode == NPCCode.Baal && (w.State == EntityState.Dead || w.State == EntityState.Dieing)))
+            {
+                Log.Information($"Client {client.Game.Me.Name} baal is dead going next game");
+                NextGame.TrySetResult(true);
+                break;
+            }
 
-                if(nearbyMonsters.Count != 0
-                    && client.Game.Me.Id == PortalClientPlayerId 
-                    && client.Game.Me.Location.Distance(nearbyMonsters.First().Location) > 30)
+            var baalPortal = client.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
+            if (baalThrone == null)
+            {
+                baalThrone = client.Game.GetNPCsByCode(NPCCode.BaalThrone).FirstOrDefault()?.Location;
+            }
+            else if(client.Game.Me.Location.Distance(baalThrone) > 60 && baalPortal != null)
+            {
+                var pathToThrone = await _pathingService.GetPathToLocation(client.Game, baalPortal.Location.Add(0, 30), MovementMode.Teleport);
+                if (pathToThrone.Count > 0)
                 {
-                    var pathToThrone = await _pathingService.GetPathToLocation(client.Game, nearbyMonsters.First().Location, MovementMode.Teleport);
-                    if (pathToThrone.Count > 0)
-                    {
-                        await MovementHelpers.TakePathOfLocations(client.Game, pathToThrone.ToList(), MovementMode.Teleport);
-                    }
-                }
-                else if(client.Game.Me.Id != PortalClientPlayerId && portalPlayer != null && portalPlayer.Location.Distance(client.Game.Me.Location) > 30)
-                {
-                    var pathToPortalPlayer = await _pathingService.GetPathToLocation(client.Game, portalPlayer.Location, MovementMode.Teleport);
-                    if (pathToPortalPlayer.Count > 0)
-                    {
-                        Log.Information($"Client {client.Game.Me.Name} teleporting nearby Portal player");
-                        await MovementHelpers.TakePathOfLocations(client.Game, pathToPortalPlayer.ToList(), MovementMode.Teleport);
-                    }
-                }
-
-                if (nearbyMonsters.Count != 0)
-                {
-                    var assistPlayer = client.Game.Players.FirstOrDefault(p => p.Id == PortalClientPlayerId) ?? client.Game.Me;
-                    await _attackService.AssistPlayer(client, assistPlayer);
-                }
-                else if(client.Game.GetNPCsByCode(NPCCode.BaalThrone).Count == 0 && baalThrone != null && client.Game.Me.Location.Distance(baalThrone) < 30)
-                {
-                    Log.Information($"Waves done, moving on {client.Game.Me.Name}");
-                    break;
-                }
-                else if (baalPortal != null && client.Game.Me.Location.Distance(baalPortal.Location.Add(0, 30)) > 10)
-                {
-                    var pathToThrone = await _pathingService.GetPathToLocation(client.Game, baalPortal.Location.Add(0, 30), MovementMode.Teleport);
-                    if (pathToThrone.Count > 0)
-                    {
-                        Log.Information($"Client {client.Game.Me.Name} teleporting nearby {EntityCode.BaalPortal}");
-                        await MovementHelpers.TakePathOfLocations(client.Game, pathToThrone.ToList(), MovementMode.Teleport);
-                    }
+                    Log.Information($"Client {client.Game.Me.Name} teleporting nearby {EntityCode.BaalPortal}");
+                    await MovementHelpers.TakePathOfLocations(client.Game, pathToThrone.ToList(), MovementMode.Teleport);
                 }
             }
 
-            Log.Information($"Finished with Sorc Client {client.Game.Me.Name}");
-        }
-
-        private async Task BasicIdleClient(Client client)
-        {
-            Log.Information($"Starting Basic idle Client {client.Game.Me.Name}");
-            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(2)), NextGame.Task) && client.Game.IsInGame())
+            var nearbyMonsters = NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 10, 50).Where(m => baalThrone == null || baalThrone.Distance(m.Location) < 50).ToList();
+            if (nearbyMonsters.Count != 0)
             {
+                runStopWatch.Restart();
+            }
+            else
+            {
+                await PickupItemsAndPotions(client, account, 30);
             }
 
-            Log.Information($"Stopped Idle Client {client.Game.Me.Name}");
-        }
-
-        private async Task BasicPalaClient(Client client, AccountConfig account)
-        {
-            SetShouldFollowLead(client, true);
-
-            client.Game.ChangeSkill(Skill.Conviction, Hand.Right);
-            var timer = new Stopwatch();
-            timer.Start();
-            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame())
+            var boPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
+            var portalPlayer = client.Game.Players.FirstOrDefault(p => p.Id == PortalClientPlayerId);
+            var monstersNearBoClient = boPlayer != null ? NPCHelpers.GetNearbyNPCs(client, boPlayer.Location, 10, 20) : [];
+            if (boPlayer != null && monstersNearBoClient.Any() && boPlayer.Location.Distance(client.Game.Me.Location) > 20)
             {
-                if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Holyshield) && client.Game.Me.HasSkill(Skill.HolyShield))
+                Log.Information($"{client.Game.Me.Name}, bo client in danger, moving to bo client");
+
+                var teleportPath = await _pathingService.GetPathToLocation(client.Game, monstersNearBoClient.First().Location, MovementMode.Teleport);
+                if (teleportPath.Count > 0)
                 {
-                    client.Game.UseRightHandSkillOnLocation(Skill.HolyShield, client.Game.Me.Location);
-                    client.Game.ChangeSkill(Skill.Conviction, Hand.Right);
+                    Log.Information($"Client {client.Game.Me.Name} teleporting at {monstersNearBoClient.First().Location}");
+                    await MovementHelpers.TakePathOfLocations(client.Game, teleportPath.ToList(), MovementMode.Teleport);
+                }
+                await _attackService.AssistPlayer(client, boPlayer);
+                continue;
+            }
+
+            if (!client.Game.Me.Effects.ContainsKey(EntityEffect.BattleOrders))
+            {
+                Log.Information($"Lost bo on client {client.Game.Me.Name}, moving to barb for bo");
+                if (boPlayer != null)
+                {
+                    if (boPlayer.Location.Distance(client.Game.Me.Location) > 10)
+                    {
+                        var teleportPathLead = await _pathingService.GetPathToLocation(client.Game, boPlayer.Location, MovementMode.Teleport);
+                        await MovementHelpers.TakePathOfLocations(client.Game, teleportPathLead.ToList(), MovementMode.Teleport);
+                    }
+                    else
+                    {
+                        var randomPointNear = boPlayer.Location.Add((short)random.Next(-5, 5), (short)random.Next(-5, 5));
+                        await client.Game.TeleportToLocationAsync(randomPointNear);
+                    }
                 }
 
+                continue;
+            }
+
+            if(nearbyMonsters.Count != 0
+                && client.Game.Me.Id == PortalClientPlayerId 
+                && client.Game.Me.Location.Distance(nearbyMonsters.First().Location) > 30)
+            {
+                var pathToThrone = await _pathingService.GetPathToLocation(client.Game, nearbyMonsters.First().Location, MovementMode.Teleport);
+                if (pathToThrone.Count > 0)
+                {
+                    await MovementHelpers.TakePathOfLocations(client.Game, pathToThrone.ToList(), MovementMode.Teleport);
+                }
+            }
+            else if(client.Game.Me.Id != PortalClientPlayerId && portalPlayer != null && portalPlayer.Location.Distance(client.Game.Me.Location) > 30)
+            {
+                var pathToPortalPlayer = await _pathingService.GetPathToLocation(client.Game, portalPlayer.Location, MovementMode.Teleport);
+                if (pathToPortalPlayer.Count > 0)
+                {
+                    Log.Information($"Client {client.Game.Me.Name} teleporting nearby Portal player");
+                    await MovementHelpers.TakePathOfLocations(client.Game, pathToPortalPlayer.ToList(), MovementMode.Teleport);
+                }
+            }
+
+            if (nearbyMonsters.Count != 0)
+            {
                 var assistPlayer = client.Game.Players.FirstOrDefault(p => p.Id == PortalClientPlayerId) ?? client.Game.Me;
                 await _attackService.AssistPlayer(client, assistPlayer);
+            }
+            else if(client.Game.GetNPCsByCode(NPCCode.BaalThrone).Count == 0 && baalThrone != null && client.Game.Me.Location.Distance(baalThrone) < 30)
+            {
+                Log.Information($"Waves done, moving on {client.Game.Me.Name}");
+                break;
+            }
+            else if (baalPortal != null && client.Game.Me.Location.Distance(baalPortal.Location.Add(0, 30)) > 10)
+            {
+                var pathToThrone = await _pathingService.GetPathToLocation(client.Game, baalPortal.Location.Add(0, 30), MovementMode.Teleport);
+                if (pathToThrone.Count > 0)
+                {
+                    Log.Information($"Client {client.Game.Me.Name} teleporting nearby {EntityCode.BaalPortal}");
+                    await MovementHelpers.TakePathOfLocations(client.Game, pathToThrone.ToList(), MovementMode.Teleport);
+                }
+            }
+        }
 
-                if (!NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 1, 200).Any())
+        Log.Information($"Finished with Sorc Client {client.Game.Me.Name}");
+    }
+
+    private async Task BasicIdleClient(Client client)
+    {
+        Log.Information($"Starting Basic idle Client {client.Game.Me.Name}");
+        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(2)), NextGame.Task) && client.Game.IsInGame())
+        {
+        }
+
+        Log.Information($"Stopped Idle Client {client.Game.Me.Name}");
+    }
+
+    private async Task BasicPalaClient(Client client, AccountConfig account)
+    {
+        SetShouldFollowLead(client, true);
+
+        client.Game.ChangeSkill(Skill.Conviction, Hand.Right);
+        var timer = new Stopwatch();
+        timer.Start();
+        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame())
+        {
+            if (!client.Game.Me.Effects.ContainsKey(EntityEffect.Holyshield) && client.Game.Me.HasSkill(Skill.HolyShield))
+            {
+                client.Game.UseRightHandSkillOnLocation(Skill.HolyShield, client.Game.Me.Location);
+                client.Game.ChangeSkill(Skill.Conviction, Hand.Right);
+            }
+
+            var assistPlayer = client.Game.Players.FirstOrDefault(p => p.Id == PortalClientPlayerId) ?? client.Game.Me;
+            await _attackService.AssistPlayer(client, assistPlayer);
+
+            if (!NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 1, 200).Any())
+            {
+                SetShouldFollowLead(client, false);
+                await PickupItemsAndPotions(client, account, 25);
+                SetShouldFollowLead(client, true);
+                var baalThrone = client.Game.GetNPCsByCode(NPCCode.BaalThrone).FirstOrDefault();
+                if (baalThrone == null)
                 {
                     SetShouldFollowLead(client, false);
-                    await PickupItemsAndPotions(client, account, 25);
-                    SetShouldFollowLead(client, true);
-                    var baalThrone = client.Game.GetNPCsByCode(NPCCode.BaalThrone).FirstOrDefault();
-                    if (baalThrone == null)
-                    {
-                        SetShouldFollowLead(client, false);
-                        break;
-                    }
+                    break;
                 }
             }
         }
+    }
 
-        private async Task BarbClient(Client client, AccountConfig account)
+    private async Task BarbClient(Client client, AccountConfig account)
+    {
+        Log.Information($"Starting BoBarb Client {client.Game.Me.Name}");
+        bool shouldBo = client.Game.Me.Id == BoClientPlayerId;
+
+        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame())
         {
-            Log.Information($"Starting BoBarb Client {client.Game.Me.Name}");
-            bool shouldBo = client.Game.Me.Id == BoClientPlayerId;
-
-            while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame())
+            if (shouldBo)
             {
-                if (shouldBo)
+                await ClassHelpers.CastAllShouts(client);
+            }
+            else
+            {
+                var boPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
+                if (boPlayer != null && boPlayer.Location.Distance(client.Game.Me.Location) > 25)
                 {
-                    await ClassHelpers.CastAllShouts(client);
-                }
-                else
-                {
-                    var boPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-                    if (boPlayer != null && boPlayer.Location.Distance(client.Game.Me.Location) > 25)
-                    {
-                        continue;
-                    }
-                }
-
-                var nearbyMonsters = NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 1, 20);
-                if (!nearbyMonsters.Any())
-                {
-                    await PickupItemsAndPotions(client, account, 15);
-                }
-                else if (client.Game.Me.HasSkill(Skill.Whirlwind))
-                {
-                    var assistPlayer = client.Game.Players.FirstOrDefault(p => p.Id == PortalClientPlayerId) ?? client.Game.Me;
-                    await _attackService.AssistPlayer(client, assistPlayer);
+                    continue;
                 }
             }
 
-            Log.Information($"Stopped Barb Client {client.Game.Me.Name}");
+            var nearbyMonsters = NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 1, 20);
+            if (!nearbyMonsters.Any())
+            {
+                await PickupItemsAndPotions(client, account, 15);
+            }
+            else if (client.Game.Me.HasSkill(Skill.Whirlwind))
+            {
+                var assistPlayer = client.Game.Players.FirstOrDefault(p => p.Id == PortalClientPlayerId) ?? client.Game.Me;
+                await _attackService.AssistPlayer(client, assistPlayer);
+            }
         }
+
+        Log.Information($"Stopped Barb Client {client.Game.Me.Name}");
     }
 }

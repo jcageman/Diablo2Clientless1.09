@@ -1,9 +1,8 @@
-﻿namespace ConsoleBot.Enums
+﻿namespace ConsoleBot.Enums;
+
+public enum MoveItemResult
 {
-    public enum MoveItemResult
-    {
-        Succes,
-        NoSpace,
-        Failed
-    }
+    Succes,
+    NoSpace,
+    Failed
 }
