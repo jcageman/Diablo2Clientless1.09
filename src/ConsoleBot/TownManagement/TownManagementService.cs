@@ -8,7 +8,7 @@ using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.Pathing;
-using Serilog;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,12 +20,14 @@ public class TownManagementService : ITownManagementService
 {
     private readonly IPathingService _pathingService;
     private readonly IExternalMessagingClient _externalMessagingClient;
+    private readonly ILogger<TownManagementService> _logger;
     private static int isAnyClientGambling;
 
-    public TownManagementService(IPathingService pathingService, IExternalMessagingClient externalMessagingClient)
+    public TownManagementService(IPathingService pathingService, IExternalMessagingClient externalMessagingClient, ILogger<TownManagementService> logger)
     {
         _pathingService = pathingService;
         _externalMessagingClient = externalMessagingClient;
+        _logger = logger;
     }
 
     public async Task<bool> TakeWaypoint(Client client, Waypoint waypoint)
@@ -34,7 +36,7 @@ public class TownManagementService : ITownManagementService
         var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, movementMode);
         if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
         {
-            Log.Debug($"Client {client.Game.Me.Name} {movementMode} to {client.Game.Act} waypoint failed");
+            _logger.LogDebug("Client {ClientName} {MovementMode} to {Act} waypoint failed", client.Game.Me.Name, movementMode, client.Game.Act);
             return false;
         }
 
@@ -47,7 +49,7 @@ public class TownManagementService : ITownManagementService
 
         if (townWaypoint == null)
         {
-            Log.Debug($"Client {client.Game.Me.Name} No waypoint found");
+            _logger.LogDebug("Client {ClientName} No waypoint found", client.Game.Me.Name);
             return false;
         }
 
@@ -86,7 +88,7 @@ public class TownManagementService : ITownManagementService
             return isValidPoint;
         }, TimeSpan.FromSeconds(3.5)))
         {
-            Log.Error($"Client {client.Game.Me.Name} Checking whether moved to area failed");
+            _logger.LogError("Client {ClientName} Checking whether moved to area failed", client.Game.Me.Name);
             return false;
         }
 
@@ -107,7 +109,7 @@ public class TownManagementService : ITownManagementService
             var pathToPortal = await _pathingService.GetPathToLocation(client.Game, portal.Location, movementMode);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToPortal, movementMode))
             {
-                Log.Warning($"Client {client.Game.Me.Name} Moving to {portal.Location} failed");
+                _logger.LogWarning("Client {ClientName} Moving to {PortalLocation} failed", client.Game.Me.Name, portal.Location);
                 return false;
             }
         }
@@ -169,7 +171,7 @@ public class TownManagementService : ITownManagementService
             return await client.Game.CreateTownPortal();
         }, TimeSpan.FromSeconds(3.5)))
         {
-            Log.Error($"Client {client.Game.Me.Name} failed to create town portal");
+            _logger.LogError("Client {ClientName} failed to create town portal", client.Game.Me.Name);
             return false;
         }
 
@@ -205,7 +207,7 @@ public class TownManagementService : ITownManagementService
             }, TimeSpan.FromSeconds(0.5));
         }, TimeSpan.FromSeconds(5.0)))
         {
-            Log.Error($"Client {client.Game.Me.Name} Moving to town failed with area {client.Game.Area}");
+            _logger.LogError("Client {ClientName} Moving to town failed with area {Area}", client.Game.Me.Name, client.Game.Area);
             return false;
         }
 
@@ -223,7 +225,7 @@ public class TownManagementService : ITownManagementService
             return !await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, previousArea, client.Game.Me.Location);
         }, TimeSpan.FromSeconds(3.5)))
         {
-            Log.Error($"Client {client.Game.Me.Name} Checking whether in town failed");
+            _logger.LogError("Client {ClientName} Checking whether in town failed", client.Game.Me.Name);
             return false;
         }
 
@@ -241,7 +243,7 @@ public class TownManagementService : ITownManagementService
         {
             if(!await TakeTownPortalToTown(client))
             {
-                Log.Warning($"Client {client.Game.Me.Name} taking townportal to {WayPointHelpers.MapTownArea(client.Game.Act)} failed");
+                _logger.LogWarning("Client {ClientName} taking townportal to {TownArea} failed", client.Game.Me.Name, WayPointHelpers.MapTownArea(client.Game.Act));
                 return false;
             }
         }
@@ -251,14 +253,14 @@ public class TownManagementService : ITownManagementService
             var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, movementMode);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
             {
-                Log.Debug($"Client {client.Game.Me.Name} moving to {client.Game.Act} waypoint failed");
+                _logger.LogDebug("Client {ClientName} moving to {Act} waypoint failed", client.Game.Me.Name, client.Game.Act);
                 return false;
             }
         }
 
         var targetTownArea = WayPointHelpers.MapTownArea(act);
         var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).Single();
-        Log.Debug($"Client {client.Game.Me.Name} taking waypoint to {targetTownArea}");
+        _logger.LogDebug("Client {ClientName} taking waypoint to {TargetTownArea}", client.Game.Me.Name, targetTownArea);
         if (!GeneralHelpers.TryWithTimeout((_) =>
         {
             if(!client.Game.TakeWaypoint(townWaypoint, act.MapTownWayPoint()))
@@ -268,7 +270,7 @@ public class TownManagementService : ITownManagementService
             return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == targetTownArea, TimeSpan.FromSeconds(2));
         }, TimeSpan.FromSeconds(5)))
         {
-            Log.Debug($"Client {client.Game.Me.Name} moving to {act} failed");
+            _logger.LogDebug("Client {ClientName} moving to {Act} failed", client.Game.Me.Name, act);
             return false;
         }
 
@@ -290,7 +292,7 @@ public class TownManagementService : ITownManagementService
 
         if (!await GeneralHelpers.PickupCorpseIfExists(client, _pathingService))
         {
-            Log.Error($"{client.Game.Me.Name} failed to pickup corpse");
+            _logger.LogError("{ClientName} failed to pickup corpse", client.Game.Me.Name);
             return result;
         }
 
@@ -329,13 +331,13 @@ public class TownManagementService : ITownManagementService
             var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, townArea, game.Me.Location, EntityCode.Stash, movementMode);
             if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))
             {
-                Log.Warning($"Client {client.Game.Me.Name} {movementMode} failed at location {game.Me.Location}");
+                _logger.LogWarning("Client {ClientName} {MovementMode} failed at location {Location}", client.Game.Me.Name, movementMode, game.Me.Location);
             }
 
             var stashItemsResult = InventoryHelpers.StashItemsToKeep(game, _externalMessagingClient);
             if (stashItemsResult != Enums.MoveItemResult.Succes)
             {
-                Log.Warning($"Client {client.Game.Me.Name} Stashing items failed with result {stashItemsResult}");
+                _logger.LogWarning("Client {ClientName} Stashing items failed with result {Result}", client.Game.Me.Name, stashItemsResult);
             }
 
             if(stashItemsResult == Enums.MoveItemResult.NoSpace)
@@ -349,9 +351,9 @@ public class TownManagementService : ITownManagementService
             var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, townArea, game.Me.Location, EntityCode.Stash, movementMode);
             if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))
             {
-                Log.Warning($"Client {client.Game.Me.Name} {movementMode} failed at location {game.Me.Location}");
+                _logger.LogWarning("Client {ClientName} {MovementMode} failed at location {Location}", client.Game.Me.Name, movementMode, game.Me.Location);
             }
-            CubeHelpers.TransmuteGems(client.Game);
+            CubeHelpers.TransmuteGems(client.Game, _logger);
         }
 
         if (!await GambleItems(client, movementMode))
@@ -377,7 +379,7 @@ public class TownManagementService : ITownManagementService
     game.Cube.Items.Count(i => !i.IsIdentified);
         if (unidentifiedItemCount > 6)
         {
-            Log.Debug($"Client {game.Me.Name} Visiting Deckard Cain with {unidentifiedItemCount} unidentified items");
+            _logger.LogDebug("Client {ClientName} Visiting Deckard Cain with {UnidCount} unidentified items", game.Me.Name, unidentifiedItemCount);
             var deckhardCainCode = NPCHelpers.GetDeckardCainForAct(game.Act);
 
             var deckardCain = NPCHelpers.GetUniqueNPC(game, deckhardCainCode);
@@ -388,27 +390,27 @@ public class TownManagementService : ITownManagementService
             }
             else
             {
-                Log.Debug($"Client {game.Me.Name} {movementMode} to deckard cain according to map {game.Me.Location}");
+                _logger.LogDebug("Client {ClientName} {MovementMode} to deckard cain according to map {Location}", game.Me.Name, movementMode, game.Me.Location);
                 pathDeckardCain = await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, deckhardCainCode, movementMode);
             }
 
             if (!await MovementHelpers.TakePathOfLocations(game, pathDeckardCain, movementMode))
             {
-                Log.Warning($"Client {game.Me.Name} {movementMode} to deckard cain failed at {game.Me.Location}");
+                _logger.LogWarning("Client {ClientName} {MovementMode} to deckard cain failed at {Location}", game.Me.Name, movementMode, game.Me.Location);
                 return false;
             }
 
             deckardCain = NPCHelpers.GetUniqueNPC(game, deckhardCainCode);
             if(deckardCain == null)
             {
-                Log.Error($"Client {game.Me.Name} could not find deckard cain failed at {game.Me.Location}");
+                _logger.LogError("Client {ClientName} could not find deckard cain failed at {Location}", game.Me.Name, game.Me.Location);
                 return false;
             }
 
             pathDeckardCain = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, deckardCain.Location, movementMode);
             if (!await MovementHelpers.TakePathOfLocations(game, pathDeckardCain, movementMode))
             {
-                Log.Warning($"Client {game.Me.Name} {movementMode} to real deckard cain failed at {game.Me.Location}");
+                _logger.LogWarning("Client {ClientName} {MovementMode} to real deckard cain failed at {Location}", game.Me.Name, movementMode, game.Me.Location);
                 return false;
             }
 
@@ -428,7 +430,7 @@ public class TownManagementService : ITownManagementService
             || options.ManaPotionsToBuy > 0)
         {
             var sellNpc = NPCHelpers.GetSellNPC(game.Act);
-            Log.Debug($"Client {game.Me.Name} moving to {sellNpc} for refresh and selling {sellItemCount} items");
+            _logger.LogDebug("Client {ClientName} moving to {SellNpc} for refresh and selling {SellCount} items", game.Me.Name, sellNpc, sellItemCount);
             var uniqueNPC = NPCHelpers.GetUniqueNPC(game, sellNpc);
             List<Point> pathSellNPC;
             if (uniqueNPC != null)
@@ -445,19 +447,19 @@ public class TownManagementService : ITownManagementService
                 uniqueNPC = NPCHelpers.GetUniqueNPC(game, sellNpc);
                 if (uniqueNPC == null)
                 {
-                    Log.Warning($"Client {game.Me.Name} Did not find {sellNpc} at {game.Me.Location}");
+                    _logger.LogWarning("Client {ClientName} Did not find {SellNpc} at {Location}", game.Me.Name, sellNpc, game.Me.Location);
                     return false;
                 }
 
                 if (!NPCHelpers.SellItemsAndRefreshPotionsAtNPC(game, uniqueNPC, options))
                 {
-                    Log.Warning($"Client {game.Me.Name} Selling items and refreshing potions failed at {game.Me.Location}");
+                    _logger.LogWarning("Client {ClientName} Selling items and refreshing potions failed at {Location}", game.Me.Name, game.Me.Location);
                     return false;
                 }
             }
             else
             {
-                Log.Warning($"Client {game.Me.Name} {movementMode} to {sellNpc} failed at {game.Me.Location}");
+                _logger.LogWarning("Client {ClientName} {MovementMode} to {SellNpc} failed at {Location}", game.Me.Name, movementMode, sellNpc, game.Me.Location);
                 return false;
             }
         }
@@ -473,25 +475,25 @@ public class TownManagementService : ITownManagementService
             && goldInStash > 50.000)
         {
             var mercNpc = NPCHelpers.GetMercNPCForAct(game.Act);
-            Log.Debug($"Client {game.Me.Name} moving to {mercNpc} for resurrecting merc");
+            _logger.LogDebug("Client {ClientName} moving to {MercNpc} for resurrecting merc", game.Me.Name, mercNpc);
             List<Point> pathRepairNPC = await _pathingService.GetPathToNPC(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, mercNpc, movementMode);
             if (pathRepairNPC.Count > 0 && await MovementHelpers.TakePathOfLocations(game, pathRepairNPC, movementMode))
             {
                 var uniqueNPC = NPCHelpers.GetUniqueNPC(game, mercNpc);
                 if (uniqueNPC == null)
                 {
-                    Log.Debug($"Client {game.Me.Name} Did not find {mercNpc} at {game.Me.Location}");
+                    _logger.LogDebug("Client {ClientName} Did not find {MercNpc} at {Location}", game.Me.Name, mercNpc, game.Me.Location);
                     return false;
                 }
 
                 if (!NPCHelpers.ResurrectMerc(game, uniqueNPC))
                 {
-                    Log.Debug($"Client {game.Me.Name} Resurrecting merc at {mercNpc} failed at {game.Me.Location}");
+                    _logger.LogDebug("Client {ClientName} Resurrecting merc at {MercNpc} failed at {Location}", game.Me.Name, mercNpc, game.Me.Location);
                 }
             }
             else
             {
-                Log.Debug($"Client {game.Me.Name} {movementMode} to {mercNpc} failed at {game.Me.Location}");
+                _logger.LogDebug("Client {ClientName} {MovementMode} to {MercNpc} failed at {Location}", game.Me.Name, movementMode, mercNpc, game.Me.Location);
             }
         }
 
@@ -503,7 +505,7 @@ public class TownManagementService : ITownManagementService
         if (NPCHelpers.ShouldGoToRepairNPC(game))
         {
             var repairNPC = NPCHelpers.GetRepairNPC(game.Act);
-            Log.Debug($"Client {game.Me.Name} moving to {repairNPC} for repair/arrows");
+            _logger.LogDebug("Client {ClientName} moving to {RepairNpc} for repair/arrows", game.Me.Name, repairNPC);
             List<Point> pathRepairNPC;
             if(repairNPC == NPCCode.Hratli)
             {
@@ -523,18 +525,18 @@ public class TownManagementService : ITownManagementService
                 var uniqueNPC = NPCHelpers.GetUniqueNPC(game, repairNPC);
                 if (uniqueNPC == null)
                 {
-                    Log.Warning($"Client {game.Me.Name} Did not find {repairNPC} at {game.Me.Location}");
+                    _logger.LogWarning("Client {ClientName} Did not find {RepairNpc} at {Location}", game.Me.Name, repairNPC, game.Me.Location);
                     return false;
                 }
 
                 if (!NPCHelpers.RepairItemsAndBuyArrows(game, uniqueNPC))
                 {
-                    Log.Warning($"Client {game.Me.Name} Selling items and refreshing potions to {repairNPC} failed at {game.Me.Location}");
+                    _logger.LogWarning("Client {ClientName} Selling items and refreshing potions to {RepairNpc} failed at {Location}", game.Me.Name, repairNPC, game.Me.Location);
                 }
             }
             else
             {
-                Log.Warning($"Client {game.Me.Name} {movementMode} to {repairNPC} failed at {game.Me.Location}");
+                _logger.LogWarning("Client {ClientName} {MovementMode} to {RepairRpc} failed at {Location}", game.Me.Name, movementMode, repairNPC, game.Me.Location);
             }
         }
 
@@ -548,7 +550,7 @@ public class TownManagementService : ITownManagementService
         if (shouldGamble && System.Threading.Interlocked.Exchange(ref isAnyClientGambling, 1) == 0)
         {
             var gambleNPC = NPCHelpers.GetGambleNPC(client.Game.Act);
-            Log.Debug($"Client {client.Game.Me.Name} Gambling items at {gambleNPC}");
+            _logger.LogDebug("Client {ClientName} Gambling items at {GambleNpc}", client.Game.Me.Name, gambleNPC);
             List<Point> pathToGamble;
             if (gambleNPC == NPCCode.Anya)
             {
@@ -561,14 +563,14 @@ public class TownManagementService : ITownManagementService
             
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToGamble, movementMode))
             {
-                Log.Debug($"Client {client.Game.Me.Name} {movementMode} to {gambleNPC} failed at {client.Game.Me.Location}");
+                _logger.LogDebug("Client {ClientName} {MovementMode} to {GambleNpc} failed at {Location}", client.Game.Me.Name, movementMode, gambleNPC, client.Game.Me.Location);
                 return false;
             }
 
             var uniqueNPC = NPCHelpers.GetUniqueNPC(client.Game, gambleNPC);
             if (uniqueNPC == null)
             {
-                Log.Warning($"Client {client.Game.Me.Name} {gambleNPC} not found at {client.Game.Me.Location}");
+                _logger.LogWarning("Client {ClientName} {GambleNpc} not found at {Location}", client.Game.Me.Name, gambleNPC, client.Game.Me.Location);
                 return false;
             }
 

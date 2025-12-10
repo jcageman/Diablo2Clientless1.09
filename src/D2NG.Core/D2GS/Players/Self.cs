@@ -108,7 +108,7 @@ public class Self : Player
         var manaCorrection = 0.0;
         switch (Class)
         {
-            case Enums.CharacterClass.Amazon:
+            case CharacterClass.Amazon:
                 lifePerLevel = 2;
                 lifePerVita = 3;
                 lifeCorrection = -12;
@@ -116,7 +116,7 @@ public class Self : Player
                 manaPerEnergy = 1.5;
                 manaCorrection = -6;
                 break;
-            case Enums.CharacterClass.Sorceress:
+            case CharacterClass.Sorceress:
                 lifePerLevel = 1;
                 lifePerVita = 2;
                 lifeCorrection = 19;
@@ -124,7 +124,7 @@ public class Self : Player
                 manaPerEnergy = 1.5;
                 manaCorrection = -33;
                 break;
-            case Enums.CharacterClass.Necromancer:
+            case CharacterClass.Necromancer:
                 lifePerLevel = 1.5;
                 lifePerVita = 2;
                 lifeCorrection = 13.5;
@@ -132,7 +132,7 @@ public class Self : Player
                 manaPerEnergy = 2;
                 manaCorrection = -23;
                 break;
-            case Enums.CharacterClass.Paladin:
+            case CharacterClass.Paladin:
                 lifePerLevel = 2;
                 lifePerVita = 3;
                 lifeCorrection = -22;
@@ -140,7 +140,7 @@ public class Self : Player
                 manaPerEnergy = 2;
                 manaCorrection = -6;
                 break;
-            case Enums.CharacterClass.Barbarian:
+            case CharacterClass.Barbarian:
                 lifePerLevel = 2;
                 lifePerVita = 4;
                 lifeCorrection = -47;
@@ -148,7 +148,7 @@ public class Self : Player
                 manaPerEnergy = 2;
                 manaCorrection = 1;
                 break;
-            case Enums.CharacterClass.Druid:
+            case CharacterClass.Druid:
                 lifePerLevel = 1.5;
                 lifePerVita = 2;
                 lifeCorrection = 3.5;
@@ -156,7 +156,7 @@ public class Self : Player
                 manaPerEnergy = 2;
                 manaCorrection = -18;
                 break;
-            case Enums.CharacterClass.Assassin:
+            case CharacterClass.Assassin:
                 lifePerLevel = 2;
                 lifePerVita = 3;
                 lifeCorrection = -12;

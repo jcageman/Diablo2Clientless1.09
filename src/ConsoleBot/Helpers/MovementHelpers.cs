@@ -25,7 +25,7 @@ public static class MovementHelpers
         Area area)
     {
         Log.Information($"Moving to warp at {warp.Location} from {game.Me.Location}");
-        if (!await MovementHelpers.MoveToLocation(game, pathingService, mapApiService, warp.Location, movementMode))
+        if (!await MoveToLocation(game, pathingService, mapApiService, warp.Location, movementMode))
         {
             return false;
         }

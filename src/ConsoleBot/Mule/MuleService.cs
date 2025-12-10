@@ -9,8 +9,8 @@ using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Items.Containers;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -26,12 +26,14 @@ public class MuleService : IMuleService
     private readonly BotConfiguration _botConfig;
     private readonly MuleConfiguration _muleConfig;
     private readonly IExternalMessagingClient _externalMessagingClient;
+    private readonly ILogger<MuleService> _logger;
 
-    public MuleService(IOptions<BotConfiguration> botConfig, IOptions<MuleConfiguration> muleConfig, IExternalMessagingClient externalMessagingClient)
+    public MuleService(IOptions<BotConfiguration> botConfig, IOptions<MuleConfiguration> muleConfig, IExternalMessagingClient externalMessagingClient, ILogger<MuleService> logger)
     {
         _botConfig = botConfig.Value;
         _muleConfig = muleConfig.Value;
         _externalMessagingClient = externalMessagingClient;
+        _logger = logger;
     }
     public async Task<bool> MuleItemsForClient(Client client)
     {
@@ -44,7 +46,7 @@ public class MuleService : IMuleService
 
         if (!await WaitForInitialize(client))
         {
-            Log.Error($"Fail to initialize client {client.LoggedInUserName()}");
+            _logger.LogError("Fail to initialize client {ClientName}", client.LoggedInUserName());
             return false;
         }
 
@@ -82,13 +84,13 @@ public class MuleService : IMuleService
                 if (!await RealmConnectHelpers.ConnectToRealm(
                     muleClient, _botConfig, accountCharacter))
                 {
-                    Log.Error($"Fail to connect to realm with {account.Username} with character {character}");
+                    _logger.LogError("Fail to connect to realm with {Account} with character {Character}", account.Username, character);
                     return false;
                 }
 
                 if (!await muleClient.JoinGame(muleGameName, _botConfig.GamePassword))
                 {
-                    Log.Error($"Fail to join game with {account.Username} with character {character}");
+                    _logger.LogError("Fail to join game with {Account} with character {Character}", account.Username, character);
                     failedToJoinCount++;
                     await Task.Delay(TimeSpan.FromSeconds(5) * failedToJoinCount);
                     if (failedToJoinCount > 5)
@@ -103,7 +105,7 @@ public class MuleService : IMuleService
 
                 if(!await WaitForInitialize(muleClient))
                 {
-                    Log.Error($"Fail to initialize client {muleClient.LoggedInUserName()}");
+                    _logger.LogError("Fail to initialize client {ClientName}", muleClient.LoggedInUserName());
                     return false;
                 }
 
@@ -181,7 +183,7 @@ public class MuleService : IMuleService
         return true;
     }
 
-    private static async Task<bool> WaitForInitialize(Client client)
+    private async Task<bool> WaitForInitialize(Client client)
     {
         var timer = new Stopwatch();
         timer.Start();
@@ -192,7 +194,7 @@ public class MuleService : IMuleService
 
         if (client.Game.Me == null)
         {
-            Log.Error($"{client.Game.Me.Name} failed to initialize Me");
+            _logger.LogError("{ClientName} failed to initialize Me", client.Game.Me?.Name);
             return false;
         }
 
@@ -201,7 +203,7 @@ public class MuleService : IMuleService
             (_) => client.Game.Me.Location.X != 0 && client.Game.Me.Location.Y != 0,
             TimeSpan.FromSeconds(5)))
         {
-            Log.Error($"{client.Game.Me.Name} failed to initialize current location");
+            _logger.LogError("{ClientName} failed to initialize current location", client.Game.Me?.Name);
             return false;
         }
 
@@ -433,7 +435,7 @@ public class MuleService : IMuleService
             bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => client.Game.CursorItem?.Id == item.Id, TimeSpan.FromSeconds(5));
             if (!resultToBuffer)
             {
-                Log.Error($"Moving item {item.Id} - {item.Name} to buffer failed");
+                _logger.LogError("Moving item {ItemId} - {ItemName} to buffer failed", item.Id, item.Name);
                 await _externalMessagingClient.SendMessage($"Moving item {item.Id} - {item.Name} to buffer failed");
                 return MoveItemResult.Failed;
             }
@@ -446,7 +448,7 @@ public class MuleService : IMuleService
                 TimeSpan.FromSeconds(5));
             if (!moveResult)
             {
-                Log.Error($"Moving item {item.Id} - {item.Name} to trade failed");
+                _logger.LogError("Moving item {ItemId} - {ItemName} to trade failed", item.Id, item.Name);
                 await _externalMessagingClient.SendMessage($"Moving item {item.Id} - {item.Name} to trade failed ");
                 return MoveItemResult.Failed;
             }

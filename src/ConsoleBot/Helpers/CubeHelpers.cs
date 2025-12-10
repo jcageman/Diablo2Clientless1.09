@@ -3,7 +3,7 @@ using D2NG.Core;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
-using Serilog;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,7 +17,7 @@ public static class CubeHelpers
 
     public static bool AnyGemsToTransmuteInStash(Game game)
     {
-        var groupedGems = game.Stash.Items.Where(i => i.Classification == D2NG.Core.D2GS.Items.ClassificationType.Gem && flawlessGems.Contains(i.Name)).GroupBy(i => i.Name);
+        var groupedGems = game.Stash.Items.Where(i => i.Classification == ClassificationType.Gem && flawlessGems.Contains(i.Name)).GroupBy(i => i.Name);
         if (groupedGems.Any())
         {
             return groupedGems.Max(g => g.Count()) >= 3;
@@ -26,18 +26,18 @@ public static class CubeHelpers
         return false;
     }
 
-    public static void TransmuteGems(Game game)
+    public static void TransmuteGems(Game game, ILogger logger)
     {
-        TransmuteFlawlessWithName(game, ItemName.FlawlessDiamond);
-        TransmuteFlawlessWithName(game, ItemName.FlawlessSkull);
-        TransmuteFlawlessWithName(game, ItemName.FlawlessRuby);
-        TransmuteFlawlessWithName(game, ItemName.FlawlessEmerald);
-        TransmuteFlawlessWithName(game, ItemName.FlawlessAmethyst);
-        TransmuteFlawlessWithName(game, ItemName.FlawlessTopaz);
-        TransmuteFlawlessWithName(game, ItemName.FlawlessSapphire);
+        TransmuteFlawlessWithName(game, ItemName.FlawlessDiamond, logger);
+        TransmuteFlawlessWithName(game, ItemName.FlawlessSkull, logger);
+        TransmuteFlawlessWithName(game, ItemName.FlawlessRuby, logger);
+        TransmuteFlawlessWithName(game, ItemName.FlawlessEmerald, logger);
+        TransmuteFlawlessWithName(game, ItemName.FlawlessAmethyst, logger);
+        TransmuteFlawlessWithName(game, ItemName.FlawlessTopaz, logger);
+        TransmuteFlawlessWithName(game, ItemName.FlawlessSapphire, logger);
     }
 
-    private static void TransmuteFlawlessWithName(Game game, ItemName flawlessName)
+    private static void TransmuteFlawlessWithName(Game game, ItemName flawlessName, ILogger logger)
     {
         var flawlessGems = game.Stash.Items.Where(i => i.Name == flawlessName)
                                  .ToList();
@@ -82,7 +82,7 @@ public static class CubeHelpers
 
         if (!result)
         {
-            Log.Error($"Failed to open stash");
+            logger.LogError("Failed to open stash");
             Thread.Sleep(300);
             game.ClickButton(ClickType.CloseStash);
             Thread.Sleep(100);
@@ -104,12 +104,12 @@ public static class CubeHelpers
         Thread.Sleep(100);
         game.ClickButton(ClickType.CloseStash);
 
-        Log.Information($"Moved {flawlessName} to inventory for transmuting");
+        logger.LogInformation("Moved {GemName} to inventory for transmuting", flawlessName);
 
         var remainingGems = flawlessGemsInInventory;
         while (remainingGems.Count > 2)
         {
-            Log.Information($"Transmuting 3 {flawlessName} to perfect");
+            logger.LogInformation("Transmuting 3 {GemName} to perfect", flawlessName);
             var gemsToTransmute = remainingGems.Take(3);
             remainingGems = remainingGems.Skip(3).ToList();
             bool moveSucceeded = true;
@@ -118,7 +118,7 @@ public static class CubeHelpers
                 var inventoryItem = game.Inventory.FindItemById(gem);
                 if (inventoryItem == null)
                 {
-                    Log.Warning($"Gem to be transmuted not found in inventory");
+                    logger.LogWarning("Gem to be transmuted not found in inventory");
                     break;
                 }
                 var freeSpace = game.Cube.FindFreeSpace(inventoryItem);
@@ -137,13 +137,13 @@ public static class CubeHelpers
 
             if (!moveSucceeded)
             {
-                Log.Error($"Transmuting items failed due not all items being moved to cube");
+                logger.LogError("Transmuting items failed due not all items being moved to cube");
                 return;
             }
 
             if (!InventoryHelpers.TransmuteItemsInCube(game, true))
             {
-                Log.Error($"Transmuting items failed");
+                logger.LogError("Transmuting items failed");
                 return;
             }
 
@@ -152,17 +152,17 @@ public static class CubeHelpers
             {
                 if (InventoryHelpers.PutCubeItemInInventory(game, item) != MoveItemResult.Succes)
                 {
-                    Log.Error($"Couldn't move transmuted items out of cube");
+                    logger.LogError("Couldn't move transmuted items out of cube");
                     continue;
                 }
             }
         }
 
-        Log.Information($"Moving items back to stash");
+        logger.LogInformation("Moving items back to stash");
 
         if (!game.OpenStash(stash))
         {
-            Log.Error($"{game.Me.Name}: Opening stash failed");
+            logger.LogError("{ClientName}: Opening stash failed", game.Me.Name);
             return;
         }
 
@@ -173,13 +173,13 @@ public static class CubeHelpers
             InventoryHelpers.MoveItemToStash(game, item);
         }
 
-        Log.Information($"Closing stash");
+        logger.LogInformation("Closing stash");
 
         Thread.Sleep(300);
         game.ClickButton(ClickType.CloseStash);
         Thread.Sleep(100);
         game.ClickButton(ClickType.CloseStash);
 
-        Log.Information($"Transmuting items succeeded");
+        logger.LogInformation("Transmuting items succeeded");
     }
 }
