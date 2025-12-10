@@ -2,8 +2,8 @@
 using D2NG.Core.BNCS.Packet;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,11 +20,13 @@ public class ExternalMessagingClient : IExternalMessagingClient
     private readonly ExternalMessagingConfiguration _externalConfiguration;
     private readonly ITelegramBotClient _telegramBotClient;
     private readonly List<Client> _clients = [];
+    private readonly ILogger<ExternalMessagingClient> _logger;
 
-    public ExternalMessagingClient(IOptions<ExternalMessagingConfiguration> externalConfiguration)
+    public ExternalMessagingClient(IOptions<ExternalMessagingConfiguration> externalConfiguration, ILogger<ExternalMessagingClient> logger)
     {
         _externalConfiguration = externalConfiguration.Value ?? throw new ArgumentNullException(nameof(externalConfiguration), $"ExternalMessagingClient constructor fails due to {nameof(externalConfiguration)} being null");
         _telegramBotClient = new TelegramBotClient(_externalConfiguration.TelegramApiKey);
+        _logger = logger;
         if(_externalConfiguration.ReceiveMessages)
         {
             var receiverOptions = new ReceiverOptions
@@ -32,7 +34,7 @@ public class ExternalMessagingClient : IExternalMessagingClient
             };
             _telegramBotClient.StartReceiving(
                 (botClient, update, token) => HandleUpdateAsync(update),
-                (botClient, exception, token) => HandleExceptionAsync(exception),
+                (botClient, exception, token) => HandleExceptionAsync(exception, _logger),
                 receiverOptions
             );
         }
@@ -51,7 +53,7 @@ public class ExternalMessagingClient : IExternalMessagingClient
         {
             if (message == null || message.Type != MessageType.Text) return Task.CompletedTask;
 
-            Log.Information($"Text received: {message.Text}");
+            _logger.LogInformation("Text received: {Text}", message.Text);
             var client = _clients.FirstOrDefault(c => message.Text.StartsWith(c.LoggedInUserName() + " ", StringComparison.InvariantCultureIgnoreCase));
             if (client != null)
             {
@@ -73,9 +75,9 @@ public class ExternalMessagingClient : IExternalMessagingClient
         return Task.CompletedTask;
     }
 
-    private static Task HandleExceptionAsync(Exception exception)
+    private static Task HandleExceptionAsync(Exception exception, ILogger logger)
     {
-        Log.Information($"Exception received: {exception}");
+        logger.LogInformation("Exception received: {Exception}", exception);
         return Task.CompletedTask;
     }
 
@@ -89,7 +91,7 @@ public class ExternalMessagingClient : IExternalMessagingClient
         var packet = new ChatEventPacket(obj.Raw);
         if (packet.Eid != Eid.SHOWUSER && packet.Eid != Eid.USERFLAGS && !packet.Username.Contains(client.LoggedInUserName()))
         {
-            Log.Debug(packet.RenderText());
+            _logger.LogDebug("Chat event: {Text}", packet.RenderText());
             if (packet.Eid == Eid.WHISPER || packet.Eid == Eid.TALK)
             {
                 SendMessage($"To {client.LoggedInUserName()} :" + packet.RenderText()).Wait();
@@ -102,7 +104,7 @@ public class ExternalMessagingClient : IExternalMessagingClient
         var packet = new ChatPacket(obj);
         if (packet.ChatType != 0x04)
         {
-            Log.Debug(packet.RenderText());
+            _logger.LogDebug("Chat message: {Text}", packet.RenderText());
             if (packet.CharacterName != client.Game.Me?.Name)
             {
                 SendMessage($"To {client.LoggedInUserName()} :" + packet.RenderText()).Wait();

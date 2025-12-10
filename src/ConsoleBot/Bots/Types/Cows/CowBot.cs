@@ -419,7 +419,7 @@ public class CowBot : MultiClientBotBase
             return false;
         }
 
-        if (InventoryHelpers.PutInventoryItemInCube(game, lowestQuantity, freeSpaceTownPortal) != Enums.MoveItemResult.Succes)
+        if (InventoryHelpers.PutInventoryItemInCube(game, lowestQuantity, freeSpaceTownPortal) != MoveItemResult.Succes)
         {
             Log.Error($"Moving tome of town portal to cube failed");
             return false;
@@ -432,7 +432,7 @@ public class CowBot : MultiClientBotBase
             return false;
         }
 
-        if (InventoryHelpers.PutInventoryItemInCube(game, wirtsleg, freeSpaceLeg) != Enums.MoveItemResult.Succes)
+        if (InventoryHelpers.PutInventoryItemInCube(game, wirtsleg, freeSpaceLeg) != MoveItemResult.Succes)
         {
             Log.Error($"Moving wirts leg to cube failed");
             return false;

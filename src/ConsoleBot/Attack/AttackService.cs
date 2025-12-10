@@ -9,7 +9,7 @@ using D2NG.Core.D2GS.Players;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
-using Serilog;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,11 +22,13 @@ public class AttackService : IAttackService
 {
     private readonly IPathingService _pathingService;
     private readonly IMapApiService _mapApiService;
+    private readonly ILogger<AttackService> _logger;
 
-    public AttackService(IPathingService pathingService, IMapApiService mapApiService)
+    public AttackService(IPathingService pathingService, IMapApiService mapApiService, ILogger<AttackService> logger)
     {
         _pathingService = pathingService;
         _mapApiService = mapApiService;
+        _logger = logger;
     }
 
     internal sealed class Line
@@ -176,14 +178,16 @@ public class AttackService : IAttackService
                 var path = await _pathingService.GetPathToLocation(client.Game, spot, MovementMode.Walking);
                 if (!await MovementHelpers.TakePathOfLocations(client.Game, path, MovementMode.Walking))
                 {
-                    Log.Warning($"Walking to safe spot failed at {client.Game.Me.Location}");
+                    if (_logger.IsEnabled(LogLevel.Warning))
+                        _logger.LogWarning("Walking to safe spot failed at {Location}", client.Game.Me.Location);
                     return false;
                 }
 
                 return true;
             }
         }
-        Log.Warning($"No safe spot found for {client.Game.Me.Name} on location {client.Game.Me.Location}");
+        if (_logger.IsEnabled(LogLevel.Warning))
+            _logger.LogWarning("No safe spot found for {Name} on location {Location}", client.Game.Me.Name, client.Game.Me.Location);
         return false;
     }
 
@@ -237,26 +241,26 @@ public class AttackService : IAttackService
 
         if (me.HasSkill(Skill.MultipleShot) && me.Mana > 20 && enemies.Count > 5)
         {
-            Log.Information($"Attacking {nearest.NPCCode} with {Skill.MultipleShot}");
+            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.MultipleShot);
             client.Game.RepeatRightHandSkillOnEntity(Skill.MultipleShot, nearest);
             await Task.Delay(200);
         }
         else if (me.HasSkill(Skill.LightningFury) && me.Mana > 20 && enemies.Count > 5)
         {
-            Log.Information($"Attacking {nearest.NPCCode} with {Skill.LightningFury}");
+            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.LightningFury);
             client.Game.UseRightHandSkillOnEntity(Skill.LightningFury, nearest);
             await Task.Delay(200);
         }
         else if (me.HasSkill(Skill.GuidedArrow) && me.Mana > 20 && enemies.Count < 5)
         {
-            Log.Information($"Attacking {nearest.NPCCode} with {Skill.GuidedArrow}");
+            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.GuidedArrow);
             client.Game.RepeatRightHandSkillOnEntity(Skill.GuidedArrow, nearest);
             await Task.Delay(200);
         }
         else if (client.Game.Me.Equipment.TryGetValue(DirectoryType.RightHand, out var weapon)
             && weapon.Classification == ClassificationType.Bow)
         {
-            Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
+            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.Attack);
             client.Game.RepeatRightHandSkillOnEntity(Skill.Attack, nearest);
             await Task.Delay(200);
         }
@@ -264,7 +268,7 @@ public class AttackService : IAttackService
             && client.Game.Me.Equipment.TryGetValue(DirectoryType.RightHand, out var javalin)
             && javalin.Classification == ClassificationType.Javelin)
         {
-            Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
+            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.Attack);
             await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
             client.Game.LeftHandSkillHoldOnEntity(Skill.Attack, nearest);
             await Task.Delay(200);
@@ -296,7 +300,7 @@ public class AttackService : IAttackService
             && !me.HasSkill(Skill.ShiverArmor)
             && !client.Game.Me.Effects.ContainsKey(EntityEffect.Frozenarmor))
         {
-            Log.Information($"Casting {Skill.FrozenArmor}");
+            _logger.LogInformation("Casting {Skill}", Skill.FrozenArmor);
             client.Game.UseRightHandSkillOnLocation(Skill.FrozenArmor, client.Game.Me.Location);
             await Task.Delay(100);
             return true;
@@ -305,7 +309,7 @@ public class AttackService : IAttackService
                 && me.HasSkill(Skill.ShiverArmor)
                 && !client.Game.Me.Effects.ContainsKey(EntityEffect.Shiverarmor))
         {
-            Log.Information($"Casting {Skill.ShiverArmor}");
+            _logger.LogInformation("Casting {Skill}", Skill.ShiverArmor);
             client.Game.UseRightHandSkillOnLocation(Skill.ShiverArmor, client.Game.Me.Location);
             await Task.Delay(100);
             return true;
@@ -390,7 +394,7 @@ public class AttackService : IAttackService
         var me = client.Game.Me;
         if (me.Mana > 20 && me.HasSkill(Skill.HolyShield) && !client.Game.Me.Effects.ContainsKey(EntityEffect.Holyshield))
         {
-            Log.Information($"Casting {Skill.HolyShield}");
+            _logger.LogInformation("Casting {Skill}", Skill.HolyShield);
             client.Game.UseRightHandSkillOnLocation(Skill.HolyShield, client.Game.Me.Location);
             await Task.Delay(100);
             return true;
@@ -404,7 +408,7 @@ public class AttackService : IAttackService
         {
             if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != Skill.Salvation)
             {
-                Log.Information($"Changing to {Skill.Salvation} due to monster with {string.Join(",", enemyLightningEnhancedMultiShot?.MonsterEnchantments ?? [])} or convicted player");
+                _logger.LogInformation("Changing to {Skill} due to monster with {Enchantments} or convicted player", Skill.Salvation, string.Join(",", enemyLightningEnhancedMultiShot?.MonsterEnchantments ?? []));
                 client.Game.ChangeSkill(Skill.Salvation, Hand.Right);
             }
         }
@@ -412,7 +416,7 @@ public class AttackService : IAttackService
         {
             if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != Skill.Conviction)
             {
-                Log.Information($"Changing to {Skill.Conviction}");
+                _logger.LogInformation("Changing to {Skill}", Skill.Conviction);
                 client.Game.ChangeSkill(Skill.Conviction, Hand.Right);
             }
         }
@@ -421,7 +425,7 @@ public class AttackService : IAttackService
             var damageSkill = me.HasSkill(Skill.Fanaticism) ? Skill.Fanaticism : me.HasSkill(Skill.Concentration) ? Skill.Concentration : Skill.Might;
             if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != damageSkill)
             {
-                Log.Information($"Changing from {currentSkill} to {damageSkill}");
+                _logger.LogInformation("Changing from {CurrentSkill} to {DamageSkill}", currentSkill, damageSkill);
                 client.Game.ChangeSkill(damageSkill, Hand.Right);
             }
         }
@@ -436,7 +440,7 @@ public class AttackService : IAttackService
             && client.Game.Difficulty == Difficulty.Normal
             && client.Game.Area != Area.CowLevel)
         {
-            Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
+            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.Attack);
             await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
             client.Game.LeftHandSkillHoldOnEntity(Skill.Attack, nearest);
             await Task.Delay(200);
@@ -455,7 +459,7 @@ public class AttackService : IAttackService
                 var pathNearest = await _pathingService.GetPathToLocation(client.Game, goalLocation, MovementMode.Walking);
                 if (!await MovementHelpers.TakePathOfLocations(client.Game, pathNearest, MovementMode.Walking))
                 {
-                    Log.Warning($"Walking to Nearest failed at {client.Game.Me.Location}");
+                    _logger.LogWarning("Walking to Nearest failed at {Location}", client.Game.Me.Location);
                 }
                 var damageSkill = me.HasSkill(Skill.Fanaticism) ? Skill.Fanaticism : me.HasSkill(Skill.Concentration) ? Skill.Concentration : Skill.Might;
                 client.Game.ChangeSkill(damageSkill, Hand.Right);
@@ -467,12 +471,12 @@ public class AttackService : IAttackService
         return true;
     }
 
-    private static async Task<bool> NecromancerAssist(Client client, Player player)
+    private async Task<bool> NecromancerAssist(Client client, Player player)
     {
         var me = client.Game.Me;
         if (me.Mana > 20 && me.HasSkill(Skill.BoneArmor) && !client.Game.Me.Effects.ContainsKey(EntityEffect.Bonearmor))
         {
-            Log.Information($"Casting {Skill.BoneArmor}");
+            _logger.LogInformation("Casting {Skill}", Skill.BoneArmor);
             client.Game.UseRightHandSkillOnLocation(Skill.BoneArmor, client.Game.Me.Location);
             await Task.Delay(100);
         }
@@ -481,7 +485,7 @@ public class AttackService : IAttackService
             && me.HasSkill(Skill.Bloodgolem)
             && !me.Summons.Exists(s => s.NPCCode == NPCCode.BloodGolem))
         {
-            Log.Information($"Summoning {NPCCode.BloodGolem}");
+            _logger.LogInformation("Summoning {NPCCode}", NPCCode.BloodGolem);
             client.Game.UseRightHandSkillOnLocation(Skill.Bloodgolem, client.Game.Me.Location);
             await Task.Delay(200);
         }
@@ -491,7 +495,7 @@ public class AttackService : IAttackService
             && !me.HasSkill(Skill.Bloodgolem)
             && !me.Summons.Exists(s => s.NPCCode == NPCCode.ClayGolem))
         {
-            Log.Information($"Summoning {NPCCode.ClayGolem}");
+            _logger.LogInformation("Summoning {NPCCode}", NPCCode.ClayGolem);
             client.Game.UseRightHandSkillOnLocation(Skill.ClayGolem, client.Game.Me.Location);
             await Task.Delay(200);
         }
@@ -508,7 +512,7 @@ public class AttackService : IAttackService
             && me.HasSkill(Skill.Skeletonraise)
             && !me.Summons.Exists(s => s.NPCCode == NPCCode.Skeleton))
         {
-            Log.Information($"Summoning {NPCCode.Skeleton}");
+            _logger.LogInformation("Summoning {NPCCode}", NPCCode.Skeleton);
             List<WorldObject> corpses = NPCHelpers.GetNearbyCorpses(client, nearest.Location, 1);
             var corpse = corpses.FirstOrDefault();
             if (corpses != null)
@@ -591,14 +595,14 @@ public class AttackService : IAttackService
         }
         else if (me.HasSkill(Skill.Concentrate) && me.Mana > 5)
         {
-            Log.Information($"Attacking {nearest.NPCCode} with {Skill.Concentrate}");
+            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.Concentrate);
             await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
             client.Game.RepeatRightHandSkillOnEntity(Skill.Concentrate, nearest);
             await Task.Delay(200);
         }
         else
         {
-            Log.Information($"Attacking {nearest.NPCCode} with {Skill.Attack}");
+            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.Attack);
             await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
             client.Game.UseRightHandSkillOnEntity(Skill.Attack, nearest);
             await Task.Delay(200);
@@ -624,12 +628,12 @@ public class AttackService : IAttackService
             //var pathDown = await _pathingService.GetPathToLocation(client.Game, worldObject.Location.Add(0, 6), MovementMode.Walking);
             if (pathLeft.Count < pathRight.Count)
             {
-                Log.Information($"same location, wwing to left {pathLeft.Count}");
+                _logger.LogInformation("same location, wwing to left {Count}", pathLeft.Count);
                 wwDirection = new Point((ushort)(client.Game.Me.Location.X - 6), client.Game.Me.Location.Y);
             }
             else
             {
-                Log.Information($"same location, wwing to right {pathRight.Count}");
+                _logger.LogInformation("same location, wwing to right {Count}", pathRight.Count);
                 wwDirection = new Point((ushort)(client.Game.Me.Location.X + 6), client.Game.Me.Location.Y);
             }
         }

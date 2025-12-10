@@ -63,12 +63,12 @@ public static class GeneralHelpers
         {
             var pickupSucceeded = false;
             var corpse = client.Game.Players.FirstOrDefault(p => p.Id == corpseId);
-            Log.Information($"Found corpse {corpse.Id} for {client.LoggedInUserName()}, trying to pickup");
-            pickupSucceeded = await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            Log.Information("Found corpse {CorpseId} for {ClientName}, trying to pickup", corpse.Id, client.LoggedInUserName());
+            pickupSucceeded = await TryWithTimeout(async (retryCount) =>
             {
                 if (client.Game.Me.Location.Distance(corpse.Location) > 5)
                 {
-                    Log.Information($"Getting walking path from {client.Game.Me.Location} to {corpse.Location} with distance {client.Game.Me.Location.Distance(corpse.Location)}");
+                    Log.Information("Getting walking path from {FromLocation} to {ToLocation} with distance {Distance}", client.Game.Me.Location, corpse.Location, client.Game.Me.Location.Distance(corpse.Location));
                     var walkingPath = await pathingService.GetPathToLocation(client.Game, corpse.Location, MovementMode.Walking);
                     await MovementHelpers.TakePathOfLocations(client.Game, walkingPath, MovementMode.Walking);
                     return false;
@@ -78,7 +78,7 @@ public static class GeneralHelpers
             }, TimeSpan.FromSeconds(5));
 
             var message = pickupSucceeded ? "succeeded" : "failed";
-            Log.Information($"Pickup of corpse {message}");
+            Log.Information("Pickup of corpse {Result}", message);
             return pickupSucceeded;
         }
 
