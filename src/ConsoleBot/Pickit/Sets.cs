@@ -1,5 +1,4 @@
 ﻿using D2NG.Core.D2GS.Items;
-using System.Collections.Generic;
 
 namespace ConsoleBot.Pickit;
 

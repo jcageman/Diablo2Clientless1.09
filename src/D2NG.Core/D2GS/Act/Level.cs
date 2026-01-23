@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace D2NG.Core.D2GS.Act;
+﻿namespace D2NG.Core.D2GS.Act;
 
 public class Level
 {

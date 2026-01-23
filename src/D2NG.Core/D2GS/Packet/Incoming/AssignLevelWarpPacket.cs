@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
+﻿using System.IO;
 using System.Text;
 using D2NG.Core.D2GS.Exceptions;
 using D2NG.Core.D2GS.Objects;

@@ -1,5 +1,4 @@
-﻿using ConsoleBot.Bots;
-using D2NG.Core;
+﻿using D2NG.Core;
 using System.Threading.Tasks;
 
 namespace ConsoleBot.Mule;

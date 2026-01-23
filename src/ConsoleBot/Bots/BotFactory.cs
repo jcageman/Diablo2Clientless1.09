@@ -1,6 +1,4 @@
-﻿using ConsoleBot.Bots.Types;
-using ConsoleBot.Bots.Types.Cows;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Linq;
 

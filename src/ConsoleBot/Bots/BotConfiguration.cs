@@ -1,5 +1,4 @@
-﻿using ConsoleBot.Mule;
-using D2NG.Core.D2GS.Enums;
+﻿using D2NG.Core.D2GS.Enums;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
