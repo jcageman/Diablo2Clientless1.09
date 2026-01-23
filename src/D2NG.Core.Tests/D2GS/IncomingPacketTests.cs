@@ -4,7 +4,6 @@ using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
-using System.Collections.Generic;
 using Xunit;
 
 namespace D2NG.Core.Tests.D2GS;

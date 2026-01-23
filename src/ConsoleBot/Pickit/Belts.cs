@@ -1,6 +1,5 @@
 ﻿using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
-using D2NG.Core.D2GS.Players;
 
 namespace ConsoleBot.Pickit;
 

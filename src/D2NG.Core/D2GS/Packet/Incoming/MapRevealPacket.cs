@@ -1,6 +1,5 @@
 ﻿using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Exceptions;
-using Serilog;
 using System.IO;
 using System.Text;
 

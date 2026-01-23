@@ -1,5 +1,4 @@
 ﻿using D2NG.Core.D2GS.Enums;
-using D2NG.Core.D2GS.Helpers;
 using D2NG.Core.MCP.Packet;
 using Xunit;
 

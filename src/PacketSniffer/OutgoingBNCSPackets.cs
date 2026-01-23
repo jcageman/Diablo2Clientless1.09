@@ -1,7 +1,5 @@
 ﻿using D2NG.Core.BNCS.Packet;
 using D2NG.Core.D2GS.Helpers;
-using D2NG.Core.D2GS.Packet;
-using D2NG.Core.D2GS.Packet.Outgoing;
 using Serilog;
 using System;
 

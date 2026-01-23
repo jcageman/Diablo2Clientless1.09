@@ -1,5 +1,4 @@
-﻿using D2NG.Core.D2GS.Enums;
-using D2NG.Core.D2GS.Exceptions;
+﻿using D2NG.Core.D2GS.Exceptions;
 using D2NG.Core.Extensions;
 using System.IO;
 using System.Text;

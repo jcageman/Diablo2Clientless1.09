@@ -1,5 +1,4 @@
-﻿using D2NG.Core.BNCS.Packet;
-using D2NG.Core.D2GS.Helpers;
+﻿using D2NG.Core.D2GS.Helpers;
 using D2NG.Core.MCP.Packet;
 using Serilog;
 using System;
