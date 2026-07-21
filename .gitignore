@@ -344,3 +344,7 @@ healthchecksdb
 log.txt
 src/ConsoleBot/Properties/launchSettings.json
 /data
+
+./config.json
+./muleconfig.json
+./meph1log.txt
