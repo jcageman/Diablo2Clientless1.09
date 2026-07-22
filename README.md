@@ -30,7 +30,40 @@ The above `config.json` should look as follows:
         "gamefolder": "C:\\Diablo II1.09D",
         "botType" : "mephisto",
 	"logFile": "meph1log.txt",
-	"mephisto" : {"username": "test", "password": "testpass", "character" : "testcharacter"}
+	"mephisto" : {"username": "test", "password": "testpass", "character" : "testcharacter"},
+	"humanization": {
+		"enabled": true,
+		"actionJitterMinMs": 0,
+		"actionJitterMaxMs": 150,
+		"townTaskPauseMinMs": 300,
+		"townTaskPauseMaxMs": 1500,
+		"waypointPauseMinMs": 400,
+		"waypointPauseMaxMs": 1800,
+		"preGameCreateDelayMinSeconds": 3,
+		"preGameCreateDelayMaxSeconds": 15,
+		"shortBreakEveryGamesMin": 8,
+		"shortBreakEveryGamesMax": 20,
+		"shortBreakDurationMinSeconds": 90,
+		"shortBreakDurationMaxSeconds": 300,
+		"longBreakEveryGamesMin": 40,
+		"longBreakEveryGamesMax": 80,
+		"longBreakDurationMinSeconds": 600,
+		"longBreakDurationMaxSeconds": 1800,
+		"joinStaggerMinSeconds": 5,
+		"joinStaggerMaxSeconds": 25
+	},
+	"pickitThresholdScaling": {
+		"defaultPercent": 100,
+		"ringPercent": 100,
+		"glovesPercent": 100,
+		"bootsPercent": 100,
+		"helmsPercent": 100,
+		"armorsPercent": 100,
+		"amuletsPercent": 100,
+		"shieldsPercent": 100,
+		"weaponsPercent": 100,
+		"beltsPercent": 100
+	}
 	},
     "externalMessaging" : {
         "telegramApiKey": "5231-xxerew",
@@ -41,6 +74,21 @@ The above `config.json` should look as follows:
     }
 }
 ```
+
+The `bot.humanization` block is optional and disabled by default (omit it, or set `"enabled": false`, to keep the bot's timing exactly as before). When enabled, it adds randomized delays to make the bot's pacing feel less mechanical:
+- `actionJitterMinMs`/`actionJitterMaxMs`: extra random delay added on top of existing NPC/cube/inventory interaction pauses.
+- `townTaskPauseMinMs`/`townTaskPauseMaxMs`: pause inserted between town chores (identify, sell, repair, resurrect merc, stash).
+- `waypointPauseMinMs`/`waypointPauseMaxMs`: pause before and after taking a waypoint.
+- `preGameCreateDelayMinSeconds`/`preGameCreateDelayMaxSeconds`: random delay before creating a new game.
+- `shortBreakEveryGamesMin`/`Max` and `shortBreakDurationMinSeconds`/`MaxSeconds`: periodic short breaks based on games played.
+- `longBreakEveryGamesMin`/`Max` and `longBreakDurationMinSeconds`/`MaxSeconds`: periodic longer breaks based on games played.
+- `joinStaggerMinSeconds`/`joinStaggerMaxSeconds`: randomizes how long multi-client bots wait before joining a game.
+
+The `bot.pickitThresholdScaling` block is optional and defaults to `100` for all values. Use it to make keep rules more or less strict by item type for threshold-based stats.
+- `defaultPercent`: fallback percent used when a type-specific percent is not set.
+- `ringPercent`, `glovesPercent`, `bootsPercent`, `helmsPercent`, `armorsPercent`, `amuletsPercent`, `shieldsPercent`, `weaponsPercent`, `beltsPercent`: per-item-type threshold scaling.
+- Scaling formula: `floor(baseThreshold * percent / 100)`.
+- Example: if a ring rule requires `GetTotalResistFrLrCr() >= 60` and `ringPercent` is `50`, the effective threshold becomes `>= 30`.
 
 The realm ip address can be retrieved with a tool like https://www.wireshark.org/. Start filtering on tcp port 6112 (in wireshark the filter would be `tcp.port == 6112` as filter). You should receive packets and as soon as you enter the login screen. The source or destination address of the packets is the ip address you need to fill in for the bot.realm parameter. Source/Destination can be your own ip or the ip of the diablo 2 server, so double check the ip you enter is not your own by using something like https://www.whatismyip.com/
 

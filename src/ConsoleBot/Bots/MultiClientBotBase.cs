@@ -76,6 +76,7 @@ public abstract class MultiClientBotBase : IBotInstance
         });
 
         int gameCount = 1;
+        var breakScheduler = new GameBreakScheduler(_config.Humanization);
         while (true)
         {
             _pickitItemsOnGround.Clear();
@@ -118,6 +119,8 @@ public abstract class MultiClientBotBase : IBotInstance
                 ClientsNeedingMule.Clear();
                 if(_multiClientConfig.ShouldCreateGames)
                 {
+                    await breakScheduler.MaybeApplyBreakAsync();
+                    await Task.Delay(breakScheduler.GetPreGameCreateDelay());
                     var result = await RealmConnectHelpers.CreateGameWithRetry(gameCount, firstFiller, _config, _multiClientConfig.Accounts.First());
                     gameCount = result.Item2;
                     if (!result.Item1)
@@ -144,7 +147,11 @@ public abstract class MultiClientBotBase : IBotInstance
                 {
                     var account = _multiClientConfig.Accounts[i];
                     var client = clients[i];
-                    var numberOfSecondsToWait = i > 2 ? TimeSpan.FromSeconds(15) : TimeSpan.Zero;
+                    var numberOfSecondsToWait = i > 2
+                        ? (_config.Humanization.Enabled
+                            ? HumanizationSettings.GetRandomSeconds(_config.Humanization.JoinStaggerMinSeconds, _config.Humanization.JoinStaggerMaxSeconds)
+                            : TimeSpan.FromSeconds(15))
+                        : TimeSpan.Zero;
                     prepareTasks.Add(InternalPrepareForRun(client, account, numberOfSecondsToWait, gameCount));
                 }
 
@@ -202,6 +209,7 @@ public abstract class MultiClientBotBase : IBotInstance
             }
 
             Log.Information($"Going to next game");
+            breakScheduler.RecordGameCompleted();
             gameCount++;
         }
     }
@@ -463,7 +471,7 @@ public abstract class MultiClientBotBase : IBotInstance
             {
                 client.Game.ChangeSkill(Skill.Vigor, Hand.Right);
             }
-            Log.Information($"Client {client.Game.Me.Name} picking up {item.Name}");
+            Log.Information($"Client {client.Game.Me.Name} picking up {item.Name} [{item.Classification}]");
             await MoveToLocation(client, item.Location);
             if (item.Ground)
             {
@@ -501,7 +509,7 @@ public abstract class MultiClientBotBase : IBotInstance
                 }
                 if (item.Ground)
                 {
-                    Log.Information($"Client {client.Game.Me.Name} picking up {item.Amount} {item.Name}");
+                    Log.Information($"Client {client.Game.Me.Name} picking up {item.Amount} {item.Name} [{item.Classification}]");
                     await MoveToLocation(client, item.Location);
                     if (client.Game.Inventory.FindFreeSpace(item) != null && await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                     {

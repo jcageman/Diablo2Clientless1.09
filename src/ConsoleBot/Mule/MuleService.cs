@@ -38,6 +38,7 @@ public class MuleService : IMuleService
     public async Task<bool> MuleItemsForClient(Client client)
     {
         var muleGameName = $"{_botConfig.GameNamePrefix}m{GameCount++}";
+        await Task.Delay(HumanizationSettings.GetRandomSeconds(_botConfig.Humanization.PreGameCreateDelayMinSeconds, _botConfig.Humanization.PreGameCreateDelayMaxSeconds));
         if (!await client.CreateGame(Difficulty.Normal, muleGameName, _botConfig.GamePassword, _botConfig.GameDescriptions?.ElementAtOrDefault(0)))
         {
             await Task.Delay(TimeSpan.FromSeconds(10));
@@ -435,8 +436,8 @@ public class MuleService : IMuleService
             bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => client.Game.CursorItem?.Id == item.Id, TimeSpan.FromSeconds(5));
             if (!resultToBuffer)
             {
-                _logger.LogError("Moving item {ItemId} - {ItemName} to buffer failed", item.Id, item.Name);
-                await _externalMessagingClient.SendMessage($"Moving item {item.Id} - {item.Name} to buffer failed");
+                _logger.LogError("Moving item {ItemId} - {ItemName} [{Classification}] to buffer failed", item.Id, item.Name, item.Classification);
+                await _externalMessagingClient.SendMessage($"Moving item {item.Id} - {item.Name} [{item.Classification}] to buffer failed");
                 return MoveItemResult.Failed;
             }
 
@@ -448,8 +449,8 @@ public class MuleService : IMuleService
                 TimeSpan.FromSeconds(5));
             if (!moveResult)
             {
-                _logger.LogError("Moving item {ItemId} - {ItemName} to trade failed", item.Id, item.Name);
-                await _externalMessagingClient.SendMessage($"Moving item {item.Id} - {item.Name} to trade failed ");
+                _logger.LogError("Moving item {ItemId} - {ItemName} [{Classification}] to trade failed", item.Id, item.Name, item.Classification);
+                await _externalMessagingClient.SendMessage($"Moving item {item.Id} - {item.Name} [{item.Classification}] to trade failed ");
                 return MoveItemResult.Failed;
             }
 

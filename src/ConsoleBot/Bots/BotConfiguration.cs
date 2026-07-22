@@ -33,4 +33,8 @@ public class BotConfiguration
 
     [Required]
     public string LogFile { get; set; }
+
+    public HumanizationConfiguration Humanization { get; set; } = new();
+
+    public PickitThresholdScalingConfiguration PickitThresholdScaling { get; set; } = new();
 }

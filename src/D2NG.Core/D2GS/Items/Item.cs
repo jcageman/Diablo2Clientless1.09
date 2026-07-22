@@ -279,7 +279,7 @@ public class Item
     {
         string etherealText = Ethereal ? "ethereal " : string.Empty;
         string socketText = Sockets > 0 ? $"[{Sockets}s]" : string.Empty;
-        string fullDescription = $"{Name}{socketText} ({Level}) - {etherealText}{Quality}: \r\n";
+        string fullDescription = $"{Name}{socketText} ({Level}) [{Classification}] - {etherealText}{Quality}: \r\n";
         foreach (var property in Properties)
         {
             switch(property.Key)

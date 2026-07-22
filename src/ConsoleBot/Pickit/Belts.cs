@@ -5,6 +5,8 @@ namespace ConsoleBot.Pickit;
 
 public static class Belts
 {
+    private static int Min(int value) => PickitThresholdScaling.Min(PickitItemType.Belts, value);
+
     public static bool ShouldPickupItemClassic(Item item)
     {
         if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
@@ -41,12 +43,12 @@ public static class Belts
             }
         }
 
-        if (item.Quality == QualityType.Unique && item.Name == ItemName.HeavyBelt && item.GetValueOfStatType(StatType.ExtraGold) >= 80)
+        if (item.Quality == QualityType.Unique && item.Name == ItemName.HeavyBelt && item.GetValueOfStatType(StatType.ExtraGold) >= Min(80))
         {
             return true;
         }
 
-        if (item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 40 && item.GetValueOfStatType(StatType.ExtraGold) >= 110)
+        if (item.GetTotalResistFrLrCr() >= Min(40) && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(40) && item.GetValueOfStatType(StatType.ExtraGold) >= Min(110))
         {
             return true;
         }
@@ -56,32 +58,32 @@ public static class Belts
 
     public static bool ShouldKeepItemClassic(Item item)
     {
-        if (item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 80)
+        if (item.GetTotalResistFrLrCr() >= Min(60) && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(80))
         {
             return true;
         }
 
-        if (item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 100)
+        if (item.GetTotalResistFrLrCr() >= Min(40) && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(100))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 60)
+        if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= Min(10) && item.GetTotalResistFrLrCr() >= Min(40) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(60))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 50)
+        if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= Min(10) && item.GetTotalResistFrLrCr() >= Min(70) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(50))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 10 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 120)
+        if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= Min(10) && item.GetTotalResistFrLrCr() >= Min(10) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(120))
         {
             return true;
         }
 
-        if (item.Quality == QualityType.Unique && item.Name == ItemName.HeavyBelt && item.GetValueOfStatType(StatType.ExtraGold) >= 80)
+        if (item.Quality == QualityType.Unique && item.Name == ItemName.HeavyBelt && item.GetValueOfStatType(StatType.ExtraGold) >= Min(80))
         {
             return true;
         }

@@ -23,6 +23,7 @@ public class ParseItemPacketTests
         Assert.Equal(4, packet.Item.Properties[StatType.MinimumColdDamage].MaximumValue);
         Assert.Equal(3, packet.Item.Properties[StatType.DamageReduction].Value);
         Assert.Equal(6, packet.Item.Properties[StatType.Strength].Value);
+        Assert.Contains("[Amulet]", packet.Item.GetFullDescription());
     }
 
     [Fact]

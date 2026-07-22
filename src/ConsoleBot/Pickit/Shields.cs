@@ -6,6 +6,8 @@ namespace ConsoleBot.Pickit;
 
 public static class Shields
 {
+    private static int Min(int value) => PickitThresholdScaling.Min(PickitItemType.Shields, value);
+
     private static readonly HashSet<ItemName> DesirableShields = [ItemName.BoneShield, ItemName.GrimShield, ItemName.SpikedShield, ItemName.BarbedShield];
 
     public static bool ShouldPickupItemExpansion(Item item)
@@ -62,7 +64,7 @@ public static class Shields
                 //case ItemName.GildedShield:
                     return !item.Ethereal;
                 case ItemName.Aegis:
-                    return item.GetValueOfStatType(StatType.ColdResistance) >= 60;
+                    return item.GetValueOfStatType(StatType.ColdResistance) >= Min(60);
             }
         }
 
@@ -73,12 +75,12 @@ public static class Shields
     {
         if(item.Sockets > 0)
         {
-            if (item.Quality == QualityType.Unique && item.Name == ItemName.GothicShield && item.GetTotalResistFrLrCr() > 140)
+            if (item.Quality == QualityType.Unique && item.Name == ItemName.GothicShield && item.GetTotalResistFrLrCr() > Min(140))
             {
                 return true;
             }
 
-            if (item.Quality == QualityType.Unique && item.Name == ItemName.BoneShield && item.Level >= 90)
+            if (item.Quality == QualityType.Unique && item.Name == ItemName.BoneShield && item.Level >= 76)
             {
                 return true;
             }
@@ -86,56 +88,56 @@ public static class Shields
 
         if (DesirableShields.Contains(item.Name))
         {
-            if(item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResistFrLrCr() > 50 && item.GetValueOfStatType(StatType.DamageToMana) >= 5)
+            if(item.GetValueOfStatType(StatType.FasterBlockRate) >= Min(30) && item.GetTotalResistFrLrCr() > Min(50) && item.GetValueOfStatType(StatType.DamageToMana) >= Min(5))
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.PaladinSkills) >= 2 && item.GetTotalResistFrLrCr() > 50 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30)
+            if (item.GetValueOfStatType(StatType.PaladinSkills) >= Min(2) && item.GetTotalResistFrLrCr() > Min(50) && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(30))
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.PaladinSkills) >= 2 && item.GetTotalResistFrLrCr() > 70 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30)
+            if (item.GetValueOfStatType(StatType.PaladinSkills) >= Min(2) && item.GetTotalResistFrLrCr() > Min(70) && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(30))
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResistFrLrCr() > 50)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= Min(10) && item.GetValueOfStatType(StatType.FasterBlockRate) >= Min(30) && item.GetTotalResistFrLrCr() > Min(50))
             {
                 return true;
             }
         }
 
-        if (item.Name == ItemName.GrimShield && item.GetValueOfStatType(StatType.PaladinSkills) >= 2 && item.GetTotalResistFrLrCr() > 50 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50)
+        if (item.Name == ItemName.GrimShield && item.GetValueOfStatType(StatType.PaladinSkills) >= Min(2) && item.GetTotalResistFrLrCr() > Min(50) && item.GetValueOfStatType(StatType.EnhancedDefense) >= Min(50))
         {
             return true;
         }
 
-        if (item.Name == ItemName.BarbedShield && item.GetValueOfStatType(StatType.PaladinSkills) >= 2 && item.GetTotalResistFrLrCr() > 50)
+        if (item.Name == ItemName.BarbedShield && item.GetValueOfStatType(StatType.PaladinSkills) >= Min(2) && item.GetTotalResistFrLrCr() > Min(50))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResistFrLrCr() > 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) > 30)
+        if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= Min(10) && item.GetValueOfStatType(StatType.FasterBlockRate) >= Min(30) && item.GetTotalResistFrLrCr() > Min(70) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) > Min(30))
         {
             return true;
         }
 
         if (item.Name == ItemName.Pavise
-            && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30
-            && item.GetValueOfStatType(StatType.EnhancedDefense) >= 90
-            && (item.GetValueOfStatType(StatType.MaximumDamage) >= 4 || item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30))
+            && item.GetValueOfStatType(StatType.FasterBlockRate) >= Min(30)
+            && item.GetValueOfStatType(StatType.EnhancedDefense) >= Min(90)
+            && (item.GetValueOfStatType(StatType.MaximumDamage) >= Min(4) || item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(30)))
         {
             return true;
         }
 
-        if (item.Name == ItemName.GrimShield && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70 && item.GetTotalResistFrLrCr() > 50)
+        if (item.Name == ItemName.GrimShield && item.GetValueOfStatType(StatType.FasterBlockRate) >= Min(30) && item.GetValueOfStatType(StatType.EnhancedDefense) >= Min(70) && item.GetTotalResistFrLrCr() > Min(50))
         {
             return true;
         }
 
-        if (item.Name == ItemName.TowerShield && item.GetValueOfStatType(StatType.FasterBlockRate) >= 30 && item.GetTotalResistFrLrCr() > 50 && item.GetValueOfStatType(StatType.ReducedRequirements) <= -20)
+        if (item.Name == ItemName.TowerShield && item.GetValueOfStatType(StatType.FasterBlockRate) >= Min(30) && item.GetTotalResistFrLrCr() > Min(50) && item.GetValueOfStatType(StatType.ReducedRequirements) <= -20)
         {
             return true;
         }

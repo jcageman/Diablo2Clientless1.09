@@ -9,7 +9,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Threading;
 
 namespace ConsoleBot.Helpers;
 
@@ -38,7 +37,7 @@ public static class NPCHelpers
             return false;
         }, TimeSpan.FromSeconds(3));
 
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.InitiateEntityChat(npc);
 
         game.TownFolkAction(npc, TownFolkActionType.Trade);
@@ -69,9 +68,9 @@ public static class NPCHelpers
 
         BuyMagicItemsAtMerchant(game, npc);
 
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.TerminateEntityChat(npc);
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         return true;
     }
 
@@ -113,7 +112,7 @@ public static class NPCHelpers
             return false;
         }
 
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.InitiateEntityChat(npc);
         game.TownFolkAction(npc, TownFolkActionType.Gamble);
         var oldItems = game.Items.Values.Where(i => i.Container == ContainerType.ArmorTab).Select(i => i.Id).ToHashSet();
@@ -130,7 +129,7 @@ public static class NPCHelpers
                 return false;
             }
 
-            Thread.Sleep(10);
+            HumanizationSettings.SleepThread(10);
             Log.Debug("Trying to find gamble items and sell previous onces");
             bool inventoryFull = GambleCurrentItemsAtNpc(game, npc);
 
@@ -142,9 +141,9 @@ public static class NPCHelpers
             }
         }
 
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.TerminateEntityChat(npc);
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
 
         return true;
     }
@@ -307,7 +306,7 @@ public static class NPCHelpers
 
             if (game.Me.Location.Distance(deckardCain.Location) < 5)
             {
-                Thread.Sleep(100);
+                HumanizationSettings.SleepThread(100);
                 return game.InteractWithNPC(deckardCain);
             }
             return false;
@@ -319,13 +318,13 @@ public static class NPCHelpers
             return false;
         }
 
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.InitiateEntityChat(deckardCain);
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.IdentifyItems(deckardCain);
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.TerminateEntityChat(deckardCain);
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         return true;
     }
 
@@ -340,7 +339,7 @@ public static class NPCHelpers
 
             if (game.Me.Location.Distance(npc.Location) < 5)
             {
-                Thread.Sleep(100);
+                HumanizationSettings.SleepThread(100);
                 return game.InteractWithNPC(npc);
             }
             return false;
@@ -352,13 +351,13 @@ public static class NPCHelpers
             return false;
         }
 
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.InitiateEntityChat(npc);
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.ResurrectMerc(npc);
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.TerminateEntityChat(npc);
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         return true;
     }
 
@@ -412,7 +411,7 @@ public static class NPCHelpers
             return false;
         }, TimeSpan.FromSeconds(3));
 
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.InitiateEntityChat(npc);
 
         game.TownFolkAction(npc, TownFolkActionType.Trade);
@@ -493,9 +492,9 @@ public static class NPCHelpers
 
         BuyMagicItemsAtMerchant(game, npc);
 
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.TerminateEntityChat(npc);
-        Thread.Sleep(50);
+        HumanizationSettings.SleepThread(50);
         game.TerminateEntityChat(npc);
         return true;
     }

@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 
 namespace ConsoleBot.Helpers;
 
@@ -83,9 +82,9 @@ public static class CubeHelpers
         if (!result)
         {
             logger.LogError("Failed to open stash");
-            Thread.Sleep(300);
+            HumanizationSettings.SleepThread(300);
             game.ClickButton(ClickType.CloseStash);
-            Thread.Sleep(100);
+            HumanizationSettings.SleepThread(100);
             game.ClickButton(ClickType.CloseStash);
             return;
         }
@@ -99,9 +98,9 @@ public static class CubeHelpers
             }
         }
 
-        Thread.Sleep(300);
+        HumanizationSettings.SleepThread(300);
         game.ClickButton(ClickType.CloseStash);
-        Thread.Sleep(100);
+        HumanizationSettings.SleepThread(100);
         game.ClickButton(ClickType.CloseStash);
 
         logger.LogInformation("Moved {GemName} to inventory for transmuting", flawlessName);
@@ -175,9 +174,9 @@ public static class CubeHelpers
 
         logger.LogInformation("Closing stash");
 
-        Thread.Sleep(300);
+        HumanizationSettings.SleepThread(300);
         game.ClickButton(ClickType.CloseStash);
-        Thread.Sleep(100);
+        HumanizationSettings.SleepThread(100);
         game.ClickButton(ClickType.CloseStash);
 
         logger.LogInformation("Transmuting items succeeded");

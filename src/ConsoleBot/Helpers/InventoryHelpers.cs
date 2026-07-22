@@ -10,7 +10,6 @@ using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Attribute = D2NG.Core.D2GS.Players.Attribute;
 
@@ -32,7 +31,7 @@ public static class InventoryHelpers
                 bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Inventory.FindItemById(item.Id) != null, MoveItemTimeout);
                 if (!resultMove)
                 {
-                    Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to inventory failed");
+                    Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] from cursor to inventory failed");
                 }
             }
             else if (freeSpaceCube != null)
@@ -41,12 +40,12 @@ public static class InventoryHelpers
                 bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
                 if (!resultMove)
                 {
-                    Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to cube failed");
+                    Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] from cursor to cube failed");
                 }
             }
             else
             {
-                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor failed, no space");
+                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] from cursor failed, no space");
             }
         }
     }
@@ -79,9 +78,9 @@ public static class InventoryHelpers
         if (!result)
         {
             Log.Error($"{game.Me.Name}: Failed to open stash while at location {game.Me.Location} with stash at {stash.Location}");
-            Thread.Sleep(300);
+            HumanizationSettings.SleepThread(300);
             game.ClickButton(ClickType.CloseStash);
-            Thread.Sleep(100);
+            HumanizationSettings.SleepThread(100);
             game.ClickButton(ClickType.CloseStash);
             return MoveItemResult.Failed;
         }
@@ -93,7 +92,7 @@ public static class InventoryHelpers
 
         var moveResult = MoveItemResult.Succes;
 
-        Thread.Sleep(100);
+        HumanizationSettings.SleepThread(100);
         foreach (Item item in items)
         {
             if (game.Stash.FindFreeSpace(item) == null)
@@ -111,7 +110,7 @@ public static class InventoryHelpers
         }
 
         game.ClickButton(ClickType.CloseStash);
-        Thread.Sleep(100);
+        HumanizationSettings.SleepThread(100);
         game.ClickButton(ClickType.CloseStash);
         return moveResult;
     }
@@ -144,16 +143,16 @@ public static class InventoryHelpers
         if (!result)
         {
             Log.Error($"{game.Me.Name}: Failed to open stash while at location {game.Me.Location} with stash at {stash.Location}");
-            Thread.Sleep(300);
+            HumanizationSettings.SleepThread(300);
             game.ClickButton(ClickType.CloseStash);
-            Thread.Sleep(100);
+            HumanizationSettings.SleepThread(100);
             game.ClickButton(ClickType.CloseStash);
             return MoveItemResult.Failed;
         }
 
         var moveItemResult = MoveItemResult.Succes;
 
-        Thread.Sleep(100);
+        HumanizationSettings.SleepThread(100);
         foreach (Item item in items)
         {
             var currentMoveResult = MoveItemFromStashToInventory(game, item);
@@ -169,7 +168,7 @@ public static class InventoryHelpers
         }
 
         game.ClickButton(ClickType.CloseStash);
-        Thread.Sleep(100);
+        HumanizationSettings.SleepThread(100);
         game.ClickButton(ClickType.CloseStash);
         return moveItemResult;
     }
@@ -249,7 +248,7 @@ public static class InventoryHelpers
 
         if (!resultToBuffer)
         {
-            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] to buffer failed");
             return MoveItemResult.Failed;
         }
         game.InsertItemIntoContainer(item, location, ItemContainer.Inventory);
@@ -273,7 +272,7 @@ public static class InventoryHelpers
             MoveItemTimeout);
         if (!resultToBuffer)
         {
-            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] to buffer failed");
             return MoveItemResult.Failed;
         }
 
@@ -283,7 +282,7 @@ public static class InventoryHelpers
             (retryCount) => game.CursorItem == null && game.Stash.FindItemById(item.Id) != null,
            MoveItemTimeout))
         {
-            Log.Error($"{game.Me.Name}: Inserting item {item.Id} - {item.Name} into stash failed");
+            Log.Error($"{game.Me.Name}: Inserting item {item.Id} - {item.Name} [{item.Classification}] into stash failed");
             return MoveItemResult.Failed;
         }
 
@@ -297,7 +296,7 @@ public static class InventoryHelpers
         bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
         if (!resultToBuffer)
         {
-            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] to buffer failed");
             return MoveItemResult.Failed;
         }
 
@@ -306,7 +305,7 @@ public static class InventoryHelpers
         bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null, MoveItemTimeout);
         if (!resultMove)
         {
-            Log.Error($"{game.Me.Name}: Dropping item {item.Id} - {item.Name} failed");
+            Log.Error($"{game.Me.Name}: Dropping item {item.Id} - {item.Name} [{item.Classification}] failed");
             return MoveItemResult.Failed;
         }
 
@@ -330,7 +329,7 @@ public static class InventoryHelpers
         bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
         if (!resultToBuffer)
         {
-            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] to buffer failed");
             game.ClickButton(ClickType.CloseHoradricCube);
             return MoveItemResult.Failed;
         }
@@ -338,7 +337,7 @@ public static class InventoryHelpers
         bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null, MoveItemTimeout);
         if (!resultMove)
         {
-            Log.Error($"{game.Me.Name}: Dropping item {item.Id} - {item.Name} failed");
+            Log.Error($"{game.Me.Name}: Dropping item {item.Id} - {item.Name} [{item.Classification}] failed");
             game.ClickButton(ClickType.CloseHoradricCube);
             return MoveItemResult.Failed;
         }
@@ -372,7 +371,7 @@ public static class InventoryHelpers
         bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
         if (!resultToBuffer)
         {
-            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] to buffer failed");
             game.ClickButton(ClickType.CloseHoradricCube);
             return MoveItemResult.Failed;
         }
@@ -382,7 +381,7 @@ public static class InventoryHelpers
         bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Inventory.FindItemById(item.Id) != null, MoveItemTimeout);
         if (!resultMove)
         {
-            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to cube failed");
+            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] to cube failed");
             game.ClickButton(ClickType.CloseHoradricCube);
             return MoveItemResult.Failed;
         }
@@ -411,7 +410,7 @@ public static class InventoryHelpers
         bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
         if (!resultToBuffer)
         {
-            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] to buffer failed");
             game.ClickButton(ClickType.CloseHoradricCube);
             return MoveItemResult.Failed;
         }
@@ -421,7 +420,7 @@ public static class InventoryHelpers
         bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
         if (!resultMove)
         {
-            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to cube failed");
+            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] to cube failed");
             game.ClickButton(ClickType.CloseHoradricCube);
             return MoveItemResult.Failed;
         }
@@ -480,7 +479,7 @@ public static class InventoryHelpers
                 bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
                 if (!resultToBuffer)
                 {
-                    Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+                    Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] to buffer failed");
                     continue;
                 }
                 game.DropItem(item);
@@ -506,7 +505,7 @@ public static class InventoryHelpers
             bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
             if (!resultToBuffer)
             {
-                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] to buffer failed");
                 continue;
             }
 
@@ -529,7 +528,7 @@ public static class InventoryHelpers
         {
             if (item.Quality == QualityType.Magical && Pickit.Pickit.CanTouchInventoryItem(game, item) && !item.IsIdentified)
             {
-                Log.Information($"{game.Me.Name}: Identifying magic item {item.Id} - {item.Name}");
+                Log.Information($"{game.Me.Name}: Identifying magic item {item.Id} - {item.Name} [{item.Classification}]");
                 game.ActivateTomeOfIdentify(tomeOfIdentify);
                 game.IdentifyItem(tomeOfIdentify, item);
             }
@@ -562,7 +561,7 @@ public static class InventoryHelpers
             MoveItemTimeout);
         if (!resultToBuffer)
         {
-            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} [{item.Classification}] to buffer failed");
             return MoveItemResult.Failed;
         }
 
@@ -572,7 +571,7 @@ public static class InventoryHelpers
             (retryCount) => game.Inventory.FindItemById(item.Id) != null,
            MoveItemTimeout))
         {
-            Log.Error($"{game.Me.Name}: Inserting item {item.Id} - {item.Name} into Inventory failed");
+            Log.Error($"{game.Me.Name}: Inserting item {item.Id} - {item.Name} [{item.Classification}] into Inventory failed");
             return MoveItemResult.Failed;
         }
 

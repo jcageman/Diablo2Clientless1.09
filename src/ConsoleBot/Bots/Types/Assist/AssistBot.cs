@@ -541,7 +541,7 @@ public class AssistBot : IBotInstance
         {
             if (item.Location.Distance(client.Game.Me.Location) > 20)
             {
-                Log.Warning($"Skipped {item} since it's at location {item.Location}, while player at {client.Game.Me.Location}");
+                Log.Warning($"Skipped {item.GetFullDescription()} since it's at location {item.Location}, while player at {client.Game.Me.Location}");
                 continue;
             }
 
@@ -621,7 +621,7 @@ public class AssistBot : IBotInstance
         {
             if (item.Ground && client.Game.Inventory.HasAnyFreeSpace())
             {
-                Log.Information($"Client {client.Game.Me.Name} picking up {item.Name}");
+                Log.Information($"Client {client.Game.Me.Name} picking up {item.Name} [{item.Classification}]");
                 await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
                     if (!await MovementHelpers.MoveToLocation(client.Game, _pathingService, _mapApiService, item.Location, GetMovementMode(client.Game)))

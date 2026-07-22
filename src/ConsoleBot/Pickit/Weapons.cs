@@ -7,6 +7,8 @@ namespace ConsoleBot.Pickit;
 
 public static class Weapons
 {
+    private static int Min(int value) => PickitThresholdScaling.Min(PickitItemType.Weapons, value);
+
     private static readonly HashSet<ItemName> desirableExceptionalWeapons = [ItemName.MarteldeFer, ItemName.BattleHammer, ItemName.Lance, ItemName.ExecutionerSword, ItemName.Naga];
 
     private static readonly HashSet<ItemName> interestingExceptionalWeapons = [ItemName.AncientAxe, ItemName.Tabar, ItemName.GothicSword, ItemName.BecDeCorbin, ItemName.GrimScythe, ItemName.Zweihander];
@@ -53,7 +55,7 @@ public static class Weapons
             return true;
         }
 
-        if (item.Ethereal && eliteMercWeapons.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 250)
+        if (item.Ethereal && eliteMercWeapons.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= Min(250))
         {
             return true;
         }
@@ -112,7 +114,7 @@ public static class Weapons
                 case ItemName.HydraBow:
                     return true;
                 case ItemName.Ballista:
-                    return item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 190;
+                    return item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= Min(190);
                 case ItemName.ColossusCrossbow:
                 //case ItemName.BoneKnife:
                 case ItemName.LegendaryMallet:
@@ -134,7 +136,7 @@ public static class Weapons
         if (item.Quality == QualityType.Rare
             && item.Ethereal
             && eliteSwords.Contains(item.Name)
-            && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 150
+            && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= Min(150)
             && item.GetValueOfStatType(StatType.RepairsDurability) > 0)
         {
             return true;
@@ -145,12 +147,12 @@ public static class Weapons
             return true;
         }
 
-        if (item.Quality == QualityType.Magical && eliteSwords.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 260)
+        if (item.Quality == QualityType.Magical && eliteSwords.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= Min(260))
         {
             return true;
         }
 
-        if (item.Quality == QualityType.Magical && item.Ethereal && eliteMercWeapons.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 200)
+        if (item.Quality == QualityType.Magical && item.Ethereal && eliteMercWeapons.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= Min(200))
         {
             return true;
         }
@@ -160,17 +162,17 @@ public static class Weapons
             return true;
         }
 
-        if (item.Ethereal && eliteMercWeapons.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 250)
+        if (item.Ethereal && eliteMercWeapons.Contains(item.Name) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= Min(250))
         {
             return true;
         }
 
-        if (item.Quality == QualityType.Magical && item.GetValueToSkillTab(SkillTab.AmazonJavelinAndSpearSkills) >= 5 && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 40)
+        if (item.Quality == QualityType.Magical && item.GetValueToSkillTab(SkillTab.AmazonJavelinAndSpearSkills) >= Min(5) && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= Min(40))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.BarbarianSkills) + item.GetValueToSkillTab(SkillTab.BarbarianWarcries) >= 3)
+        if (item.GetValueOfStatType(StatType.BarbarianSkills) + item.GetValueToSkillTab(SkillTab.BarbarianWarcries) >= Min(3))
         {
             return true;
         }
@@ -201,7 +203,7 @@ public static class Weapons
 
         if (item.Quality == QualityType.Rare
         && desirableExceptionalWeapons.Contains(item.Name)
-        && additionalDamage > 180 && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 170)
+        && additionalDamage > Min(180) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= Min(170))
         {
             return true;
         }
@@ -209,50 +211,50 @@ public static class Weapons
         var desirablePvmWeapons = new HashSet<ItemName> { ItemName.MarteldeFer, ItemName.Lance, ItemName.ExecutionerSword };
         if (item.Quality == QualityType.Rare
         && desirablePvmWeapons.Contains(item.Name)
-        && additionalDamage > 140 && item.GetValueOfStatType(StatType.ReducedRequirements) <= -20 && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6)
+        && additionalDamage > Min(140) && item.GetValueOfStatType(StatType.ReducedRequirements) <= -20 && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= Min(6))
         {
             return true;
         }
 
         if (item.Quality == QualityType.Rare
         && interestingExceptionalWeapons.Contains(item.Name)
-        && (additionalDamage > 210 && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 190))
+        && (additionalDamage > Min(210) && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= Min(190)))
         {
             return true;
         }
 
         if (item.Quality == QualityType.Rare
         && item.Name == ItemName.GothicBow
-        && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 10
-        && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 150
-        && additionalDamage > 170)
+        && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= Min(10)
+        && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= Min(150)
+        && additionalDamage > Min(170))
         {
             return true;
         }
 
         if (item.Quality == QualityType.Rare
         && desirableBows.Contains(item.Name)
-        && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
-        && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 150
-        && additionalDamage > 170)
+        && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= Min(20)
+        && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= Min(150)
+        && additionalDamage > Min(170))
         {
             return true;
         }
 
         if (item.Quality == QualityType.Rare
         && (item.Name == ItemName.LargeSiegeBow || item.Name == ItemName.RazorBow)
-        && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
-        && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= 170
-        && additionalDamage > 180)
+        && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= Min(20)
+        && item.GetValueOfStatType(StatType.EnhancedMaximumDamage) >= Min(170)
+        && additionalDamage > Min(180))
         {
             return true;
         }
 
         if (item.Quality == QualityType.Rare
         && item.Name == ItemName.Flail
-        && item.GetValueOfStatType(StatType.PaladinSkills) >= 2
-        && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 40
-        && (item.GetTotalResistFrLrCr() > 10 || item.GetTotalLifeFromStats(CharacterClass.Paladin) > 10))
+        && item.GetValueOfStatType(StatType.PaladinSkills) >= Min(2)
+        && item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= Min(40)
+        && (item.GetTotalResistFrLrCr() > Min(10) || item.GetTotalLifeFromStats(CharacterClass.Paladin) > Min(10)))
         {
             return true;
         }

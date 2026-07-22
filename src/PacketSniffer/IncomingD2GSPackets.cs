@@ -219,7 +219,7 @@ public static class IncomingD2GSPackets
             case InComingPacket.OwnedItemAction:
                 var parseItemPacket = new ParseItemPacket(eventArgs);
                 Log.Information($"{incomingPacketType} -> Id: {parseItemPacket.Item.Id} ({parseItemPacket.Item.Level}) Action: {parseItemPacket.Item.Action} " +
-                    $"Container: {parseItemPacket.Item.Container} Quality: {parseItemPacket.Item.Quality} Name: {parseItemPacket.Item.Name} " +
+                    $"Container: {parseItemPacket.Item.Container} Quality: {parseItemPacket.Item.Quality} Name: {parseItemPacket.Item.Name} Classification: {parseItemPacket.Item.Classification} " +
                     $"Type: {parseItemPacket.Item.Type} Location: {parseItemPacket.Item.Location} Entity: {parseItemPacket.Item.EntityType} Player {parseItemPacket.Item.PlayerId}" +
                     $"ShouldPickup: {Pickit.ShouldPickupItem(true, CharacterClass.Sorceress, true, parseItemPacket.Item)}" +
                     $"ShouldKeep: {Pickit.ShouldKeepItem(true, CharacterClass.Sorceress, parseItemPacket.Item)}" +

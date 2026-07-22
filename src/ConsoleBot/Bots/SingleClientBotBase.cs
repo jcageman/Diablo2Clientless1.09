@@ -47,6 +47,7 @@ public abstract class SingleClientBotBase
             int gameCount = 0;
             int successiveFailures = 0;
             int gameDescriptionIndex = 0;
+            var breakScheduler = new GameBreakScheduler(_config.Humanization);
             while (true)
             {
                 if (successiveFailures > 0 && successiveFailures % 10 == 0)
@@ -96,6 +97,8 @@ public abstract class SingleClientBotBase
                 {
                     gameCount++;
                     totalCount++;
+                    await breakScheduler.MaybeApplyBreakAsync();
+                    await Task.Delay(breakScheduler.GetPreGameCreateDelay());
                     if (await client.CreateGame(_config.Difficulty, $"{_config.GameNamePrefix}{gameCount}", _config.GamePassword, _config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)))
                     {
                         Log.Information("In game");
@@ -113,6 +116,7 @@ public abstract class SingleClientBotBase
                         {
                             successiveFailures = 0;
                         }
+                        breakScheduler.RecordGameCompleted();
                     }
                     else
                     {

@@ -5,6 +5,8 @@ namespace ConsoleBot.Pickit;
 
 public static class Amulets
 {
+    private static int Min(int value) => PickitThresholdScaling.Min(PickitItemType.Amulets, value);
+
     public static bool ShouldPickupItemClassic(Item item)
     {
         return item.Quality == QualityType.Rare;
@@ -20,31 +22,31 @@ public static class Amulets
         if(item.Quality == QualityType.Unique)
         {
             // Cats eye
-            if(item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20 && item.GetValueOfStatType(StatType.FasterRunWalk) >= 30)
+            if(item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= Min(20) && item.GetValueOfStatType(StatType.FasterRunWalk) >= Min(30))
             {
                 return true;
             }
 
             // Atma's Scarab
-            if (item.GetValueOfStatType(StatType.PoisonResistance) >= 75)
+            if (item.GetValueOfStatType(StatType.PoisonResistance) >= Min(75))
             {
                 return true;
             }
 
             // Highlord's Wrath
-            if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20 && item.GetValueOfStatType(StatType.AmazonSkills) == 1)
+            if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= Min(20) && item.GetValueOfStatType(StatType.AmazonSkills) == 1)
             {
                 return true;
             }
 
             // Mara's Kaleidescope
-            if (item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 20 && item.GetValueOfStatType(StatType.AmazonSkills) == 2)
+            if (item.GetTotalResistFrLrCr() >= Min(60) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(20) && item.GetValueOfStatType(StatType.AmazonSkills) == 2)
             {
                 return true;
             }
         }
 
-        if (item.GetValueToSkillTab(SkillTab.BarbarianWarcries) >= 3)
+        if (item.GetValueToSkillTab(SkillTab.BarbarianWarcries) >= Min(3))
         {
             return true;
         }
@@ -68,107 +70,107 @@ public static class Amulets
         toMeleeSkills += item.GetValueToSkillTab(SkillTab.DruidElemental);
         toMeleeSkills += item.GetValueToSkillTab(SkillTab.BarbarianCombatSkills);
 
-        if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
+        if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetTotalResistFrLrCr() >= Min(40) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(40))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetTotalResistFrLrCr() >= 20 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 70)
+        if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetTotalResistFrLrCr() >= Min(20) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(70))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 50)
+        if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= Min(10) && item.GetTotalResistFrLrCr() >= Min(30) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(50))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 40)
+        if (item.GetValueOfStatType(StatType.SorceressSkills) == 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= Min(10) && item.GetTotalResistFrLrCr() >= Min(40))
         {
             return true;
         }
 
-        if (toCasterSkills >= 2 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 30)
+        if (toCasterSkills >= Min(2) && item.GetTotalResistFrLrCr() >= Min(60) && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= Min(30))
         {
             return true;
         }
 
-        if (toCasterSkills >= 2 && item.GetTotalResistFrLrCr() >= 45 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 70)
+        if (toCasterSkills >= Min(2) && item.GetTotalResistFrLrCr() >= Min(45) && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= Min(70))
         {
             return true;
         }
 
-        if (toCasterSkills >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= 50)
+        if (toCasterSkills >= Min(2) && item.GetValueOfStatType(StatType.FasterCastRate) >= Min(10) && item.GetTotalResistFrLrCr() >= Min(30) && item.GetTotalLifeFromStats(CharacterClass.Necromancer) >= Min(50))
         {
             return true;
         }
 
-        if (toCasterSkills >= 2 && item.GetValueOfStatType(StatType.FasterCastRate) >= 10 && item.GetTotalResistFrLrCr() >= 70)
+        if (toCasterSkills >= Min(2) && item.GetValueOfStatType(StatType.FasterCastRate) >= Min(10) && item.GetTotalResistFrLrCr() >= Min(70))
         {
             return true;
         }
 
-        if (toMeleeSkills >= 2 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
+        if (toMeleeSkills >= Min(2) && item.GetTotalResistFrLrCr() >= Min(60) && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(50))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
-            && item.GetValueOfStatType(StatType.ExtraGold) >= 80
-            && item.GetTotalResistFrLrCr() >= 80)
+        if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= Min(4)
+            && item.GetValueOfStatType(StatType.ExtraGold) >= Min(80)
+            && item.GetTotalResistFrLrCr() >= Min(80))
         {
             return true;
         }
-        if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
-            && item.GetValueOfStatType(StatType.ExtraGold) >= 80
-            && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= 30
-            && item.GetTotalResistFrLrCr() >= 40)
+        if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= Min(4)
+            && item.GetValueOfStatType(StatType.ExtraGold) >= Min(80)
+            && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= Min(30)
+            && item.GetTotalResistFrLrCr() >= Min(40))
         {
             return true;
         }
 
         if (item.GetValueOfStatType(StatType.BarbarianSkills) == 2
-        && item.GetValueOfStatType(StatType.ExtraGold) >= 80
-        && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
-        && item.GetTotalResistFrLrCr() >= 40)
+        && item.GetValueOfStatType(StatType.ExtraGold) >= Min(80)
+        && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= Min(4)
+        && item.GetTotalResistFrLrCr() >= Min(40))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 6
-            && item.GetValueOfStatType(StatType.MinimumDamage) >= 7
-            && item.GetValueOfStatType(StatType.Strength) + item.GetValueOfStatType(StatType.BarbarianSkills) * 4 >= 10)
+        if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= Min(6)
+            && item.GetValueOfStatType(StatType.MinimumDamage) >= Min(7)
+            && item.GetValueOfStatType(StatType.Strength) + item.GetValueOfStatType(StatType.BarbarianSkills) * 4 >= Min(10))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.MinimumDamage) >= 7
-            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 100
-            && item.GetTotalResistFrLrCr() >= 70)
-        {
-            return true;
-        }
-
-        if (item.GetValueOfStatType(StatType.AmazonSkills) >= 1
-            && item.GetValueOfStatType(StatType.MinimumDamage) >= 7
-            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 40
-            && item.GetTotalResistFrLrCr() >= 60)
+        if (item.GetValueOfStatType(StatType.MinimumDamage) >= Min(7)
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(100)
+            && item.GetTotalResistFrLrCr() >= Min(70))
         {
             return true;
         }
 
         if (item.GetValueOfStatType(StatType.AmazonSkills) >= 1
-            && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= 4
-            && item.GetValueOfStatType(StatType.MinimumDamage) >= 5
-            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30
-            && item.GetTotalResistFrLrCr() >= 60)
+            && item.GetValueOfStatType(StatType.MinimumDamage) >= Min(7)
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(40)
+            && item.GetTotalResistFrLrCr() >= Min(60))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= 5
-        && item.GetValueOfStatType(StatType.MinimumDamage) >= 7
-        && item.GetValueOfStatType(StatType.Dexterity) >= 10)
+        if (item.GetValueOfStatType(StatType.AmazonSkills) >= 1
+            && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) + item.GetValueOfStatType(StatType.MinimumManaStolenPerHit) >= Min(4)
+            && item.GetValueOfStatType(StatType.MinimumDamage) >= Min(5)
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(30)
+            && item.GetTotalResistFrLrCr() >= Min(60))
+        {
+            return true;
+        }
+
+        if (item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) >= Min(5)
+        && item.GetValueOfStatType(StatType.MinimumDamage) >= Min(7)
+        && item.GetValueOfStatType(StatType.Dexterity) >= Min(10))
         {
             return true;
         }

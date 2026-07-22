@@ -64,6 +64,7 @@ public class TownManagementService : ITownManagementService
                 await client.Game.MoveToAsync(townWaypoint);
             }
 
+            await HumanizationSettings.WaypointPauseAsync();
             if (!client.Game.TakeWaypoint(townWaypoint, waypoint))
             {
                 return false;
@@ -92,6 +93,7 @@ public class TownManagementService : ITownManagementService
             return false;
         }
 
+        await HumanizationSettings.WaypointPauseAsync();
         return true;
     }
 
@@ -261,19 +263,25 @@ public class TownManagementService : ITownManagementService
         var targetTownArea = WayPointHelpers.MapTownArea(act);
         var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).Single();
         _logger.LogDebug("Client {ClientName} taking waypoint to {TargetTownArea}", client.Game.Me.Name, targetTownArea);
-        if (!GeneralHelpers.TryWithTimeout((_) =>
+        if (!await GeneralHelpers.TryWithTimeout(async (_) =>
         {
+            await HumanizationSettings.WaypointPauseAsync();
             if(!client.Game.TakeWaypoint(townWaypoint, act.MapTownWayPoint()))
             {
                 return false;
             }
-            return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == targetTownArea, TimeSpan.FromSeconds(2));
+            return await GeneralHelpers.TryWithTimeout(async (_) =>
+            {
+                await Task.CompletedTask;
+                return client.Game.Area == targetTownArea;
+            }, TimeSpan.FromSeconds(2));
         }, TimeSpan.FromSeconds(5)))
         {
             _logger.LogDebug("Client {ClientName} moving to {Act} failed", client.Game.Me.Name, act);
             return false;
         }
 
+        await HumanizationSettings.WaypointPauseAsync();
         return true;
     }
 
@@ -311,20 +319,28 @@ public class TownManagementService : ITownManagementService
             return result;
         }
 
+        await HumanizationSettings.TownTaskPauseAsync();
+
         if (!await RefreshAndSellItems(game, movementMode, options))
         {
             return result;
         }
+
+        await HumanizationSettings.TownTaskPauseAsync();
 
         if (!await RepairItems(game, movementMode))
         {
             return result;
         }
 
+        await HumanizationSettings.TownTaskPauseAsync();
+
         if (options.AccountConfig.ResurrectMerc && !await ResurrectMerc(game, movementMode))
         {
             return result;
         }
+
+        await HumanizationSettings.TownTaskPauseAsync();
 
         if (InventoryHelpers.ShouldStashItems(client.Game))
         {

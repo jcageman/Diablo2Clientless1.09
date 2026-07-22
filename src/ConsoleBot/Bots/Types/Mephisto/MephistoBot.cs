@@ -203,7 +203,7 @@ public class MephistoBot : SingleClientBotBase, IBotInstance
         {
             if (item.Location.Distance(client.Game.Me.Location) > 30)
             {
-                Log.Warning($"Skipped {item} since it's at location {item.Location}, while player at {client.Game.Me.Location}");
+                Log.Warning($"Skipped {item.GetFullDescription()} since it's at location {item.Location}, while player at {client.Game.Me.Location}");
                 continue;
             }
 

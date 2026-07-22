@@ -6,6 +6,8 @@ namespace ConsoleBot.Pickit;
 
 public static class Boots
 {
+    private static int Min(int value) => PickitThresholdScaling.Min(PickitItemType.Boots, value);
+
     private static readonly HashSet<ItemName> casterBoots = [
         ItemName.Boots, ItemName.HeavyBoots, ItemName.ChainBoots, ItemName.LightPlatedBoots, ItemName.DemonhideBoots, ItemName.SharkskinBoots ];
     public static bool ShouldPickupItemClassic(Item item)
@@ -49,55 +51,55 @@ public static class Boots
 
     public static bool ShouldKeepItemClassic(Item item)
     {
-        if (item.GetValueOfStatType(StatType.FasterRunWalk) >= 30
-            && item.GetTotalResistFrLrCr() >= 70
-            && (item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 100 || item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 50))
+        if (item.GetValueOfStatType(StatType.FasterRunWalk) >= Min(30)
+            && item.GetTotalResistFrLrCr() >= Min(70)
+            && (item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(100) || item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(50)))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.FasterRunWalk) >= 30 && item.GetTotalResistFrLrCr() >= 90 && (item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 90 || item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40))
+        if (item.GetValueOfStatType(StatType.FasterRunWalk) >= Min(30) && item.GetTotalResistFrLrCr() >= Min(90) && (item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(90) || item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(40)))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.FasterRunWalk) >= 30 && item.GetTotalResistFrLrCr() >= 120)
+        if (item.GetValueOfStatType(StatType.FasterRunWalk) >= Min(30) && item.GetTotalResistFrLrCr() >= Min(40))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.FasterRunWalk) >= 30
-            && (item.GetValueOfStatType(StatType.FireResistance) + item.GetValueOfStatType(StatType.LightningResistance)) >= 80
-            && item.GetValueOfStatType(StatType.ExtraGold) > 90)
+        if (item.GetValueOfStatType(StatType.FasterRunWalk) >= Min(30)
+            && (item.GetValueOfStatType(StatType.FireResistance) + item.GetValueOfStatType(StatType.LightningResistance)) >= Min(80)
+            && item.GetValueOfStatType(StatType.ExtraGold) > Min(90))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.FasterRunWalk) >= 30
-        && (item.GetValueOfStatType(StatType.FireResistance) + item.GetValueOfStatType(StatType.LightningResistance)) >= 50
-        && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= 20
-        && item.GetValueOfStatType(StatType.ExtraGold) > 90)
+        if (item.GetValueOfStatType(StatType.FasterRunWalk) >= Min(30)
+        && (item.GetValueOfStatType(StatType.FireResistance) + item.GetValueOfStatType(StatType.LightningResistance)) >= Min(20)
+        && (item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= Min(20)
+        || item.GetValueOfStatType(StatType.ExtraGold) > Min(90)))
         {
             return true;
         }
 
         if (casterBoots.Contains(item.Name))
         {
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= Min(10) && item.GetTotalResistFrLrCr() >= Min(60) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(40))
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10
-                && item.GetValueOfStatType(StatType.ColdResistance) >= 30
-                && item.GetTotalResistFrLrCr() >= 50
-                && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 30
-                && item.GetValueOfStatType(StatType.ReplenishLife) >= 4)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= Min(10)
+                && item.GetValueOfStatType(StatType.ColdResistance) >= Min(30)
+                && item.GetTotalResistFrLrCr() >= Min(50)
+                && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(30)
+                && item.GetValueOfStatType(StatType.ReplenishLife) >= Min(4))
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 20 && item.GetTotalResistFrLrCr() >= 120)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= Min(20) && item.GetTotalResistFrLrCr() >= Min(120))
             {
                 return true;
             }

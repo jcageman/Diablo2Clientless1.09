@@ -2,7 +2,9 @@
 using ConsoleBot.Bots;
 using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
+using ConsoleBot.Pickit;
 using ConsoleBot.TownManagement;
 using D2NG.Navigation.Extensions;
 using Microsoft.Extensions.Configuration;
@@ -96,13 +98,26 @@ hostBuilder.Services.AddSingleton<IBotFactory, BotFactory>();
 
 var host = hostBuilder.Build();
 var botFactory = host.Services.GetRequiredService<IBotFactory>();
+var botConfigurationMonitor = host.Services.GetRequiredService<IOptionsMonitor<BotConfiguration>>();
+
+void ApplyRuntimeBotSettings(BotConfiguration currentBotConfiguration)
+{
+    HumanizationSettings.Configure(currentBotConfiguration.Humanization);
+    PickitThresholdScaling.Configure(currentBotConfiguration.PickitThresholdScaling);
+}
+
+ApplyRuntimeBotSettings(botConfigurationMonitor.CurrentValue);
+_ = botConfigurationMonitor.OnChange(updatedBotConfiguration =>
+{
+    ApplyRuntimeBotSettings(updatedBotConfiguration);
+    Log.Logger.Information("Reloaded bot runtime settings from config change");
+});
 
 while (true)
 {
     try
     {
-        var botConfiguration = host.Services.GetRequiredService<IOptions<BotConfiguration>>();
-        var botInstance = botFactory.CreateBot(botConfiguration.Value.BotType);
+        var botInstance = botFactory.CreateBot(botConfigurationMonitor.CurrentValue.BotType);
         await botInstance.Run();
     }
     catch (Exception e)

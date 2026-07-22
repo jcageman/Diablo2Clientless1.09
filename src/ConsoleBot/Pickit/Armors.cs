@@ -6,6 +6,8 @@ namespace ConsoleBot.Pickit;
 
 public static class Armors
 {
+    private static int Min(int value) => PickitThresholdScaling.Min(PickitItemType.Armors, value);
+
     private static readonly HashSet<ItemName> casterArmors = [
         ItemName.QuiltedArmor, ItemName.LeatherArmor, ItemName.HardLeatherArmor, ItemName.StuddedLeather, ItemName.RingMail, ItemName.ScaleMail,
         ItemName.ChainMail, ItemName.BreastPlate, ItemName.SplintMail, ItemName.LightPlate, ItemName.GhostArmor, ItemName.SerpentskinArmor,
@@ -51,7 +53,7 @@ public static class Armors
             switch(item.Name)
             {
                 case ItemName.SerpentskinArmor:
-                    return item.GetValueOfStatType(StatType.ColdResistance) >= 34 && item.GetValueOfStatType(StatType.AllSkills) > 0 && !item.Ethereal;
+                    return item.GetValueOfStatType(StatType.ColdResistance) >= Min(34) && item.GetValueOfStatType(StatType.AllSkills) > 0 && !item.Ethereal;
                 //case ItemName.Cuirass:
                 case ItemName.MeshArmor:
                     return item.Ethereal;
@@ -66,7 +68,7 @@ public static class Armors
             }
         }
 
-        if (item.Quality == QualityType.Magical && socketedLightArmors.Contains(item.Name) && item.Sockets == 4 && item.GetValueOfStatType(StatType.Life) >= 40)
+        if (item.Quality == QualityType.Magical && socketedLightArmors.Contains(item.Name) && item.Sockets == 4 && item.GetValueOfStatType(StatType.Life) >= Min(40))
         {
             return true;
         }
@@ -78,62 +80,62 @@ public static class Armors
     {
         if (item.Name == ItemName.OrnatePlate
             && item.Quality == QualityType.Rare
-            && item.GetValueOfStatType(StatType.EnhancedDefense) >= 80
+            && item.GetValueOfStatType(StatType.EnhancedDefense) >= Min(80)
             && item.GetValueOfStatType(StatType.ReducedRequirements) <= -20
-            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60)
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(60))
         {
             return true;
         }
 
         if (item.Name == ItemName.OrnatePlate
         && item.Quality == QualityType.Rare
-        && item.GetValueOfStatType(StatType.EnhancedDefense) >= 90
-        && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 70)
+        && item.GetValueOfStatType(StatType.EnhancedDefense) >= Min(90)
+        && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(70))
         {
             return true;
         }
 
         if (defArmors.Contains(item.Name)
-        && item.GetValueOfStatType(StatType.EnhancedDefense) >= 70
+        && item.GetValueOfStatType(StatType.EnhancedDefense) >= Min(70)
         && item.GetValueOfStatType(StatType.ReducedRequirements) <= -30
-        && item.GetTotalResistFrLrCr() >= 40
-        && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 50)
+        && item.GetTotalResistFrLrCr() >= Min(40)
+        && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(50))
         {
             return true;
         }
 
-        if (casterArmors.Contains(item.Name) && item.GetValueOfStatType(StatType.Life) >= 40)
+        if (casterArmors.Contains(item.Name) && item.GetValueOfStatType(StatType.Life) >= Min(40))
         {
-            if (item.GetTotalResistFrLrCr() >= 60 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 55)
+            if (item.GetTotalResistFrLrCr() >= Min(60) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(55))
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 40 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 55)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= Min(10) && item.GetTotalResistFrLrCr() >= Min(40) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(55))
             {
                 return true;
             }
 
-            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 40)
+            if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= Min(10) && item.GetTotalResistFrLrCr() >= Min(70) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(40))
             {
                 return true;
             }
         }
 
-        if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= 10 && item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= 55)
+        if (item.GetValueOfStatType(StatType.FasterHitRecovery) >= Min(10) && item.GetTotalResistFrLrCr() >= Min(70) && item.GetTotalLifeFromStats(CharacterClass.Sorceress) >= Min(55))
         {
             return true;
         }
 
-        if (item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60)
+        if (item.GetTotalResistFrLrCr() >= Min(70) && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(60))
         {
             return true;
         }
 
         if (item.Name == ItemName.MagePlate
-        && item.GetValueOfStatType(StatType.EnhancedDefense) >= 60
-        && item.GetTotalResistFrLrCr() >= 50
-        && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 30)
+        && item.GetValueOfStatType(StatType.EnhancedDefense) >= Min(60)
+        && item.GetTotalResistFrLrCr() >= Min(50)
+        && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(30))
         {
             return true;
         }

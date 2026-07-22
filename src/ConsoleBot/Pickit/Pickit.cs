@@ -169,6 +169,8 @@ public static class Pickit
         if (item.Name == ItemName.EssenceOfAnguish
             || item.Name == ItemName.EssenceOfPain
             || item.Name == ItemName.EssenceOfSuffering
+            || item.Name == ItemName.EssenceOfHatred
+            || item.Name == ItemName.EssenceOfTerror
             || item.Name == ItemName.StandardOfHeroes
             || item.Name == ItemName.TokenOfAbsolution)
         {

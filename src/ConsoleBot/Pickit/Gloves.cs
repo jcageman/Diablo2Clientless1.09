@@ -5,6 +5,8 @@ namespace ConsoleBot.Pickit;
 
 public static class Gloves
 {
+    private static int Min(int value) => PickitThresholdScaling.Min(PickitItemType.Gloves, value);
+
     public static bool ShouldPickupItemClassic(Item item)
     {
         if (item.Quality == QualityType.Rare || item.Quality == QualityType.Unique)
@@ -65,12 +67,12 @@ public static class Gloves
             return true;
         }
         */
-        if (item.GetValueToSkillTab(SkillTab.AmazonJavelinAndSpearSkills) == 2 && item.GetTotalResistFrLrCr() >= 30)
+        if (item.GetValueToSkillTab(SkillTab.AmazonJavelinAndSpearSkills) == 2 && item.GetTotalResistFrLrCr() >= Min(30))
         {
             return true;
         }
 
-        if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= 20
+        if (item.GetValueOfStatType(StatType.IncreasedAttackSpeed) >= Min(20)
             && item.Properties.TryGetValue(StatType.SkillOnHit, out var skillOnHit)
             && skillOnHit.Skill == D2NG.Core.D2GS.Players.Skill.AmplifyDamage)
         {
@@ -83,8 +85,8 @@ public static class Gloves
     public static bool ShouldKeepItemClassic(Item item)
     {
         if (item.Name == ItemName.WarGauntlets
-            && item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
-            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 60
+            && item.GetValueOfStatType(StatType.EnhancedDefense) >= Min(50)
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(60)
             && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) > 0)
         {
             return true;
@@ -92,34 +94,45 @@ public static class Gloves
 
         if (item.Name == ItemName.WarGauntlets
             && item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) > 0
-            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= 100)
+            && item.GetTotalLifeFromStats(CharacterClass.Barbarian) >= Min(100))
         {
             return true;
         }
 
         if (item.Name == ItemName.WarGauntlets
-&& item.GetValueOfStatType(StatType.EnhancedDefense) >= 50
-&& item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) * 10 >= 90)
+&& item.GetValueOfStatType(StatType.EnhancedDefense) >= Min(50)
+&& item.GetTotalResistFrLrCr() >= Min(30) && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) * 10 >= Min(90))
         {
             return true;
         }
 
-        if (item.GetTotalResistFrLrCr() >= 30 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) * 10 >= 120)
+        if (item.GetTotalResistFrLrCr() >= Min(30) && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) * 10 >= Min(120))
         {
             return true;
         }
 
-        if (item.GetTotalResistFrLrCr() >= 50 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) * 10 >= 100)
+        if (item.GetTotalResistFrLrCr() >= Min(50) && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) * 10 >= Min(100))
         {
             return true;
         }
 
-        if (item.GetTotalResistFrLrCr() >= 70 && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) * 10 >= 70)
+        if (item.GetTotalResistFrLrCr() >= Min(70) && item.GetTotalLifeFromStats(CharacterClass.Barbarian) + item.GetValueOfStatType(StatType.MinimumLifeStolenPerHit) * 10 >= Min(70))
         {
             return true;
         }
 
-        if (item.Quality == QualityType.Unique && item.Name == ItemName.ChainGloves && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= 40)
+        if (item.Quality == QualityType.Rare && item.GetTotalResistFrLrCr() >= Min(40) && (item.GetValueOfStatType(StatType.Strength) >= Min(10) || item.GetValueOfStatType(StatType.Dexterity) >= Min(10)))
+        {
+            return true;
+        }
+
+        if (item.Quality == QualityType.Unique && item.Name == ItemName.ChainGloves && item.GetValueOfStatType(StatType.BetterChanceOfGettingMagicItem) >= Min(40))
+        {
+            return true;
+        }
+
+        // Frostburn
+        if (item.Quality == QualityType.Unique && item.Name == ItemName.Gauntlets)
         {
             return true;
         }
