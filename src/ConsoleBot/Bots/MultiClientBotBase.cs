@@ -1,4 +1,5 @@
-﻿using ConsoleBot.Bots.Types;
+﻿using ConsoleBot.Chicken;
+using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
@@ -55,6 +56,7 @@ public abstract class MultiClientBotBase : IBotInstance
         foreach (var account in _multiClientConfig.Accounts)
         {
             var client = new Client();
+            ChickenService.Attach(client, account.Chicken ?? _config.Chicken);
             client.OnReceivedPacketEvent(InComingPacket.EventMessage, (packet) => HandleEventMessage(client, new EventNotifyPacket(packet)));
             client.Game.OnWorldItemEvent(i => HandleItemDrop(client.Game, i));
             _externalMessagingClient.RegisterClient(client);
@@ -338,7 +340,8 @@ public abstract class MultiClientBotBase : IBotInstance
             return Task.CompletedTask;
         }
 
-        if (Pickit.Pickit.ShouldPickupItem(game, item, false))
+        PickitAudit.LogItemDrop(game, item, shouldPickupGoldItems: false);
+        if (D2NG.Pickit.Pickit.ShouldPickupItem(game, item, false))
         {
             _pickitItemsOnGround.TryAdd(item.Id, item);
         }
@@ -353,7 +356,7 @@ public abstract class MultiClientBotBase : IBotInstance
 
     private void PutItemOnPickitList(Client client, Item item)
     {
-        if (Pickit.Pickit.ShouldPickupItem(client.Game, item, false)
+        if (D2NG.Pickit.Pickit.ShouldPickupItem(client.Game, item, false)
             && client.Game.Items.TryGetValue(item.Id, out var newItem)
             && newItem.Ground)
         {

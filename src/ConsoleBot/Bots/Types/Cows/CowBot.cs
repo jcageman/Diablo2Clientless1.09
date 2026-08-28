@@ -97,6 +97,9 @@ public class CowBot : MultiClientBotBase
         var isPortalCharacter = _cowconfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.OrdinalIgnoreCase);
         if (isPortalCharacter)
         {
+            // Only the portal character needs the leg, so only it reserves one.
+            D2NG.Pickit.Pickit.ReserveInventoryItem(ItemName.WirtsLeg);
+
             var tomesOfTp = client.Game.Inventory.Items.Count(i => i.Name == ItemName.TomeOfTownPortal);
             if (tomesOfTp < 2)
             {

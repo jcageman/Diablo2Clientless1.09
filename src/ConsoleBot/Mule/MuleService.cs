@@ -114,7 +114,7 @@ public class MuleService : IMuleService
                 MoveItemResult moveItemResult = MoveItemResult.Succes;
                 do
                 {
-                    var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => Pickit.Pickit.CanTouchInventoryItem(muleClient.Game, i)).ToList();
+                    var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => D2NG.Pickit.Pickit.CanTouchInventoryItem(muleClient.Game, i)).ToList();
                     moveItemResult = InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0);
                     if (moveItemResult == MoveItemResult.Failed)
                     {
@@ -171,7 +171,7 @@ public class MuleService : IMuleService
             }
         }
 
-        var stashInventoryItems = client.Game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(client.Game, i) && Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
+        var stashInventoryItems = client.Game.Inventory.Items.Where(i => i.IsIdentified && D2NG.Pickit.Pickit.ShouldKeepItem(client.Game, i) && D2NG.Pickit.Pickit.CanTouchInventoryItem(client.Game, i)).ToList();
         InventoryHelpers.StashItemsAndGold(client.Game, stashInventoryItems, 0);
         await client.Game.LeaveGame();
         await Task.Delay(TimeSpan.FromSeconds(2));
@@ -238,7 +238,7 @@ public class MuleService : IMuleService
         return characterNames;
     }
 
-    private static List<Item> GetMuleItems(Client client, MuleAccount muleAccount)
+    private List<Item> GetMuleItems(Client client, MuleAccount muleAccount)
     {
         var muleItems = client.Game.Items.Values.Where(i => IsMuleItem(client, i));
         if (muleAccount.MatchesAny.Count == 0)
@@ -280,27 +280,34 @@ public class MuleService : IMuleService
         return isMatch;
     }
 
-    private static bool HasAnyItemsToMule(Client client)
+    private bool HasAnyItemsToMule(Client client)
     {
         return client.Game.Items.Values.Any(i => IsMuleItem(client, i));
     }
 
-    private static bool IsMuleItem(Client client, Item item)
+    // Used when the configuration does not say otherwise: a flawless gem is not worth a mule slot.
+    private static readonly List<MuleFilter> DefaultNeverMule =
+    [
+        new() { ItemName = ItemName.FlawlessSkull },
+        new() { ItemName = ItemName.FlawlessAmethyst },
+        new() { ItemName = ItemName.FlawlessDiamond },
+        new() { ItemName = ItemName.FlawlessEmerald },
+        new() { ItemName = ItemName.FlawlessRuby },
+        new() { ItemName = ItemName.FlawlessSapphire },
+        new() { ItemName = ItemName.FlawlessTopaz }
+    ];
+
+    private bool IsMuleItem(Client client, Item item)
     {
-        if (item.Name == ItemName.FlawlessSkull
-            || item.Name == ItemName.FlawlessAmethyst
-            || item.Name == ItemName.FlawlessDiamond
-            || item.Name == ItemName.FlawlessEmerald
-            || item.Name == ItemName.FlawlessRuby
-            || item.Name == ItemName.FlawlessSapphire
-            || item.Name == ItemName.FlawlessTopaz)
+        var neverMule = _muleConfig.NeverMule ?? DefaultNeverMule;
+        if (neverMule.Any(filter => MatchesFilter(item, filter)))
         {
             return false;
         }
 
         var rightContainer = item.Container == ContainerType.Stash || item.Container == ContainerType.Stash2 || item.Container == ContainerType.Inventory;
 
-        return rightContainer && item.IsIdentified && Pickit.Pickit.CanTouchInventoryItem(client.Game, item);
+        return rightContainer && item.IsIdentified && D2NG.Pickit.Pickit.CanTouchInventoryItem(client.Game, item);
     }
 
     private async Task<MoveItemResult> TradeInventoryItems(Client client, Client muleClient, List<Item> tradeItems)

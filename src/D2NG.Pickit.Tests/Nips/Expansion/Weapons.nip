@@ -1,0 +1,49 @@
+// Pickup: magic/rare elite swords
+([name] == phaseblade || [name] == conquestsword || [name] == crypticsword || [name] == mythicalsword || [name] == championsword || [name] == colossussword || [name] == colossusblade) && ([quality] == magic || [quality] == rare)
+
+// Pickup: BO sticks
+([name] == crystalsword || [name] == dagger || [name] == shortspear || [name] == throwingspear || [name] == throwingknife || [name] == throwingaxe || [name] == balancedknife) && [flag] != ethereal && ([quality] == magic || [quality] == rare)
+
+// Pickup: magic javelins
+[type] == javelin && [quality] == magic
+
+// Pickup: socketed elite swords worth a runeword base
+[quality] == superior && [sockets] == 3 && ([name] == phaseblade || [name] == conquestsword || [name] == crypticsword || [name] == mythicalsword || [name] == championsword || [name] == colossussword || [name] == colossusblade)
+([quality] == normal || [quality] == superior) && [sockets] >= 5 && ([name] == phaseblade || [name] == conquestsword || [name] == crypticsword || [name] == mythicalsword || [name] == championsword || [name] == colossussword || [name] == colossusblade)
+
+// Pickup: socketed ethereal merc polearms
+([quality] == normal || [quality] == superior) && [flag] == ethereal && [sockets] == 3 && ([name] == ghostspear || [name] == warpike || [name] == colossusvoulge || [name] == thresher || [name] == crypticaxe || [name] == greatpoleaxe || [name] == giantthresher)
+
+// Pickup: notable uniques
+([quality] == unique) && ([name] == hydrabow || [name] == ballista || [name] == colossuscrossbow || [name] == legendarymallet || [name] == colossusblade)
+([quality] == unique) && ([name] == warfork || [name] == yari || [name] == ceremonialjavelin) && [flag] == ethereal
+
+// Keep: notable uniques. Without these the bot picked them up and vendored them after identifying.
+([quality] == unique) && ([name] == hydrabow || [name] == colossuscrossbow || [name] == legendarymallet || [name] == colossusblade) # 1 == 1
+([quality] == unique) && [name] == ballista # [ed] >= 190
+([quality] == unique) && ([name] == warfork || [name] == yari || [name] == ceremonialjavelin) && [flag] == ethereal # 1 == 1
+
+// Keep: magic Colossus Blade of any roll
+[quality] == magic && [name] == colossusblade # 1 == 1
+
+// Keep: eth rare elite swords with ED and self-repair
+([quality] == rare) && [flag] == ethereal && ([name] == phaseblade || [name] == conquestsword || [name] == crypticsword || [name] == mythicalsword || [name] == championsword || [name] == colossussword || [name] == colossusblade) # [ed] >= 150 && [itemreplenishdurability] > 0
+
+// Keep: magic elite swords with high ED
+([quality] == magic) && ([name] == phaseblade || [name] == conquestsword || [name] == crypticsword || [name] == mythicalsword || [name] == championsword || [name] == colossussword || [name] == colossusblade) # [ed] >= 260
+
+// Keep: 3os ethereal elite swords
+([quality] == normal || [quality] == superior) && [flag] == ethereal && ([name] == phaseblade || [name] == conquestsword || [name] == crypticsword || [name] == mythicalsword || [name] == championsword || [name] == colossussword || [name] == colossusblade) # [sockets] == 3
+
+// Keep: eth merc polearms - magic with high ED, 3os bases, or any with very high ED
+[quality] == magic && [flag] == ethereal && ([name] == ghostspear || [name] == warpike || [name] == colossusvoulge || [name] == thresher || [name] == crypticaxe || [name] == greatpoleaxe || [name] == giantthresher) # [ed] >= 200
+([quality] == normal || [quality] == superior) && [flag] == ethereal && ([name] == ghostspear || [name] == warpike || [name] == colossusvoulge || [name] == thresher || [name] == crypticaxe || [name] == greatpoleaxe || [name] == giantthresher) # [sockets] == 3
+[flag] == ethereal && ([name] == ghostspear || [name] == warpike || [name] == colossusvoulge || [name] == thresher || [name] == crypticaxe || [name] == greatpoleaxe || [name] == giantthresher) # [ed] >= 250
+
+// Keep: Java skill tab with IAS. ClassificationType.AmazonSpear maps to [type] == spear.
+([type] == javelin || [type] == spear) && [quality] == magic # [javelinandspearskilltab] >= 5 && [ias] >= 40
+
+// Keep: Barbarian BO sticks. Pickit.cs only routes weapon classifications to the Weapons
+// rules, so this must be type-scoped - without it the rule kept any rare helm, amulet or
+// armour carrying 3+ combined barbarian and war cries skills.
+([type] == sword || [type] == axe || [type] == mace || [type] == club || [type] == hammer || [type] == dagger || [type] == bow || [type] == crossbow || [type] == spear || [type] == javelin || [type] == polearm || [type] == throwingaxe || [type] == throwingknife || [type] == assassinkatar) && ([quality] == magic || [quality] == rare) # [barbarianskills]+[warcriesskilltab] >= 3

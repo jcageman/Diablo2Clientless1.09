@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Bots.Types;
+using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using D2NG.Core;
@@ -35,8 +35,11 @@ public static class InventoryHelpers
                     Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to inventory failed");
                 }
             }
-            else if (freeSpaceCube != null)
+            else if (freeSpaceCube != null && !D2NG.Pickit.Pickit.IsReservedItem(item))
             {
+                // Reserved items stay out of the cube. A tome or a rejuvenation hidden in there is out of
+                // reach of the code that looks for it in the inventory, and the character behaves as
+                // though it never had one.
                 game.InsertItemIntoContainer(item, freeSpaceCube, ItemContainer.Cube);
                 bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
                 if (!resultMove)
@@ -176,8 +179,8 @@ public static class InventoryHelpers
 
     public static bool ShouldStashItems(Game game)
     {
-        var itemsToKeepInInventory = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i));
-        var itemstoKeepInCube = game.Cube.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i));
+        var itemsToKeepInInventory = game.Inventory.Items.Where(i => i.IsIdentified && D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i));
+        var itemstoKeepInCube = game.Cube.Items.Where(i => i.IsIdentified && D2NG.Pickit.Pickit.ShouldKeepItem(game, i));
         return (itemsToKeepInInventory.Sum(i => i.Width * i.Height) + itemstoKeepInCube.Sum(i => i.Width * i.Height) > 6)
             || game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0) > 1000000;
     }
@@ -189,13 +192,13 @@ public static class InventoryHelpers
             return MoveItemResult.Succes;
         }
 
-        var itemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
-        itemsToKeep.AddRange(game.Cube.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i)));
+        var itemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
+        itemsToKeep.AddRange(game.Cube.Items.Where(i => i.IsIdentified && D2NG.Pickit.Pickit.ShouldKeepItem(game, i)));
         var goldOnPerson = game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0);
         foreach (var item in itemsToKeep)
         {
             Log.Information($"{game.Me.Name}: Want to keep {item.GetFullDescription()}");
-            if (Pickit.Pickit.SendItemToKeepToExternalClient(item))
+            if (D2NG.Pickit.Pickit.SendItemToKeepToExternalClient(item))
             {
                 externalMessagingClient.SendMessage($"{game.Me.Name}: Want to keep {item.GetFullDescription()}");
             }
@@ -434,7 +437,7 @@ public static class InventoryHelpers
     {
         foreach (var item in game.Inventory.Items)
         {
-            if (Pickit.Pickit.CanTouchInventoryItem(game, item))
+            if (D2NG.Pickit.Pickit.CanTouchInventoryItem(game, item))
             {
                 var freeSpace = game.Cube.FindFreeSpace(item);
                 if (freeSpace != null)
@@ -519,15 +522,15 @@ public static class InventoryHelpers
     {
         return item.Quality == QualityType.Magical
             && item.IsIdentified
-            && !Pickit.Pickit.ShouldKeepItem(game, item)
-            && Pickit.Pickit.CanTouchInventoryItem(game, item);
+            && !D2NG.Pickit.Pickit.ShouldKeepItem(game, item)
+            && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, item);
     }
 
     private static void IdentifyMagicItems(Game game, Item tomeOfIdentify, List<Item> items)
     {
         foreach (var item in items)
         {
-            if (item.Quality == QualityType.Magical && Pickit.Pickit.CanTouchInventoryItem(game, item) && !item.IsIdentified)
+            if (item.Quality == QualityType.Magical && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, item) && !item.IsIdentified)
             {
                 Log.Information($"{game.Me.Name}: Identifying magic item {item.Id} - {item.Name}");
                 game.ActivateTomeOfIdentify(tomeOfIdentify);

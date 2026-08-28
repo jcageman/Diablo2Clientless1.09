@@ -1,0 +1,32 @@
+// Legacy expansion pickup: identify rare, unique, and crafted rings.
+[type] == ring && ([quality] == rare || [quality] == unique || [quality] == crafted)
+
+// Unique rings (skills or CBF)
+[type] == ring && [quality] == unique # ([allskills] == 1 || [cannotbefrozen] > 0)
+
+// MF high roll
+[type] == ring # [itemmagicbonus] > 37
+
+// Rare FCR caster rings (Sorc life scaling)
+[type] == ring && [quality] == rare # [fcr] >= 10 && [crlrfr] >= 60 && [sorceresslife] >= 30
+[type] == ring && [quality] == rare # [fcr] >= 10 && [crlrfr] >= 45 && [sorceresslife] >= 30 && [hpregen] >= 6
+[type] == ring && [quality] == rare # [fcr] >= 10 && [crlrfr] >= 50 && [sorceresslife] >= 60
+[type] == ring && [quality] == rare # [fcr] >= 10 && [crlrfr] >= 45 && [sorceresslife] >= 80
+
+// BvB / ZvZ damage + leech
+[type] == ring && [quality] == rare # [lifeleech] >= 6 && ([mindamage]+[maxdamage]) >= 7 && ([dexterity]+[strength]) >= 10
+[type] == ring && [quality] == rare # [lifeleech] >= 6 && [attackrating] >= 70 && ([mindamage]+[maxdamage]) >= 3 && [strength] >= 10
+
+// BvA non-leech AR/damage + res/life (Barb scaling)
+[type] == ring && [quality] == rare # ([attackrating] >= 70 || [mindamage]+[maxdamage] >= 5) && [barbarianlife] >= 80 && [crlrfr] >= 50
+[type] == ring && [quality] == rare # ([attackrating] >= 30 || [mindamage]+[maxdamage] >= 5) && [barbarianlife] >= 100 && [crlrfr] >= 45
+[type] == ring && [quality] == rare # ([attackrating] >= 30 || [mindamage]+[maxdamage] >= 5) && [barbarianlife] >= 80 && [crlrfr] >= 55
+
+// Leech rings
+[type] == ring && [quality] == rare # [lifeleech] >= 4 && [manaleech] >= 4 && [barbarianlife] >= 30 && [crlrfr] >= 45
+[type] == ring && [quality] == rare # ([mindamage]+[maxdamage]) >= 5 && [barbarianlife] >= 30 && [lifeleech]+[manaleech] >= 4 && [crlrfr] >= 45
+[type] == ring && [quality] == rare # ([mindamage]+[maxdamage]) >= 7 && [lifeleech]+[manaleech] >= 4 && [barbarianlife] >= 80
+[type] == ring && [quality] == rare # ([mindamage]+[maxdamage]) >= 7 && [lifeleech] >= 6 && [barbarianlife] >= 30 && [crlrfr] >= 40
+
+// Gold rings
+[type] == ring && [quality] == rare # [itemgoldbonus] > 40 && [lifeleech]+[manaleech] > 4 && [crlrfr] >= 40

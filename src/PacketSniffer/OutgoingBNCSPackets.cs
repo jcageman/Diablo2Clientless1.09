@@ -9,7 +9,7 @@ public static class OutgoingBNCSPackets
 {
     public static void HandleOutgoingPacket(byte[] bytes)
     {
-        if(bytes.Length < 2)
+        if(bytes.Length < 2 || !CaptureOptions.Current.ShouldLog(CaptureProtocol.Bncs, false))
         {
             return;
         }

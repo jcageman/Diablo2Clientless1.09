@@ -1,0 +1,19 @@
+// Classic boot rules, from Boots.ShouldKeepItemClassic.
+// The [quality] == rare gate is not in the C#, which applies these to any quality. It is kept
+// here to bound pickup: no classic magic/set/unique boot can reach FRW 30 with 70+ resists,
+// so no keep is lost.
+
+// Rare boots
+[type] == boots && [quality] == rare # [frw] >= 30 && [crlrfr] >= 70 && ([barbarianlife] >= 100 || [sorceresslife] >= 50)
+[type] == boots && [quality] == rare # [frw] >= 30 && [crlrfr] >= 90 && ([barbarianlife] >= 90 || [sorceresslife] >= 40)
+[type] == boots && [quality] == rare # [frw] >= 30 && [crlrfr] >= 120
+
+// Caster boot bases with FHR. All three of these sit inside casterBoots.Contains(item.Name)
+// in the C#, including the FHR 20 / 120 res one.
+[type] == boots && [quality] == rare && ([name] == boots || [name] == heavyboots || [name] == chainboots || [name] == lightplatedboots || [name] == demonhideboots || [name] == sharkskinboots) # [fhr] >= 10 && [crlrfr] >= 60 && [sorceresslife] >= 40
+[type] == boots && [quality] == rare && ([name] == boots || [name] == heavyboots || [name] == chainboots || [name] == lightplatedboots || [name] == demonhideboots || [name] == sharkskinboots) # [fhr] >= 10 && [coldresist] >= 30 && [crlrfr] >= 50 && [sorceresslife] >= 30 && [hpregen] >= 4
+[type] == boots && [quality] == rare && ([name] == boots || [name] == heavyboots || [name] == chainboots || [name] == lightplatedboots || [name] == demonhideboots || [name] == sharkskinboots) # [fhr] >= 20 && [crlrfr] >= 120
+
+// Magic find / gold find hybrids. The C# threshold is ExtraGold > 90, not >= 90.
+[type] == boots && [quality] == rare # [frw] >= 30 && ([fireresist]+[lightresist]) >= 80 && [itemgoldbonus] > 90
+[type] == boots && [quality] == rare # [frw] >= 30 && ([fireresist]+[lightresist]) >= 50 && [itemmagicbonus] >= 20 && [itemgoldbonus] > 90

@@ -1,0 +1,22 @@
+// Expansion boot rules. ShouldKeepItemExpansion handles the two uniques, then ends with
+// "return ShouldKeepItemClassic(item)", so the classic rules apply too.
+
+// Keep: unique Gore Rider and ethereal unique War Boots.
+// These need a stat section - a rule with no '#' can never keep, only pick up.
+[quality] == unique && [name] == battleboots # 1 == 1
+[quality] == unique && [name] == warboots # [flag] == ethereal
+
+// Rare boots
+[type] == boots && ([quality] == rare || [quality] == crafted) # [frw] >= 30 && [crlrfr] >= 70 && ([barbarianlife] >= 100 || [sorceresslife] >= 50)
+[type] == boots && ([quality] == rare || [quality] == crafted) # [frw] >= 30 && [crlrfr] >= 90 && ([barbarianlife] >= 90 || [sorceresslife] >= 40)
+[type] == boots && ([quality] == rare || [quality] == crafted) # [frw] >= 30 && [crlrfr] >= 120
+
+// Caster boot bases with FHR. All three of these sit inside casterBoots.Contains(item.Name)
+// in the C#, including the FHR 20 / 120 res one.
+[type] == boots && ([quality] == rare || [quality] == crafted) && ([name] == boots || [name] == heavyboots || [name] == chainboots || [name] == lightplatedboots || [name] == demonhideboots || [name] == sharkskinboots) # [fhr] >= 10 && [crlrfr] >= 60 && [sorceresslife] >= 40
+[type] == boots && ([quality] == rare || [quality] == crafted) && ([name] == boots || [name] == heavyboots || [name] == chainboots || [name] == lightplatedboots || [name] == demonhideboots || [name] == sharkskinboots) # [fhr] >= 10 && [coldresist] >= 30 && [crlrfr] >= 50 && [sorceresslife] >= 30 && [hpregen] >= 4
+[type] == boots && ([quality] == rare || [quality] == crafted) && ([name] == boots || [name] == heavyboots || [name] == chainboots || [name] == lightplatedboots || [name] == demonhideboots || [name] == sharkskinboots) # [fhr] >= 20 && [crlrfr] >= 120
+
+// Magic find / gold find hybrids. The C# threshold is ExtraGold > 90, not >= 90.
+[type] == boots && ([quality] == rare || [quality] == crafted) # [frw] >= 30 && ([fireresist]+[lightresist]) >= 80 && [itemgoldbonus] > 90
+[type] == boots && ([quality] == rare || [quality] == crafted) # [frw] >= 30 && ([fireresist]+[lightresist]) >= 50 && [itemmagicbonus] >= 20 && [itemgoldbonus] > 90

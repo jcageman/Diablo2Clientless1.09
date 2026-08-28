@@ -1,4 +1,4 @@
-﻿using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Enums;
 using D2NG.Core.MCP.Packet;
 using Serilog;
 using System;
@@ -23,6 +23,8 @@ public sealed class RealmServer : IDisposable
     private readonly McpEvent ListCharactersEvent = new();
     private readonly McpEvent StartupEvent = new();
     private readonly McpEvent JoinGameEvent = new();
+    private readonly McpEvent CreateCharacterEvent = new();
+    private readonly McpEvent DeleteCharacterEvent = new();
 
     private Thread _listener;
 
@@ -36,6 +38,8 @@ public sealed class RealmServer : IDisposable
         OnReceivedPacketEvent(Mcp.CHARLOGON, CharLogonEvent.Set);
         OnReceivedPacketEvent(Mcp.CREATEGAME, CreateGameEvent.Set);
         OnReceivedPacketEvent(Mcp.JOINGAME, JoinGameEvent.Set);
+        OnReceivedPacketEvent(Mcp.CHARCREATE, CreateCharacterEvent.Set);
+        OnReceivedPacketEvent(Mcp.CHARDELETE, DeleteCharacterEvent.Set);
     }
 
     internal void Connect(IPAddress ip, short port)
@@ -114,6 +118,40 @@ public sealed class RealmServer : IDisposable
         }
         var response = new ListCharactersServerPacket(packet.Raw);
         return response.Characters;
+    }
+
+    /// <summary>
+    /// Creates a character on the realm and returns the raw result code, 0x00 meaning success and
+    /// <see cref="CreateCharacterResponsePacket.NameUnavailable"/> meaning the realm refused the name.
+    /// </summary>
+    internal async Task<uint?> CreateCharacter(string name, CharacterClass characterClass, CharacterFlags flags)
+    {
+        CreateCharacterEvent.Reset();
+        Connection.WritePacket(new CreateCharacterRequestPacket(name, characterClass, flags));
+        var packet = await CreateCharacterEvent.WaitForPacket(5000);
+        if (packet == null)
+        {
+            return null;
+        }
+
+        return new CreateCharacterResponsePacket(packet).Result;
+    }
+
+    /// <summary>
+    /// Deletes a character from the realm, used to clean up the throwaway characters a test run
+    /// creates.
+    /// </summary>
+    internal async Task<bool> DeleteCharacter(string name)
+    {
+        DeleteCharacterEvent.Reset();
+        Connection.WritePacket(new DeleteCharacterRequestPacket(RequestId++, name));
+        var packet = await DeleteCharacterEvent.WaitForPacket(5000);
+        if (packet == null)
+        {
+            return false;
+        }
+
+        return new DeleteCharacterResponsePacket(packet).Success;
     }
 
     internal async Task<bool> CreateGame(Difficulty difficulty, string gameName, string password, string description)

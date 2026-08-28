@@ -18,7 +18,7 @@ internal sealed class Program
     public static BncsConnection bncsConnection = new();
 
     public static McpConnection mcpConnection = new();
-    private static void Main()
+    private static void Main(string[] args)
     {
         bncsConnection._stream = new SnifferNetworkStream([]);
         bncsConnection.PacketReceived += (obj, eventArgs) =>
@@ -38,7 +38,8 @@ internal sealed class Program
         .WriteTo.File("log.txt")
         .CreateLogger();
 
-
+        CaptureOptions.Parse(args);
+        Log.Information($"Capture options: {CaptureOptions.Current.Describe()}");
 
         // Retrieve the device list from the local machine
         var allDevices = CaptureDeviceList.Instance;
@@ -49,7 +50,26 @@ internal sealed class Program
             return;
         }
 
-        var selectedDevice = allDevices.Count == 1 ? allDevices[0] : null;
+        if (CaptureOptions.Current.ListDevices)
+        {
+            for (int i = 0; i != allDevices.Count; ++i)
+            {
+                Log.Information($"{i + 1}. {allDevices[i].Name} ({allDevices[i].Description ?? "No description available"})");
+            }
+
+            return;
+        }
+
+        var requestedDevice = CaptureOptions.Current.DeviceIndex;
+        if (requestedDevice.HasValue && (requestedDevice < 1 || requestedDevice > allDevices.Count))
+        {
+            Log.Warning($"Requested device {requestedDevice} does not exist, only 1-{allDevices.Count} are available, falling back to asking");
+            requestedDevice = null;
+        }
+
+        var selectedDevice = requestedDevice.HasValue
+            ? allDevices[requestedDevice.Value - 1]
+            : allDevices.Count == 1 ? allDevices[0] : null;
         if (selectedDevice == null)
         {
             // Print the list
@@ -97,7 +117,8 @@ internal sealed class Program
             ReadTimeout = readTimeoutMilliseconds
         };
         selectedDevice.Open(deviceConfiguration);
-        selectedDevice.Filter = "tcp port 4000 or 6112 or 6113";
+        selectedDevice.Filter = CaptureOptions.Current.BuildPcapFilter();
+        Log.Information($"Capturing on {selectedDevice.Description ?? selectedDevice.Name} with filter '{selectedDevice.Filter}'");
         selectedDevice.Capture();
         selectedDevice.Close();
     }
@@ -111,7 +132,8 @@ internal sealed class Program
         if (tcpPacket != null && tcpPacket.PayloadData.Length > 0)
         {
             var bytes = tcpPacket.PayloadData;
-            if (tcpPacket.SourcePort == 4000)
+            var options = CaptureOptions.Current;
+            if (tcpPacket.SourcePort == options.D2gsPort)
             {
                 if(!gameServerConnections.TryGetValue(tcpPacket.DestinationPort, out var gameServerConnection))
                 {
@@ -128,10 +150,20 @@ internal sealed class Program
 
                 if (bytes.Length == 2 && bytes[0] == 0xA7 && bytes[1] == 0x01)
                 {
-                    Log.Debug($"D2GS Initial packet received: {bytes.ByteArrayToString()}");
+                    if (options.LogRawPayloads)
+                    {
+                        Log.Debug($"D2GS Initial packet received: {bytes.ByteArrayToString()}");
+                    }
                     return;
                 }
-                Log.Debug($"D2GS Full packet received: {bytes.ByteArrayToString()}");
+
+                if (options.LogRawPayloads)
+                {
+                    Log.Debug($"D2GS Full packet received: {bytes.ByteArrayToString()}");
+                }
+
+                // Decoding always runs, whatever the log filter says: the stream is stateful, so a
+                // packet that is never parsed corrupts every packet after it.
                 var stream = gameServerConnection._stream as SnifferNetworkStream;
                 stream.AddBytes(bytes);
                 var initialBytes = stream.GetBytes();
@@ -148,13 +180,17 @@ internal sealed class Program
                     stream.SetBytes(initialBytes);
                 }
             }
-            else if(tcpPacket.DestinationPort == 4000)
+            else if(tcpPacket.DestinationPort == options.D2gsPort)
             {
                 OutgoingD2GSPackets.HandleOutgoingPacket(bytes);
             }
-            else if (tcpPacket.SourcePort == 6112)
+            else if (tcpPacket.SourcePort == options.BncsPort)
             {
-                Log.Debug($"BNCS Full packet received: {bytes.ByteArrayToString()}");
+                if (options.LogRawPayloads)
+                {
+                    Log.Debug($"BNCS Full packet received: {bytes.ByteArrayToString()}");
+                }
+
                 var stream = bncsConnection._stream as SnifferNetworkStream;
                 stream.AddBytes(bytes);
                 try
@@ -166,24 +202,31 @@ internal sealed class Program
 
                 }
             }
-            else if (tcpPacket.DestinationPort == 6112)
+            else if (tcpPacket.DestinationPort == options.BncsPort)
             {
                 OutgoingBNCSPackets.HandleOutgoingPacket(bytes);
             }
-            else if (tcpPacket.SourcePort == 6113)
+            else if (tcpPacket.SourcePort == options.McpPort)
             {
                 if (bytes.Length == 7 && bytes[0] == 0x07 && bytes[2] == 0x01)
                 {
-                    Log.Debug($"MCP Initial packet received: {bytes.ByteArrayToString()}");
+                    if (options.LogRawPayloads)
+                    {
+                        Log.Debug($"MCP Initial packet received: {bytes.ByteArrayToString()}");
+                    }
                     return;
                 }
 
-                Log.Debug($"MCP Full packet received: {bytes.ByteArrayToString()}");
+                if (options.LogRawPayloads)
+                {
+                    Log.Debug($"MCP Full packet received: {bytes.ByteArrayToString()}");
+                }
+
                 var stream = mcpConnection._stream as SnifferNetworkStream;
                 stream.AddBytes(bytes);
                 mcpConnection.ReadPacket();
             }
-            else if (tcpPacket.DestinationPort == 6113)
+            else if (tcpPacket.DestinationPort == options.McpPort)
             {
                 OutgoingMCPPackets.HandleOutgoingPacket(bytes);
             }

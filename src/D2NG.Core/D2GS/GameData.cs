@@ -1,9 +1,10 @@
-﻿using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Items.Containers;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Players;
+using D2NG.Core.D2GS.Quest;
 using D2NG.Core.MCP;
 using System;
 using System.Collections.Concurrent;
@@ -52,6 +53,7 @@ internal class GameData
     public Character ClientCharacter { get; }
     public GameFlags Flags { get; }
     public ActData Act { get; }
+    public QuestState Quests { get; } = new();
     public Self Me { get; private set; }
 
     public Container Stash { get; } = new Stash();
@@ -260,6 +262,47 @@ internal class GameData
         }
     }
 
+    /// <summary>
+    /// Remembers what each NPC is currently offering, so a reward can be claimed by echoing the id the
+    /// server just advertised rather than by knowing it in advance.
+    /// </summary>
+    internal void UpdateNpcMessages(NpcInfoPacket packet)
+    {
+        NpcMessages[packet.EntityId] = packet.MessageIds;
+    }
+
+    internal Dictionary<uint, List<uint>> NpcMessages { get; } = [];
+
+    /// <summary>
+    /// Passes a revealed tile on together with where the character is, so the area it names is only taken
+    /// as the current one when it is the tile being stood in.
+    /// </summary>
+    internal void MapReveal(MapRevealPacket packet)
+    {
+        Act.HandleMapRevealPacket(packet, Me?.Location);
+    }
+
+    internal void AssignPlayerToParty(AssignPlayerToPartyPacket packet)
+    {
+        if (Me?.Id == packet.PlayerId)
+        {
+            Me.PartyId = packet.PartyId;
+        }
+
+        var player = Players.Find(p => p.Id == packet.PlayerId);
+        player?.PartyId = packet.PartyId;
+    }
+
+    internal void UpdateQuests(QuestInfoPacket packet)
+    {
+        Quests.UpdateCharacter(packet.Quests);
+    }
+
+    internal void UpdateQuests(GameQuestInfoPacket packet)
+    {
+        Quests.UpdateGame(packet.Quests);
+    }
+
     internal void UpdatePlayerPartyInfo(AllyPartyInfoPacket packet)
     {
         if (packet.EntityType == EntityType.Player)
@@ -398,6 +441,11 @@ internal class GameData
                             Belt.UpdateBeltRows(1);
                         }
                         Me.UnequipItem(item);
+
+                        // An item taken off the body lands on the cursor, exactly as one pulled out of a
+                        // container does. Without this the cursor stays empty as far as the bot is
+                        // concerned and anything waiting to place the item waits for ever.
+                        CursorItem = item;
                     }
                 }
                 break;

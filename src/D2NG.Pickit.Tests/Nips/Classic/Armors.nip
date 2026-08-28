@@ -1,0 +1,22 @@
+// Keep: rare ornate plate with high defense and reduced requirements
+[type] == armor && [quality] == rare && [name] == ornateplate # [enhanceddefense] >= 80 && [itemreqpercent] <= -20 && [barbarianlife] >= 60
+[type] == armor && [quality] == rare && [name] == ornateplate # [enhanceddefense] >= 90 && [barbarianlife] >= 70
+
+// Keep: rare defArmors with ED/req/res/life
+[type] == armor && [quality] == rare && ([name] == ornateplate || [name] == chaosarmor || [name] == embossedplate || [name] == sharktootharmor || [name] == templarcoat || [name] == mageplate || [name] == russetarmor) # [enhanceddefense] >= 70 && [itemreqpercent] <= -30 && [crlrfr] >= 40 && [barbarianlife] >= 50
+
+// Keep: caster light armors with life/res/FHR combos
+[type] == armor # [maxhp] >= 40 && [crlrfr] >= 60 && [sorceresslife] >= 55 && ([name] == quiltedarmor || [name] == leatherarmor || [name] == hardleatherarmor || [name] == studdedleather || [name] == ringmail || [name] == scalemail || [name] == chainmail || [name] == breastplate || [name] == splintmail || [name] == lightplate || [name] == ghostarmor || [name] == serpentskinarmor || [name] == demonhidearmor || [name] == trellisedarmor || [name] == linkedmail || [name] == mageplate)
+[type] == armor # [maxhp] >= 40 && [fhr] >= 10 && [crlrfr] >= 40 && [sorceresslife] >= 55 && ([name] == quiltedarmor || [name] == leatherarmor || [name] == hardleatherarmor || [name] == studdedleather || [name] == ringmail || [name] == scalemail || [name] == chainmail || [name] == breastplate || [name] == splintmail || [name] == lightplate || [name] == ghostarmor || [name] == serpentskinarmor || [name] == demonhidearmor || [name] == trellisedarmor || [name] == linkedmail || [name] == mageplate)
+[type] == armor # [maxhp] >= 40 && [fhr] >= 10 && [crlrfr] >= 70 && [sorceresslife] >= 40 && ([name] == quiltedarmor || [name] == leatherarmor || [name] == hardleatherarmor || [name] == studdedleather || [name] == ringmail || [name] == scalemail || [name] == chainmail || [name] == breastplate || [name] == splintmail || [name] == lightplate || [name] == ghostarmor || [name] == serpentskinarmor || [name] == demonhidearmor || [name] == trellisedarmor || [name] == linkedmail || [name] == mageplate)
+
+// Keep: general FHR/res/life sorc armor
+[type] == armor # [fhr] >= 10 && [crlrfr] >= 70 && [sorceresslife] >= 55
+[type] == armor # [crlrfr] >= 70 && [barbarianlife] >= 60
+
+// Keep: Mage Plate ED/res/life
+[type] == armor && [name] == mageplate # [enhanceddefense] >= 60 && [crlrfr] >= 50 && [barbarianlife] >= 30
+
+// Classic: socketed uniques. Quilted Armor and Scale Mail are commented out in the C#.
+// The socket test must sit right of the '#' - a rule with no stat section can never keep.
+[type] == armor && [quality] == unique && ([name] == leatherarmor || [name] == studdedleather || [name] == gothicplate || [name] == fullplatemail) # [sockets] > 0

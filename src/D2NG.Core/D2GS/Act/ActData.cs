@@ -1,4 +1,4 @@
-﻿using D2NG.Core.D2GS.Objects;
+using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet.Incoming;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -110,10 +110,67 @@ value.Code,
         Warps.GetOrAdd(packet.WarpId, []).Add(packet.AsWarpData());
     }
 
-    internal void HandleMapRevealPacket(MapRevealPacket p)
+    private Point _lastResolvedPosition;
+    private Area _lastResolvedArea = Area.None;
+
+    /// <summary>
+    /// The area a world position falls in, taken from the revealed tiles rather than from whichever
+    /// reveal packet arrived last.
+    /// </summary>
+    /// <remarks>
+    /// Reveal packets arrive for neighbouring levels as they come into view, so the area they name is
+    /// not necessarily the area being stood in: approaching the underground passage entrance names the
+    /// dungeon while the character is still in stony field. Tiles carry their own area and bounds, so
+    /// asking which tile contains the position answers the question properly. The last answer is kept
+    /// because callers read the current area in tight loops and the tile list grows as an act is
+    /// explored.
+    /// </remarks>
+    internal Area AreaAtPosition(Point position)
     {
-        Area = p.Area;
+        if (position == null)
+        {
+            return Area.None;
+        }
+
+        if (_lastResolvedArea != Area.None && position.Equals(_lastResolvedPosition))
+        {
+            return _lastResolvedArea;
+        }
+
+        lock (Tiles)
+        {
+            foreach (var tile in Tiles)
+            {
+                if (tile.Contains(position))
+                {
+                    _lastResolvedPosition = position;
+                    _lastResolvedArea = tile.Area;
+                    return tile.Area;
+                }
+            }
+        }
+
+        return Area.None;
+    }
+
+    /// <summary>
+    /// Records a revealed map tile, and adopts its area as the current one only when the tile is the one
+    /// being stood in.
+    /// </summary>
+    /// <param name="position">
+    /// Where the character is, or null when that is not known yet. Reveals arrive for neighbouring levels
+    /// as they come into view, so taking every reveal at face value reports the area next door: standing
+    /// at the underground passage entrance used to report the dungeon while still in stony field.
+    /// </param>
+    internal void HandleMapRevealPacket(MapRevealPacket p, Point position = null)
+    {
         var tile = new Tile(p.X, p.Y, p.Area);
+        if (position == null || tile.Contains(position))
+        {
+            Area = p.Area;
+            _lastResolvedArea = Area.None;
+        }
+
         if (!Tiles.Any(item => item.Equals(tile)))
         {
             lock (Tiles)

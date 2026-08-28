@@ -7,6 +7,71 @@ namespace D2NG.Core.D2GS.Objects;
 
 public static class WaypointExtensions
 {
+    /// <summary>
+    /// The waypoints in the order the game packs them into the bitfield of the waypoint menu, which is
+    /// the order they appear in the in-game panel: nine for act 1, nine for act 2, nine for act 3, three
+    /// for act 4 and nine for act 5.
+    /// </summary>
+    /// <remarks>
+    /// This has to be an explicit list rather than <c>Enum.GetValues</c>. Those come back sorted by
+    /// numeric value, and the <see cref="Waypoint"/> values are level ids, which do not ascend in
+    /// panel order: Sewers 2 is 0x30 while Dry Hills, Far Oasis, Lost City and Canyon of the Magi are
+    /// 0x2A to 0x2E. Act 1 happens to ascend, so reading the bitfield in numeric order works there and
+    /// silently scrambles every act after it. It read a rusher that owns Far Oasis as owning Dry Hills
+    /// instead, and the bot then refused to take a waypoint the character had.
+    /// <para>
+    /// Acts 1 to 4 are confirmed against a captured menu packet from a character whose waypoints were
+    /// known. Act 5 follows the panel order but has not been checked against a capture, because the
+    /// characters available were classic.
+    /// </para>
+    /// </remarks>
+    public static readonly IReadOnlyList<Waypoint> BitOrder =
+    [
+        Waypoint.RogueEncampment,
+        Waypoint.ColdPlains,
+        Waypoint.StonyFields,
+        Waypoint.DarkWood,
+        Waypoint.BlackMarsh,
+        Waypoint.OuterCloister,
+        Waypoint.JailLevel1,
+        Waypoint.InnerCloister,
+        Waypoint.CatacombsLevel2,
+
+        Waypoint.LutGholein,
+        Waypoint.SewersLevel2,
+        Waypoint.DryHills,
+        Waypoint.HallsOfTheDeadLevel2,
+        Waypoint.FarOasis,
+        Waypoint.LostCity,
+        Waypoint.PalaceCellarLevel1,
+        Waypoint.ArcaneSanctuary,
+        Waypoint.CanyonOfTheMagi,
+
+        Waypoint.KurastDocks,
+        Waypoint.SpiderForest,
+        Waypoint.GreatMarsh,
+        Waypoint.FlayerJungle,
+        Waypoint.LowerKurast,
+        Waypoint.KurastBazaar,
+        Waypoint.UpperKurast,
+        Waypoint.Travincal,
+        Waypoint.DuranceOfHateLevel2,
+
+        Waypoint.ThePandemoniumFortress,
+        Waypoint.CityOfTheDamned,
+        Waypoint.RiverOfFlame,
+
+        Waypoint.Harrogath,
+        Waypoint.FrigidHighlands,
+        Waypoint.ArreatPlateau,
+        Waypoint.CrystallinePassage,
+        Waypoint.HallsOfPain,
+        Waypoint.GlacialTrail,
+        Waypoint.FrozenTundra,
+        Waypoint.TheAncientsWay,
+        Waypoint.TheWorldStoneKeepLevel2,
+    ];
+
     private static readonly Dictionary<Waypoint, Area> WaypointToArea = new()
     {
         { Waypoint.RogueEncampment, Area.RogueEncampment },

@@ -1,0 +1,39 @@
+// Keep: high ilvl
+[type] == smallcharm # [level] >= 95
+// FRW with any extra mod (approximate statcount>1)
+[type] == smallcharm # [frw] >= 5 && ([attackrating] >= 1 || [crlrfr] >= 1 || [maxhp] >= 1 || [itemmagicbonus] >= 1 || [itemgoldbonus] >= 1 || [maxdamage] >= 1)
+// Life
+[type] == smallcharm # [sorceresslife] >= 20
+// Magic find or gold find
+[type] == smallcharm # [itemmagicbonus] >= 5
+[type] == smallcharm # [itemgoldbonus] >= 10
+[type] == smallcharm # [itemmagicbonus] >= 6 && [crlrfr] >= 3
+[type] == smallcharm # [itemmagicbonus] >= 6 && ([fireresist] >= 10 || [lightresist] >= 10 || [coldresist] >= 10)
+[type] == smallcharm # [itemmagicbonus] >= 6 && [maxhp] >= 10
+[type] == smallcharm # [itemgoldbonus] >= 9 && [crlrfr] >= 3
+
+// Resist
+[type] == smallcharm # [crlrfr] >= 15
+[type] == smallcharm # [coldresist] >= 10
+[type] == smallcharm # [fireresist] >= 10
+[type] == smallcharm # [lightresist] >= 10
+[type] == smallcharm # [poisonresist] >= 11
+
+// Poison damage / lightning
+[type] == smallcharm # [minpoison] >= 200
+[type] == smallcharm # [poisonmaxdmg] >= 175
+[type] == smallcharm # [minlightdmg] + [maxlightdmg] >= 80
+
+// Max/AR/Life combos
+[type] == smallcharm # [maxdamage] >= 2 && [attackrating] >= 10 && [maxhp] >= 10
+[type] == smallcharm # [maxdamage] >= 2 && [attackrating] >= 20 && [frw] >= 3
+
+// Pure Max/AR/Life Grails & Max/AR/FHR
+[type] == smallcharm # [maxdamage] >= 3 && [attackrating] >= 15 && [maxhp] >= 15
+[type] == smallcharm # [maxdamage] >= 3 && [attackrating] >= 15 && [fhr] >= 5
+
+// 5 FHR with All Res, Single Res, Max/AR, or Life
+[type] == smallcharm # [fhr] >= 5 && [crlrfr] >= 3
+[type] == smallcharm # [fhr] >= 5 && ([fireresist] >= 10 || [lightresist] >= 10 || [coldresist] >= 10 || [poisonresist] >= 10)
+[type] == smallcharm # [fhr] >= 5 && [maxdamage] >= 3 && [attackrating] >= 10
+[type] == smallcharm # [fhr] >= 5 && [maxhp] >= 10

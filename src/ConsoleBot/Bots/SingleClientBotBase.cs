@@ -1,5 +1,7 @@
-﻿using ConsoleBot.Bots.Types;
+﻿using ConsoleBot.Chicken;
+using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using D2NG.Core;
@@ -36,6 +38,7 @@ public abstract class SingleClientBotBase
     protected async Task CreateGameLoop(Client client)
     {
         _accountConfig.Validate();
+        ChickenService.Attach(client, _accountConfig.Chicken ?? _config.Chicken);
         try
         {
             if (!await RealmConnectHelpers.ConnectToRealm(client, _config, _accountConfig))
@@ -139,10 +142,12 @@ public abstract class SingleClientBotBase
                         await Task.Delay(TimeSpan.FromSeconds(1));
                     }
                 }
-                catch (HttpRequestException)
+                catch (HttpRequestException e)
                 {
-                    await _externalMessagingClient.SendMessage($"{client.LoggedInUserName() } Received http exception, map server is probably down, restarting bot");
-                    return;
+                    var mapServerMessage = $"{client.LoggedInUserName()} Received http exception, map server is probably down";
+                    Log.Fatal(e, mapServerMessage);
+                    await _externalMessagingClient.SendMessage(mapServerMessage);
+                    throw new MapServerUnavailableException(mapServerMessage, e);
                 }
                 catch (Exception e)
                 {

@@ -8,6 +8,7 @@ using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Packet.Outgoing;
 using D2NG.Core.D2GS.Players;
+using D2NG.Core.D2GS.Quest;
 using D2NG.Core.Extensions;
 using D2NG.Core.MCP;
 using Serilog;
@@ -25,13 +26,13 @@ public class Game
 
     private GameData Data { get; set; }
 
-    private Thread pingThread, chickenThread;
+    private Thread pingThread;
 
     private DateTime lastTeleport;
 
-    private DateTime LastUsedHealthPotionTime = DateTime.Now;
+    public DateTime LastUsedHealthPotionTime { get; private set; } = DateTime.Now;
 
-    private DateTime LastUsedManaPotionTime = DateTime.Now;
+    public DateTime LastUsedManaPotionTime { get; private set; } = DateTime.Now;
 
     private Character selectedCharacter;
     protected Func<Item, Task> ItemDroppedHandler { get; set; }
@@ -53,7 +54,7 @@ public class Game
         );
         _gameServer.OnReceivedPacketEvent(InComingPacket.GameFlags, p => Initialize(new GameFlags(p)));
         _gameServer.OnReceivedPacketEvent(InComingPacket.LoadAct, p => Data.Act.LoadActData(new ActDataPacket(p)));
-        _gameServer.OnReceivedPacketEvent(InComingPacket.MapReveal, p => Data.Act.HandleMapRevealPacket(new MapRevealPacket(p)));
+        _gameServer.OnReceivedPacketEvent(InComingPacket.MapReveal, p => Data.MapReveal(new MapRevealPacket(p)));
         _gameServer.OnReceivedPacketEvent(InComingPacket.AssignLevelWarp, p => Data.Act.AddWarp(new AssignLevelWarpPacket(p)));
 #pragma warning disable CA1806 // Do not ignore method results
         _gameServer.OnReceivedPacketEvent(InComingPacket.GameHandshake, p => new GameHandshakePacket(p));
@@ -72,10 +73,8 @@ public class Game
         _gameServer.OnReceivedPacketEvent(InComingPacket.UpdateItemOSkill, p => Data.SetItemSkill(new SetItemSkillPacket(p)));
         _gameServer.OnReceivedPacketEvent(InComingPacket.UpdateItemSkill, p => Data.SetItemSkill(new SetItemSkillPacket(p)));
         _gameServer.OnReceivedPacketEvent(InComingPacket.SetSkill, p => Data.SetActiveSkill(new SetActiveSkillPacket(p)));
-#pragma warning disable CA1806 // Do not ignore method results
-        _gameServer.OnReceivedPacketEvent(InComingPacket.QuestInfo, p => new QuestInfoPacket(p));
-        _gameServer.OnReceivedPacketEvent(InComingPacket.GameQuestInfo, p => new GameQuestInfoPacket(p));
-#pragma warning restore CA1806 // Do not ignore method results
+        _gameServer.OnReceivedPacketEvent(InComingPacket.QuestInfo, p => Data.UpdateQuests(new QuestInfoPacket(p)));
+        _gameServer.OnReceivedPacketEvent(InComingPacket.GameQuestInfo, p => Data.UpdateQuests(new GameQuestInfoPacket(p)));
         _gameServer.OnReceivedPacketEvent(InComingPacket.ObjectState, p => Data.Act.UpdateObjectState(new ObjectStatePacket(p)));
         _gameServer.OnReceivedPacketEvent(InComingPacket.NPCState, p => Data.Act.UpdateNPCState(new NpcStatePacket(p)));
         _gameServer.OnReceivedPacketEvent(InComingPacket.NPCMove, p => { var packet = new NPCMovePacket(p); Data.Act.UpdateNPCLocation(packet.EntityId, packet.Location); });
@@ -114,6 +113,8 @@ public class Game
         _gameServer.OnReceivedPacketEvent(InComingPacket.PlayerStop, p => Data.PlayerStop(new PlayerStopPacket(p)));
         _gameServer.OnReceivedPacketEvent(InComingPacket.AssignMerc, p => Data.AssignMerc(new AssignMercPacket(p)));
         _gameServer.OnReceivedPacketEvent(InComingPacket.AllyPartyInfo, p => Data.UpdatePlayerPartyInfo(new AllyPartyInfoPacket(p)));
+        _gameServer.OnReceivedPacketEvent(InComingPacket.AssignPlayerToParty, p => Data.AssignPlayerToParty(new AssignPlayerToPartyPacket(p)));
+        _gameServer.OnReceivedPacketEvent(InComingPacket.NPCInfo, p => Data.UpdateNpcMessages(new NpcInfoPacket(p)));
         _gameServer.OnReceivedPacketEvent(InComingPacket.PetAction, p => Data.UpdateSummonInfo(new PetActionPacket(p)));
         
     }
@@ -126,8 +127,6 @@ public class Game
     {
         Data = new GameData(packet, selectedCharacter);
         _gameServer.Ping();
-        chickenThread = new Thread(ChickenAndLifeManaThread) { Name = "GameClient Chicken Thread", IsBackground = true };
-        chickenThread.Start();
         pingThread = new Thread(PingThread) { Name = "GameClient Ping Thread", IsBackground = true };
         pingThread.Start();
     }
@@ -157,7 +156,6 @@ public class Game
         finally
         {
             pingThread.Join();
-            chickenThread.Join();
             await Task.Delay(1000);
         }
     }
@@ -179,7 +177,7 @@ public class Game
 
         if (!Data.Me.AllowedWaypoints.Contains(waypoint))
         {
-            throw new InvalidOperationException($"cannot take waypoint {waypoint}, since character does not have it yet. List of available waypoints: {Data.Me.AllowedWaypoints}");
+            throw new InvalidOperationException($"cannot take waypoint {waypoint}, since character does not have it yet. List of available waypoints: {string.Join(", ", Data.Me.AllowedWaypoints)}");
         }
 
         if (Data.Me.LastSelectedWaypointId == 0)
@@ -200,9 +198,27 @@ public class Game
 
     public Character ClientCharacter { get => Data.ClientCharacter; }
 
-    public Area Area { get => Data.Act.Area; }
+    /// <summary>
+    /// Area this character is standing in, resolved from the revealed tile it occupies. Falls back to the
+    /// last area a reveal packet named, which is what this used to report always - and which lies while
+    /// a neighbouring level is coming into view.
+    /// </summary>
+    public Area Area
+    {
+        get
+        {
+            var byPosition = Data.Me != null ? Data.Act.AreaAtPosition(Data.Me.Location) : Area.None;
+            return byPosition != Area.None ? byPosition : Data.Act.Area;
+        }
+    }
 
     public Difficulty Difficulty { get => Data.Flags.Difficulty; }
+
+    /// <summary>
+    /// Quest progress of this character and of the game, kept up to date from the 0x9C and 0x9D
+    /// pushes. Call <see cref="RequestQuestData"/> to force a refresh.
+    /// </summary>
+    public QuestState Quests { get => Data.Quests; }
 
     public uint MapId { get => Data.Act.MapId; }
 
@@ -607,9 +623,61 @@ public class Game
         _gameServer.SendPacket(new InteractWithEntityPacket(player.Id, EntityType.Player));
     }
 
+    /// <summary>
+    /// Puts the item now on the cursor onto the character in the given slot.
+    /// </summary>
+    public void EquipItem(Item item, DirectoryType location)
+    {
+        _gameServer.SendPacket(new EquipItemPacket(item.Id, location));
+    }
+
+    /// <summary>
+    /// Asks an NPC to play one of its dialogue lines. Open the chat with
+    /// <see cref="InitiateEntityChat"/> first and close it afterwards.
+    /// </summary>
+    public void PlayNpcMessage(ushort messageId)
+    {
+        _gameServer.SendPacket(new PlayNpcMessagePacket(messageId));
+    }
+
+    /// <summary>
+    /// Takes the item worn in the given slot off and onto the cursor. Worn items cannot be moved with the
+    /// packet that moves items inside containers, which addresses them by id and ignores the body.
+    /// </summary>
+    public void RemoveBodyItem(DirectoryType location)
+    {
+        _gameServer.SendPacket(new RemoveBodyItemPacket(location));
+    }
+
+    /// <summary>
+    /// Puts the horadric staff into the orifice of the real tal rasha tomb, which opens Duriel's lair for
+    /// everyone in the game. The orifice refuses it when the game's seven tombs is already settled, so
+    /// the game has to have been created by a character that has not finished the quest.
+    /// </summary>
+    public void InsertHoradricStaff(Entity orifice, Item staff)
+    {
+        _gameServer.SendPacket(new InsertHoradricStaffPacket(Data.Me.Id, orifice, staff));
+    }
+
     public void InteractWithEntity(Entity entity)
     {
         _gameServer.SendPacket(new InteractWithEntityPacket(entity));
+    }
+
+    /// <summary>
+    /// Messages an NPC last offered, which is what a quest message has to echo to claim a reward. Empty
+    /// when the NPC has nothing pending, which is also how a claim is confirmed as already done.
+    /// </summary>
+    public IReadOnlyList<uint> GetOfferedMessages(Entity entity)
+        => entity != null && Data.NpcMessages.TryGetValue(entity.Id, out var messages) ? messages : [];
+
+    /// <summary>
+    /// Says one of the things an NPC is offering, which is how quest rewards are collected. The id has
+    /// to be one the server advertised through <see cref="GetOfferedMessages"/>.
+    /// </summary>
+    public void SendQuestMessage(Entity entity, uint messageId)
+    {
+        _gameServer.SendPacket(new QuestMessagePacket(entity.Id, messageId));
     }
 
     public void InitiateEntityChat(Entity entity)
@@ -630,6 +698,53 @@ public class Game
             RemoveNPCItems();
         }
         _gameServer.SendPacket(new EntityActionPacket(entity, actionType));
+    }
+
+    /// <summary>
+    /// Picks an entry of an NPC menu by its raw value, for menus that the
+    /// <see cref="TownFolkActionType"/> shorthand does not cover - act travel in particular.
+    /// </summary>
+    public void TownFolkAction(Entity entity, TownFolkActionType actionType, uint actionData)
+    {
+        _gameServer.SendPacket(new EntityActionPacket(entity, actionType, actionData));
+    }
+
+    /// <summary>
+    /// Asks the travel NPC of the current act - Warriv in act 1, Meshif in act 2 - to move this
+    /// character to the next act. The server answers with <c>UnloadActComplete</c> followed by
+    /// <c>LoadActComplete</c>, so callers should wait on <see cref="Act"/> changing rather than
+    /// assuming the travel took.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown for acts that have no NPC driven transition. Act 3 to 4 and act 4 to 5 are portals
+    /// that open once their act boss is dead and have to be taken as warps.
+    /// </exception>
+    public void TravelWithNpc(Entity travelNpc)
+    {
+        if (!EntityConstants.TravelMenuActionByAct.TryGetValue(Act, out var travelAction))
+        {
+            throw new InvalidOperationException(
+                $"There is no NPC driven travel out of {Act}, it has to be taken as a portal");
+        }
+
+        TownFolkAction(travelNpc, TownFolkActionType.Quest, travelAction);
+    }
+
+    /// <summary>
+    /// Resurrects this character in town after death. The corpse stays where it fell, so anything
+    /// waiting on a corpse in an area must be settled before calling this.
+    /// </summary>
+    public void Resurrect()
+    {
+        _gameServer.SendPacket(new ResurrectPacket());
+    }
+
+    /// <summary>
+    /// Requests a fresh push of the quest state for this character and the game.
+    /// </summary>
+    public void RequestQuestData()
+    {
+        _gameServer.SendPacket(new RequestQuestDataPacket());
     }
 
     private void RemoveNPCItems()
@@ -744,6 +859,19 @@ public class Game
         _gameServer.SendPacket(new PartyRequestPacket(PartyRequestType.InviteToParty, player));
     }
 
+    /// <summary>
+    /// Whether this character shares a party with the given player. Sending an invite proves nothing:
+    /// only a matching party id on both sides does.
+    /// </summary>
+    public bool IsInPartyWith(Player player)
+    {
+        var mine = Data.Me?.PartyId;
+        return player != null
+            && mine.HasValue
+            && mine.Value != AssignPlayerToPartyPacket.NoParty
+            && player.PartyId == mine;
+    }
+
     public void AcceptInvite(Player player)
     {
         _gameServer.SendPacket(new PartyRequestPacket(PartyRequestType.AcceptInvite, player));
@@ -847,96 +975,4 @@ public class Game
         return Data.Items.GetValueOrDefault(itemId);
     }
 
-    private void ChickenAndLifeManaThread()
-    {
-        try
-        {
-            while (IsInGame())
-            {
-                if (Me == null || Area == Area.None)
-                {
-                    Thread.Sleep(50);
-                    continue;
-                }
-
-                if (IsInTown())
-                {
-                    Thread.Sleep(50);
-                    continue;
-                }
-
-                if (Me.Effects.ContainsKey(EntityEffect.Playerbody))
-                {
-                    Log.Information($"Leaving game since {Me.Name} has died");
-                    LeaveGame().Wait();
-                    break;
-                }
-
-                if (Me.GetLifeFraction() < 0.2 || (Me.Life < 200 && Me.MaxLife > 600))
-                {
-                    Log.Information($"{Me.Name} Leaving game due to life being {Me.Life} of max {Me.MaxLife}");
-                    LeaveGame().Wait();
-                    break;
-                }
-
-                if (Data.Flags.Hardcore && (Me.GetLifeFraction() < 0.4 || (Me.Life < 300 && Me.MaxLife > 600)))
-                {
-                    Log.Information($"{Me.Name} Leaving game due to life being {Me.Life} of max {Me.MaxLife}");
-                    LeaveGame().Wait();
-                    break;
-                }
-
-                if (Me.GetLifeFraction() < 0.9 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(10))
-                {
-                    if (!UseHealthPotions())
-                    {
-                        UseRejuvenationPotion();
-                    }
-                }
-
-                if (Me.GetLifeFraction() < 0.7 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(2))
-                {
-                    if (!UseHealthPotions())
-                    {
-                        UseRejuvenationPotion();
-                    }
-                }
-
-                if (Data.Flags.Hardcore && Me.GetLifeFraction() < 0.5 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(0.1))
-                {
-                    if (!UseRejuvenationPotion())
-                    {
-                        Log.Information($"{Me.Name} Leaving game due out of rev potions");
-                        LeaveGame().Wait();
-                        break;
-                    }
-                }
-
-                if (Me.GetLifeFraction() < 0.3 && DateTime.Now.Subtract(LastUsedHealthPotionTime) > TimeSpan.FromSeconds(0.7))
-                {
-                    if (!UseRejuvenationPotion() && !UseHealthPotions())
-                    {
-                        Log.Information($"{Me.Name} Leaving game due out of health/rev potions");
-                        LeaveGame().Wait();
-                        break;
-                    }
-                }
-
-                if (Me.Mana < 40 && (Me.Attributes[D2GS.Players.Attribute.Level] > 40 || Me.Mana < 10) && DateTime.Now.Subtract(LastUsedManaPotionTime) > TimeSpan.FromSeconds(3))
-                {
-                    if (!UseManaPotion())
-                    {
-                        Log.Information($"{Me.Name} Leaving game due out of mana potions");
-                        LeaveGame().Wait();
-                        break;
-                    }
-                }
-
-                Thread.Sleep(50);
-            }
-        }
-        catch (Exception)
-        {
-        }
-    }
 }

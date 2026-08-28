@@ -77,6 +77,60 @@ public class Client
     }
 
     /// <summary>
+    /// Create a new character on the account currently logged on, which is how a run provisions the
+    /// fresh characters a rush needs: quest flags are permanent, so measuring a quest again takes a
+    /// character that has never done it.
+    /// </summary>
+    /// <param name="name">Name to give the character, refused by the realm if it is already taken</param>
+    /// <param name="characterClass">Class to create</param>
+    /// <param name="flags">Whether the character is expansion and whether it is hardcore</param>
+    /// <returns>The created character, or <see langword="null"/> when the realm refused</returns>
+    public async Task<Character> CreateCharacter(string name, CharacterClass characterClass, CharacterFlags flags)
+    {
+        var result = await Mcp.CreateCharacter(name, characterClass, flags);
+        if (result == null)
+        {
+            Log.Warning($"Creating character {name} timed out");
+            return null;
+        }
+
+        if (result != 0x00)
+        {
+            Log.Warning($"Creating character {name} failed with result 0x{result:X2}");
+            return null;
+        }
+
+        Log.Information($"Created {characterClass} {name} ({flags})");
+        var characters = await Mcp.ListCharacters();
+        return characters.Find(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Whether the realm connection is still up. Playing a game drops it, so anything that talks to
+    /// the realm - listing, creating or deleting characters - has to check first.
+    /// </summary>
+    public bool IsRealmConnected() => Mcp.IsConnected();
+
+    /// <summary>
+    /// Delete a character from the account currently logged on. Meant for cleaning up characters a
+    /// test run created; there is no undo.
+    /// </summary>
+    public async Task<bool> DeleteCharacter(string name)
+    {
+        var deleted = await Mcp.DeleteCharacter(name);
+        if (deleted)
+        {
+            Log.Information($"Deleted character {name}");
+        }
+        else
+        {
+            Log.Warning($"Deleting character {name} failed");
+        }
+
+        return deleted;
+    }
+
+    /// <summary>
     /// Select one of the available characters on the account.
     /// </summary>
     /// <param name="character">Character with name matching one of the account characters</param>
@@ -113,7 +167,7 @@ public class Client
     /// <param name="password">Password used to protect the game</param>
     public async Task<bool> JoinGame(string name, string password)
     {
-        Log.Information($"Joining game: {name} with {LoggedInUserName()}");
+        Log.Information($"Joining game: {name} with {LoggedInUserName()} as {_character?.Name}");
         var packet = await Mcp.JoinGame(name, password);
         if (packet == null)
         {

@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Pickit;
+﻿using D2NG.Pickit;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Helpers;
 using D2NG.Core.D2GS.Packet;
@@ -12,6 +12,11 @@ public static class IncomingD2GSPackets
 {
     public static void HandleIncomingPacket(D2gsPacket eventArgs)
     {
+        if (!CaptureOptions.Current.ShouldLogIncomingD2gs(eventArgs.Type))
+        {
+            return;
+        }
+
         if (!Enum.IsDefined(typeof(InComingPacket), eventArgs.Type))
         {
             Log.Information($"Received unknown D2GS packet of type: 0x{eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
@@ -221,9 +226,9 @@ public static class IncomingD2GSPackets
                 Log.Information($"{incomingPacketType} -> Id: {parseItemPacket.Item.Id} ({parseItemPacket.Item.Level}) Action: {parseItemPacket.Item.Action} " +
                     $"Container: {parseItemPacket.Item.Container} Quality: {parseItemPacket.Item.Quality} Name: {parseItemPacket.Item.Name} " +
                     $"Type: {parseItemPacket.Item.Type} Location: {parseItemPacket.Item.Location} Entity: {parseItemPacket.Item.EntityType} Player {parseItemPacket.Item.PlayerId}" +
-                    $"ShouldPickup: {Pickit.ShouldPickupItem(true, CharacterClass.Sorceress, true, parseItemPacket.Item)}" +
-                    $"ShouldKeep: {Pickit.ShouldKeepItem(true, CharacterClass.Sorceress, parseItemPacket.Item)}" +
-                    $"CanTouch: {Pickit.CanTouchInventoryItem(true, CharacterClass.Sorceress, parseItemPacket.Item)}" +
+                    $"ShouldPickup: {Pickit.ShouldPickupItem(CharacterClass.Sorceress, true, parseItemPacket.Item)}" +
+                    $"ShouldKeep: {Pickit.ShouldKeepItem( CharacterClass.Sorceress, parseItemPacket.Item)}" +
+                    $"CanTouch: {Pickit.CanTouchInventoryItem(CharacterClass.Sorceress, parseItemPacket.Item, inventoryHeight: 8)}" +
                     $"print: {parseItemPacket.Raw.ToPrintString()} with description {parseItemPacket.Item.GetFullDescription()}");
 
                 break;

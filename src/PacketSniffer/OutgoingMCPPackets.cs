@@ -9,7 +9,7 @@ public static class OutgoingMCPPackets
 {
     public static void HandleOutgoingPacket(byte[] bytes)
     {
-        if(bytes.Length < 3)
+        if(bytes.Length < 3 || !CaptureOptions.Current.ShouldLog(CaptureProtocol.Mcp, false))
         {
             return;
         }

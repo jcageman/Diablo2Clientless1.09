@@ -9,6 +9,11 @@ public static class IncomingMCPPackets
 {
     public static void HandleIncomingPacket(McpPacket eventArgs)
     {
+        if (!CaptureOptions.Current.ShouldLog(CaptureProtocol.Mcp, true))
+        {
+            return;
+        }
+
         if (!Enum.IsDefined(typeof(Mcp), eventArgs.Type))
         {
             Log.Information($"Received unknown MCP packet of type: 0x{eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");

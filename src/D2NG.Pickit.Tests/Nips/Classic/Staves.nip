@@ -1,0 +1,23 @@
+// Classic staff rules, from Staves.ShouldKeepItemClassic.
+//
+// Pickit.cs routes Staff, Wand, Scepter and SorceressOrb to the Staves rules, and NipFieldMaps
+// maps them to staff / wand / scepter / orb. Every line here previously read [type] == staff,
+// which made the paladin scepter rules and the necromancer wand rule impossible to match.
+
+// Pickup: all staves, wands, scepters and orbs (ShouldPickupItemClassic returns true).
+[type] == staff || [type] == wand || [type] == scepter || [type] == orb
+
+// Keep: +2 sorc staves with ES + armor
+([type] == staff || [type] == wand || [type] == scepter || [type] == orb) # [sorceressskills] == 2 && ([skillenergyshield]+[skillshiverarmor]) >= 4
+([type] == staff || [type] == wand || [type] == scepter || [type] == orb) # [sorceressskills] == 2 && ([skillenergyshield]+[skillchillingarmor]) >= 4
+
+// Keep: +2 pally scepters/staves with BH/Conc combos
+([type] == staff || [type] == wand || [type] == scepter || [type] == orb) # [paladinskills] == 2 && [skillblessedhammer] >= 2 && [skillconcentration] >= 2
+([type] == staff || [type] == wand || [type] == scepter || [type] == orb) # [paladinskills] == 2 && [fcr] >= 10 && ([skillblessedhammer]+[skillconcentration]) >= 3
+([type] == staff || [type] == wand || [type] == scepter || [type] == orb) # [paladinskills] == 2 && [fcr] >= 20 && ([skillblessedhammer]+[skillconcentration]) >= 2
+([type] == staff || [type] == wand || [type] == scepter || [type] == orb) # [paladinskills] == 2 && [crlrfr] >= 30 && [paladinlife] >= 50
+
+// Keep: +2 necro wands/staves with FCR/res and 3+ across the single-skill rolls.
+// [111] [112] [113] are StatType.SingleSkill1/2/3 by numeric id - the C# summed those three,
+// not Bone Spear + Bone Spirit specifically.
+([type] == staff || [type] == wand || [type] == scepter || [type] == orb) # [necromancerskills] == 2 && [fcr] == 20 && [crlrfr] >= 40 && ([111]+[112]+[113]) >= 3

@@ -10,6 +10,11 @@ public static class OutgoingD2GSPackets
 {
     public static void HandleOutgoingPacket(byte[] bytes)
     {
+        if (bytes.Length == 0 || !CaptureOptions.Current.ShouldLogOutgoingD2gs(bytes[0]))
+        {
+            return;
+        }
+
         if (!Enum.IsDefined(typeof(OutGoingPacket), bytes[0]))
         {
             Log.Information($"Send unknown D2GS packet of type: 0x{bytes[0],2:X2} with data {bytes.ToPrintString()}");

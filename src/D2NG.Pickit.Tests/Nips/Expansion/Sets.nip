@@ -1,0 +1,10 @@
+// Pickup set lacquered plate and amulet (Tal)
+[name] == lacqueredplate && [quality] == set
+[name] == amulet && [quality] == set
+
+// Keep: Tal Rasha amulet. C# Sets.ShouldKeepItem kept a set amulet when unidentified
+// or when it carried +2 sorceress skills; the unidentified half is automatic.
+[name] == amulet && [quality] == set # [sorceressskills] == 2
+
+// Keep: Tal Rasha armor, kept on any roll
+[name] == lacqueredplate && [quality] == set # 1 == 1

@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Bots.Types.Assist;
+using ConsoleBot.Bots.Types.Assist;
 using ConsoleBot.Bots.Types.Baal;
 using ConsoleBot.Bots.Types.Cows;
 using ConsoleBot.Bots.Types.CS;

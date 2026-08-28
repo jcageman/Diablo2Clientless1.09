@@ -1,0 +1,14 @@
+// Expansion belt rules only. C# ShouldKeepItemExpansion returns false rather than falling through
+// to the classic rules, so the classic res/life and FHR belt rules do not apply here.
+
+// Pickup: rare and unique belts
+[type] == belt && ([quality] == rare || [quality] == unique)
+
+// Keep: ethereal unique Demonhide Sash
+[type] == belt && [quality] == unique && [name] == demonhidesash # [flag] == ethereal
+
+// Keep: unique Heavy Belt with gold find
+[type] == belt && [quality] == unique && [name] == heavybelt # [itemgoldbonus] >= 80
+
+// Keep: res/life with high gold find
+[type] == belt # [crlrfr] >= 40 && [barbarianlife] >= 40 && [itemgoldbonus] >= 110

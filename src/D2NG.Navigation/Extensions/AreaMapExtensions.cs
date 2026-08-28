@@ -1,4 +1,4 @@
-﻿using D2NG.Core.D2GS;
+using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Navigation.Services.MapApi;
 using Roy_T.AStar.Graphs;
@@ -21,7 +21,8 @@ public static class AreaMapExtensions
             LevelOrigin = areaMapDto.LevelOrigin.MapFromDto(),
             Map = areaMapDto.Map.Select(a => a.ToArray()).ToArray(),
             Npcs = areaMapDto.Npcs.ToDictionary(k => int.Parse(k.Key), k => k.Value.Select(p => p.MapFromDto()).ToList()),
-            Objects = areaMapDto.Objects.ToDictionary(k => int.Parse(k.Key), k => k.Value.Select(p => p.MapFromDto()).ToList())
+            Objects = areaMapDto.Objects.ToDictionary(k => int.Parse(k.Key), k => k.Value.Select(p => p.MapFromDto()).ToList()),
+            TombArea = Enum.TryParse<Area>(areaMapDto.TombArea, true, out var tombArea) ? tombArea : null
         };
     }
 
@@ -168,6 +169,99 @@ public static class AreaMapExtensions
 
         gridPosition = null;
         return false;
+    }
+
+    /// <summary>
+    /// The nearest cell that can be stood on, for a point the level grid cannot path from or to.
+    /// </summary>
+    /// <remarks>
+    /// A teleporting character regularly ends up off the grid of the level it is in, and a point that
+    /// is off the grid or inside scenery has no A* edges, so the pathfinder returns nothing and the
+    /// caller reads that as "unreachable" and gives up. Snapping to the closest walkable cell gives it
+    /// somewhere real to path from instead. The search starts from the point clamped into the grid but
+    /// ranks candidates by their distance to the original, unclamped position, so a character far
+    /// outside the level still gets the cell nearest to where it actually is.
+    /// </remarks>
+    public static bool TryFindNearestNavigablePoint(this AreaMap areaMap, Point point, int maximumRadius, out Point navigablePoint)
+    {
+        navigablePoint = null;
+        var rows = areaMap.Map.GetLength(0);
+        if (rows == 0)
+        {
+            return false;
+        }
+
+        var columns = areaMap.Map[0].GetLength(0);
+        var relativeX = point.X - areaMap.LevelOrigin.X;
+        var relativeY = point.Y - areaMap.LevelOrigin.Y;
+        var fromX = Math.Clamp(relativeX, 0, columns - 1);
+        var fromY = Math.Clamp(relativeY, 0, rows - 1);
+
+        var best = double.MaxValue;
+        int? firstHitRadius = null;
+        for (var radius = 0; radius <= maximumRadius; radius++)
+        {
+            ScanRing(areaMap, fromX, fromY, radius, rows, relativeX, relativeY, ref best, ref navigablePoint);
+            if (navigablePoint == null)
+            {
+                continue;
+            }
+
+            // A ring is a square, so its corners are further away than the next ring's edges. One extra
+            // ring is enough for the closest cell to win.
+            firstHitRadius ??= radius;
+            if (radius > firstHitRadius)
+            {
+                break;
+            }
+        }
+
+        return navigablePoint != null;
+    }
+
+    private static void ScanRing(AreaMap areaMap, int fromX, int fromY, int radius, int rows,
+        int towardsX, int towardsY, ref double best, ref Point navigablePoint)
+    {
+        for (var y = fromY - radius; y <= fromY + radius; y++)
+        {
+            if (y < 0 || y >= rows)
+            {
+                continue;
+            }
+
+            var onHorizontalEdge = y == fromY - radius || y == fromY + radius;
+            var row = areaMap.Map[y];
+            for (var x = fromX - radius; x <= fromX + radius; x++)
+            {
+                if (x < 0 || x >= row.Length || (!onHorizontalEdge && x != fromX - radius && x != fromX + radius))
+                {
+                    continue;
+                }
+
+                if (!IsMovable(row[x]))
+                {
+                    continue;
+                }
+
+                var distance = Math.Pow(x - towardsX, 2.0) + Math.Pow(y - towardsY, 2.0);
+                if (distance < best)
+                {
+                    best = distance;
+                    navigablePoint = areaMap.MapToPoint(x, y);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the level grid has a cell for this point and that cell can be stood on.
+    /// </summary>
+    public static bool IsNavigable(this AreaMap areaMap, Point point)
+    {
+        return areaMap.TryMapToPointInMap(point, out var pointInMap)
+            && pointInMap.Y < areaMap.Map.GetLength(0)
+            && pointInMap.X < areaMap.Map[pointInMap.Y].Length
+            && IsMovable(areaMap.Map[pointInMap.Y][pointInMap.X]);
     }
 
     public static Point MapToPoint(this AreaMap areaMap, Position position)

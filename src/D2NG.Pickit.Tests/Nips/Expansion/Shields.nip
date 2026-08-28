@@ -1,0 +1,11 @@
+// Keep: 4os magic Monarch with increased blocking
+[name] == monarch && [quality] == magic # [sockets] == 4 && [increasedblocking] > 0
+
+// Keep: non-ethereal unique Monarch
+[name] == monarch && [quality] == unique # [flag] != ethereal
+
+// Keep: unique Aegis with high cold resist
+[name] == aegis && [quality] == unique # [coldresist] >= 60
+
+// Keep: Jeweler's Ward of Deflecting - elite low-strength shield for zons
+[name] == ward && [quality] == magic # [sockets] == 4 && [increasedblocking] > 0

@@ -1,0 +1,15 @@
+// Pickup all jewels
+[type] == jewel
+
+// Keep: enhanced damage
+[type] == jewel # [ed] >= 30
+// Max/min damage combo
+[type] == jewel # [mindamage]+[maxdamage] >= 20
+// Life
+[type] == jewel # [sorceresslife] >= 40
+// Gold find
+[type] == jewel # [itemgoldbonus] >= 20
+// Resist + life
+[type] == jewel # [crlrfr] >= 15 && [sorceresslife] >= 20
+// IAS + damage
+[type] == jewel # [ias] >= 15 && [ed] > 0

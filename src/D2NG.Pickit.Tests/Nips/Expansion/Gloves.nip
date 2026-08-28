@@ -1,0 +1,12 @@
+// Expansion glove rules only. C# ShouldKeepItemExpansion returns false rather than falling through
+// to the classic rules, so the Chance Guards and War Gauntlets rules do not apply here.
+
+// Pickup: rare and unique gloves
+[type] == gloves && ([quality] == rare || [quality] == unique)
+
+// Keep: amazon javelin/spear skills with resists
+[type] == gloves # [javelinandspearskilltab] == 2 && [crlrfr] >= 30
+
+// Keep: IAS with an on-hit skill. The C# required that skill to be Amplify Damage specifically;
+// [itemskillonhit] exposes only the value, not which skill, so this is broader than the original.
+[type] == gloves # [ias] >= 20 && [itemskillonhit] >= 1

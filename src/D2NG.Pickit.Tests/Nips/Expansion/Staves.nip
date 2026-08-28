@@ -1,0 +1,8 @@
+// Pickup: unique Swirling Crystal
+[name] == swirlingcrystal && [quality] == unique
+
+// Keep: lightning/energy shield orbs
+[type] == orb # [lightningskilltab] + [skillenergyshield] >= 6
+
+// Keep: godly rare orbs - +2 to a sorceress tree, 20 FCR, and a high roll on a useful skill
+[type] == orb && [quality] == rare # ([sorceressskills] >= 2 || [fireskilltab] >= 2 || [lightningskilltab] >= 2 || [coldskilltab] >= 2) && [fcr] >= 20 && ([skillnova] >= 3 || [skillfrozenorb] >= 3 || [skillfireball] >= 3 || [skilllightning] >= 3 || [skillhydra] >= 3)

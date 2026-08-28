@@ -14,10 +14,22 @@ public enum EntityCode : ushort
     WaypointAct3 = 237,
     WaypointAct3Durance = 324,
     WaypointAct4Levels = 238,
+    DurielsLairPortal = 100,
+    ViperAmuletAltar = 149,
+    HoradricOrifice = 152,
     DiabloStar = 255,
     Stash = 267,
     WirtsBody = 268,
     ArcanePortal = 298,
+
+    /// <summary>
+    /// Portal from the durance of hate to the pandemonium fortress, the act 3 to 4 transition. Taken
+    /// as a plain object interaction: unlike Warriv and Meshif there is no dialog involved.
+    /// </summary>
+    PandemoniumFortressPortal = 342,
+
+    HoradricCubeChest = 354,
+    StaffOfKingsChest = 356,
     Hratli = 379,
     RightSeal1 = 392,
     RightSeal2 = 393,
