@@ -129,6 +129,7 @@ public class RushProbeBot : IBotInstance
                 "mephisto" => await RushMephisto(client),
                 "jerhyn" => await RushJerhyn(client),
                 "diablo" => await RushDiablo(client),
+                "baal" => await RushBaal(client),
                 "portalspots" => await MeasureActOnePortalSpots(),
                 "warriv" => await CompleteActOneWithWarriv(client),
                 "traverse" => await TraverseWithoutWaypoints(),
@@ -4252,14 +4253,8 @@ public class RushProbeBot : IBotInstance
             return;
         }
 
-        if (me.HasSkill(Skill.StaticField) && distance < StaticFieldRange
-            && ClassHelpers.CanStaticEntity(client, target.LifePercentage))
-        {
-            client.Game.UseRightHandSkillOnEntity(Skill.StaticField, target);
-            await Task.Delay(200);
-            return;
-        }
-
+        // Pure nova, no static. Static is only worth casting to soften a big health pool, and a rush wants
+        // the pack dead rather than halved: mixing the two just slowed every wave down.
         if (me.HasSkill(Skill.Nova) && me.Mana > NovaManaCost)
         {
             if (distance > NovaRange)
@@ -4269,6 +4264,14 @@ public class RushProbeBot : IBotInstance
             }
 
             client.Game.UseRightHandSkillOnLocation(Skill.Nova, me.Location);
+            await Task.Delay(200);
+            return;
+        }
+
+        if (me.HasSkill(Skill.StaticField) && distance < StaticFieldRange
+            && ClassHelpers.CanStaticEntity(client, target.LifePercentage))
+        {
+            client.Game.UseRightHandSkillOnEntity(Skill.StaticField, target);
             await Task.Delay(200);
             return;
         }
@@ -4788,6 +4791,324 @@ public class RushProbeBot : IBotInstance
         }
 
         return await _townManagementService.TakeWaypoint(client, waypoint);
+    }
+
+    /// <summary>How long the rusher spends clearing waves before Baal is written off as not coming.</summary>
+    private static readonly TimeSpan WaveClearLimit = TimeSpan.FromMinutes(8);
+
+    private static readonly TimeSpan ThroneClearLimit = TimeSpan.FromMinutes(3);
+
+    /// <summary>How far the rusher may drift off the kill spot before it goes back.</summary>
+    private const double HoldSpotTolerance = 15.0;
+
+    /// <summary>How far in front of the throne to stand, so the waves arrive in reach.</summary>
+    private const short ThroneStandOff = 25;
+
+    /// <summary>
+    /// Act 5 for the rushee: the rusher clears the throne room until Baal appears, then the rushee comes
+    /// across for the kill.
+    /// </summary>
+    /// <remarks>
+    /// The rushee needs no waypoint of its own - it rides the rusher's portal out of Harrogath, which was
+    /// verified by hand on a character that had only just arrived in act 5. Baal only spawns once the five
+    /// waves are dead, so the rushee waits in town for all of that and is ferried in at the end, the same
+    /// shape act 4 uses and for the same reason: credit is area bound, not proximity bound.
+    /// </remarks>
+    private async Task<bool> RushBaal(Client rusheeClient)
+    {
+        if (_probeCharacter == null)
+        {
+            Log.Error("No rushee, add the create step first");
+            return false;
+        }
+
+        var rusherClient = SharedRusher();
+        try
+        {
+            if (!await JoinRusherAndRushee(rusherClient, rusheeClient))
+            {
+                return false;
+            }
+
+            _rusherForInvites = rusherClient;
+
+            if (rusheeClient.Game.Quests.IsComplete(QuestId.EveOfDestruction))
+            {
+                Log.Information("{Name} has already finished Baal, skipping this step", _probeCharacter.Name);
+                return true;
+            }
+
+            if (!rusherClient.Game.Me.HasSkill(Skill.Teleport))
+            {
+                Log.Error("Rusher has no teleport, and the worldstone keep cannot be done on foot");
+                return false;
+            }
+
+            var rusheeCanFollow = await RusheeIsReadyForActFive(rusheeClient);
+            await RestockRusher(rusherClient, D2NG.Core.D2GS.Act.Act.Act5);
+
+            if (!await TakeWaypointFromTown(rusherClient, Waypoint.TheWorldStoneKeepLevel2)
+                || !await TraverseTo(rusherClient, Area.ThroneOfDestruction))
+            {
+                Log.Error("Rusher failed to reach the throne of destruction");
+                return false;
+            }
+
+            // Stage at the entrance first, which is the offset BaalBot uses from the portal Baal opens.
+            var staging = await _pathingService.GetPathToObjectWithOffset(rusherClient.Game,
+                EntityCode.BaalPortal, 27, 65, MovementMode.Teleport);
+            if (staging.Count > 0)
+            {
+                await MovementHelpers.TakePathOfLocations(rusherClient.Game, staging, MovementMode.Teleport);
+            }
+
+            // The waves spawn at the throne, not at the entrance. Holding the entrance offset meant they
+            // never came within reach and the run sat there watching nothing for a minute.
+            var killSpot = await ThroneKillSpot(rusherClient) ?? rusherClient.Game.Me.Location;
+            Log.Information("Rusher is at the throne, {Location}, clearing waves", killSpot);
+
+            // Opened early and left there. The ferry casts its own later, but having one up from the start
+            // costs nothing and lets a person walk in and watch at any point.
+            if (!await _townManagementService.CreateTownPortal(rusherClient))
+            {
+                Log.Warning("Could not open an early portal at the throne, carrying on");
+            }
+
+            if (!await ClearThroneRoom(rusherClient))
+            {
+                return false;
+            }
+
+            if (!await MoveTo(rusherClient, killSpot, MovementMode.Teleport))
+            {
+                Log.Warning("Could not get back to the kill spot, holding where standing");
+                killSpot = rusherClient.Game.Me.Location;
+            }
+
+            if (!await HoldKillSpotUntilBaal(rusherClient, killSpot))
+            {
+                return false;
+            }
+
+            if (rusheeCanFollow && !await FerryRusheeToThrone(rusherClient, rusheeClient, killSpot))
+            {
+                Log.Warning("The rushee could not be brought in. Killing Baal anyway, nobody will be credited");
+                rusheeCanFollow = false;
+            }
+
+            if (!await KillNamedBoss(rusherClient, NPCCode.Baal, TimeSpan.FromSeconds(300)))
+            {
+                return false;
+            }
+
+            if (!rusheeCanFollow)
+            {
+                Log.Information("Dry run done: the waves cleared and Baal died");
+                return true;
+            }
+
+            rusheeClient.Game.RequestQuestData();
+            await Task.Delay(1500);
+            Log.Information("After Baal: rushee eve of destruction 0x{Word:X4}, act 5 outro 0x{Outro:X4}, {State}",
+                rusheeClient.Game.Quests.GetCharacterFlags(QuestId.EveOfDestruction),
+                rusheeClient.Game.Quests.GetCharacterFlags(QuestId.Act5Outro),
+                rusheeClient.Game.Me.Life == 0 ? "dead" : "alive");
+
+            if (rusheeClient.Game.Me.Life == 0)
+            {
+                rusheeClient.Game.Resurrect();
+            }
+
+            return true;
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Act 5 failed");
+            return false;
+        }
+    }
+
+    private async Task<bool> RusheeIsReadyForActFive(Client rusheeClient)
+    {
+        if (!rusheeClient.Game.IsInGame())
+        {
+            Log.Warning("The rushee is not in the game, running the rusher's half as a dry run");
+            return false;
+        }
+
+        if (rusheeClient.Game.Me.Life == 0)
+        {
+            rusheeClient.Game.Resurrect();
+            await Task.Delay(2000);
+        }
+
+        rusheeClient.Game.RequestUpdate(rusheeClient.Game.Me.Id);
+        await Task.Delay(500);
+        if (!await _pathingService.IsNavigatablePointInArea(rusheeClient.Game.MapId, Difficulty.Normal,
+            Area.Harrogath, rusheeClient.Game.Me.Location))
+        {
+            Log.Warning("Rushee is at {Location}, which is not Harrogath, so it cannot follow. Running the "
+                + "rusher's half as a dry run.", rusheeClient.Game.Me.Location);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Clears whatever is already in the throne room, chasing it down, so the waves start on empty ground.
+    /// </summary>
+    private async Task<bool> ClearThroneRoom(Client rusherClient)
+    {
+        var timer = Stopwatch.StartNew();
+        var quiet = 0;
+        while (timer.Elapsed < ThroneClearLimit && rusherClient.Game.IsInGame())
+        {
+            if (rusherClient.Game.GetNPCsByCode(NPCCode.Baal).Count > 0)
+            {
+                return true;
+            }
+
+            var target = NearbyHostiles(rusherClient, 50).FirstOrDefault();
+            if (target == null)
+            {
+                if (++quiet > 10)
+                {
+                    Log.Information("Throne room clear after {Seconds:0}s", timer.Elapsed.TotalSeconds);
+                    return true;
+                }
+
+                await Task.Delay(300);
+                continue;
+            }
+
+            quiet = 0;
+            await AttackTarget(rusherClient, target);
+        }
+
+        Log.Warning("Throne room was still busy after {Seconds:0}s, holding the kill spot anyway",
+            timer.Elapsed.TotalSeconds);
+        return true;
+    }
+
+    /// <summary>
+    /// Holds the kill spot until Baal appears, which is how BaalBot fights the waves.
+    /// </summary>
+    /// <remarks>
+    /// The waves walk to the character, so there is nothing to chase and chasing is actively harmful: an
+    /// earlier version leashed to this spot while also closing on anything out of nova range, and the two
+    /// fought each other - the rusher teleported between the spot and a monster twenty four units away,
+    /// over and over, casting nothing. Here only what comes within reach is attacked.
+    /// </remarks>
+    private async Task<bool> HoldKillSpotUntilBaal(Client rusherClient, Point killSpot)
+    {
+        var timer = Stopwatch.StartNew();
+        var lastReport = TimeSpan.Zero;
+        while (timer.Elapsed < WaveClearLimit && rusherClient.Game.IsInGame())
+        {
+            if (rusherClient.Game.GetNPCsByCode(NPCCode.Baal).Count > 0)
+            {
+                Log.Information("Baal is up after {Seconds:0}s of waves", timer.Elapsed.TotalSeconds);
+                return true;
+            }
+
+            if (!await RestockTripIfLow(rusherClient))
+            {
+                return false;
+            }
+
+            if (rusherClient.Game.Me.Location.Distance(killSpot) > HoldSpotTolerance)
+            {
+                await MoveTo(rusherClient, killSpot, MovementMode.Teleport);
+                continue;
+            }
+
+            var inReach = NearbyHostiles(rusherClient, NovaRange);
+            if (timer.Elapsed - lastReport > TimeSpan.FromSeconds(20))
+            {
+                lastReport = timer.Elapsed;
+                Log.Information("Waves: {InReach} in reach, {Near} within forty, {Seconds:0}s elapsed",
+                    inReach.Count, NearbyHostiles(rusherClient, 40).Count, timer.Elapsed.TotalSeconds);
+            }
+
+            if (inReach.Count == 0)
+            {
+                await Task.Delay(200);
+                continue;
+            }
+
+            await AttackTarget(rusherClient, inReach[0]);
+        }
+
+        Log.Error("Baal never appeared after {Minutes} minutes of waves", WaveClearLimit.TotalMinutes);
+        return false;
+    }
+
+    private async Task<bool> FerryRusheeToThrone(Client rusherClient, Client rusheeClient, Point killSpot)
+    {
+        if (!await MoveTo(rusherClient, killSpot, MovementMode.Teleport)
+            || !await _townManagementService.CreateTownPortal(rusherClient))
+        {
+            Log.Error("Rusher failed to open the portal at the throne");
+            return false;
+        }
+
+        var rusherAsSeenByRushee = rusheeClient.Game.Players
+            .Find(p => p.Name.Equals(_probeConfig.RusherCharacter, StringComparison.OrdinalIgnoreCase));
+        if (rusherAsSeenByRushee == null)
+        {
+            Log.Error("Rushee cannot see the rusher");
+            return false;
+        }
+
+        if (!await MoveRusheeToPortalSpot(rusheeClient, rusherAsSeenByRushee, Area.ThroneOfDestruction)
+            || !await _townManagementService.TakeTownPortalToArea(rusheeClient, rusherAsSeenByRushee, Area.ThroneOfDestruction))
+        {
+            Log.Error("Rushee failed to take the portal into the throne room");
+            return false;
+        }
+
+        rusheeClient.Game.RequestUpdate(rusheeClient.Game.Me.Id);
+        await Task.Delay(500);
+        if (!await _pathingService.IsNavigatablePointInArea(rusheeClient.Game.MapId, Difficulty.Normal,
+            Area.ThroneOfDestruction, rusheeClient.Game.Me.Location))
+        {
+            Log.Error("Rushee is at {Location}, which is not the throne room", rusheeClient.Game.Me.Location);
+            return false;
+        }
+
+        Log.Information("Rushee is in the throne room at {Location}; eve of destruction 0x{Word:X4}",
+            rusheeClient.Game.Me.Location,
+            rusheeClient.Game.Quests.GetCharacterFlags(QuestId.EveOfDestruction));
+        return true;
+    }
+
+    /// <summary>
+    /// Where to stand for the waves: just short of Baal's throne, which is where they arrive.
+    /// </summary>
+    private async Task<Point> ThroneKillSpot(Client rusherClient)
+    {
+        var throne = await GeneralHelpers.TryWithTimeout(
+            (_) => Task.FromResult(rusherClient.Game.GetNPCsByCode(NPCCode.BaalThrone).Count > 0),
+            TimeSpan.FromSeconds(5))
+            ? rusherClient.Game.GetNPCsByCode(NPCCode.BaalThrone).First().Location
+            : null;
+        if (throne == null)
+        {
+            Log.Warning("Baal's throne is not in sight, holding where standing");
+            return null;
+        }
+
+        var spot = OffsetOrNull(throne, 0, ThroneStandOff);
+        if (spot != null && await _pathingService.IsNavigatablePointInArea(rusherClient.Game.MapId,
+            Difficulty.Normal, Area.ThroneOfDestruction, spot))
+        {
+            Log.Information("Throne at {Throne}, holding the waves at {Spot}", throne, spot);
+            return spot;
+        }
+
+        Log.Information("Throne at {Throne}, standing on it since the offset is blocked", throne);
+        return throne;
     }
 
     private static bool LogUnknownStep(string step)
