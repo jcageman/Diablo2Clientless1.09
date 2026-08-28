@@ -1,0 +1,27 @@
+// Classic helm rules, from Helms.ShouldKeepItemClassic.
+//
+// In the C# "desirableHelms.Contains(name) && Life >= 30" is the GATE around seven
+// sub-conditions, not a rule of its own. It is ANDed into each of those seven lines below.
+// The three ungated rules after them apply to any helm.
+
+// Pickup: rare and unique helms (ShouldPickupItemClassic).
+[type] == helm && ([quality] == rare || [quality] == unique)
+
+// Keep: desirable helm bases (gated on 30+ life)
+[type] == helm && [name] == grimhelm # [maxhp] >= 30 && [enhanceddefense] >= 50 && [barbarianlife] >= 50 && [crlrfr] >= 40
+[type] == helm && ([name] == cap || [name] == skullcap || [name] == greathelm || [name] == crown || [name] == mask || [name] == bonehelm || [name] == warhat || [name] == deathmask || [name] == grimhelm) # [maxhp] >= 30 && [crlrfr] >= 50 && [barbarianlife] >= 70
+[type] == helm && ([name] == cap || [name] == skullcap || [name] == greathelm || [name] == crown || [name] == mask || [name] == bonehelm || [name] == warhat || [name] == deathmask || [name] == grimhelm) # [maxhp] >= 30 && [crlrfr] >= 45 && [barbarianlife] >= 40 && [mindamage] == 2
+[type] == helm && ([name] == cap || [name] == skullcap || [name] == greathelm || [name] == crown || [name] == mask || [name] == bonehelm || [name] == warhat || [name] == deathmask || [name] == grimhelm) # [maxhp] >= 30 && [crlrfr] >= 20 && [barbarianlife] >= 90 && [mindamage] == 2
+[type] == helm && ([name] == cap || [name] == skullcap || [name] == greathelm || [name] == crown || [name] == mask || [name] == bonehelm || [name] == warhat || [name] == deathmask || [name] == grimhelm) # [maxhp] >= 30 && [fhr] >= 10 && [crlrfr] >= 20 && [sorceresslife] >= 90
+[type] == helm && ([name] == cap || [name] == skullcap || [name] == greathelm || [name] == crown || [name] == mask || [name] == bonehelm || [name] == warhat || [name] == deathmask || [name] == grimhelm) # [maxhp] >= 30 && [fhr] >= 10 && [crlrfr] >= 40 && [sorceresslife] >= 40
+[type] == helm && ([name] == cap || [name] == skullcap || [name] == greathelm || [name] == crown || [name] == mask || [name] == bonehelm || [name] == warhat || [name] == deathmask || [name] == grimhelm) # [maxhp] >= 30 && [fhr] >= 10 && [crlrfr] >= 70 && [sorceresslife] >= 30
+
+// Keep: any helm on res/life (ungated in the C#)
+[type] == helm # [fhr] >= 10 && [crlrfr] >= 70 && [sorceresslife] >= 45
+[type] == helm # [crlrfr] >= 70 && [sorceresslife] >= 60
+[type] == helm # [crlrfr] >= 50 && [sorceresslife] >= 70
+
+// Keep: MF Skull Cap variants
+[type] == helm && [quality] == unique && [name] == skullcap # [itemmagicbonus] >= 50
+// The C# threshold on this second Skull Cap rule is 40; 48 is a deliberate tightening.
+[type] == helm && [quality] == unique && [name] == skullcap # [sockets] == 1 && [itemmagicbonus] >= 48

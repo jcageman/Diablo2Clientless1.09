@@ -1,0 +1,15 @@
+// Keep: unique goldfind heavy belt
+[type] == belt && [quality] == unique && [name] == heavybelt # [itemgoldbonus] >= 80
+
+
+// Keep: classic high res/life thresholds
+[type] == belt # [crlrfr] >= 60 && [barbarianlife] >= 80
+[type] == belt # [crlrfr] >= 40 && [barbarianlife] >= 100
+
+// Note: the "[crlrfr] >= 40 && [barbarianlife] >= 40 && [itemgoldbonus] >= 110" rule is
+// ShouldKeepItemExpansion only and does not belong here.
+
+// Keep: sorc FHR + res variants
+[type] == belt # [fhr] >= 10 && [crlrfr] >= 40 && [sorceresslife] >= 60
+[type] == belt # [fhr] >= 10 && [crlrfr] >= 70 && [sorceresslife] >= 50
+[type] == belt # [fhr] >= 10 && [crlrfr] >= 10 && [sorceresslife] >= 120

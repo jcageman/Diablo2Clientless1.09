@@ -1,4 +1,5 @@
-﻿using D2NG.Core;
+﻿using ConsoleBot.Helpers;
+using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
@@ -126,7 +127,8 @@ internal sealed class CowManager
             return Task.CompletedTask;
         }
 
-        if (Pickit.Pickit.ShouldPickupItem(game, item, false))
+        PickitAudit.LogItemDrop(game, item, shouldPickupGoldItems: false);
+        if (D2NG.Pickit.Pickit.ShouldPickupItem(game, item, false))
         {
             _pickitItemsOnGround.TryAdd(item.Id, item);
         }
@@ -258,7 +260,7 @@ internal sealed class CowManager
 
     public void PutItemOnPickitList(Client client, Item item)
     {
-        if (Pickit.Pickit.ShouldPickupItem(client.Game, item, false)
+        if (D2NG.Pickit.Pickit.ShouldPickupItem(client.Game, item, false)
             && client.Game.Items.TryGetValue(item.Id, out var newItem)
             && newItem.Ground)
         {

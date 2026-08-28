@@ -1,0 +1,23 @@
+// Expansion gem rules, from Gems.ShouldKeepItemExpansion (pickup == keep in the C#).
+// Each line needs a stat section - a rule with no '#' can only pick up, never keep.
+[type] == gem && [name] == chippedskull # 1 == 1
+[type] == gem && [name] == flawlessskull # 1 == 1
+[type] == gem && [name] == perfectskull # 1 == 1
+[type] == gem && [name] == chippedamethyst # 1 == 1
+[type] == gem && [name] == flawlessamethyst # 1 == 1
+[type] == gem && [name] == perfectamethyst # 1 == 1
+[type] == gem && [name] == chippedemerald # 1 == 1
+[type] == gem && [name] == flawlessemerald # 1 == 1
+[type] == gem && [name] == perfectemerald # 1 == 1
+[type] == gem && [name] == chippedruby # 1 == 1
+[type] == gem && [name] == flawlessruby # 1 == 1
+[type] == gem && [name] == perfectruby # 1 == 1
+[type] == gem && [name] == chippeddiamond # 1 == 1
+[type] == gem && [name] == flawlessdiamond # 1 == 1
+[type] == gem && [name] == perfectdiamond # 1 == 1
+[type] == gem && [name] == chippedtopaz # 1 == 1
+[type] == gem && [name] == flawlesstopaz # 1 == 1
+[type] == gem && [name] == perfecttopaz # 1 == 1
+[type] == gem && [name] == chippedsapphire # 1 == 1
+[type] == gem && [name] == flawlesssapphire # 1 == 1
+[type] == gem && [name] == perfectsapphire # 1 == 1

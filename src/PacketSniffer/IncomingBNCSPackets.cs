@@ -9,6 +9,11 @@ public static class IncomingBNCSPackets
 {
     public static void HandleIncomingPacket(BncsPacket eventArgs)
     {
+        if (!CaptureOptions.Current.ShouldLog(CaptureProtocol.Bncs, true))
+        {
+            return;
+        }
+
         if (!Enum.IsDefined(eventArgs.Type))
         {
             Log.Information($"Received unknown BNCS packet of type: 0x{(byte)eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");

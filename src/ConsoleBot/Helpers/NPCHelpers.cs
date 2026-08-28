@@ -1,4 +1,4 @@
-﻿using ConsoleBot.TownManagement;
+using ConsoleBot.TownManagement;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Enums;
@@ -20,6 +20,16 @@ public static class NPCHelpers
         NPCCode.ATrap5, NPCCode.ATrap6, NPCCode.ATrap7, NPCCode.Hydra1, NPCCode.Hydra2, NPCCode.Hydra3, NPCCode.CompellingOrb,
         NPCCode.ClayGolem, NPCCode.BloodGolem, NPCCode.FireGolem, NPCCode.IronGolem, NPCCode.Valkyrie,
         NPCCode.Act1Npc, NPCCode.Guard, NPCCode.BaalThrone, NPCCode.BaalTentacle1, NPCCode.BaalTentacle2, NPCCode.BaalTentacle3, NPCCode.BaalTentacle4, NPCCode.BaalTentacle5];
+    /// <summary>
+    /// Whether an NPC is on our side: a hireling, a summon, a town guard or scenery that never dies.
+    /// </summary>
+    /// <remarks>
+    /// Anything that answers true here must never be counted as something to kill or wait for. A hired
+    /// mercenary follows the character everywhere, so treating it as a monster makes a clear-the-area
+    /// check that can never finish.
+    /// </remarks>
+    public static bool IsFriendly(NPCCode npcCode) => FriendlyNPCs.Contains(npcCode);
+
     public static WorldObject GetUniqueNPC(Game game, NPCCode npcCode)
     {
         return game.GetNPCsByCode(npcCode).FirstOrDefault();
@@ -151,7 +161,7 @@ public static class NPCHelpers
 
     private static bool GambleCurrentItemsAtNpc(Game game, Entity npc)
     {
-        var inventoryItemsToSell = game.Inventory.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
+        var inventoryItemsToSell = game.Inventory.Items.Where(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
         foreach (Item item in inventoryItemsToSell)
         {
             if (item.Quality == QualityType.Rare)
@@ -164,7 +174,7 @@ public static class NPCHelpers
 
         var inventoryFull = false;
 
-        foreach (var gambleItem in game.Items.Values.Where(i => i.Container == ContainerType.ArmorTab && Pickit.Pickit.ShouldGamble(game.Me, i)))
+        foreach (var gambleItem in game.Items.Values.Where(i => i.Container == ContainerType.ArmorTab && D2NG.Pickit.Pickit.ShouldGamble(game.Me, i)))
         {
             if (game.Inventory.FindFreeSpace(gambleItem) == null)
             {
@@ -366,7 +376,9 @@ public static class NPCHelpers
     {
         return game.Belt.Height * options.AccountConfig.HealthSlots.Count - game.Belt.NumOfHealthPotions() > 1
             || game.Belt.Height * options.AccountConfig.ManaSlots.Count - game.Belt.NumOfManaPotions() > 1
-            || game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeOfTownPortal)?.Amount < 5
+            // A missing tome has to count as needing a trip: with null propagation an absent tome compares
+            // the same as a full one, so losing it used to go unnoticed until a portal was needed.
+            || game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeOfTownPortal) is not { Amount: >= 5 }
             || (game.Me.Life / (double)game.Me.MaxLife) < 0.7;
     }
 
@@ -429,8 +441,8 @@ public static class NPCHelpers
             Log.Warning($"Did not find healing or mana potions at {npc.NPCCode} {game.Me.Location}");
         }
 
-        var inventoryItemsToSell = game.Inventory.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
-        var cubeItemsToSell = game.Cube.Items.Where(i => !Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
+        var inventoryItemsToSell = game.Inventory.Items.Where(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
+        var cubeItemsToSell = game.Cube.Items.Where(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && !D2NG.Pickit.Pickit.IsReservedItem(i)).ToList();
         Log.Debug($"Selling {inventoryItemsToSell.Count} inventory items and {cubeItemsToSell.Count} cube items");
 
         foreach (Item item in inventoryItemsToSell)
@@ -445,19 +457,9 @@ public static class NPCHelpers
             game.SellItem(npc, item);
         }
 
-        var tomeOfTownPortal = game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeOfTownPortal);
-        var scrollOfTownPortal = game.Items.Values.FirstOrDefault(i => i.IsInMerchantTab() && i.Name == ItemName.ScrollofTownPortal);
-        if (tomeOfTownPortal != null && scrollOfTownPortal != null && tomeOfTownPortal.Amount < 100)
-        {
-            game.BuyItem(npc, scrollOfTownPortal, true);
-        }
-
-        var tomeOfIdentify = game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeofIdentify);
-        var scrollOfIdentify = game.Items.Values.FirstOrDefault(i => i.IsInMerchantTab() && i.Name == ItemName.ScrollofIdentify);
-        if (tomeOfIdentify != null && scrollOfIdentify != null && tomeOfIdentify.Amount < 100)
-        {
-            game.BuyItem(npc, scrollOfIdentify, true);
-        }
+        // Only the town portal tome. Identification happens at Deckard Cain, so an identify tome would be
+        // bought, carried and never read.
+        RestockTome(game, npc, ItemName.TomeOfTownPortal, ItemName.ScrollofTownPortal);
 
         if(healingPotion != null)
         {
@@ -500,6 +502,43 @@ public static class NPCHelpers
         return true;
     }
 
+    /// <summary>
+    /// Makes sure the character owns a tome and that it is full. Buys the tome itself when there is none:
+    /// a character that has lost its tome of town portal cannot make a portal, and every attempt to leave
+    /// an area fails until somebody notices.
+    /// </summary>
+    private static void RestockTome(Game game, WorldObject npc, ItemName tomeName, ItemName scrollName)
+    {
+        var tome = game.Inventory.Items.FirstOrDefault(i => i.Name == tomeName);
+        if (tome == null)
+        {
+            var tomeForSale = game.Items.Values.FirstOrDefault(i => i.IsInMerchantTab() && i.Name == tomeName);
+            if (tomeForSale == null)
+            {
+                Log.Warning($"{game.Me.Name} has no {tomeName} and {npc.NPCCode} does not stock one");
+                return;
+            }
+
+            Log.Information($"{game.Me.Name} has no {tomeName}, buying one from {npc.NPCCode}");
+            game.BuyItem(npc, tomeForSale, false);
+            if (!GeneralHelpers.TryWithTimeout(
+                (_) => game.Inventory.Items.Any(i => i.Name == tomeName),
+                TimeSpan.FromSeconds(3)))
+            {
+                Log.Warning($"{game.Me.Name} failed to buy a {tomeName}, it may be out of gold or out of space");
+                return;
+            }
+
+            tome = game.Inventory.Items.FirstOrDefault(i => i.Name == tomeName);
+        }
+
+        var scroll = game.Items.Values.FirstOrDefault(i => i.IsInMerchantTab() && i.Name == scrollName);
+        if (tome != null && scroll != null && tome.Amount < 100)
+        {
+            game.BuyItem(npc, scroll, true);
+        }
+    }
+
     public static IEnumerable<WorldObject> GetNearbyNPCs(Client client, Point point, int numberOfEnemies, int distance)
     {
         return client.Game.WorldObjects
@@ -538,7 +577,7 @@ public static class NPCHelpers
 
     private static void BuyMagicItemsAtMerchant(Game game, WorldObject npc)
     {
-        var merchantItemsToBuy = game.Items.Values.Where(i => i.IsInMerchantTab() && Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
+        var merchantItemsToBuy = game.Items.Values.Where(i => i.IsInMerchantTab() && D2NG.Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
         if (merchantItemsToBuy.Count > 0)
         {
             foreach (Item item in merchantItemsToBuy)

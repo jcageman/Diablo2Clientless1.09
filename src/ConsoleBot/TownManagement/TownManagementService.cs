@@ -311,6 +311,10 @@ public class TownManagementService : ITownManagementService
             return result;
         }
 
+        // Everything is identified and nothing has been sold yet, so this is where the keep rules
+        // decide what the run actually walks away with.
+        PickitAudit.LogKeepDecisions(game, "post-identify");
+
         if (!await RefreshAndSellItems(game, movementMode, options))
         {
             return result;
@@ -422,7 +426,7 @@ public class TownManagementService : ITownManagementService
 
     private async Task<bool> RefreshAndSellItems(Game game, MovementMode movementMode, TownManagementOptions options)
     {
-        var sellItemCount = game.Inventory.Items.Count(i => Pickit.Pickit.CanTouchInventoryItem(game, i) && !Pickit.Pickit.ShouldKeepItem(game, i)) + game.Cube.Items.Count(i => !Pickit.Pickit.ShouldKeepItem(game, i));
+        var sellItemCount = game.Inventory.Items.Count(i => D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i) && !D2NG.Pickit.Pickit.ShouldKeepItem(game, i)) + game.Cube.Items.Count(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i));
         if (NPCHelpers.ShouldRefreshCharacterAtNPC(game, options)
             || sellItemCount > 5
             || options.ItemsToBuy?.Count > 0

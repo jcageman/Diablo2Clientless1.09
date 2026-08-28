@@ -221,7 +221,8 @@ public class PindleBot : SingleClientBotBase, IBotInstance
 
     private static bool PickupNearbyItems(Client client)
     {
-        var pickupItems = client.Game.Items.Values.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location)).ToList();
+        PickitAudit.LogGroundItems(client.Game, "Pindle", shouldPickupGoldItems: true);
+        var pickupItems = client.Game.Items.Values.Where(i => i.Ground && D2NG.Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location)).ToList();
         var revCountInInventory = client.Game.Inventory.Items.Count(i => i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion);
         if (revCountInInventory < 5)
         {

@@ -1,4 +1,4 @@
-﻿using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Packet.Incoming;
@@ -17,6 +17,12 @@ public class Player
     public uint? CorpseId { get; set; }
     public uint? MercId { get; set; }
     public Area? Area { get; set; }
+
+    /// <summary>
+    /// Party this player belongs to, or null while the server has not said. 0xFFFF means no party.
+    /// Quest credit in a rush depends on this actually being shared with the rusher.
+    /// </summary>
+    public ushort? PartyId { get; set; }
     public Act.Act? Act { get; set; }
     public ConcurrentDictionary<EntityEffect, EntityEffect> Effects { get; private set; } = new ConcurrentDictionary<EntityEffect, EntityEffect>();
 

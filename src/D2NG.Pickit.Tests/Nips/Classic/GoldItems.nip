@@ -1,0 +1,7 @@
+// Optional unidentified pickup rules from GoldItems.cs
+[type] == gem && ([name] == flawlessamethyst || [name] == flawlessdiamond || [name] == flawlessemerald || [name] == flawlessruby || [name] == flawlesssapphire || [name] == flawlessskull || [name] == flawlesstopaz || [name] == perfectamethyst || [name] == perfectdiamond || [name] == perfectemerald || [name] == perfectruby || [name] == perfectsapphire || [name] == perfectskull || [name] == perfecttopaz)
+([type] == staff || [type] == wand || [type] == scepter) && [quality] != rare
+[type] == armor && [quality] == magic && ([itemtype] == plt || [itemtype] == fld || [itemtype] == gth || [itemtype] == ful || [itemtype] == aar)
+[type] == armor && ([quality] == magic || [quality] == normal) && [itemtype] == x*
+[type] == shield && [quality] == magic && ([itemtype] == xit || [itemtype] == xow || [itemtype] == xts || [itemtype] == xsh || [itemtype] == xpk)
+[type] == gloves && [quality] == magic && ([itemtype] == xtg || [itemtype] == xhg)

@@ -1,0 +1,14 @@
+// Keep: Skin of the Vipermagi
+[type] == armor && [quality] == unique && [name] == serpentskinarmor # [coldresist] >= 34 && [allskills] >= 1 && [flag] != ethereal
+
+// Keep: ethereal unique Mesh Armor
+[type] == armor && [quality] == unique && [name] == mesharmor # [flag] == ethereal
+
+// Keep: unique Russet Armor, ethereal or with vitality
+[type] == armor && [quality] == unique && [name] == russetarmor # [flag] == ethereal || [vitality] > 0
+
+// Keep: unique Wire Fleece and Balrog Skin
+[type] == armor && [quality] == unique && ([name] == wirefleece || [name] == balrogskin) # 1 == 1
+
+// Keep: magic socketed light armor, 4os with life
+[type] == armor && [quality] == magic && ([name] == quiltedarmor || [name] == leatherarmor || [name] == hardleatherarmor || [name] == studdedleather || [name] == ringmail || [name] == lightplate || [name] == ghostarmor || [name] == serpentskinarmor || [name] == demonhidearmor || [name] == trellisedarmor || [name] == linkedmail || [name] == mageplate || [name] == duskshroud || [name] == wyrmhide || [name] == scarabhusk || [name] == wirefleece || [name] == diamondmail || [name] == archonplate || [name] == krakenshell || [name] == hellforgeplate || [name] == lacqueredplate || [name] == shadowplate || [name] == sacredarmor) # [sockets] == 4 && [maxhp] >= 40

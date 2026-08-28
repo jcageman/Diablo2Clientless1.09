@@ -1,0 +1,5 @@
+// Classic gem rules, from Gems.ShouldKeepItemClassic (pickup == keep in the C#).
+// Only Flawless Skull and Perfect Skull are live; every other gem branch is commented out
+// in the C#, so the other 19 grades were neither picked up nor kept.
+[type] == gem && [name] == flawlessskull # 1 == 1
+[type] == gem && [name] == perfectskull # 1 == 1

@@ -11,6 +11,8 @@
   <Project Path="src/D2NG.MuleManager.UI/D2NG.MuleManager.UI.csproj" />
   <Project Path="src/D2NG.MuleManager/D2NG.MuleManager.csproj" />
   <Project Path="src/D2NG.Navigation/D2NG.Navigation.csproj" />
+  <Project Path="src/D2NG.Pickit.Tests/D2NG.Pickit.Tests.csproj" />
+  <Project Path="src/D2NG.Pickit/D2NG.Pickit.csproj" />
   <Project Path="src/MpqLib/MpqLib.csproj" />
   <Project Path="src/PacketSniffer/PacketSniffer.csproj" />
 </Solution>

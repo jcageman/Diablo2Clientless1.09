@@ -1,0 +1,13 @@
+// Note: the javelin/spear skill-tab rule and the IAS + Amplify Damage rule are
+// ShouldKeepItemExpansion only and do not belong here.
+
+// Keep: unique chain gloves with high magic find
+[type] == gloves && [quality] == unique && [name] == chaingloves # [itemmagicbonus] >= 40
+
+// Keep: War Gauntlets leech/def/res/life mixes
+[type] == gloves && [quality] == rare && [name] == wargauntlets # [enhanceddefense] >= 50 && [barbarianlife] >= 60 && [lifeleech] > 0
+[type] == gloves && [quality] == rare && [name] == wargauntlets # [lifeleech] > 0 && [barbarianlife] >= 100
+[type] == gloves && [quality] == rare && [name] == wargauntlets # [enhanceddefense] >= 50 && [crlrfr] >= 30 && [barbarianlife] + [lifeleech]*10 >= 90
+[type] == gloves && [quality] == rare # [crlrfr] >= 30 && [barbarianlife] + [lifeleech]*10 >= 120
+[type] == gloves && [quality] == rare # [crlrfr] >= 50 && [barbarianlife] + [lifeleech]*10 >= 100
+[type] == gloves && [quality] == rare # [crlrfr] >= 70 && [barbarianlife] + [lifeleech]*10 >= 70

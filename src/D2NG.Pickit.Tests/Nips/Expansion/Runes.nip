@@ -1,0 +1,17 @@
+// Desired runes
+[type] == rune && [name] == solrune
+[type] == rune && [name] == nefrune
+[type] == rune && [name] == lemrune
+[type] == rune && [name] == pulrune
+[type] == rune && [name] == umrune
+[type] == rune && [name] == malrune
+[type] == rune && [name] == istrune
+[type] == rune && [name] == gulrune
+[type] == rune && [name] == vexrune
+[type] == rune && [name] == ohmrune
+[type] == rune && [name] == lorune
+[type] == rune && [name] == surrune
+[type] == rune && [name] == berrune
+[type] == rune && [name] == jahrune
+[type] == rune && [name] == chamrune
+[type] == rune && [name] == zodrune

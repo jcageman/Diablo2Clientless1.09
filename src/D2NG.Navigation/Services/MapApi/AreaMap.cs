@@ -1,4 +1,4 @@
-﻿using D2NG.Core.D2GS;
+using D2NG.Core.D2GS;
 using System.Collections.Generic;
 using D2NG.Core.D2GS.Act;
 
@@ -11,4 +11,9 @@ public class AreaMap
     public Dictionary<Area, AdjacentLevel> AdjacentLevels { get; set; }
     public Dictionary<int, List<Point>> Npcs { get; set; }
     public Dictionary<int, List<Point>> Objects { get; set; }
+
+    /// <summary>
+    /// The real Tal Rasha tomb, reported by the map api on the canyon of the magi and null elsewhere.
+    /// </summary>
+    public Area? TombArea { get; set; }
 }

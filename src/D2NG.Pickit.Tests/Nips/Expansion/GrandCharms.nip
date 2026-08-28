@@ -1,0 +1,20 @@
+// Pickup all grand charms
+[type] == grandcharm
+
+// Keep: skill tab + life
+[type] == grandcharm # [itemaddskilltab] >= 1 && [barbarianlife] >= 30
+// High level bases
+[type] == grandcharm # [level] >= 91
+// Specific caster/skill tabs
+[type] == grandcharm # ([fireskilltab] >= 1 || [coldskilltab] >= 1 || [lightningskilltab] >= 1 || [javelinandspearskilltab] >= 1 || [palicombatskilltab] >= 1 || [offensiveaurasskilltab] >= 1 || [poisonandboneskilltab] >= 1 || [warcriesskilltab] >= 1)
+// Max/AR rolls
+[type] == grandcharm # [attackrating] >= 40 && [maxdamage] >= 7
+// FRW + max damage
+[type] == grandcharm # [frw] >= 7 && [maxdamage] >= 7
+// High life
+[type] == grandcharm # [sorceresslife] >= 60
+// Life + res
+[type] == grandcharm # [sorceresslife] >= 20 && [crlrfr] >= 40
+// Gold find
+[type] == grandcharm # [itemgoldbonus] >= 38
+[type] == grandcharm # [itemgoldbonus] > 30 && [attackrating] >= 1

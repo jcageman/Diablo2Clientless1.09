@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
@@ -97,10 +97,10 @@ public class CubeBot : SingleClientBotBase, IBotInstance
 
             foreach (var item in client.Game.Inventory.Items.Where(i =>
                                     IsCubeResultItem(i) &&
-                                    Pickit.Pickit.ShouldKeepItem(client.Game, i) &&
-                                    Pickit.Pickit.CanTouchInventoryItem(client.Game, i)))
+                                    D2NG.Pickit.Pickit.ShouldKeepItem(client.Game, i) &&
+                                    D2NG.Pickit.Pickit.CanTouchInventoryItem(client.Game, i)))
             {
-                if (Pickit.Pickit.ShouldKeepItem(client.Game, item))
+                if (D2NG.Pickit.Pickit.ShouldKeepItem(client.Game, item))
                 {
                     Log.Information($"{client.Game.Me.Name}: Dropping {item.GetFullDescription()}");
 
@@ -181,7 +181,7 @@ public class CubeBot : SingleClientBotBase, IBotInstance
         var newCubeItems = client.Game.Cube.Items;
         foreach (var item in newCubeItems)
         {
-            if (Pickit.Pickit.ShouldKeepItem(client.Game, item))
+            if (D2NG.Pickit.Pickit.ShouldKeepItem(client.Game, item))
             {
                 Log.Information($"{client.Game.Me.Name}: Want to keep {item.GetFullDescription()}");
             }
@@ -211,13 +211,13 @@ public class CubeBot : SingleClientBotBase, IBotInstance
         {
             return MatchesRequiredItem(i, requirement) &&
             IsItemForCubing(client, i) &&
-            Pickit.Pickit.CanTouchInventoryItem(client.Game, i);
+            D2NG.Pickit.Pickit.CanTouchInventoryItem(client.Game, i);
         }).ToList();
     }
 
     private static bool IsItemForCubing(Client client, Item item)
     {
-        return !Pickit.Pickit.ShouldKeepItem(client.Game, item)
+        return !D2NG.Pickit.Pickit.ShouldKeepItem(client.Game, item)
             || item.Classification == ClassificationType.Gem
             || (item.Name == ItemName.Ring && item.Quality == QualityType.Unique);
     }

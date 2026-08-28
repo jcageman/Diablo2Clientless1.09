@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Enums;
+using ConsoleBot.Enums;
 using D2NG.Core;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
@@ -166,7 +166,7 @@ public static class CubeHelpers
             return;
         }
 
-        var inventoryItemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && Pickit.Pickit.ShouldKeepItem(game, i) && Pickit.Pickit.CanTouchInventoryItem(game, i))
+        var inventoryItemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i))
                                                        .ToList();
         foreach (var item in inventoryItemsToKeep)
         {

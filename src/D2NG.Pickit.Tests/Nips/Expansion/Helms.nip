@@ -1,0 +1,35 @@
+// Expansion helm rules only. C# ShouldKeepItemExpansion returns false rather than falling through
+// to the classic rules, so the Skull Cap magic-find rules and the generic FHR/res/life helm rules
+// do not apply here.
+//
+// Pickit.cs routes Helm, Circlet, BarbarianHelm and DruidPelt to the Helms rules, and
+// NipFieldMaps maps those to helm / circlet / primalhelm / pelt. The ungated rules must list
+// all four. Slayer Guard is a Barbarian Helm base, so it is primalhelm and not helm - name
+// tests are written without a [type] prefix to avoid that trap.
+
+// Pickup: notable uniques
+[quality] == unique && ([name] == wingedhelm || [name] == shako || [name] == slayerguard) && [flag] != ethereal
+[quality] == unique && [name] == deathmask && [flag] == ethereal
+[quality] == unique && ([name] == grandcrown || [name] == grimhelm)
+
+// Pickup: magic and rare barbarian helms and circlets
+[type] == primalhelm && ([quality] == magic || [quality] == rare)
+[type] == circlet && ([quality] == magic || [quality] == rare)
+
+// Keep: notable uniques
+[quality] == unique && [name] == slayerguard # [flag] != ethereal && [barbariancombatskills] == 1
+[quality] == unique && [name] == wingedhelm # [fcr] >= 30
+[quality] == unique && [name] == deathmask # [flag] == ethereal
+[quality] == unique && [name] == grandcrown # [lifeleech] >= 11 && [itemgoldbonus] >= 95
+[quality] == unique && [name] == grimhelm # 1 == 1
+[quality] == unique && [name] == shako # [flag] != ethereal
+
+// Keep: rare caster helms with FCR, skills, res and life
+([type] == helm || [type] == circlet || [type] == primalhelm || [type] == pelt) && [quality] == rare # [fcr] >= 20 && ([sorceressskills]+[necromancerskills]+[paladinskills]+[druidskills]+[itemaddskilltab]) >= 2 && [crlrfr] >= 60 && [sorceresslife] >= 45
+
+// Keep: barbarian Battle Orders helms. Barbarian helm bases are [type] == primalhelm, so
+// restricting this to [type] == helm skipped the bases it exists for.
+([type] == helm || [type] == circlet || [type] == primalhelm || [type] == pelt) # [barbarianskills] + [warcriesskilltab] + [skillbattleorders] >= 5
+
+// Keep: magic circlets with FCR and skill tabs
+[type] == circlet && [quality] == magic # [fcr] >= 20 && [itemaddskilltab] >= 3

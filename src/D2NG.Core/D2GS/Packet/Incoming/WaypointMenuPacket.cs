@@ -18,13 +18,15 @@ internal class WaypointMenuPacket : D2gsPacket
         }
         WaypointId = reader.ReadUInt32();
         _ = reader.ReadUInt16();
-        foreach (Waypoint waypoint in Enum.GetValues<Waypoint>())
+        // Panel order, not numeric order. The values are level ids and do not ascend the way the
+        // bitfield is packed, so Enum.GetValues here read act 1 correctly and scrambled every act after
+        // it. See WaypointExtensions.BitOrder.
+        foreach (var waypoint in WaypointExtensions.BitOrder)
         {
             if (reader.ReadBit())
             {
                 AllowedWaypoints.Add(waypoint);
             }
-
         }
     }
 

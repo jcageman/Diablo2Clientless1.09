@@ -197,7 +197,8 @@ public class MephistoBot : SingleClientBotBase, IBotInstance
 
     private static bool PickupNearbyItems(Client client)
     {
-        var pickupItems = client.Game.Items.Values.Where(i => i.Ground && Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
+        PickitAudit.LogGroundItems(client.Game, "Mephisto", shouldPickupGoldItems: true);
+        var pickupItems = client.Game.Items.Values.Where(i => i.Ground && D2NG.Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
         Log.Information($"Killed Mephisto, picking up {pickupItems.Count()} items ");
         foreach (var item in pickupItems)
         {

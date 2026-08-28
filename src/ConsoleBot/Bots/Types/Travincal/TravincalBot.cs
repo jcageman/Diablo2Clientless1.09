@@ -132,9 +132,10 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
 
     private async Task<bool> PickupNearbyItems(Game game, double distance)
     {
+        PickitAudit.LogGroundItems(game, "Travincal", shouldPickupGoldItems: true);
         var pickupItems = game.Items.Values.Where(i =>
         {
-            return i.Ground && game.Me.Location.Distance(i.Location) < distance && Pickit.Pickit.ShouldPickupItem(game, i, true);
+            return i.Ground && game.Me.Location.Distance(i.Location) < distance && D2NG.Pickit.Pickit.ShouldPickupItem(game, i, true);
         }).OrderBy(n => game.Me.Location.Distance(n.Location));
 
         foreach (var item in pickupItems)
@@ -290,6 +291,9 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
             return false;
         }
 
-        return game.UseHealthPotions();
+        // The buffs raise maximum life and mana without raising the current values on 1.09. The
+        // chicken service sees that maximum change and drinks one potion to lift the bar, so there
+        // is nothing to do here.
+        return true;
     }
 }

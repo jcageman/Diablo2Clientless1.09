@@ -1,0 +1,31 @@
+// Classic shield rules, from Shields.ShouldKeepItemClassic.
+//
+// Removed: two generic "(rare||magic) shield with +2 paladin skills / FHR+FBR" rules that had
+// no C# counterpart - the paladin and block rules are gated on the DesirableShields list or on
+// Grim Shield / Barbed Shield by name. Also removed a Gothic Shield "[level] >= 90" rule, which
+// is a ShouldPickupItemClassic condition, not a keep one.
+// Thresholds are ">" not ">=" wherever the C# used GetTotalResistFrLrCr() > N.
+
+// Pickup: rare shields, plus high level unique Gothic Shield / Bone Shield
+[type] == shield && [quality] == rare
+[type] == shield && [quality] == unique && ([name] == gothicshield || [name] == boneshield) && [level] >= 90
+
+// Keep: socketed classic uniques
+[type] == shield && [name] == gothicshield && [quality] == unique # [crlrfr] > 140 && [sockets] > 0
+[type] == shield && [name] == boneshield && [quality] == unique # [level] >= 90 && [sockets] > 0
+
+// Keep: DesirableShields bases
+[type] == shield && ([name] == boneshield || [name] == grimshield || [name] == spikedshield || [name] == barbedshield) # [fbr] >= 30 && [crlrfr] > 50 && [damagetomana] >= 5
+[type] == shield && ([name] == boneshield || [name] == grimshield || [name] == spikedshield || [name] == barbedshield) # [paladinskills] >= 2 && [crlrfr] > 50 && [barbarianlife] >= 30
+[type] == shield && ([name] == boneshield || [name] == grimshield || [name] == spikedshield || [name] == barbedshield) # [paladinskills] >= 2 && [crlrfr] > 70 && [barbarianlife] >= 30
+[type] == shield && ([name] == boneshield || [name] == grimshield || [name] == spikedshield || [name] == barbedshield) # [fhr] >= 10 && [fbr] >= 30 && [crlrfr] > 50
+
+// Keep: named bases
+[type] == shield && [name] == grimshield # [paladinskills] >= 2 && [crlrfr] > 50 && [enhanceddefense] >= 50
+[type] == shield && [name] == barbedshield # [paladinskills] >= 2 && [crlrfr] > 50
+[type] == shield && [name] == pavise # [fbr] >= 30 && [enhanceddefense] >= 90 && ([maxdamage] >= 4 || [barbarianlife] >= 30)
+[type] == shield && [name] == grimshield # [fbr] >= 30 && [enhanceddefense] >= 70 && [crlrfr] > 50
+[type] == shield && [name] == towershield # [fbr] >= 30 && [crlrfr] > 50 && [itemreqpercent] <= -20
+
+// Keep: any shield with FHR + FBR + high res and sorc life (ungated in the C#)
+[type] == shield # [fhr] >= 10 && [fbr] >= 30 && [crlrfr] > 70 && [sorceresslife] > 30

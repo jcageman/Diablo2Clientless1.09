@@ -1,0 +1,42 @@
+// Reviewed against the original C# Weapons.cs (ShouldPickupItemClassic / ShouldKeepItemClassic).
+// Exceptional weapons and bows do drop in classic, so the keep rules below apply.
+//
+// Two approximations, because the nip fields cannot express the C# exactly:
+//   [ed] sums EnhancedDamage + EnhancedMaximumDamage + EnhancedMinimumDamage, where the C# read
+//   EnhancedMaximumDamage alone, so these thresholds are marginally looser.
+//   The C# damage score took max(primary, secondary) damage; there are no secondary-damage nip
+//   fields, so primary is used. Note the C# multiplier was written (int)1.5 * x, which evaluates
+//   to 1 * x, so plain addition matches its actual behaviour.
+
+// Pickup: BO sticks
+([name] == crystalsword || [name] == dagger || [name] == shortspear || [name] == throwingspear || [name] == throwingknife || [name] == throwingaxe || [name] == balancedknife) && [flag] != ethereal && ([quality] == magic || [quality] == rare)
+
+// Pickup: magic javelins
+[type] == javelin && [quality] == magic
+
+// Pickup: high level unique Blade / Maul
+[quality] == unique && ([name] == blade || [name] == maul) && [level] >= 90
+
+// Keep: rare exceptional melee with high damage. Knockback disqualifies a weapon outright.
+[quality] == rare && ([name] == marteldefer || [name] == battlehammer || [name] == lance || [name] == executionersword || [name] == naga) # [knockback] == 0 && [ed] >= 170 && ([ed] + [mindamage] + [maxdamage] + [barbarianskills] * 5) > 180
+
+// Keep: rare PvM weapons with reduced requirements and life leech
+[quality] == rare && ([name] == marteldefer || [name] == lance || [name] == executionersword) # [knockback] == 0 && [itemreqpercent] <= -20 && [lifeleech] >= 6 && ([ed] + [mindamage] + [maxdamage] + [barbarianskills] * 5) > 140
+
+// Keep: other interesting rare exceptional melee, at a higher damage bar
+[quality] == rare && ([name] == ancientaxe || [name] == tabar || [name] == gothicsword || [name] == becdecorbin || [name] == grimscythe || [name] == zweihander) # [knockback] == 0 && [ed] >= 190 && ([ed] + [mindamage] + [maxdamage] + [barbarianskills] * 5) > 210
+
+// Keep: rare Gothic Bow with IAS and damage
+[quality] == rare && [name] == gothicbow # [knockback] == 0 && [ias] >= 10 && [ed] >= 150 && ([ed] + [mindamage] + [maxdamage] + [dexterity] + [amazonskills] * 5) > 170
+
+// Keep: rare Double/Rune Bow with IAS and damage
+[quality] == rare && ([name] == doublebow || [name] == runebow) # [knockback] == 0 && [ias] >= 20 && [ed] >= 150 && ([ed] + [mindamage] + [maxdamage] + [dexterity] + [amazonskills] * 5) > 170
+
+// Keep: rare Large Siege / Razor Bow at a higher bar
+[quality] == rare && ([name] == largesiegebow || [name] == razorbow) # [knockback] == 0 && [ias] >= 20 && [ed] >= 170 && ([ed] + [mindamage] + [maxdamage] + [dexterity] + [amazonskills] * 5) > 180
+
+// Keep: rare paladin Flail
+[quality] == rare && [name] == flail # [knockback] == 0 && [paladinskills] >= 2 && [ias] >= 40 && ([crlrfr] > 10 || [paladinlife] > 10)
+
+// Note: the "Java skill tab with IAS" and "Barbarian BO sticks" rules are
+// ShouldKeepItemExpansion only - ShouldKeepItemClassic has neither.

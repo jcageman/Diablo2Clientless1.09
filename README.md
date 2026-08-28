@@ -5,108 +5,160 @@
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/jcageman/D2NG.svg)
 
 ## Building the project
-This project builds with .NET 10 and can be built by running `dotnet build` on the command line from the root of the Solution.
+This project builds with .NET 10 and can be built by running `dotnet build` from the solution root.
 
 ## Functionality
 Initially based on https://github.com/dkuwahara/D2NG, but now with a lot more features.
 
-- Bots: Mephisto, Travincal, Pindle, Cows, Cs, Baal (and it's easy to add new bots)
-- Pathing module using https://github.com/jcageman/d2mapapi
-- Gambling, pickit, muling
+- Bots: Mephisto, Travincal, Pindle, Cows, CS, and Baal
+- Pathing through d2mapapi
+- NIP-based pickup and keep rules
+- Gambling and muling
 
 ## Configuring
-Commandline parameters: config="D:\projects\diablo2bot\config.json" muleconfig="D:\projects\diablo2bot\muleconfig.json" 
-The above `config.json` should look as follows:
+The bot accepts three configuration files:
+
+```text
+ConsoleBot.exe config="C:\path\to\bot.json" muleconfig="C:\path\to\mule.json" pickitconfig="C:\path\to\pickitconfig-expansion.json"
 ```
+
+Do not commit credentials, tokens, server addresses, or machine-specific paths. Use placeholders while documenting configuration:
+
+```json
 {
-    "bot": {
-        "realm": "xx.xxx.xxx.xxx",
-        "keyOwner": "test",
-        "gameNamePrefix": "test",
-        "gamePassword": "x",
-        "gameDescriptions": ["trade","offer soj"],
-        "difficulty" : "hell",
-        "channelToJoin": "",
-        "gamefolder": "C:\\Diablo II1.09D",
-        "botType" : "mephisto",
-	"logFile": "meph1log.txt",
-	"mephisto" : {"username": "test", "password": "testpass", "character" : "testcharacter"}
-	},
-    "externalMessaging" : {
-        "telegramApiKey": "5231-xxerew",
-        "telegramChatId": 1234
+  "bot": {
+    "realm": "<realm-address>",
+    "keyOwner": "<key-owner>",
+    "gameNamePrefix": "<game-prefix>",
+    "gamePassword": "<game-password>",
+    "gameDescriptions": ["<description>"],
+    "difficulty": "hell",
+    "channelToJoin": "",
+    "gamefolder": "C:\\path\\to\\diablo-ii",
+    "botType": "mephisto",
+    "logFile": "bot.log",
+    "logLevel": "Information",
+    "pickitLogFile": "bot-pickit.log",
+    "chicken": {
+      "lifeChickenPercent": 0.2,
+      "lifeChickenAbsolute": 0,
+      "useHealthPotionPercent": 0.9,
+      "useRejuvenationPercent": 0.3,
+      "useManaPotionPercent": 0.3,
+      "minPotionIntervalMs": 700
     },
-    "map" : {
-       "apiUrl" : "http://localhost:8080"
+    "mephisto": {
+      "username": "<username>",
+      "password": "<password>",
+      "character": "<character>",
+      "chicken": {
+        "lifeChickenAbsolute": 400
+      }
     }
+  },
+  "externalMessaging": {
+    "telegramApiKey": "<telegram-api-key>",
+    "telegramChatId": 0
+  },
+  "map": {
+    "apiUrl": "http://localhost:8080"
+  }
 }
 ```
 
-The realm ip address can be retrieved with a tool like https://www.wireshark.org/. Start filtering on tcp port 6112 (in wireshark the filter would be `tcp.port == 6112` as filter). You should receive packets and as soon as you enter the login screen. The source or destination address of the packets is the ip address you need to fill in for the bot.realm parameter. Source/Destination can be your own ip or the ip of the diablo 2 server, so double check the ip you enter is not your own by using something like https://www.whatismyip.com/
+The required `pickitconfig` file contains the NIP root and configurable bot decisions:
 
-The above `muleconfig.json` should look as follows:
-```
+```json
 {
-	"mule": {
-		"accounts": [
-			{
-				"username": "test1",
-				"password": "testpass",
-				"excludedCharacters" : ["testchar1"],
-				"matchesAny": [
-					{
-						"matchesAll" : [{"itemName" : "ring", "qualityType" : "unique" }]
-					},
-					{
-						"matchesAll" : [{"itemName" : "perfectSkull"}]
-					}
-				]
-			},
-			{
-				"username": "test2",
-				"password": "testpass",
-				"excludedCharacters" : ["testchar2", "testchar3"],
-				"matchesAny": [
-					{
-						"matchesAll" : [{"notFilter" : true, "itemName" : "ring", "qualityType" : "unique" }, {"notFilter" : true, "classificationType" : "gem"}]
-					}
-				]
-			},
-			{
-				"username": "test2",
-				"password": "testpass",
-				"includedCharacters" : ["testchar3"],
-				"matchesAny": [
-					{
-						"matchesAll" : [{"itemName" : "perfectDiamond"}]
-					},
-					{
-						"matchesAll" : [{"itemName" : "perfectAmethyst"}]
-					},
-					{
-						"matchesAll" : [{"itemName" : "perfectEmerald"}]
-					},
-					{
-						"matchesAll" : [{"itemName" : "perfectRuby"}]
-					},
-					{
-						"matchesAll" : [{"itemName" : "perfectDiamond"}]
-					}
-				]
-			}
-		]
-	}
+  "pickit": {
+    "nipDirectory": "C:\\path\\to\\nips\\Expansion",
+    "gamble": {
+      "rules": [
+        { "itemNames": ["amulet"], "minimumCharacterLevel": 90 },
+        { "itemNames": ["boots", "heavyBoots"] }
+      ]
+    },
+    "externalItemBlacklist": [
+      { "itemNames": ["ring"], "quality": "unique" },
+      { "classification": "gem" },
+      { "itemNames": ["solRune", "nefRune"] },
+      { "itemNames": ["heavyGloves", "sharkskinGloves", "vampireboneGloves"], "quality": "magical" }
+    ]
+  }
 }
 ```
-See https://core.telegram.org/bots for configuration of the telegram bot
 
-To be able to run the bot you also need to configure the MapClient from https://github.com/jcageman/d2mapapi
-If you run this locally this runs on localhost port 8080 (which is also the default in the above config)
+`nipDirectory` points directly to either the `Classic` or `Expansion` NIP folder. Select the matching pickit configuration in the launcher; the bot no longer chooses a NIP folder from the character game mode. Gamble rules are evaluated in list order; keep them sorted by `minimumCharacterLevel` descending. The first rule whose minimum level is reached controls which item names can be gambled. An omitted minimum level means `0`. The external item list is a blacklist: matching items are not sent to the external messaging client.
 
-## Future ideas
-1. Implement pickit using .nip files (used in many other bots)
-2. Improve chicken/pot behavior (currently runs in a separate thread, probably better to use task scheduling)
-3. Auto leveling / rushing bots
+`logLevel` sets the minimum level written to `logFile` (`Verbose` through `Fatal`, default
+`Information`); it can also be given on the command line as `logLevel=Debug`. `pickitLogFile` is
+optional and receives one line per item the pickit judged - what was picked up, what was left on the
+ground, and after identification what was kept versus sold - each with the NIP rule (`file:line`)
+behind the decision.
+
+`chicken` controls when the bot drinks and when it abandons a game. Thresholds are fractions of
+maximum, except `lifeChickenAbsolute`, which is a raw hit point floor and is disabled at `0`. A
+`chicken` block on an account replaces the bot-level block entirely, so a run mixing builds can give
+each character its own numbers. On patch 1.09 Battle Orders raises maximum life and mana without
+raising the current values, so a fraction can collapse without any damage being taken; the bot
+detects that, drinks a single potion, and then only acts on fractions once it has seen real damage.
+
+The `pickit` section also takes an optional `inventory` block. `bottomCharmRowsToNotTouch` (default
+4) is the number of inventory rows, counted from the bottom, in which charms are left alone. Items
+the bot itself needs - the town portal and identify tomes, the cube, rejuvenation potions and an
+amazon's ammunition - are always kept and are not configurable.
+
+The `muleconfig` file controls mule accounts and filters. An optional `neverMule` list of filters marks items that are sold rather than given a mule slot; omit it to use the built-in list of flawless gems, or give an empty list to mule everything. Keep account credentials in private local files and never publish them.
+
+Example mule configuration using deliberately fake credentials:
+
+```json
+{
+  "mule": {
+    "accounts": [
+      {
+        "username": "example-mule-one",
+        "password": "not-a-real-password",
+        "excludedCharacters": ["example-character"],
+        "matchesAny": [
+          {
+            "matchesAll": [
+              { "itemName": "ring", "qualityType": "unique" }
+            ]
+          },
+          {
+            "matchesAll": [
+              { "itemName": "perfectSkull" }
+            ]
+          }
+        ]
+      },
+      {
+        "username": "example-mule-two",
+        "password": "not-a-real-password",
+        "includedCharacters": ["example-character"],
+        "matchesAny": [
+          {
+            "matchesAll": [
+              { "itemName": "perfectDiamond" }
+            ]
+          },
+          {
+            "matchesAll": [
+              { "itemName": "perfectAmethyst" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The bot also requires a configured MapClient from https://github.com/jcageman/d2mapapi. A local development instance commonly uses port 8080, but the address should remain environment-specific.
 
 ## Analyzing Packets
-Besides the ConsoleBot there is another CLI project called PacketSniffer, which you can use to analyse packets send by the bot, but also by any started diablo client connected to a realm. The PacketSniffer currently only monitors packets send by the game server (i.e. the packets send when you are in a game). This is 100% safe to use in all cases and undetectable. You could use this is you are not sure if your server is using the same version of 1.09d or if you simply want to analyze the game server yourself.
+The PacketSniffer project can analyze packets sent by the game server. It is useful for checking protocol behavior and version differences.
+
+## Future ideas
+1. Add auto-leveling and rushing bots.

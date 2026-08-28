@@ -1,0 +1,11 @@
+// Pickup all large charms
+[type] == largecharm
+
+// Keep: FRW + max damage
+[type] == largecharm # [frw] >= 5 && [maxdamage] >= 4
+// High life
+[type] == largecharm # [sorceresslife] >= 40
+// AR + max damage
+[type] == largecharm # [attackrating] >= 24 && [maxdamage] >= 4
+// Gold find
+[type] == largecharm # [itemgoldbonus] >= 21

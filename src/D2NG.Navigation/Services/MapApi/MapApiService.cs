@@ -25,6 +25,27 @@ public class MapApiService : IMapApiService
         _httpClientFactory = httpClientFactory;
         _cache = cache;
     }
+    public async Task<bool> IsAvailable()
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(10);
+        try
+        {
+            using var response = await client.GetAsync(new Uri(_mapConfiguration.ApiUrl), HttpCompletionOption.ResponseHeadersRead);
+
+            // Any HTTP answer, a 404 included, means something is listening and serving.
+            return true;
+        }
+        catch (HttpRequestException)
+        {
+            return false;
+        }
+        catch (TaskCanceledException)
+        {
+            return false;
+        }
+    }
+
     public async Task<AreaMap> GetArea(uint mapId, Difficulty difficulty, Area areaId)
     {
         var areaMap = _cache.GetOrCreate(GetMapApiKey(mapId, difficulty, areaId), (cacheEntry) =>

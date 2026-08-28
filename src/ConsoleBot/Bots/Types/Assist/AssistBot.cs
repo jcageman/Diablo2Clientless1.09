@@ -1,4 +1,5 @@
-﻿using ConsoleBot.Attack;
+﻿using ConsoleBot.Chicken;
+using ConsoleBot.Attack;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.TownManagement;
@@ -58,7 +59,7 @@ public class AssistBot : IBotInstance
 
     public async Task Run()
     {
-        if(ShouldStop)
+        if (ShouldStop)
         {
             Log.Information($"Stopped bot due to receiving stop message");
             await Task.Delay(TimeSpan.FromMinutes(1));
@@ -70,6 +71,7 @@ public class AssistBot : IBotInstance
         foreach (var account in _assistConfig.Accounts)
         {
             var client = new Client();
+            ChickenService.Attach(client, account.Chicken ?? _config.Chicken);
             var accountAndClient = Tuple.Create(account, client, new AssistBotClientState());
             if (IsHostClient(account))
             {
@@ -295,9 +297,9 @@ public class AssistBot : IBotInstance
                 return false;
             }
 
-            foreach(var player in client.Game.Players)
+            foreach (var player in client.Game.Players)
             {
-                if(player.Id != client.Game.Me.Id)
+                if (player.Id != client.Game.Me.Id)
                 {
                     client.Game.AllowLootCorpse(player);
                 }
@@ -306,7 +308,7 @@ public class AssistBot : IBotInstance
             while (!c.Item3.ShouldStop && !c.Item3.NextGame && !nextGameCancellation.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(0.1));
-                if(client.Game.IsInGame())
+                if (client.Game.IsInGame())
                 {
                     await AssistLeadClient(client, c.Item1, c.Item3);
                 }
@@ -318,7 +320,7 @@ public class AssistBot : IBotInstance
                         await RealmConnectHelpers.JoinGameWithRetry(gameCount, c.Item2, _config, c.Item1);
                     }
                 }
-                
+
             }
 
             return true;
@@ -350,11 +352,11 @@ public class AssistBot : IBotInstance
         {
             return await GoNextLevel(client, state, movementMode);
         }
-        else if(state.GoToWaypoint != null)
+        else if (state.GoToWaypoint != null)
         {
             return await GoToAreaWaypoint(client, state, movementMode);
         }
-        else if(state.ShouldGoToTown)
+        else if (state.ShouldGoToTown)
         {
             if (!client.Game.IsInTown())
             {
@@ -366,7 +368,7 @@ public class AssistBot : IBotInstance
             }
             state.ShouldGoToTown = false;
         }
-        else if(state.ShouldHeal)
+        else if (state.ShouldHeal)
         {
             return await HealInTown(client, account, state);
         }
@@ -460,7 +462,7 @@ public class AssistBot : IBotInstance
             return false;
         }
 
-        if(client.Game.IsInTown())
+        if (client.Game.IsInTown())
         {
             var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).Single();
             Log.Information($"Taking waypoint to {state.GoToWaypoint}");
@@ -523,11 +525,10 @@ public class AssistBot : IBotInstance
 
     private static async Task<bool> PickupNearbyItems(Client client)
     {
+        PickitAudit.LogGroundItems(client.Game, "Assist", shouldPickupGoldItems: true);
         var pickupItems = client.Game.Items.Values
             .Where(i => i.Ground
-            && Pickit.GoldItems.ShouldPickupItem(i)
-            && i.Classification != ClassificationType.Gem
-            && i.Classification != ClassificationType.Essence)
+            && D2NG.Pickit.Pickit.ShouldPickupItem(client.Game, i, true))
             .Where(n => n.Location.Distance(client.Game.Me.Location) < 20)
             .OrderBy(n => n.Location.Distance(client.Game.Me.Location))
             .ToList();

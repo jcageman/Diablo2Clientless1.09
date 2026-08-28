@@ -43,10 +43,14 @@ public static class MovementHelpers
             {
                 return false;
             }
+
+            // Give the answer time to arrive. Reading the position in the same breath as asking for it
+            // judged arrival on the stale one, and every retry then re-sent the warp interact.
             game.RequestUpdate(game.Me.Id);
+            await Task.Delay(400);
             var isValidPoint = await pathingService.IsNavigatablePointInArea(game.MapId, Difficulty.Normal, area, game.Me.Location);
             return isValidPoint;
-        }, TimeSpan.FromSeconds(3.5)))
+        }, TimeSpan.FromSeconds(10)))
         {
             Log.Error("Checking whether moved to area failed");
             return false;
@@ -66,8 +70,10 @@ public static class MovementHelpers
         }
         else
         {
-            var clientArea = await mapApiService.GetAreaFromLocation(game.MapId, Difficulty.Normal, game.Me.Location, game.Act ,game.Area) ?? game.Area;
-            var path = await pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, clientArea, game.Me.Location, location, movementMode);
+            // game.Area is resolved from the tile being stood in, so asking the map api which area this
+            // position is in would only repeat work: it used to be necessary because the area the client
+            // reported came from the last map reveal packet, neighbouring levels included.
+            var path = await pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, location, movementMode);
             if (path.Count != 0 && !await TakePathOfLocations(game, path, movementMode, token))
             {
                 Log.Warning($"Walking to location failed at {game.Me.Location}");
@@ -93,8 +99,7 @@ public static class MovementHelpers
         }
         else
         {
-            var clientArea = await mapApiService.GetAreaFromLocation(game.MapId, Difficulty.Normal, game.Me.Location, game.Act, game.Area) ?? game.Area;
-            var path = await pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, clientArea, game.Me.Location, worldObject.Location, movementMode);
+            var path = await pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, game.Area, game.Me.Location, worldObject.Location, movementMode);
             if (path.Count != 0 && !await TakePathOfLocations(game, path, movementMode, token))
             {
                 Log.Warning($"Walking to enemy to attack failed at {game.Me.Location}");

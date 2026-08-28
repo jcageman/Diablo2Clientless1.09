@@ -1,4 +1,4 @@
-﻿using D2NG.Core;
+using D2NG.Core;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.Pathing;
 using Serilog;
@@ -63,6 +63,15 @@ public static class GeneralHelpers
         {
             var pickupSucceeded = false;
             var corpse = client.Game.Players.FirstOrDefault(p => p.Id == corpseId);
+            if (corpse == null)
+            {
+                // The character remembers a corpse the game has no player object for, which happens when it
+                // died in an earlier game. Nothing to walk to, and nothing to pick up.
+                Log.Information("{ClientName} still refers to corpse {CorpseId}, but this game has no such "
+                    + "body, so there is nothing to recover", client.LoggedInUserName(), corpseId);
+                return true;
+            }
+
             Log.Information("Found corpse {CorpseId} for {ClientName}, trying to pickup", corpse.Id, client.LoggedInUserName());
             pickupSucceeded = await TryWithTimeout(async (retryCount) =>
             {

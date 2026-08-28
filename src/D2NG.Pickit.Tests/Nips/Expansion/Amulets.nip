@@ -1,0 +1,42 @@
+// Expansion amulet rules. ShouldKeepItemExpansion runs the unique rules and the war cries
+// rule, then ends with "return ShouldKeepItemClassic(item)", so the classic rules apply too.
+
+// Unique keeps.
+// The C# tested StatType.AmazonSkills for Highlord's and Mara's. The 1.09 packet lists a
+// +all-skills roll as six separate per-class stats and ParseItemPacket then synthesises
+// AllSkills from them, so both stats are present on those amulets. [allskills] is used here
+// because it cannot also be satisfied by a plain +1/+2 amazon-skills roll.
+[type] == amulet && [quality] == unique # [ias] >= 20 && [frw] >= 30
+[type] == amulet && [quality] == unique # [poisonresist] >= 75
+[type] == amulet && [quality] == unique # [ias] >= 20 && [allskills] == 1
+[type] == amulet && [quality] == unique # [crlrfr] >= 60 && [sorceresslife] >= 20 && [allskills] == 2
+
+// Warcries tab
+[type] == amulet # [warcriesskilltab] >= 3
+
+// Sorc 2 skill
+[type] == amulet # [sorceressskills] == 2 && [crlrfr] >= 40 && [sorceresslife] >= 40
+[type] == amulet # [sorceressskills] == 2 && [crlrfr] >= 20 && [sorceresslife] >= 70
+[type] == amulet # [sorceressskills] == 2 && [fcr] >= 10 && [crlrfr] >= 30 && [sorceresslife] >= 50
+[type] == amulet # [sorceressskills] == 2 && [fcr] >= 10 && [crlrfr] >= 40
+
+// Broad caster mixes
+[type] == amulet # ([sorceressskills]+[necromancerskills]+[paladinskills]+[druidskills]+[lightningskilltab]+[coldskilltab]) >= 2 && [crlrfr] >= 60 && [necromancerlife] >= 30
+[type] == amulet # ([sorceressskills]+[necromancerskills]+[paladinskills]+[druidskills]+[lightningskilltab]+[coldskilltab]) >= 2 && [crlrfr] >= 45 && [necromancerlife] >= 70
+[type] == amulet # ([sorceressskills]+[necromancerskills]+[paladinskills]+[druidskills]+[lightningskilltab]+[coldskilltab]) >= 2 && [fcr] >= 10 && [crlrfr] >= 30 && [necromancerlife] >= 50
+[type] == amulet # ([sorceressskills]+[necromancerskills]+[paladinskills]+[druidskills]+[lightningskilltab]+[coldskilltab]) >= 2 && [fcr] >= 10 && [crlrfr] >= 70
+
+// Melee / physical focus
+[type] == amulet # ([barbarianskills]+[amazonskills]+[assassinskills]+[druidskills]+[trapsskilltab]+[druidelemental]+[barbariancombatskills]) >= 2 && [crlrfr] >= 60 && [barbarianlife] >= 50
+
+// Leech + GF/MF blends
+[type] == amulet # ([lifeleech]+[manaleech]) >= 4 && [itemgoldbonus] >= 80 && [crlrfr] >= 80
+[type] == amulet # ([lifeleech]+[manaleech]) >= 4 && [itemgoldbonus] >= 80 && [itemmagicbonus] >= 30 && [crlrfr] >= 40
+[type] == amulet # [barbarianskills] == 2 && [itemgoldbonus] >= 80 && ([lifeleech]+[manaleech]) >= 4 && [crlrfr] >= 40
+
+// Damage / stat driven
+[type] == amulet # [lifeleech] >= 6 && [mindamage] >= 7 && [strength] + ([barbarianskills] * 4) >= 10
+[type] == amulet # [mindamage] >= 7 && [barbarianlife] >= 100 && [crlrfr] >= 70
+[type] == amulet # [amazonskills] >= 1 && [mindamage] >= 7 && [barbarianlife] >= 40 && [crlrfr] >= 60
+[type] == amulet # [amazonskills] >= 1 && ([lifeleech]+[manaleech]) >= 4 && [mindamage] >= 5 && [barbarianlife] >= 30 && [crlrfr] >= 60
+[type] == amulet # [lifeleech] >= 5 && [mindamage] >= 7 && [dexterity] >= 10
