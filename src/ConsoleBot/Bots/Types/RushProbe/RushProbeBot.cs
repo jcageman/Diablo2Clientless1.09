@@ -4925,6 +4925,8 @@ public class RushProbeBot : IBotInstance
                 return true;
             }
 
+            await LogActFiveQuests(rusheeClient, "after");
+
             rusheeClient.Game.RequestQuestData();
             await Task.Delay(1500);
             Log.Information("After Baal: rushee eve of destruction 0x{Word:X4}, act 5 outro 0x{Outro:X4}, {State}",
@@ -4959,6 +4961,8 @@ public class RushProbeBot : IBotInstance
             rusheeClient.Game.Resurrect();
             await Task.Delay(2000);
         }
+
+        await LogActFiveQuests(rusheeClient, "before");
 
         rusheeClient.Game.RequestUpdate(rusheeClient.Game.Me.Id);
         await Task.Delay(500);
@@ -5245,6 +5249,31 @@ public class RushProbeBot : IBotInstance
                 Log.Information("Picked up {Amount} {Name}", item.Amount, item.Name);
             }
         }
+    }
+
+    /// <summary>
+    /// Dumps the rushee's whole act 5 quest chain.
+    /// </summary>
+    /// <remarks>
+    /// Standing alive in the Worldstone Chamber when Baal dies is not enough on its own: it happened, and
+    /// EveOfDestruction stayed 0x0000. The chain is logged so the prerequisite that is actually missing can
+    /// be seen rather than guessed at. RiteOfPassage is the one to look at first - the Ancients are the one
+    /// quest in the game that cannot be rushed, because every character has to pass them personally.
+    /// </remarks>
+    private static async Task LogActFiveQuests(Client rusheeClient, string when)
+    {
+        rusheeClient.Game.RequestQuestData();
+        await Task.Delay(1000);
+
+        var quests = new[]
+        {
+            QuestId.Act5Intro, QuestId.SiegeOnHarrogath, QuestId.RescueOnMountArreat, QuestId.PrisonOfIce,
+            QuestId.BetrayalOfHarrogath, QuestId.RiteOfPassage, QuestId.EveOfDestruction, QuestId.Act5Outro,
+        };
+
+        var dump = string.Join(", ", quests.Select(q =>
+            $"{q} 0x{rusheeClient.Game.Quests.GetCharacterFlags(q):X4}"));
+        Log.Information("Rushee act 5 quests {When} Baal: {Dump}", when, dump);
     }
 
     private static bool LogUnknownStep(string step)
