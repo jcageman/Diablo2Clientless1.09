@@ -5195,8 +5195,14 @@ public class RushProbeBot : IBotInstance
     /// </summary>
     /// <remarks>
     /// The rush had no pickit at all, so an entire act 1 to act 5 run left every drop where it fell. Uses
-    /// the same decision the farming bots use, <c>Pickit.ShouldKeepItem</c>. Standing on an item is not
-    /// optional: picking from four units away was refused eighty eight times in a row at the viper altar.
+    /// the same decision the farming bots use on the ground, <c>Pickit.ShouldPickupItem</c>. Not
+    /// <c>ShouldKeepItem</c>: that answers a question about the inventory, where an unidentified item is
+    /// kept regardless of the rules so it can be identified later, which on the ground means picking up
+    /// every white drop in the game. It did, and the junk filled the rusher up until restocking failed
+    /// and it could not leave town.
+    ///
+    /// Standing on an item is not optional: picking from four units away was refused eighty eight times
+    /// in a row at the viper altar.
     /// </remarks>
     private static async Task PickupNearby(Client client, double radius)
     {
@@ -5209,7 +5215,7 @@ public class RushProbeBot : IBotInstance
             .Where(i => i.Ground
                 && i.Location != null
                 && i.Location.Distance(client.Game.Me.Location) < radius
-                && (i.IsGold || Pickit.ShouldKeepItem(client.Game, i)))
+                && (i.IsGold || Pickit.ShouldPickupItem(client.Game, i, true)))
             .OrderBy(i => i.Location.Distance(client.Game.Me.Location))
             .Take(MaxPicksPerSweep)
             .ToList();
