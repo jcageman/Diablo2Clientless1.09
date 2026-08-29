@@ -17,6 +17,7 @@ using D2NG.Core.MCP;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
+using D2NG.Pickit;
 using Microsoft.Extensions.Options;
 using Serilog;
 using System;
@@ -4804,6 +4805,14 @@ public class RushProbeBot : IBotInstance
     /// <summary>How far in front of the throne to stand, so the waves arrive in reach.</summary>
     private const short ThroneStandOff = 25;
 
+    /// <summary>How far out a wave monster is still worth going to. Ranged ones never close on their own.</summary>
+    private const double WaveEngageRange = 40.0;
+
+    /// <summary>How far out to look for loot after a fight.</summary>
+    private const double PickupRadius = 40.0;
+
+    private const int MaxPicksPerSweep = 8;
+
     /// <summary>
     /// Act 5 for the rushee: the rusher clears the throne room until Baal appears, then the rushee comes
     /// across for the kill.
@@ -4890,7 +4899,14 @@ public class RushProbeBot : IBotInstance
                 return false;
             }
 
-            if (rusheeCanFollow && !await FerryRusheeToThrone(rusherClient, rusheeClient, killSpot))
+            await PickupNearby(rusherClient, PickupRadius);
+
+            if (!await TakeBaalPortal(rusherClient))
+            {
+                return false;
+            }
+
+            if (rusheeCanFollow && !await FerryRusheeToChamber(rusherClient, rusheeClient))
             {
                 Log.Warning("The rushee could not be brought in. Killing Baal anyway, nobody will be credited");
                 rusheeCanFollow = false;
@@ -4900,6 +4916,8 @@ public class RushProbeBot : IBotInstance
             {
                 return false;
             }
+
+            await PickupNearby(rusherClient, PickupRadius);
 
             if (!rusheeCanFollow)
             {
@@ -4964,11 +4982,6 @@ public class RushProbeBot : IBotInstance
         var quiet = 0;
         while (timer.Elapsed < ThroneClearLimit && rusherClient.Game.IsInGame())
         {
-            if (rusherClient.Game.GetNPCsByCode(NPCCode.Baal).Count > 0)
-            {
-                return true;
-            }
-
             var target = NearbyHostiles(rusherClient, 50).FirstOrDefault();
             if (target == null)
             {
@@ -5006,50 +5019,60 @@ public class RushProbeBot : IBotInstance
         var lastReport = TimeSpan.Zero;
         while (timer.Elapsed < WaveClearLimit && rusherClient.Game.IsInGame())
         {
-            if (rusherClient.Game.GetNPCsByCode(NPCCode.Baal).Count > 0)
+            // The waves are over when Baal gets up: NPCCode.BaalThrone is removed, which is the signal
+            // BaalBot uses. EntityCode.BaalPortal is no good for this - it is streamed from the start of
+            // the level and only becomes usable later, the same trick the act 3 infernal gate plays, so
+            // testing for it ended the wave phase instantly at zero seconds.
+            if (rusherClient.Game.GetNPCsByCode(NPCCode.BaalThrone).Count == 0)
             {
-                Log.Information("Baal is up after {Seconds:0}s of waves", timer.Elapsed.TotalSeconds);
+                Log.Information("Baal has left his throne after {Seconds:0}s of waves", timer.Elapsed.TotalSeconds);
                 return true;
             }
+
+            await PickupNearby(rusherClient, PickupRadius);
 
             if (!await RestockTripIfLow(rusherClient))
             {
                 return false;
             }
 
-            if (rusherClient.Game.Me.Location.Distance(killSpot) > HoldSpotTolerance)
-            {
-                await MoveTo(rusherClient, killSpot, MovementMode.Teleport);
-                continue;
-            }
-
-            var inReach = NearbyHostiles(rusherClient, NovaRange);
+            // Target first, leash second. A wave holds ranged casters that never walk into nova range, so
+            // waiting on the spot for them to come is waiting for ever - six of them sat between ten and
+            // forty units away for a minute while the rusher stood still. AttackTarget closes; the leash
+            // only pulls back once there is nothing left nearby, which is also what stops the two fighting.
+            var nearby = NearbyHostiles(rusherClient, WaveEngageRange);
             if (timer.Elapsed - lastReport > TimeSpan.FromSeconds(20))
             {
                 lastReport = timer.Elapsed;
-                Log.Information("Waves: {InReach} in reach, {Near} within forty, {Seconds:0}s elapsed",
-                    inReach.Count, NearbyHostiles(rusherClient, 40).Count, timer.Elapsed.TotalSeconds);
+                Log.Information("Waves: {Near} within {Range}, nearest {Distance:0} away, {Seconds:0}s elapsed",
+                    nearby.Count, WaveEngageRange,
+                    nearby.Count == 0 ? 0 : nearby[0].Location.Distance(rusherClient.Game.Me.Location),
+                    timer.Elapsed.TotalSeconds);
             }
 
-            if (inReach.Count == 0)
+            if (nearby.Count == 0)
             {
+                if (rusherClient.Game.Me.Location.Distance(killSpot) > HoldSpotTolerance)
+                {
+                    await MoveTo(rusherClient, killSpot, MovementMode.Teleport);
+                }
+
                 await Task.Delay(200);
                 continue;
             }
 
-            await AttackTarget(rusherClient, inReach[0]);
+            await AttackTarget(rusherClient, nearby[0]);
         }
 
         Log.Error("Baal never appeared after {Minutes} minutes of waves", WaveClearLimit.TotalMinutes);
         return false;
     }
 
-    private async Task<bool> FerryRusheeToThrone(Client rusherClient, Client rusheeClient, Point killSpot)
+    private async Task<bool> FerryRusheeToChamber(Client rusherClient, Client rusheeClient)
     {
-        if (!await MoveTo(rusherClient, killSpot, MovementMode.Teleport)
-            || !await _townManagementService.CreateTownPortal(rusherClient))
+        if (!await _townManagementService.CreateTownPortal(rusherClient))
         {
-            Log.Error("Rusher failed to open the portal at the throne");
+            Log.Error("Rusher failed to open the portal in the worldstone chamber");
             return false;
         }
 
@@ -5061,23 +5084,23 @@ public class RushProbeBot : IBotInstance
             return false;
         }
 
-        if (!await MoveRusheeToPortalSpot(rusheeClient, rusherAsSeenByRushee, Area.ThroneOfDestruction)
-            || !await _townManagementService.TakeTownPortalToArea(rusheeClient, rusherAsSeenByRushee, Area.ThroneOfDestruction))
+        if (!await MoveRusheeToPortalSpot(rusheeClient, rusherAsSeenByRushee, Area.TheWorldStoneChamber)
+            || !await _townManagementService.TakeTownPortalToArea(rusheeClient, rusherAsSeenByRushee, Area.TheWorldStoneChamber))
         {
-            Log.Error("Rushee failed to take the portal into the throne room");
+            Log.Error("Rushee failed to take the portal into the worldstone chamber");
             return false;
         }
 
         rusheeClient.Game.RequestUpdate(rusheeClient.Game.Me.Id);
         await Task.Delay(500);
         if (!await _pathingService.IsNavigatablePointInArea(rusheeClient.Game.MapId, Difficulty.Normal,
-            Area.ThroneOfDestruction, rusheeClient.Game.Me.Location))
+            Area.TheWorldStoneChamber, rusheeClient.Game.Me.Location))
         {
-            Log.Error("Rushee is at {Location}, which is not the throne room", rusheeClient.Game.Me.Location);
+            Log.Error("Rushee is at {Location}, which is not the worldstone chamber", rusheeClient.Game.Me.Location);
             return false;
         }
 
-        Log.Information("Rushee is in the throne room at {Location}; eve of destruction 0x{Word:X4}",
+        Log.Information("Rushee is in the worldstone chamber at {Location}; eve of destruction 0x{Word:X4}",
             rusheeClient.Game.Me.Location,
             rusheeClient.Game.Quests.GetCharacterFlags(QuestId.EveOfDestruction));
         return true;
@@ -5109,6 +5132,113 @@ public class RushProbeBot : IBotInstance
 
         Log.Information("Throne at {Throne}, standing on it since the offset is blocked", throne);
         return throne;
+    }
+
+    /// <summary>
+    /// Follows Baal into the worldstone chamber through the portal the last wave opens.
+    /// </summary>
+    /// <remarks>
+    /// The portal is created during play, so it is not in the map data and cannot be pathed to as an
+    /// object. It is reached the way every other streamed object in this bot is - alternating
+    /// <c>MoveToWorldObject</c> with a direct move - and arrival is confirmed by position, never by
+    /// <c>Game.Area</c>.
+    /// </remarks>
+    private async Task<bool> TakeBaalPortal(Client rusherClient)
+    {
+        var portal = rusherClient.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
+        if (portal == null)
+        {
+            Log.Error("Baal's portal is not in sight from {Location}", rusherClient.Game.Me.Location);
+            return false;
+        }
+
+        var entered = await GeneralHelpers.TryWithTimeout(async (attempt) =>
+        {
+            rusherClient.Game.RequestUpdate(rusherClient.Game.Me.Id);
+            if (await _pathingService.IsNavigatablePointInArea(rusherClient.Game.MapId, Difficulty.Normal,
+                Area.TheWorldStoneChamber, rusherClient.Game.Me.Location))
+            {
+                return true;
+            }
+
+            if (attempt % 3 == 0)
+            {
+                await MovementHelpers.MoveToWorldObject(rusherClient.Game, _pathingService, _mapApiService,
+                    portal, GetMovementMode(rusherClient));
+            }
+            else if (rusherClient.Game.Me.Location.Distance(portal.Location) > 5)
+            {
+                await rusherClient.Game.MoveToAsync(portal.Location);
+            }
+            else
+            {
+                rusherClient.Game.InteractWithEntity(portal);
+            }
+
+            await Task.Delay(400);
+            return false;
+        }, TimeSpan.FromSeconds(40));
+
+        if (!entered)
+        {
+            Log.Error("Could not follow Baal into the worldstone chamber, stopped at {Location}",
+                rusherClient.Game.Me.Location);
+            return false;
+        }
+
+        Log.Information("In the worldstone chamber at {Location}", rusherClient.Game.Me.Location);
+        return true;
+    }
+
+    /// <summary>
+    /// Picks up anything on the floor worth keeping, plus gold.
+    /// </summary>
+    /// <remarks>
+    /// The rush had no pickit at all, so an entire act 1 to act 5 run left every drop where it fell. Uses
+    /// the same decision the farming bots use, <c>Pickit.ShouldKeepItem</c>. Standing on an item is not
+    /// optional: picking from four units away was refused eighty eight times in a row at the viper altar.
+    /// </remarks>
+    private static async Task PickupNearby(Client client, double radius)
+    {
+        if (!client.Game.IsInGame())
+        {
+            return;
+        }
+
+        var wanted = client.Game.Items.Values
+            .Where(i => i.Ground
+                && i.Location != null
+                && i.Location.Distance(client.Game.Me.Location) < radius
+                && (i.IsGold || Pickit.ShouldKeepItem(client.Game, i)))
+            .OrderBy(i => i.Location.Distance(client.Game.Me.Location))
+            .Take(MaxPicksPerSweep)
+            .ToList();
+
+        foreach (var item in wanted)
+        {
+            if (!item.IsGold && client.Game.Inventory.FindFreeSpace(item) == null)
+            {
+                continue;
+            }
+
+            var picked = await GeneralHelpers.TryWithTimeout(async (_) =>
+            {
+                if (client.Game.Me.Location.Distance(item.Location) > 2)
+                {
+                    await client.Game.MoveToAsync(item.Location);
+                    return false;
+                }
+
+                client.Game.PickupItem(item);
+                await Task.Delay(200);
+                return item.IsGold || client.Game.Inventory.FindItemById(item.Id) != null;
+            }, TimeSpan.FromSeconds(6));
+
+            if (picked)
+            {
+                Log.Information("Picked up {Amount} {Name}", item.Amount, item.Name);
+            }
+        }
     }
 
     private static bool LogUnknownStep(string step)
