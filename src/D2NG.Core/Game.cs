@@ -188,7 +188,7 @@ public class Game
         _gameServer.SendPacket(new TakeWaypointPacket(Data.Me.LastSelectedWaypointId, waypoint));
         return true;
     }
-    public Self Me { get => Data.Me; }
+    public Self Me { get => Data?.Me; }
 
     public List<Player> Players { get => Data.Players.ToList(); }
 
@@ -745,6 +745,14 @@ public class Game
     public void RequestQuestData()
     {
         _gameServer.SendPacket(new RequestQuestDataPacket());
+    }
+
+    /// <summary>
+    /// Acknowledges a completed quest after the server sends its client-side completion event.
+    /// </summary>
+    public void CompleteQuest(QuestId quest)
+    {
+        _gameServer.SendPacket(new QuestCompletePacket(quest));
     }
 
     private void RemoveNPCItems()

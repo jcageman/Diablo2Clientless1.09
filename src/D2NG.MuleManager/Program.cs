@@ -1,6 +1,6 @@
 using D2NG.MuleManager.Configuration;
 using D2NG.MuleManager.Services.MuleManager;
-using Marten;
+using D2NG.Mule;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,11 +22,10 @@ Log.Logger = new LoggerConfiguration()
 builder.Logging.AddSerilog();
 
 builder.Services.AddControllers();
-builder.Services.AddMarten(configuration.GetConnectionString("Marten"));
+builder.Services.AddMuleStore(configuration.GetConnectionString("Marten"));
 builder.Services.AddOptions<MuleManagerConfiguration>()
     .Bind(configuration.GetSection("mulemanager"))
     .ValidateDataAnnotations();
-builder.Services.AddScoped<IMuleManagerRepository, MuleManagerRepository>();
 builder.Services.AddScoped<IMuleManagerService, MuleManagerService>();
 builder.Services.AddCors(options =>
 {

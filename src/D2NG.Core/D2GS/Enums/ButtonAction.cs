@@ -6,6 +6,8 @@ public enum ButtonAction : byte
     APlayerHasPressedAcceptButton = 0x05,
     NoAcceptButtonsCanBeClicked = 0x06,
     YouDontHaveRoomToAcceptTheItems = 0x09,
+    // Seen by the giver at the moment the receiver gets 0x09; the server then closes the trade and resends all items.
+    TheOtherPlayerDoesNotHaveRoom = 0x0A,
     APlayerAcceptedTrade = 0x0C,
     YouHaveTradedSomeItems = 0x0D,
     TheAcceptButtonHasBeenDisabled = 0x0E,

@@ -57,6 +57,18 @@ public class Client
     /// Login to Battle.Net with credentials and receive the list of available characters to select.
     /// </summary>
     /// <param name="username">Account name</param>
+    /// <summary>
+    /// Changes an account's password. Use between <see cref="Connect"/> and <see cref="Login"/>.
+    /// </summary>
+    public bool ChangePassword(string username, string oldPassword, string newPassword)
+        => Bncs.ChangePassword(username, oldPassword, newPassword);
+
+    /// <summary>
+    /// Creates a new account. Use between <see cref="Connect"/> and <see cref="Login"/>.
+    /// </summary>
+    public bool CreateAccount(string username, string password)
+        => Bncs.CreateAccount(username, password);
+
     /// <param name="password">Password used to login</param>
     /// <returns>A list of Characters associated with the account</returns>
     public async Task<List<Character>> Login(string username, string password)

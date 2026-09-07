@@ -1,4 +1,4 @@
-using ConsoleBot.Bots.Types;
+﻿using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using D2NG.Core;
@@ -19,8 +19,28 @@ namespace ConsoleBot.Helpers;
 public static class InventoryHelpers
 {
     private static readonly TimeSpan MoveItemTimeout = TimeSpan.FromSeconds(2);
+    /// <summary>
+    /// Whether the cursor is only reported as holding this item. The item's own container is the
+    /// reliable signal: an update can arrive carrying the new container without going through the
+    /// path that registers it and clears the cursor, which leaves CursorItem pointing at something
+    /// that is already put away. Acting on that spends the rest of the game trying to place, cube
+    /// and drop an item nobody is holding.
+    /// </summary>
+    private static bool CursorIsStale(Game game, Item cursor)
+    {
+        return game.Items.TryGetValue(cursor.Id, out var known)
+            && known.Container is ContainerType.Inventory or ContainerType.Cube
+                or ContainerType.Stash or ContainerType.Stash2 or ContainerType.Belt;
+    }
+
     public static void CleanupCursorItem(this Game game)
     {
+        if (game.CursorItem != null && CursorIsStale(game, game.CursorItem))
+        {
+            Log.Debug($"{game.Me.Name}: cursor reports {game.CursorItem.Name} but it is already in a container, ignoring");
+            return;
+        }
+
         if (game.CursorItem != null)
         {
             var item = game.CursorItem;
@@ -29,38 +49,109 @@ public static class InventoryHelpers
             if (freeSpaceInventory != null)
             {
                 game.InsertItemIntoContainer(game.CursorItem, freeSpaceInventory, ItemContainer.Inventory);
-                bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Inventory.FindItemById(item.Id) != null, MoveItemTimeout);
+                // The destination decides it, not the cursor flag. CursorItem is only cleared when a
+                // confirming packet arrives for that exact id, so a missed one leaves it set for
+                // good - and then an item that really did reach the inventory reads as a failed
+                // move, the cube attempt that follows works on a phantom, and so does the drop.
+                bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) =>
+                    game.Inventory.FindItemById(item.Id) != null || CursorIsStale(game, item), MoveItemTimeout);
                 if (!resultMove)
                 {
-                    Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to inventory failed");
+                    Log.Warning($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to inventory failed, dropping it instead");
                 }
             }
-            else if (freeSpaceCube != null && !D2NG.Pickit.Pickit.IsReservedItem(item))
+
+            // Whatever happened above, the cursor has to end up empty. Reporting the failed move and
+            // returning left the item held, and a held item makes the server ignore every
+            // interaction that character attempts afterwards - it then cannot cast a town portal,
+            // take one, or talk to anyone, and the run is lost with no obvious cause.
+            if (game.CursorItem == null || game.Inventory.FindItemById(item.Id) != null
+                || CursorIsStale(game, game.CursorItem))
+            {
+                return;
+            }
+
+            item = game.CursorItem;
+            freeSpaceCube = game.Cube.FindFreeSpace(item);
+            if (freeSpaceCube != null && !D2NG.Pickit.Pickit.IsReservedItem(item))
             {
                 // Reserved items stay out of the cube. A tome or a rejuvenation hidden in there is out of
                 // reach of the code that looks for it in the inventory, and the character behaves as
                 // though it never had one.
                 game.InsertItemIntoContainer(item, freeSpaceCube, ItemContainer.Cube);
-                bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout);
+                bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) =>
+                    game.Cube.FindItemById(item.Id) != null || CursorIsStale(game, item), MoveItemTimeout);
                 if (!resultMove)
                 {
-                    Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to cube failed");
+                    Log.Warning($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to cube failed, dropping it instead");
                 }
             }
-            else
+
+            if (game.CursorItem == null || game.Cube.FindItemById(item.Id) != null
+                || CursorIsStale(game, game.CursorItem))
             {
-                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor failed, no space");
+                return;
+            }
+
+            // Dropped rather than carried. An item left on the cursor makes the server ignore every
+            // interaction the character attempts afterwards, so holding on to it costs the whole
+            // run: the character stands on an open town portal, or in front of a merchant, and is
+            // refused over and over with nothing in the log to say why. One belt on the floor is far
+            // cheaper than that.
+            item = game.CursorItem;
+
+            // Traced, because "still on the cursor" is exactly what a stale CursorItem looks like
+            // too. If the item is reported here as sitting in a container or on the ground, then it
+            // was put away and only the flag is wrong - and every drop that follows is a no-op on
+            // something that is not there.
+            var cursor = game.CursorItem;
+            game.RequestUpdate(game.Me.Id);
+            // "Known" is the field that decides it. An item the game no longer knows about at all has
+            // been sold or consumed, and the cursor is merely stale; one the game still knows about
+            // is really being held and the drops are being refused. Reporting only "on the ground"
+            // could not tell those apart - it reads false for both.
+            var isKnown = game.Items.TryGetValue(cursor.Id, out var known);
+            Log.Warning("{Character}: cursor still shows {Item} id {Id} - known to the game {Known}, container {Container}, ground {OnGround}, inventory {InInventory}, cube {InCube}, stash {InStash}, cursor id now {CursorNow}",
+                game.Me.Name, cursor.Name, cursor.Id,
+                isKnown,
+                isKnown ? known.Container.ToString() : "n/a",
+                isKnown && known.Ground,
+                game.Inventory.FindItemById(cursor.Id) != null,
+                game.Cube.FindItemById(cursor.Id) != null,
+                game.Stash.FindItemById(cursor.Id) != null,
+                game.CursorItem?.Id.ToString() ?? "none");
+
+            if (game.CursorItem == null)
+            {
+                return;
+            }
+
+            Log.Warning($"{game.Me.Name}: {item.Name} could not be put away, dropping it rather than letting it block every interaction");
+
+            // Windows first. This runs in the middle of stash and cube work, and the server refuses
+            // a drop while one of those is open - every drop attempted here was refused, and the
+            // item stayed on the cursor blocking the character exactly as before. Closing something
+            // that is not open is ignored, so this is safe either way.
+            game.ClickButton(ClickType.CloseHoradricCube);
+            game.ClickButton(ClickType.CloseStash);
+            game.DropItem(item);
+            if (!GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null, MoveItemTimeout))
+            {
+                Log.Error($"{game.Me.Name}: {item.Name} is still on the cursor after dropping it, the character will refuse interactions until this clears");
             }
         }
     }
 
-    public static MoveItemResult StashItemsAndGold(Game game, List<Item> items, int gold)
+    /// <summary>
+    /// Walks to the stash and opens it. On failure the stash window is closed again so the next attempt starts clean.
+    /// </summary>
+    public static bool OpenStash(Game game)
     {
         var stashes = game.GetEntityByCode(EntityCode.Stash);
         if (stashes.Count == 0)
         {
             Log.Error($"{game.Me.Name}: No stash found");
-            return MoveItemResult.Failed;
+            return false;
         }
 
         var stash = stashes.Single();
@@ -83,9 +174,24 @@ public static class InventoryHelpers
         {
             Log.Error($"{game.Me.Name}: Failed to open stash while at location {game.Me.Location} with stash at {stash.Location}");
             Thread.Sleep(300);
-            game.ClickButton(ClickType.CloseStash);
-            Thread.Sleep(100);
-            game.ClickButton(ClickType.CloseStash);
+            CloseStash(game);
+            return false;
+        }
+
+        return true;
+    }
+
+    public static void CloseStash(Game game)
+    {
+        game.ClickButton(ClickType.CloseStash);
+        Thread.Sleep(100);
+        game.ClickButton(ClickType.CloseStash);
+    }
+
+    public static MoveItemResult StashItemsAndGold(Game game, List<Item> items, int gold)
+    {
+        if (!OpenStash(game))
+        {
             return MoveItemResult.Failed;
         }
 
@@ -113,44 +219,14 @@ public static class InventoryHelpers
             };
         }
 
-        game.ClickButton(ClickType.CloseStash);
-        Thread.Sleep(100);
-        game.ClickButton(ClickType.CloseStash);
+        CloseStash(game);
         return moveResult;
     }
 
     public static MoveItemResult MoveStashItemsToInventory(Game game, List<Item> items)
     {
-        var stashes = game.GetEntityByCode(EntityCode.Stash);
-        if (stashes.Count == 0)
+        if (!OpenStash(game))
         {
-            Log.Error($"{game.Me.Name}: No stash found");
-            return MoveItemResult.Failed;
-        }
-
-        var stash = stashes.Single();
-
-        bool result = GeneralHelpers.TryWithTimeout((retryCount) =>
-        {
-            if (game.Me.Location.Distance(stash.Location) >= 5)
-            {
-                game.MoveTo(stash);
-            }
-            else
-            {
-                return game.OpenStash(stash);
-            }
-
-            return false;
-        }, TimeSpan.FromSeconds(4));
-
-        if (!result)
-        {
-            Log.Error($"{game.Me.Name}: Failed to open stash while at location {game.Me.Location} with stash at {stash.Location}");
-            Thread.Sleep(300);
-            game.ClickButton(ClickType.CloseStash);
-            Thread.Sleep(100);
-            game.ClickButton(ClickType.CloseStash);
             return MoveItemResult.Failed;
         }
 
@@ -171,9 +247,7 @@ public static class InventoryHelpers
             };
         }
 
-        game.ClickButton(ClickType.CloseStash);
-        Thread.Sleep(100);
-        game.ClickButton(ClickType.CloseStash);
+        CloseStash(game);
         return moveItemResult;
     }
 
@@ -185,6 +259,19 @@ public static class InventoryHelpers
             || game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0) > 1000000;
     }
 
+    /// <summary>
+    /// Everything the character is carrying that the pickit says to keep, from the inventory and
+    /// the cube both.
+    /// </summary>
+    public static List<Item> ItemsWorthKeeping(Game game)
+    {
+        var itemsToKeep = game.Inventory.Items
+            .Where(i => i.IsIdentified && D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i))
+            .ToList();
+        itemsToKeep.AddRange(game.Cube.Items.Where(i => i.IsIdentified && D2NG.Pickit.Pickit.ShouldKeepItem(game, i)));
+        return itemsToKeep;
+    }
+
     public static MoveItemResult StashItemsToKeep(Game game, IExternalMessagingClient externalMessagingClient)
     {
         if (!ShouldStashItems(game))
@@ -192,8 +279,7 @@ public static class InventoryHelpers
             return MoveItemResult.Succes;
         }
 
-        var itemsToKeep = game.Inventory.Items.Where(i => i.IsIdentified && D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
-        itemsToKeep.AddRange(game.Cube.Items.Where(i => i.IsIdentified && D2NG.Pickit.Pickit.ShouldKeepItem(game, i)));
+        var itemsToKeep = ItemsWorthKeeping(game);
         var goldOnPerson = game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0);
         foreach (var item in itemsToKeep)
         {
@@ -433,10 +519,28 @@ public static class InventoryHelpers
         return MoveItemResult.Succes;
     }
 
+    /// <summary>
+    /// Whether the character has to be able to reach this item where it stands. Potions are drunk
+    /// out of the inventory and the belt, so a potion in the cube is a potion that cannot be drunk.
+    /// </summary>
+    public static bool IsDrinkable(Item item)
+    {
+        return item.Classification == ClassificationType.HealthPotion
+            || item.Classification == ClassificationType.ManaPotion
+            || item.Classification == ClassificationType.RejuvenationPotion;
+    }
+
     public static void MoveInventoryItemsToCube(Game game)
     {
         foreach (var item in game.Inventory.Items)
         {
+            if (IsDrinkable(item))
+            {
+                // Cubing the reserve is how characters reached the cow level with a full belt and
+                // nothing to fall back on: it went in the cube on the first item they picked up.
+                continue;
+            }
+
             if (D2NG.Pickit.Pickit.CanTouchInventoryItem(game, item))
             {
                 var freeSpace = game.Cube.FindFreeSpace(item);

@@ -103,9 +103,15 @@ internal class GameServer : IDisposable
                 _ = Connection.ReadPacket();
 
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                Log.Debug($"InstanceId {InstanceId} GameServer Connection was terminated");
+                Log.Debug(
+                    exception,
+                    "InstanceId {InstanceId} GameServer connection was terminated",
+                    InstanceId);
+                InGame = false;
+                Connection.Terminate();
+                break;
             }
         }
     }

@@ -61,6 +61,8 @@ internal class BattleNetChatServer : IDisposable
     private readonly BncsEvent EnterChatEvent = new();
     private readonly BncsEvent LogonEvent = new();
     private readonly BncsEvent ListRealmsEvent = new();
+    private readonly BncsEvent ChangePasswordEvent = new();
+    private readonly BncsEvent CreateAccountEvent = new();
     private readonly BncsEvent RealmLogonEvent = new();
 
     internal BattleNetChatServer()
@@ -114,6 +116,8 @@ internal class BattleNetChatServer : IDisposable
         OnReceivedPacketEvent(Sid.AUTH_INFO, AuthInfoEvent.Set);
         OnReceivedPacketEvent(Sid.ENTERCHAT, EnterChatEvent.Set);
         OnReceivedPacketEvent(Sid.LOGONRESPONSE2, LogonEvent.Set);
+        OnReceivedPacketEvent(Sid.CHANGEPASSWORD, ChangePasswordEvent.Set);
+        OnReceivedPacketEvent(Sid.CREATEACCOUNT2, CreateAccountEvent.Set);
         OnReceivedPacketEvent(Sid.REQUIREDWORK, _ => { });
     }
 
@@ -184,6 +188,49 @@ internal class BattleNetChatServer : IDisposable
                 Thread.Sleep(300);
             }
         }
+    }
+
+    /// <summary>
+    /// Changes an account's password. Call after <see cref="ConnectTo"/> and before <see cref="Login"/>, as the game
+    /// client does from its logon screen.
+    /// </summary>
+    public bool ChangePassword(string username, string oldPassword, string newPassword)
+    {
+        ChangePasswordEvent.Reset();
+        Connection.WritePacket(new ChangePasswordRequestPacket(Context.ClientToken, Context.ServerToken, username, oldPassword, newPassword));
+        var response = ChangePasswordEvent.WaitForPacket(3000);
+        if (response == null)
+        {
+            Log.Warning("No answer to the password change for {Username}", username);
+            return false;
+        }
+        var result = new ChangePasswordResponsePacket(response);
+        if (!result.Success)
+        {
+            Log.Warning("Password change for {Username} refused with status {Status}", username, result.Status);
+        }
+        return result.Success;
+    }
+
+    /// <summary>
+    /// Creates an account. Call after <see cref="ConnectTo"/>; the new account can be logged on right away.
+    /// </summary>
+    public bool CreateAccount(string username, string password)
+    {
+        CreateAccountEvent.Reset();
+        Connection.WritePacket(new CreateAccountRequestPacket(username, password));
+        var response = CreateAccountEvent.WaitForPacket(3000);
+        if (response == null)
+        {
+            Log.Warning("No answer to the account creation for {Username}", username);
+            return false;
+        }
+        var result = new CreateAccountResponsePacket(response);
+        if (!result.Success)
+        {
+            Log.Warning("Account creation for {Username} refused with status {Status} {Message}", username, result.Status, result.Message);
+        }
+        return result.Success;
     }
 
     public bool Login(string username, string password)

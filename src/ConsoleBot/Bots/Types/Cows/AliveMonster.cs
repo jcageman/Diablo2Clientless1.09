@@ -13,4 +13,10 @@ public class AliveMonster
 
     public NPCCode NPCCode { get; set; }
     public HashSet<MonsterEnchantment> MonsterEnchantments { get; set; } = [];
+
+    /// <summary>Whether this is one of the monsters the party hunts in active mode.</summary>
+    public bool IsHunted { get; set; }
+
+    /// <summary>The cluster this monster was first seen in. It keeps that cluster open until it dies.</summary>
+    public uint ClusterId { get; set; }
 }

@@ -1,4 +1,4 @@
-using D2NG.Core.D2GS.Enums;
+﻿using D2NG.Core.D2GS.Enums;
 using D2NG.Core.MCP.Packet;
 using Serilog;
 using System;
@@ -164,6 +164,10 @@ public sealed class RealmServer : IDisposable
             return false;
         }
         var result = new CreateGameResponsePacket(packet.Raw);
+        if (result.ResultCode != 0x00)
+        {
+            Log.Warning("Realm refused game {GameName} with result 0x{ResultCode:X2}", gameName, result.ResultCode);
+        }
         return result.ResultCode == 0x00;
     }
 

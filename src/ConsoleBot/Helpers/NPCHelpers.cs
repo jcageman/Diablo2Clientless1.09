@@ -1,4 +1,4 @@
-using ConsoleBot.TownManagement;
+﻿using ConsoleBot.TownManagement;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Enums;
@@ -260,6 +260,78 @@ public static class NPCHelpers
         };
     }
 
+    /// <summary>
+    /// The NPC that restores life and mana for free just for being talked to. Distinct from
+    /// <see cref="GetSellNPC"/> because act 2 heals at Fara rather than at the potion seller.
+    /// </summary>
+    public static NPCCode GetHealNPC(D2NG.Core.D2GS.Act.Act act)
+    {
+        return act switch
+        {
+            D2NG.Core.D2GS.Act.Act.Act1 => NPCCode.Akara,
+            D2NG.Core.D2GS.Act.Act.Act2 => NPCCode.Fara,
+            D2NG.Core.D2GS.Act.Act.Act3 => NPCCode.Ormus,
+            D2NG.Core.D2GS.Act.Act.Act4 => NPCCode.JamellaAct4,
+            D2NG.Core.D2GS.Act.Act.Act5 => NPCCode.Malah,
+            _ => throw new InvalidEnumArgumentException(nameof(act)),
+        };
+    }
+
+    /// <summary>
+    /// Walks to the town healer and talks to it, which costs nothing and refills life and mana.
+    /// This is the only healing a rushee can afford: a level one carries no potions and no gold,
+    /// so without it a hurt rushee stays hurt until something kills it.
+    /// </summary>
+    public static bool HealAtHealer(Game game)
+    {
+        var healerCode = GetHealNPC(game.Act);
+        if (!GeneralHelpers.TryWithTimeout(
+            (_) => game.GetNPCsByCode(healerCode).Count != 0,
+            TimeSpan.FromSeconds(3)))
+        {
+            Log.Warning($"{healerCode} was not visible to {game.Me.Name} to heal at");
+            return false;
+        }
+
+        var healer = GetUniqueNPC(game, healerCode);
+        if (healer == null)
+        {
+            return false;
+        }
+
+        var reached = GeneralHelpers.TryWithTimeout((retryCount) =>
+        {
+            if (game.Me.Location.Distance(healer.Location) > 2)
+            {
+                game.MoveTo(healer);
+            }
+
+            if (game.Me.Location.Distance(healer.Location) < 5)
+            {
+                Thread.Sleep(100);
+                return game.InteractWithNPC(healer);
+            }
+            return false;
+        }, TimeSpan.FromSeconds(5));
+
+        if (!reached)
+        {
+            Log.Warning($"{game.Me.Name} could not reach {healerCode} at {healer.Location} from {game.Me.Location}");
+            return false;
+        }
+
+        var lifeBefore = game.Me.Life;
+        Thread.Sleep(50);
+        game.InitiateEntityChat(healer);
+        Thread.Sleep(300);
+        game.TerminateEntityChat(healer);
+        Thread.Sleep(200);
+
+        Log.Information(
+            $"{game.Me.Name} healed at {healerCode}: {lifeBefore} -> {game.Me.Life} of {game.Me.MaxLife} life");
+        return true;
+    }
+
     public static NPCCode GetGambleNPC(D2NG.Core.D2GS.Act.Act act)
     {
         return act switch
@@ -379,7 +451,23 @@ public static class NPCHelpers
             // A missing tome has to count as needing a trip: with null propagation an absent tome compares
             // the same as a full one, so losing it used to go unnoticed until a portal was needed.
             || game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeOfTownPortal) is not { Amount: >= 5 }
-            || (game.Me.Life / (double)game.Me.MaxLife) < 0.7;
+            || IsBelowHealthPotionBar(game, options);
+    }
+
+    /// <summary>
+    /// Whether life has dropped past the point at which the character would be drinking. Tied to the
+    /// chicken configuration rather than a number of its own: the healer is free, so anything the
+    /// belt would be spent on is worth a walk to the NPC instead.
+    /// </summary>
+    public static bool IsBelowHealthPotionBar(Game game, TownManagementOptions options)
+    {
+        if (game.Me.MaxLife == 0)
+        {
+            return false;
+        }
+
+        var bar = options?.AccountConfig?.Chicken?.UseHealthPotionPercent ?? 0.7;
+        return game.Me.Life / (double)game.Me.MaxLife < bar;
     }
 
     public static bool ShouldGoToRepairNPC(Game game)
@@ -410,7 +498,11 @@ public static class NPCHelpers
 
     public static bool SellItemsAndRefreshPotionsAtNPC(Game game, WorldObject npc, TownManagementOptions options)
     {
-        GeneralHelpers.TryWithTimeout((retryCount) =>
+        // Checked, and given long enough to actually arrive. Discarding this meant a character that
+        // never reached the merchant went on to chat and trade with her from wherever it had got
+        // to: the shop then held nothing, and every purchase failed without saying so - the town
+        // portal tomes included, which is what strands the portal character a few minutes later.
+        if (!GeneralHelpers.TryWithTimeout((retryCount) =>
         {
             if (game.Me.Location.Distance(npc.Location) >= 2)
             {
@@ -421,8 +513,14 @@ public static class NPCHelpers
             {
                 return game.InteractWithNPC(npc);
             }
+
             return false;
-        }, TimeSpan.FromSeconds(3));
+        }, TimeSpan.FromSeconds(10)))
+        {
+            Log.Warning("{Character} never reached {NPCCode} to trade, {Distance:F0} away at {Location} - skipping the shop rather than buying from nowhere",
+                game.Me.Name, npc.NPCCode, game.Me.Location.Distance(npc.Location), game.Me.Location);
+            return false;
+        }
 
         Thread.Sleep(50);
         game.InitiateEntityChat(npc);
@@ -431,17 +529,33 @@ public static class NPCHelpers
         Item healingPotion = null;
         Item manaPotion = null;
 
+        // Longer than the three seconds this used to allow, and the trade is asked for again along
+        // the way. The stock arrives in its own packet, and when the server is slow it had not come
+        // by the time this gave up - which is not a shop with nothing in it, though the code went on
+        // to treat it as one. Everything bought here then failed quietly, the town portal tomes
+        // included, and the run died later for want of a tome nobody could see had not been bought.
         if (!GeneralHelpers.TryWithTimeout((retryCount) =>
         {
+            if (retryCount > 0 && retryCount % 10 == 0)
+            {
+                game.TownFolkAction(npc, TownFolkActionType.Trade);
+            }
+
             healingPotion = game.Items.Values.Where(i => i.IsInMerchantTab() && i.Type.StartsWith("hp", StringComparison.OrdinalIgnoreCase)).OrderByDescending(i => (int)i.Type.Last()).FirstOrDefault();
             manaPotion = game.Items.Values.Where(i => i.IsInMerchantTab() && i.Type.StartsWith("mp", StringComparison.OrdinalIgnoreCase)).OrderByDescending(i => (int)i.Type.Last()).FirstOrDefault();
             return healingPotion != null && manaPotion != null;
-        }, TimeSpan.FromSeconds(3)))
+        }, TimeSpan.FromSeconds(12)))
         {
-            Log.Warning($"Did not find healing or mana potions at {npc.NPCCode} {game.Me.Location}");
+            Log.Warning($"Did not find healing or mana potions at {npc.NPCCode} {game.Me.Location} after 12s, {game.Items.Values.Count(i => i.IsInMerchantTab())} items in the merchant tab - nothing bought here will have worked");
         }
 
-        var inventoryItemsToSell = game.Inventory.Items.Where(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i)).ToList();
+        // The potion reserve is bought a few lines below; selling it here and buying it straight
+        // back would be a round trip for nothing.
+        var inventoryItemsToSell = game.Inventory.Items
+            .Where(i => !InventoryHelpers.IsDrinkable(i)
+                && !D2NG.Pickit.Pickit.ShouldKeepItem(game, i)
+                && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i))
+            .ToList();
         var cubeItemsToSell = game.Cube.Items.Where(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && !D2NG.Pickit.Pickit.IsReservedItem(i)).ToList();
         Log.Debug($"Selling {inventoryItemsToSell.Count} inventory items and {cubeItemsToSell.Count} cube items");
 
@@ -464,21 +578,24 @@ public static class NPCHelpers
         if(healingPotion != null)
         {
             var numberOfHealthPotions = options.HealthPotionsToBuy ?? game.Belt.Height * options.AccountConfig.HealthSlots.Count - game.Belt.NumOfHealthPotions();
-            while (numberOfHealthPotions > 0)
+            // Buying is fire and forget: with no gold every call fails and the character walks out
+            // with an empty belt looking like it shopped. Report what it actually came away with.
+            var wanted = numberOfHealthPotions;
+            var gained = BuyPotions(game, npc, "hp", wanted);
+            if (gained < wanted)
             {
-                game.BuyItem(npc, healingPotion, false);
-                numberOfHealthPotions -= 1;
+                Log.Warning($"{game.Me.Name} wanted {wanted} {healingPotion.Name} but only got {gained}, {game.Inventory.FreeCellCount()} free inventory cells");
+            }
+            else
+            {
+                Log.Information($"{game.Me.Name} bought {gained} {healingPotion.Name}, leaving town with belt {game.Belt.NumOfHealthPotions()}, inventory {game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion)}, {game.Inventory.FreeCellCount()} free cells");
             }
         }
 
         if(manaPotion != null)
         {
             var numberOfManaPotions = options.ManaPotionsToBuy ?? game.Belt.Height * options.AccountConfig.ManaSlots.Count - game.Belt.NumOfManaPotions();
-            while (numberOfManaPotions > 0)
-            {
-                game.BuyItem(npc, manaPotion, false);
-                numberOfManaPotions -= 1;
-            }
+            BuyPotions(game, npc, "mp", numberOfManaPotions);
         }
 
         if (options.ItemsToBuy != null)
@@ -500,6 +617,66 @@ public static class NPCHelpers
         Thread.Sleep(50);
         game.TerminateEntityChat(npc);
         return true;
+    }
+
+    /// <summary>
+    /// Buys potions one at a time, waiting for each to arrive before ordering the next. Buying is
+    /// fire and forget and the server does not keep up with a burst: an order of seven sent 30ms
+    /// apart landed one potion, which is how characters reached the cow level with an empty belt.
+    /// The stock is looked up each time as well, though a potion vendor keeps the same item id.
+    /// </summary>
+    private static long BuyPotions(Game game, WorldObject npc, string typePrefix, long wanted)
+    {
+        if (wanted <= 0)
+        {
+            return 0;
+        }
+
+        var start = CountPotions(game, typePrefix);
+
+        // One stack buy fills the belt in a single action. It only works for the belt, so whatever
+        // is still wanted after it goes to the inventory and has to be bought one at a time.
+        var stock = FindPotionInStock(game, typePrefix);
+        if (stock != null)
+        {
+            var before = CountPotions(game, typePrefix);
+            game.BuyItem(npc, stock, buyStack: true);
+            GeneralHelpers.TryWithTimeout((_) => CountPotions(game, typePrefix) > before, TimeSpan.FromSeconds(2));
+        }
+
+        while (CountPotions(game, typePrefix) - start < wanted)
+        {
+            stock = FindPotionInStock(game, typePrefix);
+            if (stock == null)
+            {
+                Log.Warning($"{game.Me.Name} found no more {typePrefix} potions to buy at {npc.NPCCode}");
+                break;
+            }
+
+            var before = CountPotions(game, typePrefix);
+            game.BuyItem(npc, stock, buyStack: false);
+            if (!GeneralHelpers.TryWithTimeout((_) => CountPotions(game, typePrefix) > before, TimeSpan.FromSeconds(1)))
+            {
+                break;
+            }
+        }
+
+        return CountPotions(game, typePrefix) - start;
+    }
+
+    private static Item FindPotionInStock(Game game, string typePrefix)
+    {
+        return game.Items.Values
+            .Where(i => i.IsInMerchantTab() && i.Type.StartsWith(typePrefix, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(i => (int)i.Type.Last())
+            .FirstOrDefault();
+    }
+
+    /// <summary>Potions of this type held anywhere the character can drink from.</summary>
+    private static int CountPotions(Game game, string typePrefix)
+    {
+        return game.Inventory.Items.Count(i => i.Type.StartsWith(typePrefix, StringComparison.OrdinalIgnoreCase))
+            + game.Belt.Items.Count(i => i.Type.StartsWith(typePrefix, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 ﻿using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Helpers;
+using System;
 using System.Collections;
 using System.Text;
 
@@ -8,6 +9,7 @@ namespace D2NG.Core.MCP;
 public class Character
 {
     private readonly byte[] _stats;
+    private readonly ushort _flags;
 
     public string Name { get; }
 
@@ -16,19 +18,23 @@ public class Character
         Name = name;
         _stats = stats;
         Stats = _stats.ToPrintString();
-        var flagsBits = new BitArray([_stats[26]]);
+        _flags = (ushort)((_stats[26] & 0x7F) | ((_stats[27] & 0x7F) << 7));
+        var flagsBits = new BitArray(BitConverter.GetBytes(_flags));
         IsHardCore = flagsBits[2];
         IsExpansion = flagsBits[5];
+        Progression = (byte)((_flags >> 8) & 0x1F);
     }
 
     public CharacterClass Class { get => (CharacterClass)((_stats[13] - 0x01) & 0xFF); }
 
     public uint Level { get => _stats[25]; }
 
-    public string FlagsString { get => ToBitString(new BitArray([_stats[26]])); }
+    public string FlagsString { get => ToBitString(new BitArray(BitConverter.GetBytes(_flags))); }
 
     public bool IsHardCore { get; private set; }
     public bool IsExpansion { get; private set; }
+    public byte Progression { get; }
+    public byte RawProgression => _stats[27];
     public string Stats { get; set; }
 
     public static string ToBitString(BitArray bits)

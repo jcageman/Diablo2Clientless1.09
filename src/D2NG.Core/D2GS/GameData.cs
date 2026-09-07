@@ -1,4 +1,4 @@
-using D2NG.Core.D2GS.Act;
+﻿using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Items.Containers;
 using D2NG.Core.D2GS.Objects;
@@ -189,11 +189,12 @@ internal class GameData
     internal void PlayerCorpseAssign(CorpseAssignPacket packet)
     {
         var player = Players.Where(p => p.Id == packet.PlayerId).FirstOrDefault();
-        player?.CorpseId = packet.CorpseId;
+        uint? corpseId = packet.CorpseAdded ? packet.CorpseId : null;
+        player?.CorpseId = corpseId;
 
         if (Me?.Id == packet.PlayerId)
         {
-            Me.CorpseId = packet.CorpseId;
+            Me.CorpseId = corpseId;
         }
 
         var corpse = Players.Where(p => p.Id == packet.CorpseId).FirstOrDefault();
@@ -539,7 +540,12 @@ internal class GameData
                 {
                     CursorItem = item;
                 }
-                
+
+                break;
+            case ContainerType.ForTrade:
+            case ContainerType.TradeOffer:
+                // Lifted off the trade grid: the trade page is not modelled, but the item is on the cursor now.
+                CursorItem = item;
                 break;
             default:
                 // Do nothing we don't know how to handle this
@@ -619,7 +625,7 @@ internal class GameData
                 break;
             case EntityType.Player:
                 Act.RemoveWorldObject(packet.EntityId, packet.EntityType);
-                foreach (var player in Players.Where(p => p.CorpseId == packet.EntityId))
+                foreach (var player in Players.Where(p => p.CorpseId == packet.EntityId).ToList())
                 {
                     Players.RemoveAll(p => p.Id == packet.EntityId);
                     player.CorpseId = null;

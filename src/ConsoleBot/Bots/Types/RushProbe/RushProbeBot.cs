@@ -51,6 +51,9 @@ public class RushProbeBot : IBotInstance
     /// </summary>
     private Client SharedRusher() => _sharedRusher ??= new Client();
     private Client _rusherForInvites;
+
+    /// <summary>Walk of the rushee to the portal spot, running while the rusher is still travelling.</summary>
+    private Task _rusheePreStage;
     private readonly List<string> _createdCharacters = [];
     private Character _probeCharacter;
     private List<Character> _characters = [];
@@ -340,7 +343,7 @@ public class RushProbeBot : IBotInstance
     private async Task<bool> WalkFromWaypointToArea(Client client, Area from, Waypoint waypoint, Area toArea)
     {
         var movementMode = GetMovementMode(client);
-        var path = await _pathingService.GetPathFromWaypointToArea(client.Game.MapId, Difficulty.Normal, from, waypoint, toArea, movementMode);
+        var path = await _pathingService.GetPathFromWaypointToArea(client.Game.MapId, _config.Difficulty, from, waypoint, toArea, movementMode);
         if (!await MovementHelpers.TakePathOfLocations(client.Game, path, movementMode))
         {
             Log.Error("Rusher failed to move towards {Area} from the waypoint", toArea);
@@ -733,7 +736,7 @@ public class RushProbeBot : IBotInstance
     /// </summary>
     private async Task<bool> TraverseTo(Client client, Area destination)
     {
-        var route = await _pathingService.GetAreaRoute(client.Game.MapId, Difficulty.Normal, client.Game.Area, destination);
+        var route = await _pathingService.GetAreaRoute(client.Game.MapId, _config.Difficulty, client.Game.Area, destination);
         if (route.Count == 0)
         {
             Log.Error("No route from {From} to {To}", client.Game.Area, destination);
@@ -788,7 +791,7 @@ public class RushProbeBot : IBotInstance
         for (var attempt = 0; attempt < 10; attempt++)
         {
             if (await _pathingService.IsNavigatablePointInArea(
-                    client.Game.MapId, Difficulty.Normal, client.Game.Area, client.Game.Me.Location))
+                    client.Game.MapId, _config.Difficulty, client.Game.Area, client.Game.Me.Location))
             {
                 return true;
             }
@@ -834,7 +837,7 @@ public class RushProbeBot : IBotInstance
         {
             var candidate = new Point((ushort)(from.X + dx), (ushort)(from.Y + dy));
             if (!await _pathingService.IsNavigatablePointInArea(
-                    client.Game.MapId, Difficulty.Normal, client.Game.Area, candidate))
+                    client.Game.MapId, _config.Difficulty, client.Game.Area, candidate))
             {
                 continue;
             }
@@ -857,7 +860,7 @@ public class RushProbeBot : IBotInstance
         try
         {
             path = await _pathingService.GetPathToAdjacentArea(
-                client.Game.MapId, Difficulty.Normal, from, client.Game.Me.Location, target, movementMode);
+                client.Game.MapId, _config.Difficulty, from, client.Game.Me.Location, target, movementMode);
         }
         catch (InvalidOperationException e)
         {
@@ -900,7 +903,7 @@ public class RushProbeBot : IBotInstance
         {
             client.Game.RequestUpdate(client.Game.Me.Id);
             await Task.Delay(250);
-            if (await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location))
+            if (await _pathingService.IsNavigatablePointInArea(client.Game.MapId, _config.Difficulty, area, client.Game.Me.Location))
             {
                 return true;
             }
@@ -1044,38 +1047,23 @@ public class RushProbeBot : IBotInstance
     /// for three Andariel runs. So this step joins a game rather than making one, and the name comes
     /// from configuration.
     /// </remarks>
-    private async Task<bool> OpenTombForManualInsert(Client unused)
+    private async Task<bool> OpenTombForManualInsert(Client rusheeClient)
     {
-        if (string.IsNullOrEmpty(_probeConfig.ManualGameName))
+        if (_probeCharacter == null)
         {
-            Log.Error("No manualGameName configured, so there is no game to join");
+            Log.Error("No rushee, add the create step first");
             return false;
         }
 
-        var rusherClient = new Client();
+        var rusherClient = SharedRusher();
         try
         {
-            if (!rusherClient.Connect(_config.Realm, _config.KeyOwner, _config.GameFolder))
+            if (!await JoinRusherAndRushee(rusherClient, rusheeClient))
             {
-                Log.Error("Rusher failed to connect to the realm");
                 return false;
             }
 
-            var characters = await rusherClient.Login(_probeConfig.RusherUsername, _probeConfig.RusherPassword);
-            var rusher = characters?.Find(c => c.Name.Equals(_probeConfig.RusherCharacter, StringComparison.OrdinalIgnoreCase));
-            if (rusher == null)
-            {
-                Log.Error("Rusher character {Character} not found on {Account}", _probeConfig.RusherCharacter, _probeConfig.RusherUsername);
-                return false;
-            }
-
-            await rusherClient.SelectCharacter(rusher);
-            if (!await rusherClient.JoinGame(_probeConfig.ManualGameName, _config.GamePassword))
-            {
-                Log.Error("Rusher failed to join game {GameName}. Create it first with the character that "
-                    + "carries the staff.", _probeConfig.ManualGameName);
-                return false;
-            }
+            _rusherForInvites = rusherClient;
 
             if (!GeneralHelpers.TryWithTimeout((_) => rusherClient.Game.Me != null, TimeSpan.FromSeconds(10)))
             {
@@ -1114,7 +1102,7 @@ public class RushProbeBot : IBotInstance
             if (string.IsNullOrWhiteSpace(_probeConfig.ManualTargetArea))
             {
                 // No area named means the tombs, and which tomb is real is per game rather than fixed.
-                var canyon = await _mapApiService.GetArea(rusherClient.Game.MapId, Difficulty.Normal, Area.CanyonOfTheMagi);
+                var canyon = await _mapApiService.GetArea(rusherClient.Game.MapId, _config.Difficulty, Area.CanyonOfTheMagi);
                 if (canyon?.TombArea == null)
                 {
                     Log.Error("The map api did not name the real tomb for this game, so there is nothing to aim at");
@@ -1188,12 +1176,9 @@ public class RushProbeBot : IBotInstance
         }
         finally
         {
-            if (rusherClient.Game.IsInGame())
-            {
-                rusherClient.Game.CleanupCursorItem();
-                await rusherClient.Game.LeaveGame();
-            }
-            rusherClient.Disconnect();
+            // The game is deliberately kept open: every step of a rush runs in the same
+            // one, and tearing it down here would cost a fresh game per step. RunSteps
+            // closes it once at the end.
         }
     }
 
@@ -1212,6 +1197,15 @@ public class RushProbeBot : IBotInstance
     {
         if (string.IsNullOrWhiteSpace(_probeConfig.RestockAct) || !rusherClient.Game.IsInGame())
         {
+            return;
+        }
+
+        // Only ever restock from town. The trip starts with SwitchAct, which takes the town waypoint and
+        // Single()s on it, so calling this from anywhere else throws "Sequence contains no elements" and
+        // takes the whole probe down - which is exactly what the tombs step did from Duriel's lair.
+        if (rusherClient.Game.Area != WayPointHelpers.MapTownArea(rusherClient.Game.Act))
+        {
+            Log.Debug("Not restocking from {Area}, it is not a town", rusherClient.Game.Area);
             return;
         }
 
@@ -1716,7 +1710,7 @@ public class RushProbeBot : IBotInstance
             return null;
         }
 
-        var town = await _mapApiService.GetArea(rusheeClient.Game.MapId, Difficulty.Normal, rusheeClient.Game.Area);
+        var town = await _mapApiService.GetArea(rusheeClient.Game.MapId, _config.Difficulty, rusheeClient.Game.Area);
         var waypoint = town?.Objects?.GetValueOrDefault((int)waypointCode)?.FirstOrDefault();
         if (waypoint == null)
         {
@@ -1752,8 +1746,66 @@ public class RushProbeBot : IBotInstance
         return OffsetOrNull(waypoint, offset.Dx, offset.Dy);
     }
 
+    /// <summary>
+    /// Starts walking the rushee onto the town portal spot while the rusher is still on its way.
+    /// </summary>
+    /// <remarks>
+    /// The rushee used to stand in town for the whole traversal and only begin walking once there was a
+    /// portal to walk to, which put its walk on the critical path for no reason: the spot is derived from
+    /// the town waypoint and can be reached long before a portal lands on it. Failures are ignored on
+    /// purpose - this is an optimisation, and <see cref="MoveRusheeToPortalSpot"/> still does the real
+    /// work and its own verification.
+    /// </remarks>
+    private void StartRusheePreStage(Client rusheeClient)
+    {
+        _rusheePreStage = Task.Run(async () =>
+        {
+            try
+            {
+                // Always first. A rushee that died in an earlier step respawns in town naked next to its
+                // body, and everything after this assumes it still has its gear.
+                await GeneralHelpers.PickupCorpseIfExists(rusheeClient, _pathingService);
+
+                var spot = await ResolvePortalSpot(rusheeClient);
+                if (spot != null)
+                {
+                    await WalkRusheeTo(rusheeClient, spot);
+                    Log.Information("Rushee is pre-staged at {Spot} waiting for a portal", spot);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Debug(e, "Pre-staging the rushee failed; it will walk when the portal opens");
+            }
+        });
+    }
+
+    /// <summary>
+    /// Waits for any pre-staging walk to finish, so two movement loops never drive the rushee at once.
+    /// </summary>
+    private async Task AwaitRusheePreStage()
+    {
+        var staging = _rusheePreStage;
+        if (staging == null)
+        {
+            return;
+        }
+
+        _rusheePreStage = null;
+        try
+        {
+            await staging;
+        }
+        catch (Exception e)
+        {
+            Log.Debug(e, "Pre-staging the rushee failed; carrying on");
+        }
+    }
+
     private async Task<bool> MoveRusheeToPortalSpot(Client rusheeClient, Player rusher, Area area)
     {
+        await AwaitRusheePreStage();
+
         // Try the recorded spot first, but verify rather than assume. Act 1 and act 2 both have a handful
         // of town layout variants, so a spot measured in one game is a strong hint and not a guarantee;
         // falling back to the sweep costs a slow walk once instead of failing the run.
@@ -1796,7 +1848,7 @@ public class RushProbeBot : IBotInstance
     /// </remarks>
     private async Task<bool> FindPortalSpotBySweep(Client rusheeClient, Player rusher, Area area)
     {
-        var town = await _mapApiService.GetArea(rusheeClient.Game.MapId, Difficulty.Normal, rusheeClient.Game.Area);
+        var town = await _mapApiService.GetArea(rusheeClient.Game.MapId, _config.Difficulty, rusheeClient.Game.Area);
         if (town?.Objects == null)
         {
             Log.Error("The map api knows no objects in {Area} to sweep for the portal", rusheeClient.Game.Area);
@@ -2232,21 +2284,43 @@ public class RushProbeBot : IBotInstance
     /// orifice with an id higher than every other object in the level, meaning the server made it rather
     /// than switching an existing one on.
     /// </remarks>
-    private async Task<bool> RushDuriel(Client unused)
+    private async Task<bool> RushDuriel(Client rusheeClient)
     {
-        if (string.IsNullOrEmpty(_probeConfig.ManualGameName))
+        if (_probeCharacter == null)
         {
-            Log.Error("No manualGameName configured, so there is no game to join");
+            Log.Error("No rushee, add the create step first");
             return false;
         }
 
-        var rusherClient = new Client();
+        var rusherClient = SharedRusher();
         try
         {
-            if (!await JoinManualGameAsRusher(rusherClient))
+            if (!await JoinRusherAndRushee(rusherClient, rusheeClient))
             {
                 return false;
             }
+
+            _rusherForInvites = rusherClient;
+
+            // Walk to the portal spot now, not when the portal exists: it is derived from the
+            // town waypoint, so the rushee can be standing on it before the rusher even arrives.
+            StartRusheePreStage(rusheeClient);
+
+            if (rusheeClient.Game.Quests.IsComplete(QuestId.Act2Outro)
+                || rusheeClient.Game.Act > Act.Act2)
+            {
+                Log.Information("{Name} is already past act 2, skipping this step", _probeCharacter.Name);
+                return true;
+            }
+
+            var rusheeCanFollow = rusheeClient.Game.Act == Act.Act2;
+            if (!rusheeCanFollow)
+            {
+                Log.Warning("Rushee is in {Act}, not act 2, so it cannot follow into the lair. Running the "
+                    + "rusher's half as a dry run.", rusheeClient.Game.Act);
+            }
+
+            await EnsureSupplies(rusherClient, D2NG.Core.D2GS.Act.Act.Act2);
 
             if (!await TakeWaypointFromTown(rusherClient, Waypoint.CanyonOfTheMagi))
             {
@@ -2254,7 +2328,7 @@ public class RushProbeBot : IBotInstance
                 return false;
             }
 
-            var canyon = await _mapApiService.GetArea(rusherClient.Game.MapId, Difficulty.Normal, Area.CanyonOfTheMagi);
+            var canyon = await _mapApiService.GetArea(rusherClient.Game.MapId, _config.Difficulty, Area.CanyonOfTheMagi);
             if (canyon?.TombArea == null)
             {
                 Log.Error("The map api did not name the real tomb for this game");
@@ -2287,6 +2361,16 @@ public class RushProbeBot : IBotInstance
                 Log.Warning("Could not open a portal inside the lair; the rushee will have to be already here");
             }
 
+            // Drag Duriel off the portal before anyone walks through it. The lair entrance, the spot the
+            // portal lands on and Duriel's start are all the same few units of floor, so a rushee arriving
+            // while he is still standing there arrives inside him and dies to the first smite.
+            await DrawDurielAwayFromPortal(rusherClient);
+
+            if (rusheeCanFollow && !await FerryRusheeToLair(rusherClient, rusheeClient))
+            {
+                Log.Warning("The rushee could not be brought into the lair, nobody will be credited");
+            }
+
             await WaitForCompanyInTheLair(rusherClient);
 
             if (!await KillDuriel(rusherClient))
@@ -2295,25 +2379,92 @@ public class RushProbeBot : IBotInstance
             }
 
             Log.Information("Duriel is down. Rusher quest words: {Words}", Describe(rusherClient.Game.Quests.Describe()));
-            Log.Information("Holding the lair for {Seconds}s so Tyrael can be reached.", _probeConfig.HoldTombSeconds);
 
-            var timer = Stopwatch.StartNew();
-            while (timer.Elapsed < TimeSpan.FromSeconds(_probeConfig.HoldTombSeconds) && rusherClient.Game.IsInGame())
-            {
-                await ClearTick(rusherClient, 18);
-                await Task.Delay(200);
-            }
-
+            // No long hold here. It existed for the manual flow, where a person logged in and walked to
+            // Tyrael themselves; the jerhyn step does Tyrael, Jerhyn and Meshif on its own and wants the
+            // rusher still standing in the lair, which it now is because the game is never torn down.
             return true;
         }
         finally
         {
-            if (rusherClient.Game.IsInGame())
-            {
-                await rusherClient.Game.LeaveGame();
-            }
-            rusherClient.Disconnect();
+            // The game is deliberately kept open: every step of a rush runs in the same
+            // one, and tearing it down here would cost a fresh game per step. RunSteps
+            // closes it once at the end.
         }
+    }
+
+    /// <summary>
+    /// Walks the rushee through the rusher's portal into Duriel's lair, so the kill is credited.
+    /// </summary>
+    /// <summary>How far across the lair the rusher drags Duriel before the rushee comes through.</summary>
+    private const int DurielPullDistance = 34;
+
+    /// <summary>How far off the portal counts as having pulled Duriel clear of it.</summary>
+    private const int MinimumPullDistance = 15;
+
+    /// <summary>
+    /// Walks the rusher to the far side of Duriel's lair so that Duriel follows it off the portal.
+    /// </summary>
+    /// <remarks>
+    /// Measured: the rusher, the rushee and Duriel all arrive within a couple of units of (22638, 15694),
+    /// so the portal is opened on top of him. Pulling him away is what a person does by hand, and it is
+    /// the difference between the rushee living to see the kill and dying to it.
+    /// </remarks>
+    private async Task DrawDurielAwayFromPortal(Client rusherClient)
+    {
+        var entry = rusherClient.Game.Me.Location;
+        var directions = new (int Dx, int Dy)[]
+        {
+            (0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1),
+        };
+
+        foreach (var range in new[] { DurielPullDistance, 26, 18 })
+        {
+            foreach (var (dx, dy) in directions)
+            {
+                var candidate = new Point(
+                    (ushort)Math.Clamp(entry.X + (dx * range), 0, ushort.MaxValue),
+                    (ushort)Math.Clamp(entry.Y + (dy * range), 0, ushort.MaxValue));
+
+                // No navigability gate here. The first attempt filtered every candidate out and the rushee
+                // arrived on top of Duriel anyway; MoveTo already snaps to the nearest reachable point, so
+                // the honest test is whether we actually ended up somewhere else.
+                await MoveTo(rusherClient, candidate, GetMovementMode(rusherClient));
+                if (rusherClient.Game.Me.Location.Distance(entry) > MinimumPullDistance)
+                {
+                    Log.Information("Pulled Duriel from {Entry} to {Spot}, leaving the portal clear",
+                        entry, rusherClient.Game.Me.Location);
+                    return;
+                }
+            }
+        }
+
+        Log.Warning("Could not pull Duriel off the portal at {Entry}; the rushee arrives next to him", entry);
+    }
+
+    private async Task<bool> FerryRusheeToLair(Client rusherClient, Client rusheeClient)
+    {
+        var rusherAsSeenByRushee = rusheeClient.Game.Players
+            .Find(p => p.Name.Equals(_probeConfig.RusherCharacter, StringComparison.OrdinalIgnoreCase));
+        if (rusherAsSeenByRushee == null)
+        {
+            Log.Error("Rushee cannot see the rusher");
+            return false;
+        }
+
+        if (!await MoveRusheeToPortalSpot(rusheeClient, rusherAsSeenByRushee, Area.DurielsLair)
+            || !await _townManagementService.TakeTownPortalToArea(rusheeClient, rusherAsSeenByRushee, Area.DurielsLair))
+        {
+            Log.Error("Rushee failed to take the portal into Duriel's lair");
+            return false;
+        }
+
+        rusheeClient.Game.RequestUpdate(rusheeClient.Game.Me.Id);
+        await Task.Delay(500);
+        Log.Information("Rushee is in the lair at {Location}; seven tombs 0x{Word:X4}",
+            rusheeClient.Game.Me.Location,
+            rusheeClient.Game.Quests.GetCharacterFlags(QuestId.TheSevenTombs));
+        return true;
     }
 
     private async Task<bool> JoinManualGameAsRusher(Client rusherClient)
@@ -2356,6 +2507,29 @@ public class RushProbeBot : IBotInstance
     private async Task<bool> EnterDurielsLair(Client rusherClient)
     {
         var portal = rusherClient.Game.GetEntityByCode(EntityCode.DurielsLairPortal).FirstOrDefault();
+
+        // In a game hosted by a character that already put the staff in, the orifice comes up Activated
+        // but the portal is not streamed to us with it - two games in a row showed 152/Activated and no
+        // code 100 anywhere. Touching the orifice is what a player does and it makes the server send the
+        // portal. Harmless when the portal is already in hand, which is why it only runs when it is not.
+        if (portal == null)
+        {
+            var orifice = rusherClient.Game.GetEntityByCode(EntityCode.HoradricOrifice).FirstOrDefault();
+            if (orifice != null)
+            {
+                Log.Information("No portal yet, nudging the orifice at {Location}, state {State}",
+                    orifice.Location, orifice.State);
+
+                await GeneralHelpers.TryWithTimeout(async (_) =>
+                {
+                    rusherClient.Game.InteractWithEntity(orifice);
+                    await Task.Delay(500);
+                    portal = rusherClient.Game.GetEntityByCode(EntityCode.DurielsLairPortal).FirstOrDefault();
+                    return portal != null;
+                }, TimeSpan.FromSeconds(12));
+            }
+        }
+
         if (portal == null)
         {
             Log.Error("No lair portal in sight from {Location}. It only exists once a staff has been put "
@@ -2742,7 +2916,7 @@ public class RushProbeBot : IBotInstance
         rusheeClient.Game.RequestUpdate(rusheeClient.Game.Me.Id);
         await Task.Delay(500);
         var inLair = await _pathingService.IsNavigatablePointInArea(
-            rusheeClient.Game.MapId, Difficulty.Normal, Area.DurielsLair, rusheeClient.Game.Me.Location);
+            rusheeClient.Game.MapId, _config.Difficulty, Area.DurielsLair, rusheeClient.Game.Me.Location);
 
         if (!inLair)
         {
@@ -2837,7 +3011,7 @@ public class RushProbeBot : IBotInstance
 
     private async Task<bool> TalkToTyrael(Client rusheeClient)
     {
-        var lair = await _mapApiService.GetArea(rusheeClient.Game.MapId, Difficulty.Normal, rusheeClient.Game.Area);
+        var lair = await _mapApiService.GetArea(rusheeClient.Game.MapId, _config.Difficulty, rusheeClient.Game.Area);
         var tyraelSpot = lair?.Npcs?.GetValueOrDefault((int)NPCCode.TyraelAct3)?.FirstOrDefault();
         if (tyraelSpot == null)
         {
@@ -2846,7 +3020,7 @@ public class RushProbeBot : IBotInstance
         }
 
         var navigable = await _pathingService.IsNavigatablePointInArea(
-            rusheeClient.Game.MapId, Difficulty.Normal, rusheeClient.Game.Area, tyraelSpot);
+            rusheeClient.Game.MapId, _config.Difficulty, rusheeClient.Game.Area, tyraelSpot);
         Log.Information("Tyrael should be at {Spot}, navigable {Navigable}, walking from {Location}",
             tyraelSpot, navigable, rusheeClient.Game.Me.Location);
 
@@ -2931,7 +3105,7 @@ public class RushProbeBot : IBotInstance
         foreach (var candidate in offsets)
         {
             if (await _pathingService.IsNavigatablePointInArea(
-                    client.Game.MapId, Difficulty.Normal, client.Game.Area, candidate))
+                    client.Game.MapId, _config.Difficulty, client.Game.Area, candidate))
             {
                 return candidate;
             }
@@ -3056,6 +3230,10 @@ public class RushProbeBot : IBotInstance
 
             _rusherForInvites = rusherClient;
 
+            // Walk to the portal spot now, not when the portal exists: it is derived from the
+            // town waypoint, so the rushee can be standing on it before the rusher even arrives.
+            StartRusheePreStage(rusheeClient);
+
             // Already in act 4, so there is nothing for this step to do and the durance waypoint it would
             // take is beside the point.
             if (rusheeClient.Game.Quests.IsComplete(QuestId.Act3Outro)
@@ -3165,7 +3343,7 @@ public class RushProbeBot : IBotInstance
             await Task.Delay(500);
 
             var inDurance = await _pathingService.IsNavigatablePointInArea(
-                rusheeClient.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel3, rusheeClient.Game.Me.Location);
+                rusheeClient.Game.MapId, _config.Difficulty, Area.DuranceOfHateLevel3, rusheeClient.Game.Me.Location);
 
             if (!inDurance)
             {
@@ -3200,7 +3378,7 @@ public class RushProbeBot : IBotInstance
 
     private async Task<Area?> ResolveTombWithOrifice(Client client)
     {
-        var canyon = await _mapApiService.GetArea(client.Game.MapId, Difficulty.Normal, Area.CanyonOfTheMagi);
+        var canyon = await _mapApiService.GetArea(client.Game.MapId, _config.Difficulty, Area.CanyonOfTheMagi);
         var candidates = new List<Area>();
         if (canyon?.TombArea != null)
         {
@@ -3217,7 +3395,7 @@ public class RushProbeBot : IBotInstance
 
         foreach (var tomb in candidates)
         {
-            var map = await _mapApiService.GetArea(client.Game.MapId, Difficulty.Normal, tomb);
+            var map = await _mapApiService.GetArea(client.Game.MapId, _config.Difficulty, tomb);
             if (map?.Objects?.ContainsKey((int)EntityCode.HoradricOrifice) == true)
             {
                 Log.Information("The orifice is in {Tomb}{Note}", tomb,
@@ -3386,7 +3564,7 @@ public class RushProbeBot : IBotInstance
                 client.Game.RequestUpdate(client.Game.Me.Id);
                 await Task.Delay(400);
                 return await _pathingService.IsNavigatablePointInArea(
-                    client.Game.MapId, Difficulty.Normal, Area.ThePandemoniumFortress, client.Game.Me.Location);
+                    client.Game.MapId, _config.Difficulty, Area.ThePandemoniumFortress, client.Game.Me.Location);
             }, TimeSpan.FromSeconds(30));
 
             if (!went)
@@ -3697,6 +3875,10 @@ public class RushProbeBot : IBotInstance
 
             _rusherForInvites = rusherClient;
 
+            // Walk to the portal spot now, not when the portal exists: it is derived from the
+            // town waypoint, so the rushee can be standing on it before the rusher even arrives.
+            StartRusheePreStage(rusheeClient);
+
             if (!rusherClient.Game.Me.HasSkill(Skill.Teleport))
             {
                 Log.Error("Rusher {Name} has no teleport, and the chaos sanctuary cannot be done on foot",
@@ -3881,7 +4063,7 @@ public class RushProbeBot : IBotInstance
 
         rusheeClient.Game.RequestUpdate(rusheeClient.Game.Me.Id);
         await Task.Delay(500);
-        var inTown = await _pathingService.IsNavigatablePointInArea(rusheeClient.Game.MapId, Difficulty.Normal,
+        var inTown = await _pathingService.IsNavigatablePointInArea(rusheeClient.Game.MapId, _config.Difficulty,
             Area.ThePandemoniumFortress, rusheeClient.Game.Me.Location);
         if (!inTown)
         {
@@ -3931,7 +4113,7 @@ public class RushProbeBot : IBotInstance
     /// </summary>
     private async Task<Point> SealAnchor(Client rusherClient, EntityCode seal)
     {
-        var map = await _mapApiService.GetArea(rusherClient.Game.MapId, Difficulty.Normal, Area.ChaosSanctuary);
+        var map = await _mapApiService.GetArea(rusherClient.Game.MapId, _config.Difficulty, Area.ChaosSanctuary);
         var right1 = MapPointOf(map, EntityCode.RightSeal1);
         var right2 = MapPointOf(map, EntityCode.RightSeal2);
         var top = MapPointOf(map, EntityCode.TopSeal);
@@ -3946,7 +4128,7 @@ public class RushProbeBot : IBotInstance
 
             case EntityCode.TopSeal when top != null:
                 var leftOfSealIsOpen = await _pathingService.IsNavigatablePointInArea(rusherClient.Game.MapId,
-                    Difficulty.Normal, Area.ChaosSanctuary, top.Add(-20, 0));
+                    _config.Difficulty, Area.ChaosSanctuary, top.Add(-20, 0));
                 return await StandBackFrom(rusherClient, top,
                     leftOfSealIsOpen ? top.Add(-37, 31) : top.Add(0, 70));
 
@@ -3982,7 +4164,7 @@ public class RushProbeBot : IBotInstance
         // rusher could teleport into and then never path out of. Asking for a walking path from the seal
         // tests real connectivity, because walking cannot cross the scenery teleport goes over.
         if (further != null
-            && (await _pathingService.GetPathToLocation(rusherClient.Game.MapId, Difficulty.Normal,
+            && (await _pathingService.GetPathToLocation(rusherClient.Game.MapId, _config.Difficulty,
                 Area.ChaosSanctuary, seal, further, MovementMode.Walking)).Count > 0)
         {
             return further;
@@ -4011,7 +4193,7 @@ public class RushProbeBot : IBotInstance
             return false;
         }
 
-        var map = await _mapApiService.GetArea(rusherClient.Game.MapId, Difficulty.Normal, Area.ChaosSanctuary);
+        var map = await _mapApiService.GetArea(rusherClient.Game.MapId, _config.Difficulty, Area.ChaosSanctuary);
         var sealPoint = MapPointOf(map, seal);
         if (sealPoint == null)
         {
@@ -4392,7 +4574,7 @@ public class RushProbeBot : IBotInstance
 
         rusheeClient.Game.RequestUpdate(rusheeClient.Game.Me.Id);
         await Task.Delay(500);
-        if (!await _pathingService.IsNavigatablePointInArea(rusheeClient.Game.MapId, Difficulty.Normal,
+        if (!await _pathingService.IsNavigatablePointInArea(rusheeClient.Game.MapId, _config.Difficulty,
             Area.ChaosSanctuary, rusheeClient.Game.Me.Location))
         {
             Log.Error("Rushee is at {Location}, which is not in the sanctuary", rusheeClient.Game.Me.Location);
@@ -4440,7 +4622,7 @@ public class RushProbeBot : IBotInstance
     {
         rusherClient.Game.RequestUpdate(rusherClient.Game.Me.Id);
         await Task.Delay(500);
-        if (await _pathingService.IsNavigatablePointInArea(rusherClient.Game.MapId, Difficulty.Normal,
+        if (await _pathingService.IsNavigatablePointInArea(rusherClient.Game.MapId, _config.Difficulty,
             Area.ChaosSanctuary, rusherClient.Game.Me.Location))
         {
             return true;
@@ -4579,7 +4761,7 @@ public class RushProbeBot : IBotInstance
     /// </remarks>
     private async Task<Point> MephistoStagingSpot(Client rusherClient)
     {
-        var map = await _mapApiService.GetArea(rusherClient.Game.MapId, Difficulty.Normal, Area.DuranceOfHateLevel3);
+        var map = await _mapApiService.GetArea(rusherClient.Game.MapId, _config.Difficulty, Area.DuranceOfHateLevel3);
         var mephisto = map?.Npcs != null && map.Npcs.TryGetValue((int)NPCCode.Mephisto, out var npcs) && npcs.Count > 0
             ? npcs[0]
             : null;
@@ -4602,7 +4784,7 @@ public class RushProbeBot : IBotInstance
                 continue;
             }
 
-            if (!await _pathingService.IsNavigatablePointInArea(rusherClient.Game.MapId, Difficulty.Normal,
+            if (!await _pathingService.IsNavigatablePointInArea(rusherClient.Game.MapId, _config.Difficulty,
                     Area.DuranceOfHateLevel3, candidate)
                 || await _attackService.IsInLineOfSight(rusherClient, candidate, mephisto))
             {
@@ -4722,7 +4904,7 @@ public class RushProbeBot : IBotInstance
             return false;
         }
 
-        var town = await _mapApiService.GetArea(client.Game.MapId, Difficulty.Normal, Area.RogueEncampment);
+        var town = await _mapApiService.GetArea(client.Game.MapId, _config.Difficulty, Area.RogueEncampment);
         var stash = town?.Objects?.GetValueOrDefault((int)EntityCode.Stash)?.FirstOrDefault();
         var waypoint = town?.Objects?.GetValueOrDefault((int)EntityCode.WaypointAct1)?.FirstOrDefault();
         if (stash == null || waypoint == null)
@@ -4840,6 +5022,10 @@ public class RushProbeBot : IBotInstance
             }
 
             _rusherForInvites = rusherClient;
+
+            // Walk to the portal spot now, not when the portal exists: it is derived from the
+            // town waypoint, so the rushee can be standing on it before the rusher even arrives.
+            StartRusheePreStage(rusheeClient);
 
             if (rusheeClient.Game.Quests.IsComplete(QuestId.EveOfDestruction))
             {
@@ -4966,7 +5152,7 @@ public class RushProbeBot : IBotInstance
 
         rusheeClient.Game.RequestUpdate(rusheeClient.Game.Me.Id);
         await Task.Delay(500);
-        if (!await _pathingService.IsNavigatablePointInArea(rusheeClient.Game.MapId, Difficulty.Normal,
+        if (!await _pathingService.IsNavigatablePointInArea(rusheeClient.Game.MapId, _config.Difficulty,
             Area.Harrogath, rusheeClient.Game.Me.Location))
         {
             Log.Warning("Rushee is at {Location}, which is not Harrogath, so it cannot follow. Running the "
@@ -5097,7 +5283,7 @@ public class RushProbeBot : IBotInstance
 
         rusheeClient.Game.RequestUpdate(rusheeClient.Game.Me.Id);
         await Task.Delay(500);
-        if (!await _pathingService.IsNavigatablePointInArea(rusheeClient.Game.MapId, Difficulty.Normal,
+        if (!await _pathingService.IsNavigatablePointInArea(rusheeClient.Game.MapId, _config.Difficulty,
             Area.TheWorldStoneChamber, rusheeClient.Game.Me.Location))
         {
             Log.Error("Rushee is at {Location}, which is not the worldstone chamber", rusheeClient.Game.Me.Location);
@@ -5128,7 +5314,7 @@ public class RushProbeBot : IBotInstance
 
         var spot = OffsetOrNull(throne, 0, ThroneStandOff);
         if (spot != null && await _pathingService.IsNavigatablePointInArea(rusherClient.Game.MapId,
-            Difficulty.Normal, Area.ThroneOfDestruction, spot))
+            _config.Difficulty, Area.ThroneOfDestruction, spot))
         {
             Log.Information("Throne at {Throne}, holding the waves at {Spot}", throne, spot);
             return spot;
@@ -5159,7 +5345,7 @@ public class RushProbeBot : IBotInstance
         var entered = await GeneralHelpers.TryWithTimeout(async (attempt) =>
         {
             rusherClient.Game.RequestUpdate(rusherClient.Game.Me.Id);
-            if (await _pathingService.IsNavigatablePointInArea(rusherClient.Game.MapId, Difficulty.Normal,
+            if (await _pathingService.IsNavigatablePointInArea(rusherClient.Game.MapId, _config.Difficulty,
                 Area.TheWorldStoneChamber, rusherClient.Game.Me.Location))
             {
                 return true;
@@ -5255,10 +5441,10 @@ public class RushProbeBot : IBotInstance
     /// Dumps the rushee's whole act 5 quest chain.
     /// </summary>
     /// <remarks>
-    /// Standing alive in the Worldstone Chamber when Baal dies is not enough on its own: it happened, and
-    /// EveOfDestruction stayed 0x0000. The chain is logged so the prerequisite that is actually missing can
-    /// be seen rather than guessed at. RiteOfPassage is the one to look at first - the Ancients are the one
-    /// quest in the game that cannot be rushed, because every character has to pass them personally.
+    /// Kept as a diagnostic. It was added while chasing an EveOfDestruction that read 0x0000 after a
+    /// successful kill, which turned out to be the quest index being wrong rather than a missing
+    /// prerequisite - act 5 starts two words later than the block layout predicts. Dumping the whole
+    /// chain is still the fastest way to see a rush's real state.
     /// </remarks>
     private static async Task LogActFiveQuests(Client rusheeClient, string when)
     {

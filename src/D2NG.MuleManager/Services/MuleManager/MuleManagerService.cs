@@ -1,13 +1,12 @@
 ﻿using D2NG.Core;
 using D2NG.Core.D2GS.Enums;
-using D2NG.Core.D2GS.Items;
 using D2NG.Core.MCP;
+using D2NG.Mule;
 using D2NG.MuleManager.Configuration;
 using Microsoft.Extensions.Options;
 using Serilog;
 using System;
 using System.Diagnostics;
-using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,13 +16,13 @@ namespace D2NG.MuleManager.Services.MuleManager;
 public class MuleManagerService : IMuleManagerService
 {
     private readonly MuleManagerConfiguration _configuration;
-    private readonly IMuleManagerRepository _muleManagerRepository;
+    private readonly IMuleRepository _muleRepository;
     private static int SeedCount;
 
-    public MuleManagerService(IOptions<MuleManagerConfiguration> configuration, IMuleManagerRepository muleManagerRepository)
+    public MuleManagerService(IOptions<MuleManagerConfiguration> configuration, IMuleRepository muleRepository)
     {
         _configuration = configuration.Value;
-        _muleManagerRepository = muleManagerRepository;
+        _muleRepository = muleRepository;
     }
 
     public async Task<bool> UpdateAllAccounts()
@@ -60,6 +59,13 @@ public class MuleManagerService : IMuleManagerService
 
         foreach (var character in characters)
         {
+            var lastSeen = await _muleRepository.GetCharacter(account.Name, character.Name);
+            if (MuleSkipRule.ShouldSkip(lastSeen, DateTimeOffset.UtcNow))
+            {
+                Log.Information($"{account.Name}-{character.Name}: full since {lastSeen.SeenAt:u}, skipping");
+                continue;
+            }
+
             if(!await CreateGameWithRetry(random, client, account, character))
             {
                 Log.Error($"{account.Name}-{character.Name}: Failed to create game");
@@ -89,12 +95,7 @@ public class MuleManagerService : IMuleManagerService
 
             await Task.Delay(TimeSpan.FromSeconds(0.5));
 
-            var itemsOnAccount = client.Game.Stash.Items;
-            itemsOnAccount.AddRange(client.Game.Inventory.Items);
-            itemsOnAccount.AddRange(client.Game.Cube.Items);
-            var itemsToUpdate = itemsOnAccount.Where(i => i.Classification != ClassificationType.Scroll).Select(i => i.MapToMuleItem(account, character)).ToList();
-
-            await _muleManagerRepository.UpdateCharacter(account, character, itemsToUpdate);
+            await _muleRepository.UpdateCharacter(account.Name, character.Name, MuleCharacterSnapshot.Take(client.Game));
             if(client.Game.IsInGame())
             {
                 await client.Game.LeaveGame();

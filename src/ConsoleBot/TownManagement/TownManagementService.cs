@@ -1,9 +1,11 @@
 ﻿using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
+using System.Collections.Concurrent;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
 using D2NG.Navigation.Extensions;
@@ -22,6 +24,12 @@ public class TownManagementService : ITownManagementService
     private readonly IExternalMessagingClient _externalMessagingClient;
     private readonly ILogger<TownManagementService> _logger;
     private static int isAnyClientGambling;
+
+    /// <summary>
+    /// The keep-items each character was carrying when it last asked for a mule, so a request that
+    /// changed nothing is not repeated every game.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, HashSet<uint>> _unmulableItems = new();
 
     public TownManagementService(IPathingService pathingService, IExternalMessagingClient externalMessagingClient, ILogger<TownManagementService> logger)
     {
@@ -53,7 +61,7 @@ public class TownManagementService : ITownManagementService
             return false;
         }
 
-        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+        if (!await GeneralHelpers.TryWithTimeout(async _ =>
         {
             if (client.Game.Me.HasSkill(Skill.Teleport))
             {
@@ -97,50 +105,76 @@ public class TownManagementService : ITownManagementService
 
     public async Task<bool> TakeTownPortalToArea(Client client, Player player, Area area)
     {
-        var portal = client.Game.GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalArea == area && t.TownPortalOwnerId == player.Id);
-        if(portal == null)
-        {
-            return false;
-        }
-
         var movementMode = GetMovementMode(client.Game);
-        if(client.Game.Me.Location.Distance(portal.Location) > 10)
-        {
-            var pathToPortal = await _pathingService.GetPathToLocation(client.Game, portal.Location, movementMode);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToPortal, movementMode))
-            {
-                _logger.LogWarning("Client {ClientName} Moving to {PortalLocation} failed", client.Game.Me.Name, portal.Location);
-                return false;
-            }
-        }
-
-        var previousArea = client.Game.Area;
+        WorldObject portal = null;
         if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
-            portal = client.Game.GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalArea == area && t.TownPortalOwnerId == player.Id);
+            client.Game.RequestUpdate(client.Game.Me.Id);
+            await Task.Delay(100);
+            if (await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location))
+            {
+                return true;
+            }
+
+            // Newest first. A character only ever owns one town portal, so casting another replaces
+            // it, and the entity for the old one can linger in this client's world at the same
+            // spot. Interacting with that does nothing at all, which reads in the log as standing
+            // on an open portal failing to use it over and over.
+            portal = client.Game.GetEntityByCode(EntityCode.TownPortal)
+                .Where(t => t.TownPortalArea == area && t.TownPortalOwnerId == player.Id)
+                .OrderByDescending(t => t.Id)
+                .FirstOrDefault();
             if (portal == null)
             {
                 return false;
             }
 
-            if(!await client.Game.MoveToAsync(portal))
+            var distance = client.Game.Me.Location.Distance(portal.Location);
+            if (distance > 15)
             {
+                var pathToPortal = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, await ResolveCurrentArea(client), client.Game.Me.Location, portal.Location, movementMode);
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToPortal, movementMode))
+                {
+                    _logger.LogWarning("Client {ClientName} {MovementMode} from {Location} to portal at {PortalLocation} failed", client.Game.Me.Name, movementMode, client.Game.Me.Location, portal.Location);
+                }
                 return false;
             }
 
-            if (retryCount > 0 && retryCount % 5 == 0)
+            if (distance > 5)
             {
-                client.Game.RequestUpdate(client.Game.Me.Id);
+                await client.Game.MoveToAsync(portal);
+                return false;
             }
 
+            // An item left on the cursor makes the server ignore interactions.
+            client.Game.CleanupCursorItem();
             client.Game.InteractWithEntity(portal);
-            return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+            return await GeneralHelpers.TryWithTimeout(async _ =>
             {
-                await Task.Delay(50);
-                return client.Game.Area != previousArea;
-            }, TimeSpan.FromSeconds(0.5));
-        }, TimeSpan.FromSeconds(10)))
+                await Task.Delay(250);
+                client.Game.RequestUpdate(client.Game.Me.Id);
+                return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location);
+            }, TimeSpan.FromSeconds(3));
+        }, TimeSpan.FromSeconds(20)))
         {
+            if (portal == null)
+            {
+                _logger.LogWarning("Client {ClientName} never saw a portal of {Owner} to {Area}, standing at {Location} in {GameArea}", client.Game.Me.Name, player.Name, area, client.Game.Me.Location, client.Game.Area);
+            }
+            else
+            {
+                // How many portals this client can see for that owner, and whether anything was
+                // stuck on the cursor, are the two things that tell stale entity apart from
+                // blocked interaction. Neither was recorded the first two times this happened.
+                var candidates = client.Game.GetEntityByCode(EntityCode.TownPortal)
+                    .Where(t => t.TownPortalArea == area && t.TownPortalOwnerId == player.Id)
+                    .Select(t => t.Id.ToString())
+                    .ToList();
+                _logger.LogWarning("Client {ClientName} did not get through the portal of {Owner} to {Area}, standing at {Location} in {GameArea}, portal {PortalId} at {PortalLocation}, distance {Distance:F1}, candidates {Candidates}, cursor {Cursor}",
+                    client.Game.Me.Name, player.Name, area, client.Game.Me.Location, client.Game.Area,
+                    portal.Id, portal.Location, client.Game.Me.Location.Distance(portal.Location),
+                    string.Join("/", candidates), client.Game.CursorItem?.Name.ToString() ?? "empty");
+            }
             return false;
         }
 
@@ -155,13 +189,26 @@ public class TownManagementService : ITownManagementService
                 await Task.Delay(300);
             }
 
-            return !await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, previousArea, client.Game.Me.Location);
+            return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location);
         }, TimeSpan.FromSeconds(10)))
         {
+            _logger.LogWarning("Client {ClientName} reached {Area} but did not settle there, standing at {Location} in {GameArea}", client.Game.Me.Name, area, client.Game.Me.Location, client.Game.Area);
             return false;
         }
 
         return true;
+    }
+
+    // Game.Area lags every transition, so trust it only when the position agrees with it; otherwise the character is in its town.
+    private async Task<Area> ResolveCurrentArea(Client client)
+    {
+        var area = client.Game.Area;
+        if (area != Area.None && await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location))
+        {
+            return area;
+        }
+
+        return WayPointHelpers.MapTownArea(client.Game.Act);
     }
 
     public async Task<bool> CreateTownPortal(Client client)
@@ -171,7 +218,15 @@ public class TownManagementService : ITownManagementService
             return await client.Game.CreateTownPortal();
         }, TimeSpan.FromSeconds(3.5)))
         {
-            _logger.LogError("Client {ClientName} failed to create town portal", client.Game.Me.Name);
+            // Which of the two causes it was matters: an empty tome is a restocking problem, an
+            // existing portal is a state problem, and the message alone cannot tell them apart.
+            var tome = client.Game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeOfTownPortal);
+            var ownPortal = client.Game.GetEntityByCode(EntityCode.TownPortal).Any(t => t.TownPortalOwnerId == client.Game.Me.Id);
+            _logger.LogError("Client {ClientName} failed to create town portal in {Area}, tome {Tome}, already owns a portal: {Owns}",
+                client.Game.Me.Name,
+                client.Game.Area,
+                tome == null ? "missing" : $"{tome.Amount} scrolls",
+                ownPortal);
             return false;
         }
 
@@ -246,20 +301,41 @@ public class TownManagementService : ITownManagementService
                 _logger.LogWarning("Client {ClientName} taking townportal to {TownArea} failed", client.Game.Me.Name, WayPointHelpers.MapTownArea(client.Game.Act));
                 return false;
             }
-        }
-        else
-        {
-            var movementMode = GetMovementMode(client.Game);
-            var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, movementMode);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
+
+            var currentTownArea = WayPointHelpers.MapTownArea(client.Game.Act);
+            if (!await GeneralHelpers.TryWithTimeout(async _ =>
+                {
+                    client.Game.RequestUpdate(client.Game.Me.Id);
+                    await Task.Delay(250);
+                    return client.Game.IsInTown()
+                        && await _pathingService.IsNavigatablePointInArea(
+                            client.Game.MapId,
+                            client.Game.Difficulty,
+                            currentTownArea,
+                            client.Game.Me.Location);
+                }, TimeSpan.FromSeconds(10)))
             {
-                _logger.LogDebug("Client {ClientName} moving to {Act} waypoint failed", client.Game.Me.Name, client.Game.Act);
+                _logger.LogWarning("Client {ClientName} did not settle in {TownArea}", client.Game.Me.Name, currentTownArea);
                 return false;
             }
         }
 
+        var movementMode = GetMovementMode(client.Game);
+        var pathToTownWayPoint = await _pathingService.ToTownWayPoint(client.Game, movementMode);
+        if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToTownWayPoint, movementMode))
+        {
+            _logger.LogDebug("Client {ClientName} moving to {Act} waypoint failed", client.Game.Me.Name, client.Game.Act);
+            return false;
+        }
+
         var targetTownArea = WayPointHelpers.MapTownArea(act);
-        var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).Single();
+        var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).FirstOrDefault();
+        if (townWaypoint == null)
+        {
+            _logger.LogWarning("Client {ClientName} cannot see the {Act} waypoint", client.Game.Me.Name, client.Game.Act);
+            return false;
+        }
+
         _logger.LogDebug("Client {ClientName} taking waypoint to {TargetTownArea}", client.Game.Me.Name, targetTownArea);
         if (!GeneralHelpers.TryWithTimeout((_) =>
         {
@@ -346,6 +422,18 @@ public class TownManagementService : ITownManagementService
 
             if(stashItemsResult == Enums.MoveItemResult.NoSpace)
             {
+                // Muling is the answer to a full stash, so always ask. Report what is being carried
+                // and whether these are the same items as last time: repeats mean the mules cannot
+                // take them either, which no amount of muling will fix.
+                var carried = InventoryHelpers.ItemsWorthKeeping(game).Select(i => i.Id).ToHashSet();
+                var previous = _unmulableItems.GetValueOrDefault(game.Me.Name);
+                var stuck = previous == null ? 0 : carried.Count(previous.Contains);
+                _logger.LogWarning(
+                    "Client {ClientName} could not stash {Count} items, muling. {Stuck} of them were still here after the last mule",
+                    game.Me.Name,
+                    carried.Count,
+                    stuck);
+                _unmulableItems[game.Me.Name] = carried;
                 result.ShouldMule = true;
             }
         }
@@ -407,8 +495,11 @@ public class TownManagementService : ITownManagementService
             deckardCain = NPCHelpers.GetUniqueNPC(game, deckhardCainCode);
             if(deckardCain == null)
             {
-                _logger.LogError("Client {ClientName} could not find deckard cain failed at {Location}", game.Me.Name, game.Me.Location);
-                return false;
+                // Cain stands in town only once the host has rescued him, so a guest in a fresh rushee's
+                // game finds nobody at his spot. That is the host's quest state, not a failed town visit;
+                // aborting here skipped the vendor and sent the crew into the Chaos Sanctuary unstocked.
+                _logger.LogWarning("Client {ClientName} found no deckard cain at {Location}; skipping identification", game.Me.Name, game.Me.Location);
+                return true;
             }
 
             pathDeckardCain = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, deckardCain.Location, movementMode);
@@ -459,6 +550,26 @@ public class TownManagementService : ITownManagementService
                 {
                     _logger.LogWarning("Client {ClientName} Selling items and refreshing potions failed at {Location}", game.Me.Name, game.Me.Location);
                     return false;
+                }
+
+                // Healing is free and nothing else in the run does it, so a character that finished
+                // the last game hurt would start the next one hurt and keep drinking its belt away.
+                // Done here because it is already standing at the NPC; walking to one across town
+                // needs pathing that HealAtHealer does not do.
+                if (NPCHelpers.IsBelowHealthPotionBar(game, options))
+                {
+                    if (NPCHelpers.GetHealNPC(game.Act) == sellNpc)
+                    {
+                        if (!NPCHelpers.HealAtHealer(game))
+                        {
+                            _logger.LogWarning("Client {ClientName} failed to heal at {Npc}", game.Me.Name, sellNpc);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Client {ClientName} is below the potion bar but {Act} heals at {Healer}, not at {Npc}",
+                            game.Me.Name, game.Act, NPCHelpers.GetHealNPC(game.Act), sellNpc);
+                    }
                 }
             }
             else

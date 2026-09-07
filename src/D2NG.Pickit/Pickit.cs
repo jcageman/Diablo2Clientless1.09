@@ -164,6 +164,7 @@ public static class Pickit
     ];
 
     private static readonly HashSet<ItemName> AdditionalReservedItems = [];
+    private static readonly HashSet<ClassificationType> AdditionalReservedClassifications = [];
 
     /// <summary>
     /// Reserves an item for the lifetime of this bot, on top of the ones the bot always needs. Used
@@ -175,6 +176,19 @@ public static class Pickit
         lock (AdditionalReservedItems)
         {
             AdditionalReservedItems.Add(itemName);
+        }
+    }
+
+    /// <summary>
+    /// Reserves a whole classification the way <see cref="ReserveInventoryItem"/> reserves one name.
+    /// A rusher carries spare healing and mana in its inventory and drinks from there first, so the
+    /// vendor step selling that reserve left it fighting on the belt alone.
+    /// </summary>
+    public static void ReserveInventoryClassification(ClassificationType classification)
+    {
+        lock (AdditionalReservedItems)
+        {
+            AdditionalReservedClassifications.Add(classification);
         }
     }
 
@@ -196,7 +210,7 @@ public static class Pickit
 
         lock (AdditionalReservedItems)
         {
-            return AdditionalReservedItems.Contains(item.Name);
+            return AdditionalReservedItems.Contains(item.Name) || AdditionalReservedClassifications.Contains(item.Classification);
         }
     }
 
@@ -219,7 +233,7 @@ public static class Pickit
 
         lock (AdditionalReservedItems)
         {
-            if (AdditionalReservedItems.Contains(item.Name))
+            if (AdditionalReservedItems.Contains(item.Name) || AdditionalReservedClassifications.Contains(item.Classification))
             {
                 return false;
             }

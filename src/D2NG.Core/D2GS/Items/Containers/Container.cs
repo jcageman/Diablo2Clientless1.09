@@ -53,10 +53,25 @@ public class Container
         SetBuffer(location, width, height, true);
     }
 
+    /// <summary>
+    /// Two items cannot share a cell, so whatever the new item overlaps is a stale record of an item the server has
+    /// since renumbered or moved. The server resends every item with fresh ids when a trade ends.
+    /// </summary>
     public void Add(Item item)
     {
+        foreach (var stale in _items.Values.Where(existing => existing.Id != item.Id && Overlaps(existing, item)).ToList())
+        {
+            Remove(stale.Id);
+        }
         _items[item.Id] = item;
         SetBuffer(item, true);
+    }
+
+    private bool Overlaps(Item a, Item b)
+    {
+        var la = GetItemLocation(a);
+        var lb = GetItemLocation(b);
+        return la.X < lb.X + b.Width && lb.X < la.X + a.Width && la.Y < lb.Y + b.Height && lb.Y < la.Y + a.Height;
     }
 
     public Item FindItemByName(ItemName name)
@@ -103,7 +118,7 @@ public class Container
         return null;
     }
 
-    private bool SpaceIsFree(Point point, ushort itemWidth, ushort itemHeight)
+    public bool SpaceIsFree(Point point, ushort itemWidth, ushort itemHeight)
     {
         if ((point.X + itemWidth > Width) || (point.Y + itemHeight > Height))
         {
@@ -122,6 +137,8 @@ public class Container
         return true;
     }
 
+    public bool IsOccupied(int x, int y) => Buffer[y, x];
+
     public bool HasAnyFreeSpace()
     {
         for (int y = 0; y < Height; y++)
@@ -136,6 +153,23 @@ public class Container
         }
 
         return false;
+    }
+
+    public int FreeCellCount()
+    {
+        var free = 0;
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                if (!Buffer[y, x])
+                {
+                    free++;
+                }
+            }
+        }
+
+        return free;
     }
 
     public override string ToString()

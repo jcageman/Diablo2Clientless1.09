@@ -34,8 +34,57 @@ public abstract class MultiClientBotBase : IBotInstance
     protected TaskCompletionSource<bool> NextGame = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly ConcurrentDictionary<string, ManualResetEvent> PlayersInGame = new();
     protected HashSet<string> ClientsNeedingMule = [];
-    private readonly ConcurrentDictionary<uint, Item> _pickitItemsOnGround = new();
-    private readonly ConcurrentDictionary<uint, Item> _pickitPotionsOnGround = new();
+    private readonly SpatialGrid<Item> _pickitItemsOnGround = new();
+    private readonly ConcurrentDictionary<uint, int> _pickitAttempts = new();
+    private readonly ConcurrentDictionary<uint, bool> _pickedUp = new();
+    private readonly ConcurrentDictionary<uint, int> _pickitReAdds = new();
+
+    /// <summary>
+    /// How many times a single item is put back on the list after a failed pickup. Enough that an
+    /// item merely out of sight survives, few enough that one that genuinely cannot be taken stops
+    /// the character retrying it forever instead of moving on.
+    /// </summary>
+    private const int MaxPickupAttempts = 3;
+
+    /// <summary>
+    /// How many times an item is put back regardless of why the pickup failed, so one that can
+    /// never be reached at all is eventually left rather than retried for the whole game.
+    /// </summary>
+    private const int MaxPickupReAdds = 12;
+
+    /// <summary>
+    /// Close enough that a failed pickup is about the item rather than about the walk. Measured
+    /// failures land in two groups: right on top of the item at nought to seven units, or fifty to
+    /// a hundred and seventy away having never arrived. At five this counted the first group as
+    /// walks and let them run to the loose bound - thirteen round trips for an item instead of
+    /// three.
+    /// </summary>
+    private const double WithinReach = 12;
+
+    /// <summary>How far a character will go for a rejuvenation, whatever its normal pickup range.</summary>
+    private const double RejuvenationPickupRadius = 60;
+
+    /// <summary>How many full rejuvenations a character will carry. They are the best thing it can
+    /// be holding when something goes wrong, so they displace lesser potions rather than queue
+    /// behind them.</summary>
+    private const int FullRejuvenationsWanted = 6;
+    private readonly SpatialGrid<Item> _pickitPotionsOnGround = new();
+    private readonly List<Client> _clients = [];
+
+    /// <summary>
+    /// How much closer another client has to be before a drop is left to it. Without a margin the
+    /// two nearest clients hand the same item back and forth.
+    /// </summary>
+    private const double ItemClaimMargin = 5;
+
+    /// <summary>
+    /// How long a drop is reserved for the client nearest to it. After this it goes to whoever can
+    /// reach it, because the nearest client may be one that is never going to walk over: it could
+    /// be fighting, or only looting around its group.
+    /// </summary>
+    private static readonly TimeSpan ItemClaimGrace = TimeSpan.FromSeconds(10);
+
+    private readonly ConcurrentDictionary<uint, DateTime> _itemFirstSeen = new();
 
     public MultiClientBotBase(IOptions<BotConfiguration> config, IOptions<MultiClientConfiguration> multiClientConfig,
         IExternalMessagingClient externalMessagingClient, IMuleService muleService, IPathingService pathingService)
@@ -63,6 +112,7 @@ public abstract class MultiClientBotBase : IBotInstance
             PostInitializeClient(client, account);
             PlayersInGame.TryAdd(account.Character.ToLower(), new ManualResetEvent(false));
             clients.Add(client);
+            _clients.Add(client);
         }
 
         var firstFiller = clients.First();
@@ -82,6 +132,10 @@ public abstract class MultiClientBotBase : IBotInstance
         {
             _pickitItemsOnGround.Clear();
             _pickitPotionsOnGround.Clear();
+            _itemFirstSeen.Clear();
+            _pickitAttempts.Clear();
+            _pickedUp.Clear();
+            _pickitReAdds.Clear();
             foreach (var playerInGame in PlayersInGame)
             {
                 playerInGame.Value.Reset();
@@ -108,12 +162,29 @@ public abstract class MultiClientBotBase : IBotInstance
                 {
                     var foundClient = clients.Single(c => c.LoggedInUserName() == client);
                     await _externalMessagingClient.SendMessage($"{client}: needs mule, starting mule");
-                    if (!await _muleService.MuleItemsForClient(foundClient))
+
+                    // Whether a mule run actually emptied anything only went to the chat client, so
+                    // a mule that offloaded nothing looked exactly like one that worked, and the
+                    // same items came back for another run next game.
+                    var before = InventoryHelpers.ItemsWorthKeeping(foundClient.Game).Count;
+                    var muled = await _muleService.MuleItemsForClient(foundClient);
+                    var after = InventoryHelpers.ItemsWorthKeeping(foundClient.Game).Count;
+                    if (!muled)
                     {
+                        Log.Warning("{Client} mule run failed, still carrying {After} of {Before} items", client, after, before);
                         await _externalMessagingClient.SendMessage($"{client}: failed mule");
                     }
                     else
                     {
+                        if (after >= before)
+                        {
+                            Log.Warning("{Client} mule run finished but offloaded nothing, still carrying {After} items: the mules have no room either", client, after);
+                        }
+                        else
+                        {
+                            Log.Information("{Client} muled {Offloaded} items, {After} left", client, before - after, after);
+                        }
+
                         await _externalMessagingClient.SendMessage($"{client}: finished mule");
                     }
                 }
@@ -247,9 +318,47 @@ public abstract class MultiClientBotBase : IBotInstance
         return await PrepareForRun(client, account);
     }
 
-    protected async Task PickupItemsAndPotions(Client client, AccountConfig account, double distance)
+    /// <summary>
+    /// Picks up drops and tops up potions. <paramref name="anchor"/> is the point loot is measured
+    /// from, defaulting to the client itself; a client travelling with a group passes the group's
+    /// position so fetching an item can never walk it away from everyone else. Potions stay
+    /// measured from the client, since running dry is a survival problem rather than a loot one.
+    /// </summary>
+    /// <summary>
+    /// Where the nearest item waiting to be picked up is, anywhere in the level, or null when there
+    /// is nothing left to collect. For a character that has run out of things to kill but can still
+    /// cross the level quickly.
+    /// </summary>
+    protected Point NearestPickitLocation(Client client, Point from)
     {
-        await PickupItemsFromPickupList(client, distance);
+        Point nearest = null;
+        var nearestDistance = double.MaxValue;
+
+        // Potions as well as loot. A rejuvenation is refused by the pickit rules, so the only thing
+        // that ever collects one is the potion path, and that only looks within its own radius at
+        // the moment it drops. Anything it missed lies there for the rest of the game unless the
+        // character with nothing left to do goes and gets it.
+        foreach (var item in _pickitItemsOnGround.Snapshot().Concat(_pickitPotionsOnGround.Snapshot()))
+        {
+            if (IsReservedForAnotherClient(client, item))
+            {
+                continue;
+            }
+
+            var distance = from.Distance(item.Location);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = item.Location;
+            }
+        }
+
+        return nearest;
+    }
+
+    protected async Task PickupItemsAndPotions(Client client, AccountConfig account, double distance, Point anchor = null)
+    {
+        await PickupItemsFromPickupList(client, distance, anchor);
         await PickupNearbyPotionsIfNeeded(client, account, distance);
     }
 
@@ -341,42 +450,135 @@ public abstract class MultiClientBotBase : IBotInstance
         }
 
         PickitAudit.LogItemDrop(game, item, shouldPickupGoldItems: false);
+
+        // An item coming back into view raises this again for something already collected or
+        // already given up on, which put it straight back on the list and undid the give-up bound
+        // entirely - the same breastplate was approached fifteen times, each approach from further
+        // away than the last.
+        if (_pickedUp.ContainsKey(item.Id) || _pickitReAdds.GetValueOrDefault(item.Id) > MaxPickupReAdds)
+        {
+            return Task.CompletedTask;
+        }
+
         if (D2NG.Pickit.Pickit.ShouldPickupItem(game, item, false))
         {
-            _pickitItemsOnGround.TryAdd(item.Id, item);
+            _pickitItemsOnGround.TryAdd(item.Id, item.Location, item);
+            _itemFirstSeen.TryAdd(item.Id, DateTime.UtcNow);
         }
 
         if (item.Name == ItemName.RejuvenationPotion || item.Name == ItemName.FullRejuvenationPotion || item.Name == ItemName.SuperHealingPotion || item.Name == ItemName.SuperManaPotion)
         {
-            _pickitPotionsOnGround.TryAdd(item.Id, item);
+            _pickitPotionsOnGround.TryAdd(item.Id, item.Location, item);
         }
 
         return Task.CompletedTask;
     }
 
-    private void PutItemOnPickitList(Client client, Item item)
+    /// <summary>
+    /// Puts an item back without counting the attempt, for when the reason it was not picked up has
+    /// nothing to do with the item.
+    /// </summary>
+    private void ReturnItemToPickitList(Client client, Item item)
     {
-        if (D2NG.Pickit.Pickit.ShouldPickupItem(client.Game, item, false)
-            && client.Game.Items.TryGetValue(item.Id, out var newItem)
-            && newItem.Ground)
+        if (!D2NG.Pickit.Pickit.ShouldPickupItem(client.Game, item, false) || _pickedUp.ContainsKey(item.Id))
         {
-            _pickitItemsOnGround.TryAdd(item.Id, item);
+            return;
         }
-    }
-    private void PutRejuvenationOnPickitList(Item item)
-    {
-        if (item.IsPotion && item.Ground)
-        {
-            _pickitItemsOnGround.TryAdd(item.Id, item);
-        }
+
+        _pickitItemsOnGround.TryAdd(item.Id, item.Location, item);
     }
 
-    private List<Item> GetPickitList(Client client, double distance)
+    private void PutItemOnPickitList(Client client, Item item)
+    {
+        if (!D2NG.Pickit.Pickit.ShouldPickupItem(client.Game, item, false))
+        {
+            return;
+        }
+
+        // Out of view is not the same as taken. An item this client can no longer see is missing
+        // from Game.Items altogether, and requiring it to be found there dropped it from the list
+        // for the rest of the game - which is how a rare on the far side of the level is walked
+        // away from and never collected. Only an item we can still see, and can see is no longer on
+        // the ground, has actually gone.
+        if (_pickedUp.ContainsKey(item.Id))
+        {
+            return;
+        }
+
+        if (client.Game.Items.TryGetValue(item.Id, out var known) && !known.Ground)
+        {
+            return;
+        }
+
+        // Standing on the spot and unable to see it means it is gone, not merely out of sight - at
+        // zero distance this client would see it if it were there. Treating those two the same is
+        // what had three characters in turn walk to the same vanished breastplate, and every one of
+        // them counted as a fresh failure for the next.
+        if (client.Game.Me.Location.Distance(item.Location) <= WithinReach
+            && !client.Game.Items.ContainsKey(item.Id))
+        {
+            _pickedUp[item.Id] = true;
+            Log.Debug($"{item.Name} at {item.Location} is not there any more, dropping it for every client");
+            return;
+        }
+
+        // Bounded. Putting it back unconditionally turned every item that could not be taken into a
+        // character standing on the spot retrying it, which costs far more than the item is worth.
+        // Only failures with the character actually standing on the item say anything about the
+        // item: those are the ones that are no longer really there. Failing from fifty units away
+        // means the walk failed, which is about this attempt and not about the item, and counting
+        // it threw away perfectly good rares nobody had reached yet.
+        var distance = client.Game.Me.Location.Distance(item.Location);
+        var attempts = distance <= WithinReach
+            ? _pickitAttempts.AddOrUpdate(item.Id, 1, (_, count) => count + 1)
+            : _pickitAttempts.GetValueOrDefault(item.Id);
+
+        // A separate, looser bound so an item nobody can ever reach still stops being retried.
+        var reAdds = _pickitReAdds.AddOrUpdate(item.Id, 1, (_, count) => count + 1);
+
+        if (attempts > MaxPickupAttempts || reAdds > MaxPickupReAdds)
+        {
+            // Said out loud: an item the bot walks away from is the one thing here worth money, and
+            // without this the only evidence is a rare still lying on the floor at the end.
+            Log.Warning("Client {ClientName} gave up on {Item} at {Location} after {Tries} tries and {ReAdds} approaches, {FreeCells} free cells, {Distance:F0} away",
+                client.Game.Me.Name, item.Name, item.Location, attempts, reAdds,
+                client.Game.Inventory.FreeCellCount(), distance);
+            return;
+        }
+
+        _pickitItemsOnGround.TryAdd(item.Id, item.Location, item);
+    }
+    private void PutRejuvenationOnPickitList(Client client, Item item)
+    {
+        if (!item.IsPotion || !item.Ground)
+        {
+            return;
+        }
+
+        // Bounded like any other pickup. A potion is only counted as collected once it reaches the
+        // belt, so one that lands anywhere else never satisfies the shortfall that sent the
+        // character after it: it walked back for the same potion every few seconds and held the
+        // whole party each time it did.
+        if (_pickitAttempts.AddOrUpdate(item.Id, 1, (_, count) => count + 1) > MaxPickupAttempts)
+        {
+            Log.Debug($"Client {client.Game.Me.Name} gave up on {item.Name} after {MaxPickupAttempts} tries");
+            return;
+        }
+
+        _pickitItemsOnGround.TryAdd(item.Id, item.Location, item);
+    }
+
+    private List<Item> GetPickitList(Client client, double distance, Point anchor)
     {
         var resultPickitList = new List<Item>();
-        var listItems = _pickitItemsOnGround.Values.Where(i => client.Game.Me.Location.Distance(i.Location) < distance).ToList();
+        var listItems = _pickitItemsOnGround.Within(anchor ?? client.Game.Me.Location, distance);
         foreach (var tryItem in listItems)
         {
+            if (IsReservedForAnotherClient(client, tryItem))
+            {
+                continue;
+            }
+
             if (_pickitItemsOnGround.TryRemove(tryItem.Id, out var item))
             {
                 resultPickitList.Add(item);
@@ -390,21 +592,88 @@ public abstract class MultiClientBotBase : IBotInstance
         return resultPickitList;
     }
 
+    /// <summary>
+    /// Whether another client in the same area stands closer to <paramref name="location"/> and
+    /// should be the one to walk over for it. Potions are deliberately not shared this way: those
+    /// go to whoever is short of them.
+    /// </summary>
+    private bool IsReservedForAnotherClient(Client client, Item item)
+    {
+        if (_itemFirstSeen.TryGetValue(item.Id, out var seen) && DateTime.UtcNow - seen > ItemClaimGrace)
+        {
+            return false;
+        }
+
+        return IsNearerToAnotherClient(client, item.Location);
+    }
+
+    private bool IsNearerToAnotherClient(Client client, Point location)
+    {
+        var myDistance = client.Game.Me.Location.Distance(location);
+        foreach (var other in _clients)
+        {
+            if (other == client || !other.Game.IsInGame() || other.Game.Me == null || other.Game.Area != client.Game.Area)
+            {
+                continue;
+            }
+
+            if (other.Game.Me.Location.Distance(location) + ItemClaimMargin < myDistance)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private List<Item> GetPotionPickupList(Client client, double distance, int nofRevPotions, int nofHealthPotions, int nofManaPotions)
     {
         var resultPickitList = new List<Item>();
-        resultPickitList.AddRange(TakePotionsOfType(client, distance, nofRevPotions, ClassificationType.RejuvenationPotion));
+
+        // Full rejuvenations first, and taken whether or not the rejuvenation count is already met:
+        // a full one is worth more than the lesser one it displaces, which is worth more again than
+        // any plain potion. Room is made for it below rather than the pickup being skipped.
+        var rejuvenationRange = Math.Max(distance, RejuvenationPickupRadius);
+        var fullRejuvenations = TakePotionsByName(client, rejuvenationRange, FullRejuvenationsWanted, ItemName.FullRejuvenationPotion);
+        resultPickitList.AddRange(fullRejuvenations);
+
+        // Further than the rest. A rejuvenation refills life and mana at once and is the only thing
+        // that saves a character already in trouble, so it is worth a walk that a healing potion is
+        // not - and the party fights on top of them without ever looking this far for one.
+        resultPickitList.AddRange(TakePotionsOfType(client, rejuvenationRange, Math.Max(nofRevPotions - fullRejuvenations.Count, 0), ClassificationType.RejuvenationPotion));
         resultPickitList.AddRange(TakePotionsOfType(client, distance, nofHealthPotions, ClassificationType.HealthPotion));
         resultPickitList.AddRange(TakePotionsOfType(client, distance, nofManaPotions, ClassificationType.ManaPotion));
+        return resultPickitList;
+    }
+
+    /// <summary>
+    /// The same as <see cref="TakePotionsOfType"/> but by name, so the full rejuvenation can be
+    /// preferred over the lesser one - both share a classification.
+    /// </summary>
+    private List<Item> TakePotionsByName(Client client, double distance, int nofPotions, ItemName name)
+    {
+        var resultPickitList = new List<Item>();
+        foreach (var tryItem in _pickitPotionsOnGround.Within(client.Game.Me.Location, distance).Where(i => i.Name == name))
+        {
+            if (resultPickitList.Count >= nofPotions)
+            {
+                break;
+            }
+
+            if (_pickitPotionsOnGround.TryRemove(tryItem.Id, out var item))
+            {
+                resultPickitList.Add(item);
+            }
+        }
+
         return resultPickitList;
     }
 
     private List<Item> TakePotionsOfType(Client client, double distance, int nofPotions, ClassificationType classificationType)
     {
         var resultPickitList = new List<Item>();
-        var potionsToTryPick = _pickitPotionsOnGround.Values.Where(i =>
-        client.Game.Me.Location.Distance(i.Location) < distance
-        && i.Classification == classificationType).ToList();
+        var potionsToTryPick = _pickitPotionsOnGround.Within(client.Game.Me.Location, distance)
+            .Where(i => i.Classification == classificationType);
         foreach (var tryItem in potionsToTryPick)
         {
             if (resultPickitList.Count >= nofPotions)
@@ -431,7 +700,25 @@ public abstract class MultiClientBotBase : IBotInstance
             {
                 return;
             }
+
+            // An empty path leaves the character exactly where it was, and the caller then does
+            // whatever it wanted to do there from wherever it still is - which reads in the log as
+            // a pickup failing from a hundred units away for no stated reason.
+            if (path.Count == 0)
+            {
+                Log.Warning("Client {ClientName} found no {MovementMode} path from {From} to {To}, {Distance:F0} away",
+                    client.Game.Me.Name, movementMode, client.Game.Me.Location, location, distance);
+                return;
+            }
+
             await MovementHelpers.TakePathOfLocations(client.Game, path.ToList(), movementMode, token);
+            var remaining = client.Game.Me.Location.Distance(location);
+            var cancelled = token.HasValue && token.Value.IsCancellationRequested;
+            if (!cancelled && remaining > 15 && remaining > distance - 5)
+            {
+                Log.Warning("Client {ClientName} did not get anywhere {MovementMode} towards {To}, still {Remaining:F0} away over {Steps} steps",
+                    client.Game.Me.Name, movementMode, location, remaining, path.Count);
+            }
         }
         else
         {
@@ -466,6 +753,24 @@ public abstract class MultiClientBotBase : IBotInstance
             {
                 client.Game.ChangeSkill(Skill.Vigor, Hand.Right);
             }
+            // A full rejuvenation outranks anything it would have to displace, so if there is
+            // nowhere to put it, drink a plain potion to make the room rather than walk past it.
+            // Drinking one that is already needed costs nothing; the character was going to drink
+            // it anyway, and a full rejuvenation in hand is worth more than a healing potion in
+            // reserve.
+            if (item.Name == ItemName.FullRejuvenationPotion && client.Game.Inventory.FindFreeSpace(item) == null)
+            {
+                var lesser = client.Game.Inventory.Items.FirstOrDefault(i =>
+                    i.Classification == ClassificationType.HealthPotion
+                    || i.Classification == ClassificationType.ManaPotion);
+                if (lesser != null)
+                {
+                    Log.Information($"Client {client.Game.Me.Name} drinking {lesser.Name} to make room for {item.Name}");
+                    client.Game.UsePotion(lesser);
+                    await Task.Delay(150);
+                }
+            }
+
             Log.Information($"Client {client.Game.Me.Name} picking up {item.Name}");
             await MoveToLocation(client, item.Location);
             if (item.Ground)
@@ -477,25 +782,33 @@ public abstract class MultiClientBotBase : IBotInstance
                     return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                     {
                         await Task.Delay(50);
-                        return client.Game.Belt.FindItemById(item.Id) != null;
+                        // Either container counts. Only the belt did, but a potion goes to the
+                        // inventory whenever the belt has no room for it - and rejuvenations are
+                        // counted in the inventory in the first place. So a potion that was picked
+                        // up perfectly well reported failure, went back on the list, and was walked
+                        // back for again: full rejuvenations were never collected at all, and the
+                        // amazon fetched the same mana potion every few seconds all game.
+                        return client.Game.Belt.FindItemById(item.Id) != null
+                            || client.Game.Inventory.FindItemById(item.Id) != null;
                     }, TimeSpan.FromSeconds(0.2));
                 }, TimeSpan.FromSeconds(3)))
                 {
-                    PutRejuvenationOnPickitList(item);
+                    PutRejuvenationOnPickitList(client, item);
                 }
             }
         }
     }
 
-    private async Task PickupItemsFromPickupList(Client client, double distance)
+    private async Task PickupItemsFromPickupList(Client client, double distance, Point anchor = null)
     {
         var maxPicks = 3;
         var picks = 0;
+        var startLocation = client.Game.Me.Location;
         var pickitList = new List<Item>();
         do
         {
             picks++;
-            pickitList = pickitList = GetPickitList(client, distance);
+            pickitList = GetPickitList(client, distance, anchor);
             foreach (var item in pickitList)
             {
                 if (client.Game.Me.HasSkill(Skill.Vigor))
@@ -504,16 +817,48 @@ public abstract class MultiClientBotBase : IBotInstance
                 }
                 if (item.Ground)
                 {
+                    // Before walking, not after. A character with a full inventory used to cross the
+                    // level to every item it had no room for, fail, put it straight back on the list
+                    // and set off again: one full inventory produced 14,000 attempts in eight
+                    // minutes and dragged the party along for all of them. Space can still turn up
+                    // when potions are drunk or items go to the cube, so the item stays on the list.
+                    if (client.Game.Inventory.FindFreeSpace(item) == null)
+                    {
+                        // Untouched. Having no room says nothing about the item - it is about this
+                        // character - and counting it retired perfectly good loot for everyone once
+                        // one full character had skipped it a dozen times, while five other clients
+                        // with seventy free cells never got the chance.
+                        ReturnItemToPickitList(client, item);
+                        continue;
+                    }
+
                     Log.Information($"Client {client.Game.Me.Name} picking up {item.Amount} {item.Name}");
                     await MoveToLocation(client, item.Location);
-                    if (client.Game.Inventory.FindFreeSpace(item) != null && await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+
+                    // An item that left this client's sight and came back is a new entity with a new
+                    // id, and the list is still holding the old one. Picking up a stale id does
+                    // nothing at all, which is what a character standing on an item and failing to
+                    // take it four times over with sixty free cells looks like.
+                    var target = item;
+                    var live = client.Game.Items.Values.FirstOrDefault(i => i.Ground
+                        && i.Name == item.Name
+                        && i.Id != item.Id
+                        && i.Location.Distance(item.Location) <= 2);
+                    if (live != null)
                     {
-                        await client.Game.MoveToAsync(item.Location);
-                        client.Game.PickupItem(item);
+                        Log.Warning("Client {ClientName} found {Item} at {Location} under a new id {NewId}, the list had {OldId}",
+                            client.Game.Me.Name, item.Name, item.Location, live.Id, item.Id);
+                        target = live;
+                    }
+
+                    if (await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                    {
+                        await client.Game.MoveToAsync(target.Location);
+                        client.Game.PickupItem(target);
                         return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                         {
                             await Task.Delay(50);
-                            if (!item.IsGold && client.Game.Inventory.FindItemById(item.Id) == null)
+                            if (!target.IsGold && client.Game.Inventory.FindItemById(target.Id) == null)
                             {
                                 return false;
                             }
@@ -522,6 +867,12 @@ public abstract class MultiClientBotBase : IBotInstance
                         }, TimeSpan.FromSeconds(0.2));
                     }, TimeSpan.FromSeconds(3)))
                     {
+                        // The clients share one list, so one of them taking an item is the only
+                        // reliable way any of the others can tell "already collected" apart from
+                        // "out of my sight" - from a client that cannot see the tile, both look
+                        // exactly like an item missing from Game.Items.
+                        _pickedUp[item.Id] = true;
+                        _pickedUp[target.Id] = true;
                         InventoryHelpers.MoveInventoryItemsToCube(client.Game);
                     }
                     else
@@ -531,6 +882,8 @@ public abstract class MultiClientBotBase : IBotInstance
                 }
             }
         }
-        while (pickitList.Count != 0 && picks < maxPicks);
+        while (pickitList.Count != 0
+            && picks < maxPicks
+            && client.Game.Me.Location.Distance(startLocation) < distance);
     }
 }

@@ -31,6 +31,30 @@ public class AttackService : IAttackService
         _logger = logger;
     }
 
+    /// <summary>How tightly monsters have to be bunched around the target to be worth whirling through.</summary>
+    private const double WhirlwindPackRadius = 8;
+
+    /// <summary>
+    /// How far past the far edge of the pack the whirl carries on. Long enough that a target which
+    /// steps aside is still on the path, since a whirl that misses costs the mana without leeching
+    /// any back.
+    /// </summary>
+    private const double WhirlwindOvershoot = 10;
+
+    /// <summary>The middle of a group of monsters, which is the line worth whirling along.</summary>
+    private static Point Centre(List<WorldObject> monsters)
+    {
+        double x = 0;
+        double y = 0;
+        foreach (var monster in monsters)
+        {
+            x += monster.Location.X;
+            y += monster.Location.Y;
+        }
+
+        return new Point((ushort)(x / monsters.Count), (ushort)(y / monsters.Count));
+    }
+
     internal sealed class Line
     {
         public Point StartPoint { get; set; }
@@ -191,7 +215,7 @@ public class AttackService : IAttackService
         return false;
     }
 
-    public async Task<bool> AssistPlayer(Client client, Player player)
+    public async Task<bool> AssistPlayer(Client client, Player player, IReadOnlyCollection<NPCCode> priorityCodes = null)
     {
         if (client.Game.IsInTown())
         {
@@ -201,15 +225,15 @@ public class AttackService : IAttackService
         switch (client.Game.Me.Class)
         {
             case CharacterClass.Amazon:
-                return await AmazonAssist(client, player);
+                return await AmazonAssist(client, player, priorityCodes);
             case CharacterClass.Sorceress:
-                return await SorceressAssist(client, player);
+                return await SorceressAssist(client, player, priorityCodes);
             case CharacterClass.Necromancer:
                 return await NecromancerAssist(client, player);
             case CharacterClass.Paladin:
-                return await PaladinAssist(client, player);
+                return await PaladinAssist(client, player, priorityCodes);
             case CharacterClass.Barbarian:
-                return await BarbarianAssist(client, player);
+                return await BarbarianAssist(client, player, priorityCodes);
             case CharacterClass.Druid:
                 break;
             case CharacterClass.Assassin:
@@ -219,10 +243,10 @@ public class AttackService : IAttackService
         return true;
     }
 
-    private async Task<bool> AmazonAssist(Client client, Player player)
+    private async Task<bool> AmazonAssist(Client client, Player player, IReadOnlyCollection<NPCCode> priorityCodes)
     {
         var me = client.Game.Me;
-        var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 20, 40).ToList();
+        var enemies = Prioritize(NPCHelpers.GetNearbyNPCs(client, player.Location, 20, 40).ToList(), priorityCodes);
 
         if (me.Attributes[Attribute.Level] < 30 && client.Game.Difficulty > Difficulty.Normal)
         {
@@ -236,31 +260,40 @@ public class AttackService : IAttackService
         var nearest = await GetNearestInSight(client, enemies);
         if (nearest == null)
         {
+            // Enemies are there, they are simply all behind something. Reporting success here left
+            // the character standing against a wall doing nothing while monsters sat on the other
+            // side of it, so step to somewhere the shot actually lands instead.
+            var blocked = enemies.FirstOrDefault();
+            if (blocked != null)
+            {
+                await MoveToNearbySafeSpot(client, enemies.Select(e => e.Location).ToList(), blocked.Location, MovementMode.Walking);
+            }
+
             return true;
         }
 
         if (me.HasSkill(Skill.MultipleShot) && me.Mana > 20 && enemies.Count > 5)
         {
-            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.MultipleShot);
+            _logger.LogInformation("{Character} attacking {NPCCode} with {Skill}", client.Game.Me.Name, nearest.NPCCode, Skill.MultipleShot);
             client.Game.RepeatRightHandSkillOnEntity(Skill.MultipleShot, nearest);
             await Task.Delay(200);
         }
         else if (me.HasSkill(Skill.LightningFury) && me.Mana > 20 && enemies.Count > 5)
         {
-            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.LightningFury);
+            _logger.LogInformation("{Character} attacking {NPCCode} with {Skill}", client.Game.Me.Name, nearest.NPCCode, Skill.LightningFury);
             client.Game.UseRightHandSkillOnEntity(Skill.LightningFury, nearest);
             await Task.Delay(200);
         }
         else if (me.HasSkill(Skill.GuidedArrow) && me.Mana > 20 && enemies.Count < 5)
         {
-            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.GuidedArrow);
+            _logger.LogInformation("{Character} attacking {NPCCode} with {Skill}", client.Game.Me.Name, nearest.NPCCode, Skill.GuidedArrow);
             client.Game.RepeatRightHandSkillOnEntity(Skill.GuidedArrow, nearest);
             await Task.Delay(200);
         }
         else if (client.Game.Me.Equipment.TryGetValue(DirectoryType.RightHand, out var weapon)
             && weapon.Classification == ClassificationType.Bow)
         {
-            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.Attack);
+            _logger.LogInformation("{Character} attacking {NPCCode} with {Skill}", client.Game.Me.Name, nearest.NPCCode, Skill.Attack);
             client.Game.RepeatRightHandSkillOnEntity(Skill.Attack, nearest);
             await Task.Delay(200);
         }
@@ -268,13 +301,27 @@ public class AttackService : IAttackService
             && client.Game.Me.Equipment.TryGetValue(DirectoryType.RightHand, out var javalin)
             && javalin.Classification == ClassificationType.Javelin)
         {
-            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.Attack);
+            _logger.LogInformation("{Character} attacking {NPCCode} with {Skill}", client.Game.Me.Name, nearest.NPCCode, Skill.Attack);
             await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
             client.Game.LeftHandSkillHoldOnEntity(Skill.Attack, nearest);
             await Task.Delay(200);
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Moves the monsters the caller cares about to the front of an otherwise distance ordered
+    /// list, so the party finishes them before it chews through whatever else wandered in.
+    /// </summary>
+    private static List<WorldObject> Prioritize(List<WorldObject> enemies, IReadOnlyCollection<NPCCode> priorityCodes)
+    {
+        if (priorityCodes == null || priorityCodes.Count == 0 || enemies.Count == 0)
+        {
+            return enemies;
+        }
+
+        return enemies.OrderBy(e => priorityCodes.Contains(e.NPCCode) ? 0 : 1).ToList();
     }
 
     private async Task<WorldObject> GetNearestInSight(Client client, List<WorldObject> enemies)
@@ -290,9 +337,19 @@ public class AttackService : IAttackService
         return null;
     }
 
-    private async Task<bool> SorceressAssist(Client client, Player player)
+    /// <summary>
+    /// Monsters that lightning cannot touch, so static field is wasted on them. Burning souls are
+    /// the ones that matter here: they are what the cow runs hunt, and a cold sorceress is the only
+    /// character in the party who can hurt them.
+    /// </summary>
+    private static bool IsLightningImmune(NPCCode code)
     {
-        var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 30, 40).ToList();
+        return code == NPCCode.BurningSoul;
+    }
+
+    private async Task<bool> SorceressAssist(Client client, Player player, IReadOnlyCollection<NPCCode> priorityCodes)
+    {
+        var enemies = Prioritize(NPCHelpers.GetNearbyNPCs(client, player.Location, 30, 40).ToList(), priorityCodes);
 
         var me = client.Game.Me;
         if (me.Mana > 10
@@ -328,14 +385,21 @@ public class AttackService : IAttackService
         }
         else if (me.HasSkill(Skill.FrozenOrb) && me.Mana > 30)
         {
-            if (me.Skills.GetValueOrDefault(Skill.StaticField) > 10
+            // Static is lightning, so it does nothing at all to a lightning immune target - and
+            // because it never takes their life down, the cold sorceress stayed in this branch
+            // softening a burning soul that cannot be softened and never cast her orb. She logged
+            // no attacks for a whole session while standing next to things only she could kill.
+            var canSoften = me.Skills.GetValueOrDefault(Skill.StaticField) > 10
+                && !IsLightningImmune(nearest.NPCCode)
+                && ClassHelpers.CanStaticEntity(client, nearest.LifePercentage);
+
+            if (canSoften
                 && nearest.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique)
-                && nearest.LifePercentage > 20
-                && ClassHelpers.CanStaticEntity(client, nearest.LifePercentage))
+                && nearest.LifePercentage > 20)
             {
                 client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
             }
-            else if (me.Skills.GetValueOrDefault(Skill.StaticField) > 10 && nearest.LifePercentage > 50 && ClassHelpers.CanStaticEntity(client, nearest.LifePercentage))
+            else if (canSoften && nearest.LifePercentage > 50)
             {
                 client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
             }
@@ -387,9 +451,9 @@ public class AttackService : IAttackService
         return true;
     }
 
-    private async Task<bool> PaladinAssist(Client client, Player player)
+    private async Task<bool> PaladinAssist(Client client, Player player, IReadOnlyCollection<NPCCode> priorityCodes)
     {
-        var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 30, 20).ToList();
+        var enemies = Prioritize(NPCHelpers.GetNearbyNPCs(client, player.Location, 30, 20).ToList(), priorityCodes);
 
         var me = client.Game.Me;
         if (me.Mana > 20 && me.HasSkill(Skill.HolyShield) && !client.Game.Me.Effects.ContainsKey(EntityEffect.Holyshield))
@@ -440,7 +504,7 @@ public class AttackService : IAttackService
             && client.Game.Difficulty == Difficulty.Normal
             && client.Game.Area != Area.CowLevel)
         {
-            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.Attack);
+            _logger.LogInformation("{Character} attacking {NPCCode} with {Skill}", client.Game.Me.Name, nearest.NPCCode, Skill.Attack);
             await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
             client.Game.LeftHandSkillHoldOnEntity(Skill.Attack, nearest);
             await Task.Delay(200);
@@ -565,11 +629,11 @@ public class AttackService : IAttackService
         return true;
     }
 
-    private async Task<bool> BarbarianAssist(Client client, Player player)
+    private async Task<bool> BarbarianAssist(Client client, Player player, IReadOnlyCollection<NPCCode> priorityCodes)
     {
         var me = client.Game.Me;
         await ClassHelpers.CastAllShouts(client);
-        var enemies = NPCHelpers.GetNearbyNPCs(client, player.Location, 1, 20);
+        var enemies = Prioritize(NPCHelpers.GetNearbyNPCs(client, player.Location, 10, 20).ToList(), priorityCodes);
         var nearest = enemies.FirstOrDefault();
         if (nearest == null)
         {
@@ -585,24 +649,27 @@ public class AttackService : IAttackService
             return true;
         }
 
-        if (me.HasSkill(Skill.Whirlwind) &&
-            ((me.Attributes[Attribute.Level] > 33 && client.Game.Difficulty != Difficulty.Normal) || me.Attributes[Attribute.Level] > 40))
+        // Whirlwind is the barbarian's damage and leeches its own mana back when it connects, so it
+        // is the first choice against anything. The skills below are what is left when it cannot be
+        // used at all: too low a level, or mana already drained by a bad stretch.
+        var pack = enemies.Where(e => e.Location.Distance(nearest.Location) < WhirlwindPackRadius).ToList();
+        var canWhirlwind = me.HasSkill(Skill.Whirlwind)
+            && ((me.Attributes[Attribute.Level] > 33 && client.Game.Difficulty != Difficulty.Normal) || me.Attributes[Attribute.Level] > 40);
+        if (canWhirlwind && me.Mana > 30 && pack.Count > 0)
         {
-            if(me.Mana > 30)
-            {
-                return await WhirlWindEnemy(client, nearest);
-            }
+            return await WhirlWindThroughPack(client, pack);
         }
-        else if (me.HasSkill(Skill.Concentrate) && me.Mana > 5)
+
+        if (me.HasSkill(Skill.Concentrate) && me.Mana > 5)
         {
-            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.Concentrate);
+            _logger.LogInformation("{Character} attacking {NPCCode} with {Skill}", client.Game.Me.Name, nearest.NPCCode, Skill.Concentrate);
             await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
             client.Game.RepeatRightHandSkillOnEntity(Skill.Concentrate, nearest);
             await Task.Delay(200);
         }
         else
         {
-            _logger.LogInformation("Attacking {NPCCode} with {Skill}", nearest.NPCCode, Skill.Attack);
+            _logger.LogInformation("{Character} attacking {NPCCode} with {Skill}", client.Game.Me.Name, nearest.NPCCode, Skill.Attack);
             await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, nearest, MovementMode.Walking);
             client.Game.UseRightHandSkillOnEntity(Skill.Attack, nearest);
             await Task.Delay(200);
@@ -611,19 +678,31 @@ public class AttackService : IAttackService
         return true;
     }
 
-    private async Task<bool> WhirlWindEnemy(Client client, WorldObject worldObject)
+    /// <summary>
+    /// Cuts through the middle of a pack and out the far side. Aiming at one monster and stopping
+    /// six units past it sweeps almost no ground, so a target that steps aside is missed and the
+    /// mana is spent for nothing; crossing the pack keeps enough of them on the path to leech the
+    /// mana back.
+    /// </summary>
+    private async Task<bool> WhirlWindThroughPack(Client client, List<WorldObject> pack)
     {
-        if (client.Game.Me.Location.Distance(worldObject.Location) > 15)
+        var centre = Centre(pack);
+        _logger.LogInformation("{Character} attacking {Count} {NPCCode} with {Skill}",
+            client.Game.Me.Name, pack.Count, pack[0].NPCCode, Skill.Whirlwind);
+
+        if (client.Game.Me.Location.Distance(centre) > 15)
         {
-            var wwStartPoint = client.Game.Me.Location.GetPointBeforePointInSameDirection(worldObject.Location, 15);
+            var wwStartPoint = client.Game.Me.Location.GetPointBeforePointInSameDirection(centre, 15);
             await MovementHelpers.MoveToLocation(client.Game, _pathingService, _mapApiService, wwStartPoint, MovementMode.Walking);
         }
 
-        var wwDirection = client.Game.Me.Location.GetPointPastPointInSameDirection(worldObject.Location, 6);
-        if (client.Game.Me.Location.Equals(worldObject.Location))
+        // Exit far enough beyond the far edge of the pack that the path crosses all of it.
+        var spread = pack.Max(e => e.Location.Distance(centre));
+        var wwDirection = client.Game.Me.Location.GetPointPastPointInSameDirection(centre, spread + WhirlwindOvershoot);
+        if (client.Game.Me.Location.Equals(centre))
         {
-            var pathLeft = await _pathingService.GetPathToLocation(client.Game, worldObject.Location.Add(-6, 0), MovementMode.Walking);
-            var pathRight = await _pathingService.GetPathToLocation(client.Game, worldObject.Location.Add(6, 0), MovementMode.Walking);
+            var pathLeft = await _pathingService.GetPathToLocation(client.Game, centre.Add(-6, 0), MovementMode.Walking);
+            var pathRight = await _pathingService.GetPathToLocation(client.Game, centre.Add(6, 0), MovementMode.Walking);
             //var pathUp = await _pathingService.GetPathToLocation(client.Game, worldObject.Location.Add(0, -6), MovementMode.Walking);
             //var pathDown = await _pathingService.GetPathToLocation(client.Game, worldObject.Location.Add(0, 6), MovementMode.Walking);
             if (pathLeft.Count < pathRight.Count)
