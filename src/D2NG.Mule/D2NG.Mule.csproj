@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Marten" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\D2NG.Core\D2NG.Core.csproj" />
+  </ItemGroup>
+
+</Project>

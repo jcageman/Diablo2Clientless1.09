@@ -1,21 +1,21 @@
-﻿using D2NG.Core.D2GS.Items;
-using D2NG.Core.MCP;
-using D2NG.MuleManager.Configuration;
-using D2NG.MuleManager.Services.MuleManager.Models;
+using D2NG.Core.D2GS.Items;
+using D2NG.Mule.Models;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace D2NG.MuleManager.Services.MuleManager;
+namespace D2NG.Mule;
 
 public static class ItemExtensions
 {
-    public static MuleItemDb MapToMuleItem(this Item item, MuleManagerAccount account, Character character)
+    public static MuleItemDb MapToMuleItem(this Item item, string accountName, string characterName)
     {
+        accountName = MuleNames.Normalize(accountName);
+        characterName = MuleNames.Normalize(characterName);
         return new MuleItemDb
         {
-            Id = $"{account.Name}-{character.Name}-{item.Id}",
-            AccountName = account.Name,
-            CharacterName = character.Name,
+            Id = $"{accountName}-{characterName}-{item.Id}",
+            AccountName = accountName,
+            CharacterName = characterName,
             ItemName = item.Name.ToString(),
             QualityType = item.Quality.ToString(),
             ClassificationType = item.Classification.ToString(),

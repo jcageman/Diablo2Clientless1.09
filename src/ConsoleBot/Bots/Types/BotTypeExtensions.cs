@@ -1,10 +1,12 @@
-using ConsoleBot.Bots.Types.Assist;
+﻿using ConsoleBot.Bots.Types.Assist;
 using ConsoleBot.Bots.Types.Baal;
 using ConsoleBot.Bots.Types.Cows;
 using ConsoleBot.Bots.Types.CS;
 using ConsoleBot.Bots.Types.Cuber;
 using ConsoleBot.Bots.Types.Mephisto;
 using ConsoleBot.Bots.Types.Pindle;
+using ConsoleBot.Bots.Types.Rush;
+using ConsoleBot.Bots.Types.RushProbe;
 using ConsoleBot.Bots.Types.Travincal;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +26,8 @@ public static class BotTypeExtensions
         services.AddSingleton<IBotInstance, PindleBot>();
         services.AddSingleton<IBotInstance, BaalBot>();
         services.AddSingleton<IBotInstance, CubeBot>();
+        services.AddSingleton<IBotInstance, RushBot>();
+        services.AddSingleton<IBotInstance, RushProbeBot>();
         services.AddSingleton<IBotFactory, BotFactory>();
         services.AddOptions<CowConfiguration>()
             .Bind(config.GetSection("bot").GetSection("cows"));
@@ -41,5 +45,9 @@ public static class BotTypeExtensions
             .Bind(config.GetSection("bot").GetSection("cube"));
         services.AddOptions<AssistConfiguration>()
             .Bind(config.GetSection("bot").GetSection("assist"));
+        services.AddOptions<RushConfiguration>()
+            .Bind(config.GetSection("bot").GetSection("rush"));
+        services.AddOptions<RushProbeConfiguration>()
+            .Bind(config.GetSection("bot").GetSection("rushprobe"));
     }
 }

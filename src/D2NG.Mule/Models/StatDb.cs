@@ -1,4 +1,4 @@
-﻿namespace D2NG.MuleManager.Services.MuleManager.Models;
+namespace D2NG.Mule.Models;
 
 public class StatDb
 {

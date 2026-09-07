@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\D2NG.Navigation\D2NG.Navigation.csproj" />
     <ProjectReference Include="..\D2NG.Core\D2NG.Core.csproj" />
+    <ProjectReference Include="..\D2NG.Mule\D2NG.Mule.csproj" />
     <ProjectReference Include="..\D2NG.Pickit\D2NG.Pickit.csproj" />
   </ItemGroup>
 

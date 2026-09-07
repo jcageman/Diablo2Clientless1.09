@@ -1,5 +1,5 @@
 ﻿using D2NG.MuleManager.Controllers.Models;
-using D2NG.MuleManager.Services.MuleManager.Models;
+using D2NG.Mule.Models;
 using System.Collections.Generic;
 using System.Linq;
 

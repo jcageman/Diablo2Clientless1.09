@@ -1,4 +1,4 @@
-using D2NG.Core.D2GS;
+﻿using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Enums;
 
 namespace D2NG.Pickit.Tests;
@@ -86,6 +86,18 @@ public class InventoryReservationTests
         var leg = InInventoryAt(ClassificationType.BodyPart, ItemName.WirtsLeg, 0);
 
         Assert.True(Pickit.CanTouchInventoryItem(CharacterClass.Sorceress, leg, InventoryHeight));
+    }
+
+    // Only the rush bot reserves these, via Pickit.ReserveInventoryClassification: every other bot
+    // sells the potions it carries in the inventory.
+    [Fact]
+    public void InventoryPotionsAreTouchedUnlessABotReservesThem()
+    {
+        var healing = InInventoryAt(ClassificationType.HealthPotion, ItemName.GreaterHealingPotion, 0);
+        var mana = InInventoryAt(ClassificationType.ManaPotion, ItemName.GreaterManaPotion, 0);
+
+        Assert.True(Pickit.CanTouchInventoryItem(CharacterClass.Sorceress, healing, InventoryHeight));
+        Assert.True(Pickit.CanTouchInventoryItem(CharacterClass.Sorceress, mana, InventoryHeight));
     }
 
     [Fact]

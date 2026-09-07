@@ -67,7 +67,7 @@ public class BotConfiguration
     /// <summary>
     /// Which bot to run. Must match one of the registered bot names:
     /// <c>assist</c>, <c>baal</c>, <c>cows</c>, <c>cs</c>, <c>cube</c>, <c>mephisto</c>,
-    /// <c>pindle</c>, <c>test</c> or <c>travincal</c>.
+    /// <c>pindle</c>, <c>rush</c>, <c>test</c> or <c>travincal</c>.
     /// </summary>
     [Required]
     public string BotType { get; set; }

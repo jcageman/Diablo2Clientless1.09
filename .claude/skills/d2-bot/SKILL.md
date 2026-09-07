@@ -48,6 +48,19 @@ needs the object must be walked into range *before* it matters.
 Give area changes room. An act change reloads the act and takes seconds; a one-second inner timeout
 re-fires the interact on a portal already taken.
 
+## Map data
+
+Pass `Difficulty.Normal` to every map api and pathing call, whatever difficulty the game is on. The
+service returns a **different layout per difficulty for the same map id**, and only the Normal one
+matches the live game: asking for the Nightmare layout put the Durance 3 stairs 250 units from where
+they are, so the path ended somewhere no warp existed and the rusher stood still. `MephistoBot` has
+always hardcoded Normal, which is why it crosses that border in four seconds in a Hell game.
+
+A cell is walkable when `IsMovable(value)` — `value % 2 == 0` — holds, so a `-1` cell is not, and
+waypoint tiles come back `-1`. Pathing snaps the destination but never the source, so a character
+standing on a waypoint has an unwalkable source and **every** path comes back empty. Step off it with
+`MoveToAsync` before pathing; the pathing service cannot route out of a source it rejects.
+
 ## Escort model
 
 Two clients: a high-level **rusher** and a low-level **rushee**. What the rushee must do itself:
@@ -85,6 +98,7 @@ bytes are not in a capture, go find a capture — `DEBUGGING.md` covers where th
   core test executable directly covers only 133 of them, so prefer `dotnet test`.
 - **Accounts cap at 18 characters**, and a full account fails as `RealmLogin failed`. The `cleanup`
   step deletes exactly the names in `characterNames`, and only for accounts in `deletableAccounts`.
+- **Always use `gs1` as the game description.** Other realms in the list are not reliable.
 - Configs hold credentials. Reference them by path; keep them out of documents and commits.
 
 ## Reference

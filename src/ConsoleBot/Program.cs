@@ -4,6 +4,7 @@ using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
+using D2NG.Mule;
 using D2NG.Pickit;
 using ConsoleBot.TownManagement;
 using D2NG.Navigation.Extensions;
@@ -82,6 +83,11 @@ else
 {
     hostBuilder.Services.AddSingleton<IExternalMessagingClient, DummyMessagingClient>();
 }
+var muleConnectionString = config.GetSection("mule")["connectionString"];
+if (!string.IsNullOrEmpty(muleConnectionString))
+{
+    hostBuilder.Services.AddMuleStore(muleConnectionString);
+}
 hostBuilder.Services.AddSingleton<IMuleService, MuleService>();
 hostBuilder.Services.AddSingleton<ITownManagementService, TownManagementService>();
 hostBuilder.Services.AddSingleton<IAttackService, AttackService>();
@@ -109,7 +115,9 @@ if (!string.IsNullOrEmpty(logLevelName) && !Enum.TryParse(logLevelName, ignoreCa
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Is(minimumLevel)
     .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
-    .WriteTo.Console()
+    // Debug and below only ever reach the file: the console cannot keep up with that volume and
+    // the clients stall behind it.
+    .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
     .WriteTo.File(
         logfileName,
         fileSizeLimitBytes: 20_000_000,
@@ -170,6 +178,11 @@ while (true)
         var botConfiguration = host.Services.GetRequiredService<IOptions<BotConfiguration>>();
         var botInstance = botFactory.CreateBot(botConfiguration.Value.BotType);
         await botInstance.Run();
+        if (botInstance.RunsOnce)
+        {
+            await Log.CloseAndFlushAsync();
+            return 0;
+        }
     }
     catch (MapServerUnavailableException e)
     {
@@ -182,6 +195,13 @@ while (true)
     }
     catch (Exception e)
     {
+        var botConfiguration = host.Services.GetRequiredService<IOptions<BotConfiguration>>();
+        if (botConfiguration.Value.BotType.Equals("rush", StringComparison.OrdinalIgnoreCase))
+        {
+            await StopWithFatalError(host, $"Rush failed: {e.Message}", e);
+            return 1;
+        }
+
         var externalClient = host.Services.GetRequiredService<IExternalMessagingClient>();
         Log.Logger.Error(e, "Bot crashed with exception {Message}, restarting", e.Message);
         await externalClient.SendMessage($"Bot crashed with exception {e.Message}, restarting");

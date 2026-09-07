@@ -1,4 +1,5 @@
 ﻿using D2NG.Core.D2GS.Items;
+using D2NG.Mule;
 using D2NG.MuleManager.Services.MuleManager;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -12,11 +13,11 @@ public class UpdateController : ControllerBase
 {
 
     private readonly IMuleManagerService _muleManagerService;
-    private readonly IMuleManagerRepository _muleManagerRepository;
+    private readonly IMuleRepository _muleManagerRepository;
 
     public UpdateController(
         IMuleManagerService muleManagerService,
-        IMuleManagerRepository muleManagerRepository)
+        IMuleRepository muleManagerRepository)
     {
         _muleManagerService = muleManagerService;
         _muleManagerRepository = muleManagerRepository;

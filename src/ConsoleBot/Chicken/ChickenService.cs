@@ -2,8 +2,10 @@
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Packet;
+using D2NG.Core.D2GS.Items;
 using Serilog;
 using System;
+using System.Linq;
 using System.Threading;
 
 namespace ConsoleBot.Chicken;
@@ -32,10 +34,14 @@ public static class ChickenService
         private readonly Client _client;
         private readonly ChickenConfiguration _config;
         private readonly object _leaveGate = new();
+
+        /// <summary>How long after being hit potions and chickening stay armed.</summary>
+        private static readonly TimeSpan UnharmedGracePeriod = TimeSpan.FromSeconds(3);
         private bool _leaveSignalled;
 
         private int _previousLife;
         private int _previousMaxLife;
+        private DateTime _lastDamageAt = DateTime.MinValue;
         private int _previousMaxMana;
 
         // Set when a maximum rose without any life being lost - Battle Orders on 1.09. Until real
@@ -146,6 +152,7 @@ public static class ChickenService
                 if (lostLife)
                 {
                     _awaitingDamage = false;
+                    _lastDamageAt = DateTime.Now;
                 }
                 else if (maximumRose)
                 {
@@ -158,6 +165,15 @@ public static class ChickenService
                         game.UseHealthPotions();
                     }
 
+                    return;
+                }
+
+                // Nothing in town damages you, so nothing in town should drink or leave. Game.Area is
+                // the only town test available here and it lags every transition, so a portal into town
+                // left this drinking at 88% life beside the vendor until the belt was empty. Recent
+                // damage is the one signal that cannot be stale.
+                if (DateTime.Now - _lastDamageAt > UnharmedGracePeriod)
+                {
                     return;
                 }
 
@@ -193,7 +209,19 @@ public static class ChickenService
 
                 if (lifeFraction < _config.UseHealthPotionPercent && canDrink)
                 {
-                    game.UseHealthPotions();
+                    // A drink that finds nothing to drink is worth saying out loud: the character
+                    // otherwise sits below the threshold looking like it is healing and never does.
+                    if (!game.UseHealthPotions())
+                    {
+                        // With the counts attached, an empty belt tells apart from a belt that was
+                        // never filled because there was no inventory room to buy into.
+                        Log.Warning("{Character} has no health potions to drink at {Life} of {MaxLife} life, belt {Belt}, inventory {Inventory}, {FreeCells} free cells",
+                            me.Name, life, maxLife,
+                            game.Belt.NumOfHealthPotions(),
+                            game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion),
+                            game.Inventory.FreeCellCount());
+                    }
+
                     return;
                 }
 

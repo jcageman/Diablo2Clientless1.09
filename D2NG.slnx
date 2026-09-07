@@ -5,10 +5,13 @@
     <File Path="Directory.Packages.props" />
     <File Path="global.json" />
   </Folder>
+  <Project Path="src/ConsoleBot.Tests/ConsoleBot.Tests.csproj" />
   <Project Path="src/ConsoleBot/ConsoleBot.csproj" />
   <Project Path="src/D2NG.Core.Tests/D2NG.Core.Tests.csproj" />
   <Project Path="src/D2NG.Core/D2NG.Core.csproj" />
   <Project Path="src/D2NG.MuleManager.UI/D2NG.MuleManager.UI.csproj" />
+  <Project Path="src/D2NG.Mule.Tests/D2NG.Mule.Tests.csproj" />
+  <Project Path="src/D2NG.Mule/D2NG.Mule.csproj" />
   <Project Path="src/D2NG.MuleManager/D2NG.MuleManager.csproj" />
   <Project Path="src/D2NG.Navigation/D2NG.Navigation.csproj" />
   <Project Path="src/D2NG.Pickit.Tests/D2NG.Pickit.Tests.csproj" />

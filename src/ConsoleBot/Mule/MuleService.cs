@@ -1,19 +1,18 @@
-﻿using ConsoleBot.Bots;
+using ConsoleBot.Bots;
 using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
-using ConsoleBot.Enums;
 using ConsoleBot.Helpers;
 using D2NG.Core;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
-using D2NG.Core.D2GS.Items.Containers;
-using D2NG.Core.D2GS.Packet;
-using D2NG.Core.D2GS.Packet.Incoming;
+using D2NG.Mule;
+using D2NG.Mule.Packing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -27,14 +26,19 @@ public class MuleService : IMuleService
     private readonly MuleConfiguration _muleConfig;
     private readonly IExternalMessagingClient _externalMessagingClient;
     private readonly ILogger<MuleService> _logger;
+    private readonly IMuleRepository _muleRepository;
+    private readonly MuleTransfer _transfer;
 
-    public MuleService(IOptions<BotConfiguration> botConfig, IOptions<MuleConfiguration> muleConfig, IExternalMessagingClient externalMessagingClient, ILogger<MuleService> logger)
+    public MuleService(IOptions<BotConfiguration> botConfig, IOptions<MuleConfiguration> muleConfig, IExternalMessagingClient externalMessagingClient, ILogger<MuleService> logger, IMuleRepository muleRepository = null)
     {
         _botConfig = botConfig.Value;
         _muleConfig = muleConfig.Value;
         _externalMessagingClient = externalMessagingClient;
         _logger = logger;
+        _muleRepository = muleRepository;
+        _transfer = new MuleTransfer(logger);
     }
+
     public async Task<bool> MuleItemsForClient(Client client)
     {
         var muleGameName = $"{_botConfig.GameNamePrefix}m{GameCount++}";
@@ -51,26 +55,28 @@ public class MuleService : IMuleService
         }
 
         InventoryHelpers.MoveCubeItemsToInventory(client.Game);
+        var passStamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+        SaveFixture(client, $"{passStamp}-farmer-{client.Game.Me.Name}");
 
         var failedToJoinCount = 0;
 
         foreach (var account in _muleConfig.Accounts)
         {
-            List<Item> muleItems = GetMuleItems(client, account);
-            if (muleItems.Count == 0)
-            {
-                continue;
-            }
-
             var accountCharacters = await GetAccountCharactersForMule(account);
 
             foreach (var character in accountCharacters)
             {
                 InventoryHelpers.CleanupCursorItem(client.Game);
 
-                if (!HasAnyItemsToMule(client))
+                var muleItems = GetMuleItems(client, account);
+                if (muleItems.Count == 0)
                 {
                     break;
+                }
+
+                if (await SeenFullRecently(account.Username, character, muleItems.Select(MuleGrids.ShapeOf)))
+                {
+                    continue;
                 }
 
                 var muleClient = new Client();
@@ -103,70 +109,41 @@ public class MuleService : IMuleService
                     continue;
                 }
 
-                if(!await WaitForInitialize(muleClient))
+                if (!await WaitForInitialize(muleClient))
                 {
                     _logger.LogError("Fail to initialize client {ClientName}", muleClient.LoggedInUserName());
                     return false;
                 }
 
                 InventoryHelpers.CleanupCursorItem(muleClient.Game);
+                SaveFixture(muleClient, $"{passStamp}-mule-{account.Username}-{character}");
 
-                MoveItemResult moveItemResult = MoveItemResult.Succes;
-                do
+                var timer = Stopwatch.StartNew();
+                var result = await _transfer.Run(client, muleClient, () => GetMuleItems(client, account));
+                _logger.LogInformation("{Account}-{Character}: {Ending} after {Rounds} rounds, {Items} items / {Cells} cells moved, {Rejections} refusals, {Seconds:F0}s",
+                    account.Username, character, result.Ending, result.Rounds, result.ItemsMoved, result.CellsMoved, result.Rejections, timer.Elapsed.TotalSeconds);
+
+                if (result.Ending != TransferEnding.Failed)
                 {
-                    var movableInventoryItems = muleClient.Game.Inventory.Items.Where(i => D2NG.Pickit.Pickit.CanTouchInventoryItem(muleClient.Game, i)).ToList();
-                    moveItemResult = InventoryHelpers.StashItemsAndGold(muleClient.Game, movableInventoryItems, 0);
-                    if (moveItemResult == MoveItemResult.Failed)
-                    {
-                        break;
-                    }
-
-                    var itemsToTrade = GetItemsToTrade(muleClient.Game.Inventory, muleItems);
-                    if (itemsToTrade.Count == 0)
-                    {
-                        break;
-                    }
-
-                    var stashItemsToTrade = itemsToTrade.Where(i => i.Container == ContainerType.Stash || i.Container == ContainerType.Stash2).ToList();
-                    if (stashItemsToTrade.Count > 0)
-                    {
-                        moveItemResult = InventoryHelpers.MoveStashItemsToInventory(client.Game, stashItemsToTrade);
-                        InventoryHelpers.CleanupCursorItem(client.Game);
-                    }
-                    else
-                    {
-                        moveItemResult = MoveItemResult.Succes;
-                    }
-
-                    var itemIdsToTrade = itemsToTrade.Select(i => i.Id).ToHashSet();
-                    itemsToTrade = client.Game.Inventory.Items.Where(i => itemIdsToTrade.Contains(i.Id)).ToList();
-                    if (itemsToTrade.Count == 0)
-                    {
-                        break;
-                    }
-
-                    if (moveItemResult != MoveItemResult.Failed)
-                    {
-                        moveItemResult = await TradeInventoryItems(client, muleClient, itemsToTrade);
-                        await Task.Delay(TimeSpan.FromSeconds(5));
-                    }
-                    muleItems = GetMuleItems(client, account);
-                    if (muleItems.Count == 0)
-                    {
-                        break;
-                    }
-                } while (moveItemResult == MoveItemResult.Succes);
+                    await RecordCharacter(account.Username, character, muleClient.Game);
+                }
 
                 await Task.Delay(TimeSpan.FromSeconds(2));
                 await muleClient.Game.LeaveGame();
                 await Task.Delay(TimeSpan.FromSeconds(1));
                 muleClient.Disconnect();
-                if (moveItemResult == MoveItemResult.Failed)
+                if (result.Ending == TransferEnding.Failed)
                 {
                     await client.Game.LeaveGame();
                     await Task.Delay(TimeSpan.FromSeconds(2));
                     await client.RejoinMCP();
                     return false;
+                }
+
+                if (result.Ending == TransferEnding.GiverInventoryBlocks)
+                {
+                    _logger.LogWarning("{Farmer}: inventory has no room to pull stash items through; muling stops for this game", client.Game.Me.Name);
+                    break;
                 }
             }
         }
@@ -181,6 +158,68 @@ public class MuleService : IMuleService
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Writes the character's containers next to the log so a real mule situation can be replayed in a test.
+    /// </summary>
+    private void SaveFixture(Client client, string name)
+    {
+        try
+        {
+            var directory = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_botConfig.LogFile ?? "log.txt")) ?? ".", "mule-fixtures");
+            var fixture = MuleFixture.From(client.Game, i => D2NG.Pickit.Pickit.CanTouchInventoryItem(client.Game, i));
+            fixture.Save(Path.Combine(directory, $"{name}.json"));
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Could not write mule fixture {Name}", name);
+        }
+    }
+
+    private async Task<bool> SeenFullRecently(string accountName, string characterName, IEnumerable<Shape> carried)
+    {
+        if (_muleRepository == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var lastSeen = await _muleRepository.GetCharacter(accountName, characterName);
+            if (!MuleSkipRule.ShouldSkip(lastSeen, DateTimeOffset.UtcNow, carried))
+            {
+                return false;
+            }
+
+            _logger.LogInformation("Skipping {Account}-{Character}, nothing we carry fits since {SeenAt} ({FreeCells} free cells)", accountName, characterName, lastSeen.SeenAt, lastSeen.FreeCells);
+            return true;
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Mule database unavailable, visiting {Account}-{Character}", accountName, characterName);
+            return false;
+        }
+    }
+
+    private async Task RecordCharacter(string accountName, string characterName, Game game)
+    {
+        if (_muleRepository == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var snapshot = MuleCharacterSnapshot.Take(game);
+            await _muleRepository.UpdateCharacter(accountName, characterName, snapshot);
+            _logger.LogInformation("Recorded {Account}-{Character}: {Items} items, {FreeCells} free cells, widest fit per height {Profile}",
+                accountName, characterName, snapshot.Items.Count, snapshot.FreeCells, string.Join("/", snapshot.FitProfile.Skip(1)));
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Mule database unavailable, not recording {Account}-{Character}", accountName, characterName);
+        }
     }
 
     private async Task<bool> WaitForInitialize(Client client)
@@ -240,7 +279,7 @@ public class MuleService : IMuleService
 
     private List<Item> GetMuleItems(Client client, MuleAccount muleAccount)
     {
-        var muleItems = client.Game.Items.Values.Where(i => IsMuleItem(client, i));
+        var muleItems = client.Game.Stash.Items.Concat(client.Game.Inventory.Items).Where(i => IsMuleItem(client, i));
         if (muleAccount.MatchesAny.Count == 0)
         {
             return muleItems.ToList();
@@ -280,11 +319,6 @@ public class MuleService : IMuleService
         return isMatch;
     }
 
-    private bool HasAnyItemsToMule(Client client)
-    {
-        return client.Game.Items.Values.Any(i => IsMuleItem(client, i));
-    }
-
     // Used when the configuration does not say otherwise: a flawless gem is not worth a mule slot.
     private static readonly List<MuleFilter> DefaultNeverMule =
     [
@@ -308,164 +342,5 @@ public class MuleService : IMuleService
         var rightContainer = item.Container == ContainerType.Stash || item.Container == ContainerType.Stash2 || item.Container == ContainerType.Inventory;
 
         return rightContainer && item.IsIdentified && D2NG.Pickit.Pickit.CanTouchInventoryItem(client.Game, item);
-    }
-
-    private async Task<MoveItemResult> TradeInventoryItems(Client client, Client muleClient, List<Item> tradeItems)
-    {
-        bool tradeAccepted = false;
-        var clientActions = new HashSet<ButtonAction>();
-        client.OnReceivedPacketEvent(InComingPacket.ButtonAction, (packet) => clientActions.Add(new ButtonActionPacket(packet).Action));
-        client.OnReceivedPacketEvent(InComingPacket.TradeAccepted, (packet) => tradeAccepted = true);
-        var muleClientActions = new HashSet<ButtonAction>();
-        muleClient.OnReceivedPacketEvent(InComingPacket.ButtonAction, (packet) => muleClientActions.Add(new ButtonActionPacket(packet).Action));
-
-        var entityPlayerClient = muleClient.Game.Players.First(p => p.Id == client.Game.Me.Id);
-
-        var tries = 0;
-
-        muleClient.Game.InteractWithPlayer(entityPlayerClient);
-
-        while (!clientActions.Contains(ButtonAction.APlayerWantsToTrade) && tries < 20)
-        {
-            await Task.Delay(100);
-            tries++;
-        }
-
-        if (tries >= 20)
-        {
-            return MoveItemResult.Failed;
-        }
-
-        client.Game.ClickButton(ClickType.AcceptTradeRequest);
-        while (!tradeAccepted && tries < 20)
-        {
-            await Task.Delay(100);
-            tries++;
-        }
-
-        if (tries >= 20)
-        {
-            return MoveItemResult.Failed;
-        }
-
-        await Task.Delay(500);
-        var movedItems = await MoveAllInventoryItemsToTradeScreenThatFit(client, muleClient.Game.Inventory, tradeItems);
-
-        client.Game.ClickButton(ClickType.PressAcceptButton);
-        muleClient.Game.ClickButton(ClickType.PressAcceptButton);
-
-        while (!clientActions.Contains(ButtonAction.YouHaveTradedSomeItems) && tries < 20)
-        {
-            await Task.Delay(100);
-            tries++;
-        }
-
-        if (tries >= 20)
-        {
-            return MoveItemResult.Failed;
-        }
-
-        return movedItems;
-    }
-
-    private static List<Item> GetItemsToTrade(Container muleInventory, List<Item> tradeableItems)
-    {
-        if (!muleInventory.HasAnyFreeSpace())
-        {
-            return [];
-        }
-
-        var itemsToTrade = new List<Item>();
-        var temporaryInventory = new Inventory();
-        foreach (var item in muleInventory.Items)
-        {
-            temporaryInventory.Add(item);
-        }
-
-        var tradeScreenClient = new Container(10, 4);
-        foreach (var item in tradeableItems)
-        {
-            var freeTradeScreenSpace = tradeScreenClient.FindFreeSpace(item);
-            if (freeTradeScreenSpace == null)
-            {
-                continue;
-            }
-
-            var freeSpaceInventory = temporaryInventory.FindFreeSpace(item);
-            if (freeSpaceInventory == null)
-            {
-                continue;
-            }
-
-            temporaryInventory.Block(freeSpaceInventory, item.Width, item.Height);
-            tradeScreenClient.Block(freeTradeScreenSpace, item.Width, item.Height);
-            itemsToTrade.Add(item);
-        }
-
-        return itemsToTrade;
-    }
-
-    private async Task<MoveItemResult> MoveAllInventoryItemsToTradeScreenThatFit(Client client, Container muleInventory, List<Item> tradeableItems)
-    {
-        var temporaryInventory = new Inventory();
-        foreach (var item in muleInventory.Items)
-        {
-            temporaryInventory.Add(item);
-        }
-
-        bool atLeastOneTraded = false;
-
-        var tradeScreenClient = new Container(10, 4);
-        foreach (var item in tradeableItems)
-        {
-            var space = tradeScreenClient.FindFreeSpace(item);
-            if (space == null)
-            {
-                continue;
-            }
-
-            var freeSpaceInventory = temporaryInventory.FindFreeSpace(item);
-            if (freeSpaceInventory == null)
-            {
-                if (atLeastOneTraded)
-                {
-                    break;
-                }
-                else
-                {
-                    continue;
-                }
-            }
-
-            client.Game.RemoveItemFromContainer(item);
-
-            bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => client.Game.CursorItem?.Id == item.Id, TimeSpan.FromSeconds(5));
-            if (!resultToBuffer)
-            {
-                _logger.LogError("Moving item {ItemId} - {ItemName} to buffer failed", item.Id, item.Name);
-                await _externalMessagingClient.SendMessage($"Moving item {item.Id} - {item.Name} to buffer failed");
-                return MoveItemResult.Failed;
-            }
-
-            await Task.Delay(100);
-            client.Game.InsertItemIntoContainer(item, space, ItemContainer.Trade);
-            Item newItem = null;
-            var moveResult = GeneralHelpers.TryWithTimeout(
-                (retryCount) => client.Game.CursorItem == null && client.Game.Items.TryGetValue(item.Id, out newItem) && newItem.Container == ContainerType.ForTrade,
-                TimeSpan.FromSeconds(5));
-            if (!moveResult)
-            {
-                _logger.LogError("Moving item {ItemId} - {ItemName} to trade failed", item.Id, item.Name);
-                await _externalMessagingClient.SendMessage($"Moving item {item.Id} - {item.Name} to trade failed ");
-                return MoveItemResult.Failed;
-            }
-
-            await Task.Delay(100);
-            temporaryInventory.Block(freeSpaceInventory, newItem.Width, newItem.Height);
-            tradeScreenClient.Add(newItem);
-            atLeastOneTraded = true;
-        }
-
-        return atLeastOneTraded ? MoveItemResult.Succes : MoveItemResult.NoSpace;
     }
 }

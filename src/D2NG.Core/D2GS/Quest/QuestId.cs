@@ -12,6 +12,12 @@ namespace D2NG.Core.D2GS.Quest;
 /// 0x2001 when act 2 travel opened. The remaining entries follow the same block layout and were
 /// cross checked against a second character whose words 8-15 read as a consistent act 2
 /// progression, but each one still needs its own capture before code depends on it.
+///
+/// <see cref="EveOfDestruction"/> is measured too, and it broke the block layout. Killing Baal moved
+/// word <b>40</b> from 0x0000 to 0x1401 on the rushee, and a character that had already finished act 5
+/// read 0x1451 in the same word; word 38, where the layout puts the quest, never moved on either. So
+/// act 5 begins two words later than the pattern predicts. Acts 1 to 4 were re-checked against the
+/// same capture and are where this enum says they are.
 /// </remarks>
 public enum QuestId
 {
@@ -48,12 +54,15 @@ public enum QuestId
     HellsForge = 27,
     Act4Outro = 28,
 
-    Act5Intro = 32,
-    SiegeOnHarrogath = 33,
-    RescueOnMountArreat = 34,
-    PrisonOfIce = 35,
-    BetrayalOfHarrogath = 36,
-    RiteOfPassage = 37,
-    EveOfDestruction = 38,
-    Act5Outro = 39
+    // Act 5 does not sit where the eight word block layout predicts: it starts two words later.
+    // EveOfDestruction is the measured one - see the remarks above - and the rest of the block is
+    // placed by following the act 5 quest order back from it, so they still need their own capture.
+    Act5Intro = 34,
+    SiegeOnHarrogath = 35,
+    RescueOnMountArreat = 36,
+    PrisonOfIce = 37,
+    BetrayalOfHarrogath = 38,
+    RiteOfPassage = 39,
+    EveOfDestruction = 40,
+    Act5Outro = 41
 }
