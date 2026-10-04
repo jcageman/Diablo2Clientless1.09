@@ -27,13 +27,15 @@ public static class RepackPlanner
         }
         var wantedNow = CountFitting(current.Clone(), wanted);
 
+        // Repacking from scratch can fail outright: first fit is not optimal, so a stash whose items sit in a layout
+        // it would never have produced has no compact target at all. That is a stash to leave alone, not a crash.
         var anchored = Layout(stashItems, wanted, stashSize, keepPositions: true);
         var compact = Layout(stashItems, wanted, stashSize, keepPositions: false);
-        var anchoredFit = CountFitting(Occupancy(stashItems, anchored, stashSize), wanted);
-        var compactFit = CountFitting(Occupancy(stashItems, compact, stashSize), wanted);
+        var anchoredFit = anchored == null ? -1 : CountFitting(Occupancy(stashItems, anchored, stashSize), wanted);
+        var compactFit = compact == null ? -1 : CountFitting(Occupancy(stashItems, compact, stashSize), wanted);
 
         var (target, fit) = compactFit > anchoredFit ? (compact, compactFit) : (anchored, anchoredFit);
-        if (fit <= wantedNow)
+        if (target == null || fit <= wantedNow)
         {
             return null;
         }
@@ -61,7 +63,8 @@ public static class RepackPlanner
     /// <summary>
     /// Where each stash item should end up. The wanted shapes take part in the packing as placeholders so that the
     /// stash items are arranged around them. When the placeholders crowd a stash item out, the smallest wanted shape
-    /// is dropped and the packing is redone; with no placeholders left every stash item fits by definition.
+    /// is dropped and the packing is redone. Keeping positions, the last attempt always succeeds because every item
+    /// can stay where it is; packing from scratch can still fail, and then there is no target layout.
     /// </summary>
     private static Dictionary<uint, Cell> Layout(IReadOnlyList<StashItem> items, IReadOnlyList<Shape> wanted, Shape stashSize, bool keepPositions)
     {

@@ -1,4 +1,4 @@
-using D2NG.Core.D2GS.Packet;
+﻿using D2NG.Core.D2GS.Packet;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -75,6 +75,12 @@ public sealed class CaptureOptions
     /// </summary>
     public bool LogRawPayloads { get; private set; }
 
+    /// <summary>
+    /// Folder holding the item tables. They no longer ship with the build, so decoding an item packet
+    /// needs pointing at the same data folder the bot uses.
+    /// </summary>
+    public string DataDirectory { get; private set; }
+
     public bool LogIncoming { get; private set; } = true;
 
     public bool LogOutgoing { get; private set; } = true;
@@ -126,6 +132,9 @@ public sealed class CaptureOptions
                     break;
                 case "mcpport":
                     options.McpPort = ParsePort(value, options.McpPort);
+                    break;
+                case "datadir":
+                    options.DataDirectory = value;
                     break;
                 case "raw":
                     options.LogRawPayloads = ParseBool(value, options.LogRawPayloads);
@@ -208,7 +217,7 @@ public sealed class CaptureOptions
         var protocols = string.Join(",", Protocols.Select(p => p.ToString().ToLowerInvariant()).Order());
         var direction = LogIncoming && LogOutgoing ? "both" : LogIncoming ? "in" : "out";
         return $"device={DeviceIndex?.ToString() ?? "prompt"} d2gsPort={D2gsPort} protocols={protocols} " +
-            $"direction={direction} raw={LogRawPayloads}" +
+            $"direction={direction} raw={LogRawPayloads} dataDir={DataDirectory ?? "default"}" +
             $"{DescribeSet("include in", _includeIncoming, true)}" +
             $"{DescribeSet("include out", _includeOutgoing, false)}" +
             $"{DescribeSet("exclude in", _excludeIncoming, true)}" +

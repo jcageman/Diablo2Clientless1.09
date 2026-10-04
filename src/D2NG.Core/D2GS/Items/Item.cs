@@ -133,33 +133,29 @@ public class Item
         totalResist += GetValueOfStatType(StatType.LightningResistance);
         return totalResist;
     }
+    /// <summary>
+    /// What the item's attributes are worth to this class, in life. Vitality counts the same as the
+    /// other attributes: leaving it out scored a boot rolling ten vitality as worth nothing, which
+    /// is the roll these rules most want to keep.
+    /// </summary>
     public int GetTotalLifeFromStats(CharacterClass characterClass)
     {
         var totalLife = GetValueOfStatType(StatType.Life);
-        switch (characterClass)
+        var perAttribute = characterClass switch
         {
-            case CharacterClass.Amazon:
-                totalLife += GetValueOfStatType(StatType.Dexterity) * 3;
-                totalLife += GetValueOfStatType(StatType.Strength) * 3;
-                break;
-            case CharacterClass.Sorceress:
-                totalLife += GetValueOfStatType(StatType.Dexterity) * 2;
-                totalLife += GetValueOfStatType(StatType.Strength) * 2;
-                totalLife += GetValueOfStatType(StatType.Mana);
-                totalLife += GetValueOfStatType(StatType.Energy) * 2;
-                break;
-            case CharacterClass.Necromancer:
-            case CharacterClass.Paladin:
-            case CharacterClass.Druid:
-            case CharacterClass.Assassin:
-                totalLife += GetValueOfStatType(StatType.Dexterity) * 2;
-                totalLife += GetValueOfStatType(StatType.Strength) * 2;
-                break;
-            case CharacterClass.Barbarian:
-                totalLife += GetValueOfStatType(StatType.Dexterity) * 4;
-                totalLife += GetValueOfStatType(StatType.Strength) * 4;
-                break;
+            CharacterClass.Barbarian => 4,
+            CharacterClass.Amazon => 3,
+            _ => 2
+        };
 
+        totalLife += GetValueOfStatType(StatType.Dexterity) * perAttribute;
+        totalLife += GetValueOfStatType(StatType.Strength) * perAttribute;
+        totalLife += GetValueOfStatType(StatType.Vitality) * perAttribute;
+
+        if (characterClass == CharacterClass.Sorceress)
+        {
+            totalLife += GetValueOfStatType(StatType.Mana);
+            totalLife += GetValueOfStatType(StatType.Energy) * 2;
         }
 
         return totalLife;

@@ -18,33 +18,21 @@ public class CowConfiguration : MultiClientConfiguration
     public string PortalCharacterName { get; set; }
 
     /// <summary>
-    /// Whether the non-sorceress clients hunt monsters of their own instead of only following the
-    /// lead. With this off the bot behaves exactly as it did before active mode existed.
+    /// Whether every client clears the level rather than only following the lead. Nothing lists
+    /// which monsters to kill: everything in the level is a target, and whether a given character
+    /// can hurt a given pack comes from its resistances. With this off the bot behaves exactly as
+    /// it did before active mode existed.
     /// </summary>
     public bool ActiveMode { get; set; }
 
-    /// <summary>
-    /// The monsters the hunting party goes after in <see cref="ActiveMode"/>. Their packs are
-    /// clustered like cow packs are, so the party can tell when it has been over all of them.
-    /// Required with <see cref="ActiveMode"/>: the configuration binder appends to a list that
-    /// already holds values, so a default here would be added to whatever is configured rather
-    /// than replaced by it.
-    /// </summary>
-    public List<NPCCode> HuntedMonsters { get; set; } = [];
-
-    /// <summary>
-    /// Validates that a portal character is configured, and that active mode has something to hunt.
-    /// </summary>
+    /// <summary>Validates that a portal character is configured.</summary>
     public override void Validate()
     {
+        base.Validate();
         if (string.IsNullOrEmpty(PortalCharacterName))
         {
             throw new ValidationException($"{nameof(PortalCharacterName)} is required on cow configuration");
         }
 
-        if (ActiveMode && (HuntedMonsters == null || HuntedMonsters.Count == 0))
-        {
-            throw new ValidationException($"{nameof(HuntedMonsters)} must list at least one monster when {nameof(ActiveMode)} is enabled");
-        }
     }
 }

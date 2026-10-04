@@ -44,40 +44,40 @@ internal class JoinGameResponsePacket : McpPacket
             case 0x00:
                 break;
             case 0x29:
-                Log.Debug("Password incorrect");
+                Log.Warning("Join refused: password incorrect");
                 break;
             case 0x2A:
-                Log.Debug("Game does not exist");
+                Log.Warning("Join refused: game does not exist (d2cs NOT_EXIST - the game is created but d2gs has not confirmed it yet)");
                 break;
             case 0x2B:
-                Log.Debug("Game is full");
+                Log.Warning("Join refused: game is full");
                 break;
             case 0x2C:
-                Log.Debug("You do not meet the level requirements for the game");
+                Log.Warning("Join refused: level requirements not met");
                 break;
             case 0x6E:
-                Log.Debug("A dead hardcore chracter cannot join a game");
+                Log.Warning("Join refused: dead hardcore character");
                 break;
             case 0x71:
-                Log.Debug("A non-hardcore character cannot join a hardcore game");
+                Log.Warning("Join refused: non-hardcore character in a hardcore game");
                 break;
             case 0x73:
-                Log.Debug("Unable to join a Nightmare game");
+                Log.Warning("Join refused: cannot join a nightmare game");
                 break;
             case 0x74:
-                Log.Debug("Unable to join a Hell Game");
+                Log.Warning("Join refused: cannot join a hell game");
                 break;
             case 0x78:
-                Log.Debug("A non-expansion character cannot join a game created by an expansion character");
+                Log.Warning("Join refused: non-expansion character in an expansion game");
                 break;
             case 0x79:
-                Log.Debug("An expansion character cannot join a game created by a non-expansion character");
+                Log.Warning("Join refused: expansion character in a non-expansion game");
                 break;
             case 0x7D:
-                Log.Debug("A non-ladder character cannot join a ladder game");
+                Log.Warning("Join refused: non-ladder character in a ladder game");
                 break;
             default:
-                Log.Debug("Unknown game join failure");
+                Log.Warning("Join refused: unknown reason, result {Result:X2}", result);
                 break;
         }
     }

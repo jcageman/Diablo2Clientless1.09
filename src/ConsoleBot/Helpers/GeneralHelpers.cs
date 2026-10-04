@@ -34,6 +34,22 @@ public static class GeneralHelpers
         return success;
     }
 
+    public static async Task<bool> WithDeadline(Func<Task<bool>> work, TimeSpan deadline, string description)
+    {
+        var task = Task.Run(work);
+        if (await Task.WhenAny(task, Task.Delay(deadline)) == task)
+        {
+            return await task;
+        }
+
+        _ = task.ContinueWith(
+            finished => Log.Warning(finished.Exception, "{Description} unblocked after its deadline", description),
+            TaskContinuationOptions.OnlyOnFaulted);
+
+        Log.Warning("{Description} passed its deadline of {Seconds:0} seconds, abandoning the game", description, deadline.TotalSeconds);
+        return false;
+    }
+
     public static async Task<bool> TryWithTimeout(Func<int, Task<bool>> action, TimeSpan timeout)
     {
         bool success = false;

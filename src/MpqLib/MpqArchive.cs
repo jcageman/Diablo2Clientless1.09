@@ -52,7 +52,7 @@ public class MpqArchive : IDisposable
 
     public MpqArchive(string Filename)
     {
-        mStream = File.Open(Filename, FileMode.Open, FileAccess.Read);
+        mStream = File.Open(Filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         Init();
     }
 

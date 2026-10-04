@@ -1,0 +1,12 @@
+// Bases kept for their sockets and their life roll, not for their affixes: raw material for
+// runewords and jewels rather than finished gear.
+//
+// Kept in their own file because a base list buried in a gear file is exactly where bases go
+// missing. Armors.nip names twenty three magic bases for the four socket rule, and neither
+// fullplatemail nor ancientarmor is among them - yet all three armory characters wear a four
+// socket "Jeweler's ... of the Whale" body armour, two on full plate mail and one on ancient
+// armour. Matching on the sockets and the life instead of on a list of bases cannot go stale
+// the same way.
+
+// Four socket body armour with a real life roll.
+[type] == armor && [quality] == magic # [sockets] == 4 && [maxhp] >= 40

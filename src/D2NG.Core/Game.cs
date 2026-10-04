@@ -1,4 +1,4 @@
-﻿using D2NG.Core.D2GS;
+using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
@@ -27,6 +27,8 @@ public class Game
     private GameData Data { get; set; }
 
     private Thread pingThread;
+
+    private volatile bool _leavingGame;
 
     private DateTime lastTeleport;
 
@@ -127,6 +129,7 @@ public class Game
     {
         Data = new GameData(packet, selectedCharacter);
         _gameServer.Ping();
+        _leavingGame = false;
         pingThread = new Thread(PingThread) { Name = "GameClient Ping Thread", IsBackground = true };
         pingThread.Start();
     }
@@ -155,6 +158,9 @@ public class Game
         }
         finally
         {
+            // The ping loop sleeps five seconds between pings, and joining it cost a mean 2.5s on
+            // every teardown. Waking it is free.
+            _leavingGame = true;
             pingThread.Join();
             await Task.Delay(1000);
         }
@@ -274,7 +280,7 @@ public class Game
         }
         var buttonAction = _gameServer.GetResetEventOfType(InComingPacket.ButtonAction);
         _gameServer.SendPacket(new ActivateBufferItemPacket(Me, item));
-        return buttonAction.WaitOne(2000);
+        return WaitForPacket(buttonAction, 2000, "ClickButton");
     }
 
     public bool ActivateTomeOfIdentify(Item item)
@@ -285,7 +291,7 @@ public class Game
         }
         var stackableItem = _gameServer.GetResetEventOfType(InComingPacket.UseStackableItem);
         _gameServer.SendPacket(new ActivateBufferItemPacket(Me, item));
-        return stackableItem.WaitOne(2000);
+        return WaitForPacket(stackableItem, 2000, "UseStackableItem");
     }
 
     public bool UsePotion(Item item)
@@ -340,10 +346,25 @@ public class Game
             return true;
         }
 
+        // The server silently drops a cast that arrives while the previous one is still animating,
+        // and the move only arrives ~230ms after a cast it accepts. Recasting every few frames until
+        // the move arrives lands the first cast after the animation ends; the extra ones fall inside
+        // an animation and are dropped.
         var reAssignPlayer = _gameServer.GetResetEventOfType(InComingPacket.ReassignPlayer);
-        UseRightHandSkillOnLocation(Skill.Teleport, point);
-        return await reAssignPlayer.AsTask(TimeSpan.FromMilliseconds(200)) && Me.Location.Distance(point) < 10;
+        for (var waited = 0; waited < TeleportReplyTimeoutMs; waited += TeleportRecastIntervalMs)
+        {
+            UseRightHandSkillOnLocation(Skill.Teleport, point);
+            if (await reAssignPlayer.AsTask(TimeSpan.FromMilliseconds(TeleportRecastIntervalMs)))
+            {
+                return Me.Location.Distance(point) < 10;
+            }
+        }
+
+        return false;
     }
+
+    private const int TeleportRecastIntervalMs = 60;
+    private const int TeleportReplyTimeoutMs = 600;
 
     public bool ChangeSkill(Skill skill, Hand hand)
     {
@@ -432,9 +453,8 @@ public class Game
         {
             return false;
         }
-        var entityEffect = _gameServer.GetResetEventOfType(InComingPacket.AddEntityEffect);
         _gameServer.SendPacket(new RightSkillOnUnitPacket(entity));
-        return entityEffect.WaitOne(100);
+        return true;
     }
 
     public async Task<bool> CreateTownPortal()
@@ -477,6 +497,33 @@ public class Game
         _gameServer.SendPacket(new ClickButtonPacket(ClickType.MoveGoldFromInventoryToStash, goldAmount));
     }
 
+    /// <summary>
+    /// Multiplies the speed the movement sleeps assume, on top of the character's own faster run and
+    /// walk. Above 1 the bot waits less between hops than it believes the character needs; since
+    /// MoveTo sets Me.Location optimistically, too high a value makes the bot think it has arrived
+    /// while the character is still on its way.
+    /// </summary>
+    public double MovementSpeedFactor { get; set; } = 1.0;
+
+    private double MovementSpeed => Data.WalkingSpeedMultiplier * MovementSpeedFactor;
+
+
+    /// <summary>
+    /// Waits for a packet of this type, reporting when it never arrives. The reset events are keyed
+    /// by packet type rather than by entity, so a wait can also return for something else entirely -
+    /// where the caller can check the state it actually wanted, it should.
+    /// </summary>
+    private bool WaitForPacket(System.Threading.ManualResetEvent resetEvent, int milliseconds, string what)
+    {
+        if (resetEvent.WaitOne(milliseconds))
+        {
+            return true;
+        }
+
+        Log.Information("{Character}: {What} waited {Ms}ms and its packet never came", Me?.Name, what, milliseconds);
+        return false;
+    }
+
     public void MoveTo(ushort x, ushort y) => MoveTo(new Point(x, y));
     public bool MoveTo(Point location)
     {
@@ -490,12 +537,12 @@ public class Game
         {
             _gameServer.SendPacket(new UpdatePlayerLocationPacket(location));
             lastTeleport = DateTime.Now;
-            Thread.Sleep((int)(120 / Data.WalkingSpeedMultiplier));
+            Thread.Sleep((int)(120 / MovementSpeed));
         }
         else
         {
             _gameServer.SendPacket(new RunToLocationPacket(location));
-            Thread.Sleep((int)(distance * 80 / Data.WalkingSpeedMultiplier));
+            Thread.Sleep((int)(distance * 80 / MovementSpeed));
         }
         Me.Location = location;
         return true;
@@ -513,12 +560,12 @@ public class Game
         {
             _gameServer.SendPacket(new UpdatePlayerLocationPacket(location));
             lastTeleport = DateTime.Now;
-            await Task.Delay((int)(120 / Data.WalkingSpeedMultiplier));
+            await Task.Delay((int)(120 / MovementSpeed));
         }
         else
         {
             _gameServer.SendPacket(new RunToLocationPacket(location));
-            await Task.Delay((int)(distance * 80 / Data.WalkingSpeedMultiplier));
+            await Task.Delay((int)(distance * 80 / MovementSpeed));
         }
         Me.Location = location;
         return true;
@@ -537,7 +584,7 @@ public class Game
             return false;
         }
         _gameServer.SendPacket(new RunToEntityPacket(item));
-        await Task.Delay((int)(distance * 80 / Data.WalkingSpeedMultiplier));
+        await Task.Delay((int)(distance * 80 / MovementSpeed));
         Me.Location = item.Location;
         return true;
     }
@@ -554,12 +601,12 @@ public class Game
         {
             _gameServer.SendPacket(new UpdatePlayerLocationPacket(entity.Location));
             lastTeleport = DateTime.Now;
-            Thread.Sleep((int)(120 / Data.WalkingSpeedMultiplier));
+            Thread.Sleep((int)(120 / MovementSpeed));
         }
         else
         {
             _gameServer.SendPacket(new RunToEntityPacket(entity));
-            Thread.Sleep((int)(distance * 80 / Data.WalkingSpeedMultiplier));
+            Thread.Sleep((int)(distance * 80 / MovementSpeed));
         }
         Me.Location = entity.Location;
         return true;
@@ -577,12 +624,12 @@ public class Game
         {
             _gameServer.SendPacket(new UpdatePlayerLocationPacket(entity.Location));
             lastTeleport = DateTime.Now;
-            await Task.Delay((int)(120 / Data.WalkingSpeedMultiplier));
+            await Task.Delay((int)(120 / MovementSpeed));
         }
         else
         {
             _gameServer.SendPacket(new RunToEntityPacket(entity));
-            await Task.Delay((int)(distance * 80 / Data.WalkingSpeedMultiplier));
+            await Task.Delay((int)(distance * 80 / MovementSpeed));
         }
         Me.Location = entity.Location;
         return true;
@@ -601,21 +648,21 @@ public class Game
     {
         var corpseAssignPacket = _gameServer.GetResetEventOfType(InComingPacket.CorpseAssign);
         _gameServer.SendPacket(new InteractWithEntityPacket(player.Id, EntityType.Player));
-        return corpseAssignPacket.WaitOne(1000);
+        return WaitForPacket(corpseAssignPacket, 1000, "PickupBody");
     }
 
     public bool OpenStash(Entity stash)
     {
         var buttonActionPacket = _gameServer.GetResetEventOfType(InComingPacket.ButtonAction);
         _gameServer.SendPacket(new InteractWithEntityPacket(stash));
-        return buttonActionPacket.WaitOne(1500);
+        return WaitForPacket(buttonActionPacket, 1500, "ActivateCube");
     }
 
     public bool TakeWarp(WarpData warpData)
     {
         var reassignPlayerPacket = _gameServer.GetResetEventOfType(InComingPacket.ReassignPlayer);
         _gameServer.SendPacket(new InteractWithEntityPacket(warpData.EntityId, EntityType.Doorway));
-        return reassignPlayerPacket.WaitOne(500);
+        return WaitForPacket(reassignPlayerPacket, 500, "TakeWaypoint");
     }
 
     public void InteractWithPlayer(Player player)
@@ -768,21 +815,32 @@ public class Game
     {
         var nPCTransactionPacket = _gameServer.GetResetEventOfType(InComingPacket.NPCTransaction);
         _gameServer.SendPacket(new IdentifyItemsPacket(entity));
-        nPCTransactionPacket.WaitOne(200);
+        WaitForPacket(nPCTransactionPacket, 200, "IdentifyItemsAtCain");
     }
 
     public void IdentifyItem(Item bookOfIdentify, Item itemToIdentify)
     {
         var updateItemStats = _gameServer.GetResetEventOfType(InComingPacket.UpdateItemStats);
         _gameServer.SendPacket(new IdentifyItemPacket(bookOfIdentify, itemToIdentify));
-        updateItemStats.WaitOne(200);
+        WaitForPacket(updateItemStats, 200, "IdentifyItem");
+    }
+
+    /// <summary>
+    /// Asks for an item to be identified without waiting. The reset events are keyed by packet type
+    /// rather than by item, so waiting on UpdateItemStats returns for whatever item the server
+    /// happened to answer about first. A caller identifying several items should send them all and
+    /// then wait on <see cref="Item.IsIdentified"/>, which is the state it actually cares about.
+    /// </summary>
+    public void SendIdentifyItem(Item bookOfIdentify, Item itemToIdentify)
+    {
+        _gameServer.SendPacket(new IdentifyItemPacket(bookOfIdentify, itemToIdentify));
     }
 
     public void ResurrectMerc(Entity entity)
     {
         var assignMercPacket = _gameServer.GetResetEventOfType(InComingPacket.AssignMerc);
         _gameServer.SendPacket(new ResurrectMercPacket(entity));
-        assignMercPacket.WaitOne(200);
+        WaitForPacket(assignMercPacket, 200, "ResurrectMerc");
     }
 
     public void RepairItems(Entity entity)
@@ -822,7 +880,7 @@ public class Game
         
         var worldItemAction = _gameServer.GetResetEventOfType(InComingPacket.WorldItemAction);
         _gameServer.SendPacket(new SendItemToBeltPacket(item));
-        return worldItemAction.WaitOne(2000);
+        return WaitForPacket(worldItemAction, 2000, "PutItemInBelt");
     }
 
     public void SellItem(Entity entity, Item item)
@@ -894,12 +952,15 @@ public class Game
     {
         try
         {
-            while (IsInGame())
+            while (IsInGame() && !_leavingGame)
             {
                 _gameServer.Ping();
                 var pongPacket = _gameServer.GetResetEventOfType(InComingPacket.Pong);
                 pongPacket.WaitOne(1000);
-                Thread.Sleep(5000);
+                for (var slept = 0; slept < 5000 && !_leavingGame; slept += 100)
+                {
+                    Thread.Sleep(100);
+                }
             }
         }
         catch (Exception)

@@ -113,6 +113,8 @@ public enum EntityEffect : byte
     SyncWarped,
     ConversionSave,
     Pregnant,
+    /// <summary>states.txt 111 golem_mastery. Was missing, which shifted every later value down by one.</summary>
+    GolemMastery,
     Rabies,
     Defensecurse,
     Bloodmana,
@@ -122,6 +124,8 @@ public enum EntityEffect : byte
     CorpseNoSelect,
     ShadowWarrior,
     Feralrage,
+    /// <summary>states.txt 121 skilldelay. Was missing, which shifted every later value down by one more.</summary>
+    SkillDelay,
     ProgressiveDamage,
     ProgressiveSteal,
     ProgressiveOther,

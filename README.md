@@ -157,6 +157,36 @@ Example mule configuration using deliberately fake credentials:
 
 The bot also requires a configured MapClient from https://github.com/jcageman/d2mapapi. A local development instance commonly uses port 8080, but the address should remain environment-specific.
 
+## Game data
+
+The bot reads a few tables straight out of the game so they cannot drift from the realm's patch.
+They live in a `data` folder next to the bot config (`datadir=<folder>` overrides it):
+
+| File | Origin | Purpose |
+|---|---|---|
+| `item_data.txt`, `item_properties.txt` | hand maintained, required | item parsing |
+| `monster-resists.json` | generated from `monstats.bin` | immunity checks |
+| `shrines.json` | generated from `objects.bin` | which object ids are shrines and whether they are fixed health, fixed mana or rolled |
+
+Regenerate the generated files from a Diablo II 1.09 install:
+
+```text
+dotnet run --project tools/MpqData -c Release -- --gamedir "C:\Diablo II 1.09" --out "C:\path\to\data"
+```
+
+`--probe "data\global\excel\<table>.bin" --find <text>` prints the shape and strings of any compiled
+table, which is how a new offset is located before a reader is written against it.
+
+To look at any file in the archives, resolved the way the game does (`patch_d2.mpq` first):
+
+```text
+dotnet run --project tools/MpqDump -c Release -- --gamedir "C:\Diablo II 1.09" --file "data\global\excel\shrines.txt"
+dotnet run --project tools/MpqDump -c Release -- --gamedir "C:\Diablo II 1.09" --file "data\global\excel\objects.txt" --columns "Id,Name,Parm0" --rows shrine
+```
+
+A running game or map server holds `patch_d2.mpq` open exclusively. Copy that archive into an empty
+folder and point `--gamedir` at the copy when either is running.
+
 ## Analyzing Packets
 The PacketSniffer project can analyze packets sent by the game server. It is useful for checking protocol behavior and version differences.
 

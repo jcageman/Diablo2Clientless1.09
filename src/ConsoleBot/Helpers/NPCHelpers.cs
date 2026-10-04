@@ -1,4 +1,4 @@
-﻿using ConsoleBot.TownManagement;
+using ConsoleBot.TownManagement;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Enums;
@@ -161,7 +161,7 @@ public static class NPCHelpers
 
     private static bool GambleCurrentItemsAtNpc(Game game, Entity npc)
     {
-        var inventoryItemsToSell = game.Inventory.Items.Where(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i)).ToList();
+        var inventoryItemsToSell = InventoryHelpers.InventoryItemsToSell(game);
         foreach (Item item in inventoryItemsToSell)
         {
             if (item.Quality == QualityType.Rare)
@@ -551,11 +551,7 @@ public static class NPCHelpers
 
         // The potion reserve is bought a few lines below; selling it here and buying it straight
         // back would be a round trip for nothing.
-        var inventoryItemsToSell = game.Inventory.Items
-            .Where(i => !InventoryHelpers.IsDrinkable(i)
-                && !D2NG.Pickit.Pickit.ShouldKeepItem(game, i)
-                && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i))
-            .ToList();
+        var inventoryItemsToSell = InventoryHelpers.InventoryItemsToSell(game);
         var cubeItemsToSell = game.Cube.Items.Where(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && !D2NG.Pickit.Pickit.IsReservedItem(i)).ToList();
         Log.Debug($"Selling {inventoryItemsToSell.Count} inventory items and {cubeItemsToSell.Count} cube items");
 
@@ -571,13 +567,32 @@ public static class NPCHelpers
             game.SellItem(npc, item);
         }
 
-        // Only the town portal tome. Identification happens at Deckard Cain, so an identify tome would be
-        // bought, carried and never read.
+        // Full rejuvenations were picked up without limit and filled the paladin's inventory to the
+        // last cell; the cap on pickups stops the growth, this clears what is already there.
+        if (options.RejuvenationsToKeep is int keep)
+        {
+            var surplus = game.Inventory.Items
+                .Where(i => i.Classification == ClassificationType.RejuvenationPotion)
+                .OrderBy(i => i.Name == ItemName.FullRejuvenationPotion ? 1 : 0)
+                .Skip(keep)
+                .ToList();
+            foreach (var potion in surplus)
+            {
+                Log.Information("{Character} selling surplus {Potion}", game.Me.Name, potion.Name);
+                game.SellItem(npc, potion);
+            }
+        }
+
         RestockTome(game, npc, ItemName.TomeOfTownPortal, ItemName.ScrollofTownPortal);
+
+        if (options.IdentifyWithTome)
+        {
+            RestockTome(game, npc, ItemName.TomeofIdentify, ItemName.ScrollofIdentify);
+        }
 
         if(healingPotion != null)
         {
-            var numberOfHealthPotions = options.HealthPotionsToBuy ?? game.Belt.Height * options.AccountConfig.HealthSlots.Count - game.Belt.NumOfHealthPotions();
+            var numberOfHealthPotions = options.HealthPotionsToBuy ?? options.AccountConfig.HealthPotionTarget(game.Belt.Height) - game.Belt.NumOfHealthPotions();
             // Buying is fire and forget: with no gold every call fails and the character walks out
             // with an empty belt looking like it shopped. Report what it actually came away with.
             var wanted = numberOfHealthPotions;
@@ -594,8 +609,19 @@ public static class NPCHelpers
 
         if(manaPotion != null)
         {
-            var numberOfManaPotions = options.ManaPotionsToBuy ?? game.Belt.Height * options.AccountConfig.ManaSlots.Count - game.Belt.NumOfManaPotions();
-            BuyPotions(game, npc, "mp", numberOfManaPotions);
+            var numberOfManaPotions = options.ManaPotionsToBuy ?? options.AccountConfig.ManaPotionTarget(game.Belt.Height) - game.Belt.NumOfManaPotions();
+            // Reported the same way as the healing buy above. Without this a half-filled mana belt is
+            // invisible: the return value was thrown away, so a character leaving town with two mana
+            // potions instead of six read exactly like one that needed none.
+            var gainedMana = BuyPotions(game, npc, "mp", numberOfManaPotions);
+            if (gainedMana < numberOfManaPotions)
+            {
+                Log.Warning($"{game.Me.Name} wanted {numberOfManaPotions} {manaPotion.Name} but only got {gainedMana}, leaving town with belt {game.Belt.NumOfManaPotions()}, inventory {game.Inventory.Items.Count(i => i.Classification == ClassificationType.ManaPotion)}, {game.Inventory.FreeCellCount()} free cells");
+            }
+            else
+            {
+                Log.Information($"{game.Me.Name} bought {gainedMana} {manaPotion.Name}, leaving town with belt {game.Belt.NumOfManaPotions()}, inventory {game.Inventory.Items.Count(i => i.Classification == ClassificationType.ManaPotion)}, {game.Inventory.FreeCellCount()} free cells");
+            }
         }
 
         if (options.ItemsToBuy != null)
@@ -603,9 +629,50 @@ public static class NPCHelpers
             foreach (var additionalBuy in options.ItemsToBuy)
             {
                 var additionalItem = game.Items.Values.FirstOrDefault(i => i.IsInMerchantTab() && i.Name == additionalBuy.Key);
+
+                // Both halves said nothing before. A stock list that has not arrived leaves this
+                // null, and buying null does nothing at all - the portal character then walked to
+                // Tristram with no town portal tome, could not get back, and the whole party waited
+                // out its budget on a portal that was never coming. Not one line of it was logged.
+                if (additionalItem == null)
+                {
+                    Log.Warning("{Character} wanted {Count} {Item} but {NPCCode} is not showing any, {TabItems} items in the merchant tab",
+                        game.Me.Name, additionalBuy.Value, additionalBuy.Key, npc.NPCCode,
+                        game.Items.Values.Count(i => i.IsInMerchantTab()));
+                    continue;
+                }
+
+                // One at a time, waiting for each to land, exactly as potions are bought. Firing the
+                // buys back to back looked like it worked and delivered nothing: the portal
+                // character came away with zero town portal tomes from a merchant that was plainly
+                // showing them, and lost the run an act later for want of one.
+                var before = game.Inventory.Items.Count(i => i.Name == additionalBuy.Key);
                 for (var i = 0; i < additionalBuy.Value; ++i)
                 {
+                    var had = game.Inventory.Items.Count(i2 => i2.Name == additionalBuy.Key);
                     game.BuyItem(npc, additionalItem, false);
+                    if (!GeneralHelpers.TryWithTimeout(
+                            (_) => game.Inventory.Items.Count(i2 => i2.Name == additionalBuy.Key) > had,
+                            TimeSpan.FromSeconds(2)))
+                    {
+                        // Re-read the stock: the merchant's entry can be replaced between buys.
+                        additionalItem = game.Items.Values.FirstOrDefault(i2 => i2.IsInMerchantTab() && i2.Name == additionalBuy.Key);
+                        if (additionalItem == null)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                var gained = game.Inventory.Items.Count(i => i.Name == additionalBuy.Key) - before;
+                if (gained < additionalBuy.Value)
+                {
+                    Log.Warning("{Character} wanted {Count} {Item} from {NPCCode} but came away with {Gained}",
+                        game.Me.Name, additionalBuy.Value, additionalBuy.Key, npc.NPCCode, gained);
+                }
+                else
+                {
+                    Log.Information($"{game.Me.Name} bought {gained} {additionalBuy.Key}");
                 }
             }
         }

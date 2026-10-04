@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Attack;
+using ConsoleBot.Attack;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using ConsoleBot.Helpers;
@@ -37,6 +37,17 @@ public class CowBot : MultiClientBotBase
     private readonly CowConfiguration _cowconfig;
     private uint? BoClientPlayerId;
     private readonly ConcurrentDictionary<string, bool> ShouldFollow = new();
+    /// <summary>
+    /// Whether this character has been confirmed standing in the cow level, by character name.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="Game.Area"/>: it lags a transition, and the first burst of monster assigns
+    /// after stepping through the red portal arrives inside exactly that window - so gating on it
+    /// threw away the pack at the entrance, which is never assigned again while it stays in view.
+    /// This is set from the arrival check that already asks the map whether the character's own
+    /// position is in the level, which cannot be stale.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, bool> InCowLevel = new();
     private readonly ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new();
     private CowManager _cowManager;
     private readonly BreadcrumbTrail _huntTrail = new();
@@ -196,8 +207,24 @@ public class CowBot : MultiClientBotBase
         FollowTasks.TryAdd(accountCharacter.Character.ToLower(), (null, new CancellationTokenSource()));
         // Subscribed once for the life of the client and dispatched to whichever manager is running
         // the current game; Client has no way to unsubscribe, so per-game handlers would pile up.
-        client.OnReceivedPacketEvent(InComingPacket.AssignNPC2, p => CurrentManagerFor(client)?.OnAssignNpc(p));
-        client.OnReceivedPacketEvent(InComingPacket.AssignNPC1, p => CurrentManagerFor(client)?.OnAssignNpc(p));
+        // Only what is in the level being cleared. Every monster counts now, so without this the
+        // clients cluster whatever they see in town, in Tristram on the way to the leg, and at the
+        // waypoint - and the party then sets off across the map to kill the townsfolk's neighbours.
+        var characterKey = accountCharacter.Character.ToLower();
+        client.OnReceivedPacketEvent(InComingPacket.AssignNPC2, p =>
+        {
+            if (InCowLevel.GetValueOrDefault(characterKey))
+            {
+                CurrentManagerFor(client)?.OnAssignNpc(p);
+            }
+        });
+        client.OnReceivedPacketEvent(InComingPacket.AssignNPC1, p =>
+        {
+            if (InCowLevel.GetValueOrDefault(characterKey))
+            {
+                CurrentManagerFor(client)?.OnAssignNpc(p);
+            }
+        });
         client.OnReceivedPacketEvent(InComingPacket.NPCState, p => CurrentManagerFor(client)?.OnNpcState(p));
         client.OnReceivedPacketEvent(InComingPacket.NPCMove, p => { var m = new NPCMovePacket(p); CurrentManagerFor(client)?.OnNpcMove(m.Location, m.EntityId); });
         client.OnReceivedPacketEvent(InComingPacket.NPCStop, p => { var m = new NPCStopPacket(p); CurrentManagerFor(client)?.OnNpcStop(m.EntityId, m.Location, m.LifePercentage); });
@@ -240,7 +267,7 @@ public class CowBot : MultiClientBotBase
             // Everyone fights in active mode, so everyone drinks. Buy past what the belt holds: the
             // surplus sits in the inventory and refills the belt as columns empty, which is the
             // difference between running dry mid level and finishing the game.
-            var beltShortfall = (client.Game.Belt.Height * account.HealthSlots.Count)
+            var beltShortfall = account.HealthPotionTarget(client.Game.Belt.Height)
                 - client.Game.Belt.GetHealthPotionsInSlots(account.HealthSlots).Count;
             // Minus what is already carried. Buying the buffer afresh every visit ratcheted the
             // inventory up to 62 potions of its 80 cells, and a full inventory is what stops loot
@@ -319,7 +346,7 @@ public class CowBot : MultiClientBotBase
         }
         else
         {
-            var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+            var movementMode = MovementHelpers.PreferredMovement(client.Game);
             var pathTownPortalArea = await _pathingService.GetPathToObjectWithOffset(client.Game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(client.Game.Act), client.Game.Me.Location, EntityCode.Stash, 24, 29, movementMode);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathTownPortalArea, movementMode))
             {
@@ -377,16 +404,14 @@ public class CowBot : MultiClientBotBase
             Log.Warning($"Active mode is configured but the lead is {boClient.Game.Me.Name} ({boClient.Game.Me.Class}) with no other non-sorceress in the game, running without it");
         }
 
-        List<NPCCode> huntedMonsters = [];
         List<Client> listeningClients;
         if (canHunt)
         {
-            huntedMonsters = _cowconfig.HuntedMonsters;
-            // Everything that is not already killing listens, so packs the hunting party walks into
-            // are seen even where no sorceress ever goes.
+            // Everything that is not already killing listens, so packs the party walks into are
+            // seen even where no sorceress ever goes.
             listeningClients = clients.Where(c => !killingClients.Contains(c)).ToList();
             _huntingParty = clients.Where(c => c.Game.Me.Class != CharacterClass.Sorceress).ToList();
-            Log.Information($"Active mode on, hunting party {string.Join(",", _huntingParty.Select(c => c.Game.Me.Name))} looking for {string.Join(",", huntedMonsters)}");
+            Log.Information($"Active mode on, party {string.Join(",", _huntingParty.Select(c => c.Game.Me.Name))} clearing everything in the level");
         }
         else
         {
@@ -398,7 +423,8 @@ public class CowBot : MultiClientBotBase
         _killingClients = killingClients;
         _partyRetreating = false;
         _huntTrail.Clear();
-        _cowManager = new CowManager(killingClients, listeningClients, _mapApiService, huntedMonsters);
+        InCowLevel.Clear();
+        _cowManager = new CowManager(killingClients, listeningClients, _mapApiService, _cowconfig.ActiveMode);
         return Task.CompletedTask;
     }
 
@@ -449,6 +475,7 @@ public class CowBot : MultiClientBotBase
             }
 
             Log.Information($"Client {client.Game.Me.Name} ín cow level");
+            await ConfirmInCowLevel(client);
         }
 
         await GetTaskForClient(client, account, _cowManager);
@@ -555,6 +582,10 @@ public class CowBot : MultiClientBotBase
             {
                 Log.Information($"Client {client.Game.Me.Name} teleporting to starting location {location}");
                 await MovementHelpers.TakePathOfLocations(client.Game, teleportPath.ToList(), MovementMode.Teleport);
+                // Unfiltered: this asks whether it is safe to stand here and plant a portal, and a
+                // monster this character cannot hurt is still perfectly able to kill her. Filtering
+                // by what she can damage hid the lightning enchanted pack - the one most likely to
+                // do it - from the only check looking for it.
                 var nearbyAliveCows = cowManager.GetNearbyAliveMonsters(client, 35.0, 100);
                 if (!nearbyAliveCows.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)))
                 {
@@ -621,7 +652,7 @@ public class CowBot : MultiClientBotBase
     private async Task<bool> CreateCowLevel(Client client)
     {
         var game = client.Game;
-        var movementMode = game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+        var movementMode = MovementHelpers.PreferredMovement(game);
 
         // Before the trip, not after. Tristram is a one-way walk without a tome to portal back
         // from, and the rest of the party then waits out its whole budget for a cow portal that
@@ -925,15 +956,48 @@ public class CowBot : MultiClientBotBase
             return;
         }
 
+        // Experience is the level-wide score: it counts what the party actually killed, and it
+        // falls by itself when the last few stragglers cost minutes to reach.
+        //
+        // Me.Experience, not the Experience attribute - the server never sends attribute 0x0D, it
+        // sends experience on its own packets (0x1A-0x1C), which GameData accumulates here.
+        // Reading the attribute logged a flat zero for every character all game. What arrives
+        // first is the lifetime total, so this is a running total and not a per-game figure: the
+        // gain for a game is the difference between two samples of it.
+        void LogExperience()
+        {
+            if (!client.Game.IsInGame() || client.Game.Me == null)
+            {
+                return;
+            }
+
+            Log.Information("Experience {Character} {Experience} in {Area}",
+                client.Game.Me.Name, client.Game.Me.Experience, client.Game.Area);
+        }
+
         ElapsedEventHandler refreshHandler = (sender, args) =>
         {
             if (client.Game.IsInGame() && client.Game.Me != null)
             {
                 client.Game.RequestUpdate(client.Game.Me.Id);
+                LogExperience();
             }
         };
         using var executeRefresh = new ExecuteAtInterval(refreshHandler, TimeSpan.FromSeconds(30));
         executeRefresh.Start();
+
+        // Said once per character per game. Four separate attempts to work out why one sorceress
+        // never attacked were all guesses about skills nobody had looked at.
+        Log.Information("{Character} is a {Class} lvl {Level}: orb {Orb}, blizzard {Blizzard}, glacial {Glacial}, iceblast {IceBlast}, nova {Nova}, static {Static}, teleport {Teleport}, mana {Mana}/{MaxMana}",
+            client.Game.Me.Name, client.Game.Me.Class, client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.Level],
+            client.Game.Me.Skills.GetValueOrDefault(Skill.FrozenOrb),
+            client.Game.Me.Skills.GetValueOrDefault(Skill.Blizzard),
+            client.Game.Me.Skills.GetValueOrDefault(Skill.GlacialSpike),
+            client.Game.Me.Skills.GetValueOrDefault(Skill.IceBlast),
+            client.Game.Me.Skills.GetValueOrDefault(Skill.Nova),
+            client.Game.Me.Skills.GetValueOrDefault(Skill.StaticField),
+            client.Game.Me.Skills.GetValueOrDefault(Skill.Teleport),
+            client.Game.Me.Mana, client.Game.Me.MaxMana);
 
         if (cowManager.ActiveMode && client.Game.Me.Class != CharacterClass.Sorceress)
         {
@@ -948,6 +1012,8 @@ public class CowBot : MultiClientBotBase
 
             return;
         }
+
+        LogExperience();
 
         switch (client.Game.Me.Class)
         {
@@ -980,6 +1046,8 @@ public class CowBot : MultiClientBotBase
                 await BasicFollowClient(client, account, cowManager);
                 break;
         }
+
+        LogExperience();
     }
 
     private async Task StaticSorcClient(Client client, AccountConfig account, CowManager cowManager)
@@ -1013,7 +1081,7 @@ public class CowBot : MultiClientBotBase
         while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
         {
             var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-            var cowsNearLead = rescueLead && leadPlayer != null ? cowManager.GetNearbyAliveCows(leadPlayer.Location, 20.0, 10) : [];
+            var cowsNearLead = rescueLead && leadPlayer != null ? cowManager.GetNearbyAliveMonsters(leadPlayer.Location, 20.0, 10) : [];
             if (rescueLead && leadPlayer != null && leadPlayer.Location != currentTarget && cowsNearLead.Count != 0 && leadPlayer.Location.Distance(client.Game.Me.Location) > 20)
             {
                 if (cowsNearLead.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)))
@@ -1088,8 +1156,13 @@ public class CowBot : MultiClientBotBase
                 client.Game.UseRightHandSkillOnLocation(Skill.ThunderStorm, client.Game.Me.Location);
             }
 
-            var nearbyAliveCows = cowManager.GetNearbyAliveCows(client, 30.0, 10);
-            if (((double)client.Game.Me.Life) / client.Game.Me.MaxLife <= 0.5 && nearbyAliveCows.Count != 0)
+            // Two lists on purpose. What is dangerous is everything nearby; what is worth casting at
+            // is only what this character can hurt. Running the life and lightning-enchanted checks
+            // off the filtered list meant the monsters she cannot damage - the ones she cannot
+            // shift and so is stuck next to - were invisible to both.
+            var nearbyMonsters = cowManager.GetNearbyAliveMonsters(client, 30.0, 10);
+            var nearbyAliveCows = HarmableNearby(client, cowManager, 30.0, 10);
+            if (((double)client.Game.Me.Life) / client.Game.Me.MaxLife <= 0.5 && nearbyMonsters.Count != 0)
             {
                 executeStaticField.Stop();
                 executeNova.Stop();
@@ -1100,7 +1173,7 @@ public class CowBot : MultiClientBotBase
                 }
             }
 
-            var lightningEnhancedCows = nearbyAliveCows.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted));
+            var lightningEnhancedCows = nearbyMonsters.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted));
             if (clusterStopWatch.Elapsed > TimeSpan.FromSeconds(40) && currentCluster != null && leadPlayer?.Location != currentTarget)
             {
                 Log.Information($"Taking too much time on cluster, skipping current cluster and moving to next cluster {client.Game.Me.Name}");
@@ -1202,7 +1275,7 @@ public class CowBot : MultiClientBotBase
             // Anchored on the walking party. The killers clear one area around them together, so
             // the soul packs that open up are ones the party is already standing near instead of
             // whichever distant pack happened to be uncovered first.
-            currentCluster = cowManager.ClaimNextCowCluster(client, sweepProgress, HuntingPartyAnchor(client));
+            currentCluster = cowManager.ClaimNextCluster(client, sweepProgress, HuntingPartyAnchor(client), canHarm: CanHarmMonster(client));
             if (currentCluster == null)
             {
                 // No cluster left to claim, but that is not the same as nothing left to do. Whole
@@ -1214,7 +1287,7 @@ public class CowBot : MultiClientBotBase
                 // the point is to clear what is slowing the group down, not to chase strays into a
                 // corner of the level where killing them helps nobody.
                 var partyAt = leadPlayer?.Location ?? client.Game.Me.Location;
-                var strays = cowManager.GetNearbyAliveCows(partyAt, StraySearchRadius, 10);
+                var strays = HarmableNearby(client, cowManager, StraySearchRadius, 10);
                 if (strays.Count != 0)
                 {
                     var stray = strays.First();
@@ -1333,47 +1406,9 @@ public class CowBot : MultiClientBotBase
         var timer = new Stopwatch();
         timer.Start();
         var random = new Random();
-        MonsterCluster roamCluster = null;
         while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
         {
             var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-
-            // A cold sorceress is the only one here who can hurt a burning soul once the cows are
-            // gone - the nova pair cannot touch them and the walkers arrive on foot. Rather than
-            // trailing the party at walking pace she takes a cluster of her own and teleports to
-            // it, so two ends of the level are being cleared at once.
-            if (!_partyRetreating && CanRoamForSouls(client, cowManager))
-            {
-                roamCluster ??= cowManager.ClaimNextHuntedCluster(client, 0, double.MaxValue);
-                if (roamCluster != null)
-                {
-                    if (cowManager.IsClusterCleared(roamCluster))
-                    {
-                        cowManager.ReleaseCluster(roamCluster);
-                        roamCluster = null;
-                        continue;
-                    }
-
-                    var target = cowManager.GetNearestClusterMember(roamCluster, client.Game.Me.Location) ?? roamCluster.Location;
-                    if (client.Game.Me.Location.Distance(target) > NovaRange)
-                    {
-                        var roamPath = await _pathingService.GetPathToLocation(client.Game, target, MovementMode.Teleport);
-                        if (roamPath.Count > 0)
-                        {
-                            await MovementHelpers.TakePathOfLocations(client.Game, roamPath, MovementMode.Teleport);
-                        }
-                    }
-
-                    await _attackService.AssistPlayer(client, SelfPlayer(client), PriorityCodes(client, cowManager));
-                    await PickupItemsAndPotions(client, account, TeleportPickupRadius);
-                    continue;
-                }
-            }
-            else if (roamCluster != null)
-            {
-                cowManager.ReleaseCluster(roamCluster);
-                roamCluster = null;
-            }
 
             if (leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) > 10)
             {
@@ -1406,13 +1441,25 @@ public class CowBot : MultiClientBotBase
             var nearLead = canCatchUp
                 || leadPlayer?.Location == null
                 || leadPlayer.Location.Distance(client.Game.Me.Location) < StragglerDistance;
-            if (nearLead && cowManager.GetNearbyAliveMonsters(client, 20, 1).Count == 0)
+            // Nothing alive near the group either, not just near this character. A teleporting
+            // client loots out to a hundred units, and testing only its own surroundings let it
+            // wander away from the fight - far enough that the monsters left its view entirely, so
+            // it found no enemies to assist against and spent whole games collecting. One of ours
+            // logged two hundred and forty six pickups and not a single attack.
+            var partyFighting = leadPlayer != null
+                && cowManager.GetNearbyAliveMonsters(leadPlayer.Location, EscortEngagementRange, 1).Count != 0;
+            if (nearLead && !partyFighting && cowManager.GetNearbyAliveMonsters(client, 20, 1).Count == 0)
             {
                 // A walker only fetches what is lying around the group; anything further out is
                 // left to whoever ends up nearest it.
+                // Anchored on the party, for teleporters too. Letting them range a hundred units
+                // from wherever they happened to stand meant drifting after loot until the fight
+                // was out of view, and a character that cannot see the monsters finds no enemies to
+                // assist against: one of ours logged nearly three hundred pickups and no attacks at
+                // all. The wide radius stays - it is measured from the group instead.
                 await PickupItemsAndPotions(client, account,
                     canCatchUp ? TeleportPickupRadius : HuntingPartyPickupRadius,
-                    canCatchUp ? null : leadPlayer?.Location);
+                    leadPlayer?.Location);
                 SetShouldFollowLead(client, true);
             }
 
@@ -1447,6 +1494,16 @@ public class CowBot : MultiClientBotBase
             var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
             if (leadPlayer != null && leadPlayer.Location.Distance(client.Game.Me.Location) > 25)
             {
+                // Left behind and hemmed in is a trap this used to sit in forever: walking back is
+                // impossible while a pack is standing in the way, and doing nothing here meant he
+                // never cut himself free either. He just stood in the middle of it, further from
+                // the group every time they advanced. A barbarian in a crowd is the one character
+                // who is perfectly fine - so kill the way out rather than wait for it to open.
+                if (cowManager.GetNearbyAliveMonsters(client, SelfDefenceRange, 1).Count != 0)
+                {
+                    await _attackService.AssistPlayer(client, SelfPlayer(client), PriorityCodes(client, cowManager));
+                }
+
                 continue;
             }
 
@@ -1497,7 +1554,7 @@ public class CowBot : MultiClientBotBase
         }
 
         var holdLocation = client.Game.Me.Location;
-        var priorityCodes = cowManager.HuntedMonsters;
+        IReadOnlyCollection<NPCCode> priorityCodes = null;
         MonsterCluster currentCluster = null;
         var clusterStopWatch = new Stopwatch();
         var clusterAliveMembers = int.MaxValue;
@@ -1676,16 +1733,13 @@ public class CowBot : MultiClientBotBase
                 // While the sorceresses are still clearing, a cluster on the far side of the level
                 // is a bad trade: something nearer opens where they are working, and a quarter of
                 // the party's hops were long ones carrying half of all the distance it ran.
-                currentCluster = cowManager.ClaimNextHuntedCluster(
-                    client,
-                    sweepProgress,
-                    cowManager.CowsAllDone ? double.MaxValue : FarClusterDistance);
+                currentCluster = cowManager.ClaimNextCluster(client, sweepProgress, null, FarClusterDistance, CanHarmMonster(client));
 
                 // Preferring something nearby is worth it only while there is something nearby. With
                 // the cows at forty nine of fifty one the party was still held inside the cap, had
                 // cleared everything within it, and stood still with nine eligible clusters further
                 // out - until the ninety second patience timer gave the game away.
-                currentCluster ??= cowManager.ClaimNextHuntedCluster(client, sweepProgress, double.MaxValue);
+                currentCluster ??= cowManager.ClaimNextCluster(client, sweepProgress, canHarm: CanHarmMonster(client));
                 if (currentCluster == null)
                 {
                     // With nothing to hunt, close on the sorceresses rather than standing still.
@@ -1773,14 +1827,13 @@ public class CowBot : MultiClientBotBase
     }
 
     /// <summary>
-    /// The monsters this client should pick out of a fight first. Sorceresses get none: the hunted
-    /// monsters are lightning immune, so pointing one at them wastes the whole fight.
+    /// No monster is worth more than another now: the level is cleared as one job, and which
+    /// character should be the one hitting a given pack is answered from resistances rather than
+    /// from a ranking of monster types.
     /// </summary>
     private static IReadOnlyCollection<NPCCode> PriorityCodes(Client client, CowManager cowManager)
     {
-        return cowManager.ActiveMode && client.Game.Me.Class != CharacterClass.Sorceress
-            ? cowManager.HuntedMonsters
-            : null;
+        return null;
     }
 
     /// <summary>
@@ -1890,20 +1943,30 @@ public class CowBot : MultiClientBotBase
     }
 
     /// <summary>
-    /// Whether this client should go and hunt soul clusters on its own. A teleporting sorceress with
-    /// a cold attack and no nova qualifies: cold is the only damage that touches a burning soul, and
-    /// she can cross the level in seconds while the walkers cannot. Only once the cows are finished,
-    /// so she is not pulled away from the clearing the party still depends on.
+    /// The nearby monsters this character can actually hurt. Everything in the level is a target
+    /// now, so a lightning sorceress would otherwise stand next to something immune to lightning
+    /// casting at it forever. The resistance table answers this per monster, including the boss
+    /// modifiers it spawned with.
     /// </summary>
-    private static bool CanRoamForSouls(Client client, CowManager cowManager)
+    private List<AliveMonster> HarmableNearby(Client client, CowManager cowManager, double distance, int count)
     {
-        var me = client.Game.Me;
-        return cowManager.ActiveMode
-            && cowManager.CowsAllDone
-            && me.Class == CharacterClass.Sorceress
-            && me.HasSkill(Skill.Teleport)
-            && me.Skills.GetValueOrDefault(Skill.Nova) < 20
-            && (me.HasSkill(Skill.FrozenOrb) || me.HasSkill(Skill.Blizzard) || me.HasSkill(Skill.GlacialSpike));
+        var nearby = cowManager.GetNearbyAliveMonsters(client, distance, int.MaxValue);
+        var harmable = new List<AliveMonster>(Math.Min(nearby.Count, count));
+        foreach (var monster in nearby)
+        {
+            if (!_attackService.CanHarm(client, monster.NPCCode, monster.MonsterEnchantments))
+            {
+                continue;
+            }
+
+            harmable.Add(monster);
+            if (harmable.Count == count)
+            {
+                break;
+            }
+        }
+
+        return harmable;
     }
 
     private bool AnyHunterHurt()
@@ -1980,6 +2043,46 @@ public class CowBot : MultiClientBotBase
         return anchor ?? client.Game.Players.FirstOrDefault(p => p.Id == client.Game.Me.Id);
     }
 
+    /// <summary>
+    /// Records that this character is standing in the cow level, so its monster assigns count.
+    /// </summary>
+    /// <remarks>
+    /// Every client has to call this, not just the one that opens the level. Setting it only where
+    /// the portal character confirms its own arrival left the other five dropping every assign they
+    /// received, and the party then swept a level it had registered a third of: twelve clusters
+    /// where a full game finds fifty.
+    /// </remarks>
+    /// <summary>
+    /// Whether a killer may only claim packs it can actually damage. Both arms of the measurement
+    /// come from one build so that shared code, which several bots are editing, is identical in
+    /// each - flipping this is the only difference between them.
+    /// </summary>
+    private const bool ClaimOnlyWhatWeCanHarm = false;
+
+    /// <summary>What this client can actually damage, for deciding which packs are worth claiming.</summary>
+    private Func<AliveMonster, bool> CanHarmMonster(Client client)
+        => ClaimOnlyWhatWeCanHarm
+            ? monster => _attackService.CanHarm(client, monster.NPCCode, monster.MonsterEnchantments)
+            : null;
+
+    private async Task<bool> ConfirmInCowLevel(Client client)
+    {
+        if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+        {
+            await Task.Delay(100);
+            return await _pathingService.IsNavigatablePointInArea(
+                client.Game.MapId, Difficulty.Normal, Area.CowLevel, client.Game.Me.Location);
+        }, TimeSpan.FromSeconds(10)))
+        {
+            Log.Warning("Client {Character} could not be confirmed in the cow level at {Location}, its monsters will not be clustered",
+                client.Game.Me.Name, client.Game.Me.Location);
+            return false;
+        }
+
+        InCowLevel[client.Game.Me.Name.ToLower()] = true;
+        return true;
+    }
+
     private async Task<bool> MoveToCowLevel(Client client)
     {
         // The portal is created moments earlier and does not always appear in the entity list by the
@@ -2039,6 +2142,8 @@ public class CowBot : MultiClientBotBase
         {
             return false;
         }
+
+        await ConfirmInCowLevel(client);
 
         foreach (var (x, y) in new List<(short, short)> { (-3, -3), (3, 3), (-5, 0), (5, 0), (0, 5), (0, -5) })
         {

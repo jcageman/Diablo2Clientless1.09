@@ -20,6 +20,7 @@ public class BaalConfiguration : MultiClientConfiguration
     /// </summary>
     public override void Validate()
     {
+        base.Validate();
         if (string.IsNullOrEmpty(PortalCharacterName))
         {
             throw new ValidationException($"{nameof(PortalCharacterName)} is required on cow configuration");

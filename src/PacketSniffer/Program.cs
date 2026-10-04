@@ -1,4 +1,5 @@
-﻿using D2NG.Core.BNCS;
+﻿using D2NG.Core;
+using D2NG.Core.BNCS;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Helpers;
 using D2NG.Core.MCP;
@@ -40,6 +41,22 @@ internal sealed class Program
 
         CaptureOptions.Parse(args);
         Log.Information($"Capture options: {CaptureOptions.Current.Describe()}");
+
+        if (!string.IsNullOrEmpty(CaptureOptions.Current.DataDirectory))
+        {
+            GameDataLocation.Use(CaptureOptions.Current.DataDirectory);
+        }
+
+        // Item packets cannot be decoded without these, and the failure would otherwise land in the
+        // middle of a capture.
+        var missingData = GameDataLocation.MissingRequiredFiles();
+        if (missingData.Count > 0)
+        {
+            Log.Warning(
+                "Missing game data file(s) {Missing} in {Directories}; item packets will not decode. Pass datadir=<folder>.",
+                string.Join(", ", missingData),
+                string.Join(" or ", GameDataLocation.Directories()));
+        }
 
         // Retrieve the device list from the local machine
         var allDevices = CaptureDeviceList.Instance;

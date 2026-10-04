@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MpqDataApp</RootNamespace>
+    <AssemblyName>MpqData</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\D2NG.Core\D2NG.Core.csproj" />
+  </ItemGroup>
+
+</Project>
