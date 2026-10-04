@@ -1,5 +1,14 @@
 # AGENTS.md
 
+## Accounts and characters stay out of the repository
+
+This repository is public. Never put account names, character names, passwords, keys, connection
+strings or the realm address in code, comments, tests, fixtures, commit messages or pull requests.
+They live only in the run configs and logs under `D:\projects\diablo2bot`. Refer to a character
+by role instead - the taxi sorceress, the amazon, a mule - and rename captured fixtures (mule
+fixtures carry the account and character in the file name and the `Character` field) before
+committing them.
+
 ## Building
 
 The start scripts in `D:\projects\diablo2bot` run
