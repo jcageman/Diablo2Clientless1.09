@@ -13,3 +13,7 @@
 [type] == jewel # [crlrfr] >= 15 && [sorceresslife] >= 20
 // IAS + damage
 [type] == jewel # [ias] >= 15 && [ed] > 0
+// Faster hit recovery, but never on its own. Seven is the highest a jewel rolls here, so a
+// threshold above it would keep none and the bare roll is too common to be worth a socket - it
+// earns its place only alongside damage or resistance.
+[type] == jewel # [fhr] >= 7 && ([maxdamage] >= 12 || [crlrfr] >= 30)

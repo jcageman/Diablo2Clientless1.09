@@ -14,6 +14,7 @@ using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Players;
 using D2NG.Core.D2GS.Quest;
 using D2NG.Core.MCP;
+using D2NG.Core.MonsterData;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
@@ -140,6 +141,7 @@ public sealed class RushBot : IBotInstance
     private readonly IMapApiService _mapApiService;
     private readonly ITownManagementService _townManagementService;
     private readonly IAttackService _attackService;
+    private readonly MonsterResistTable _monsterResists;
     private bool _hasRun;
 
     /// <summary>
@@ -176,7 +178,8 @@ public sealed class RushBot : IBotInstance
         IPathingService pathingService,
         IMapApiService mapApiService,
         ITownManagementService townManagementService,
-        IAttackService attackService)
+        IAttackService attackService,
+        MonsterResistTable monsterResists)
     {
         _botConfiguration = botConfiguration.Value;
         _rushConfiguration = rushConfiguration.Value;
@@ -185,6 +188,7 @@ public sealed class RushBot : IBotInstance
         _mapApiService = mapApiService;
         _townManagementService = townManagementService;
         _attackService = attackService;
+        _monsterResists = monsterResists;
     }
 
     /// <summary>A rush is finished when it is finished; the host loop must not start another.</summary>
@@ -2140,13 +2144,13 @@ public sealed class RushBot : IBotInstance
         {
             HealthPotionsToBuy = PotionsToBuy(
                 rusher.Game,
-                rusher.Game.Belt.Height * account.HealthSlots.Count,
+                account.HealthPotionTarget(rusher.Game.Belt.Height),
                 rusher.Game.Belt.NumOfHealthPotions(),
                 InventoryHelpers.GetTotalHealthPotions(rusher.Game),
                 HealthReserve),
             ManaPotionsToBuy = PotionsToBuy(
                 rusher.Game,
-                rusher.Game.Belt.Height * account.ManaSlots.Count,
+                account.ManaPotionTarget(rusher.Game.Belt.Height),
                 rusher.Game.Belt.NumOfManaPotions(),
                 InventoryHelpers.GetTotalManaPotions(rusher.Game),
                 ManaReserve)
@@ -4339,13 +4343,13 @@ public sealed class RushBot : IBotInstance
         {
             HealthPotionsToBuy = PotionsToBuy(
                 member.Game,
-                member.Game.Belt.Height * account.HealthSlots.Count,
+                account.HealthPotionTarget(member.Game.Belt.Height),
                 member.Game.Belt.NumOfHealthPotions(),
                 InventoryHelpers.GetTotalHealthPotions(member.Game),
                 HealthReserve),
             ManaPotionsToBuy = PotionsToBuy(
                 member.Game,
-                member.Game.Belt.Height * account.ManaSlots.Count,
+                account.ManaPotionTarget(member.Game.Belt.Height),
                 member.Game.Belt.NumOfManaPotions(),
                 InventoryHelpers.GetTotalManaPotions(member.Game),
                 ManaReserve)
@@ -4447,13 +4451,13 @@ public sealed class RushBot : IBotInstance
         {
             HealthPotionsToBuy = PotionsToBuy(
                 rusher.Game,
-                rusher.Game.Belt.Height * account.HealthSlots.Count,
+                account.HealthPotionTarget(rusher.Game.Belt.Height),
                 rusher.Game.Belt.NumOfHealthPotions(),
                 InventoryHelpers.GetTotalHealthPotions(rusher.Game),
                 HealthReserve),
             ManaPotionsToBuy = PotionsToBuy(
                 rusher.Game,
-                rusher.Game.Belt.Height * account.ManaSlots.Count,
+                account.ManaPotionTarget(rusher.Game.Belt.Height),
                 rusher.Game.Belt.NumOfManaPotions(),
                 InventoryHelpers.GetTotalManaPotions(rusher.Game),
                 ManaReserve)
@@ -4751,25 +4755,41 @@ public sealed class RushBot : IBotInstance
     /// field and leave the killing to the crew.
     /// </summary>
     /// <remarks>
-    /// Base resistances are not on the wire - the client reads them from monstats.txt - so Duriel is a
-    /// hardcoded constant. Monster enchantments ARE sent, though, so a Cold Enchanted seal boss is
-    /// detectable at runtime; that covers Chaos Sanctuary De Seis, who is cold immune in Hell and on
-    /// Nightmare only sometimes. Treating "cold enchanted" as "cold is pointless" is a hypothesis, not
-    /// something measured - it costs a slower kill if wrong, never a lost fight, because static field
-    /// and the crew still apply.
+    /// Base resistances come from the game's own monstats table, extracted by the MpqData tool, and
+    /// the enchantments the monster spawned with come off the wire. The two together decide it: De
+    /// Seis is an Oblivion Knight at 60/80/100 cold, so he is immune outright in Hell, and on
+    /// Nightmare only when he rolls Cold Enchanted (+75) or Magic Resistant (+40). That matches what
+    /// was measured by hand - the one Magic Resistant De Seis fight took 268 seconds and 440 landed
+    /// hits against 8 to 54 for every other seal boss - and it also explains why the same modifiers
+    /// cost nothing on a Storm Caster, whose base cold resistance is zero.
     /// </remarks>
     private bool ColdIsUselessAgainst(WorldObject target)
     {
-        if (_gameDifficulty == Difficulty.Normal || target == null)
+        if (target == null)
         {
             return false;
         }
 
-        // De Seis carrying Magic Resistant above Normal behaves as cold immune: the one such fight
-        // measured took 268 seconds and 440 landed hits, against 8 to 54 hits for every other seal boss.
-        // Cold Enchanted counts here too, but only on him: both modifiers stack onto his already high
-        // base cold resistance and push him over immunity, while on a Storm Caster or a Venom Lord the
-        // same modifiers cost nothing - those died to orb in 10 to 26 seconds.
+        if (_monsterResists.TryGetResist(
+                target.NPCCode, _gameDifficulty, ResistType.Cold, target.MonsterEnchantments, out var resist))
+        {
+            return resist >= MonsterResistTable.ImmuneAt;
+        }
+
+        return ColdIsUselessWithoutTable(target);
+    }
+
+    /// <summary>
+    /// What the bot knew before the resist table existed, kept so a missing data file slows a rush
+    /// down rather than sending a cold rusher at an immune boss.
+    /// </summary>
+    private bool ColdIsUselessWithoutTable(WorldObject target)
+    {
+        if (_gameDifficulty == Difficulty.Normal)
+        {
+            return false;
+        }
+
         if (target.NPCCode == NPCCode.OblivionKnight
             && target.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique)
             && (target.MonsterEnchantments.Contains(MonsterEnchantment.MagicResistant)
@@ -4778,8 +4798,6 @@ public sealed class RushBot : IBotInstance
             return true;
         }
 
-        // Everywhere else Cold Enchanted is not immunity, it is cold damage on the monster's own
-        // attacks: five other seal bosses carried it and died to orb in 12 to 23 seconds.
         return ColdImmuneAboveNormal.Contains(target.NPCCode);
     }
 
@@ -6291,7 +6309,7 @@ public sealed class RushBot : IBotInstance
 
     private static MovementMode GetMovementMode(Client client)
     {
-        return client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+        return MovementHelpers.PreferredMovement(client.Game);
     }
 
     private static void AcceptPartyInvites(Client client)

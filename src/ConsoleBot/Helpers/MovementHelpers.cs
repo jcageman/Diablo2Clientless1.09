@@ -1,4 +1,4 @@
-﻿using D2NG.Core;
+using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
@@ -111,6 +111,23 @@ public static class MovementHelpers
 
         return true;
     }
+
+    /// <summary>
+    /// How this character should move right now. Teleport costs mana, and a sorceress that has run
+    /// out cannot teleport at all - the move fails silently, so she cannot reach a merchant to buy
+    /// mana potions, and cannot recover. One of ours spent whole sessions like that: no mana potions
+    /// drunk, seventy six failed moves, and not a single attack. Walking is slow; being stuck is
+    /// permanent.
+    /// </summary>
+    public static MovementMode PreferredMovement(Game game)
+    {
+        return game.Me.HasSkill(Skill.Teleport) && game.Me.Mana > TeleportManaFloor
+            ? MovementMode.Teleport
+            : MovementMode.Walking;
+    }
+
+    /// <summary>Teleport costs about twenty four mana, so below this it will simply not fire.</summary>
+    private const int TeleportManaFloor = 30;
 
     public static async Task<bool> TakePathOfLocations(Game game, List<Point> points, MovementMode movementMode, CancellationToken? token = null)
     {

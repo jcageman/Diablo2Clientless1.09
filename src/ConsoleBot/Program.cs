@@ -1,9 +1,12 @@
-﻿using ConsoleBot.Attack;
+using ConsoleBot.Attack;
 using ConsoleBot.Bots;
 using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
+using D2NG.Core;
+using D2NG.Core.MonsterData;
+using D2NG.Core.ObjectData;
 using D2NG.Mule;
 using D2NG.Pickit;
 using ConsoleBot.TownManagement;
@@ -151,6 +154,56 @@ hostBuilder.Logging.SetMinimumLevel(minimumLevel switch
     LogEventLevel.Fatal => LogLevel.Critical,
     _ => LogLevel.Information,
 });
+// Game data - the item tables and the monster resistances - lives in a data folder beside the run
+// configs rather than in the build, so regenerating it after a realm patch does not need a rebuild.
+// --datadir overrides where to look.
+var dataDirectory = config["datadir"]
+    ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(config["config"])), "data");
+GameDataLocation.Use(dataDirectory);
+
+// Checked here rather than on the first item that drops, because without these no item can be
+// parsed at all and the failure would otherwise surface deep inside a run.
+var missingData = GameDataLocation.MissingRequiredFiles();
+if (missingData.Count > 0)
+{
+    Console.WriteLine(
+        $"Missing game data file(s) {string.Join(", ", missingData)} in {string.Join(" or ", GameDataLocation.Directories())}");
+    throw new InvalidProgramException("Missing game data files");
+}
+
+var monsterResists = MonsterResistTable.Empty;
+if (GameDataLocation.TryResolve(GameDataLocation.MonsterResistsFile, out var monsterResistFile))
+{
+    monsterResists = MonsterResistTable.Load(monsterResistFile);
+}
+else
+{
+    Log.Logger.Warning(
+        "No {File} in {DataDirectory}, so immunity checks fall back to the cases hardcoded in the bots. "
+        + "Generate it with: MpqData --gamedir \"<Diablo 2 install>\" --out \"{DataDirectory}\"",
+        GameDataLocation.MonsterResistsFile,
+        dataDirectory);
+}
+
+hostBuilder.Services.AddSingleton(monsterResists);
+
+// Shrine objects by class id, so a bot can pick health and mana shrines out of the map api's preset
+// objects and recognise shrine world objects when they come into view.
+var shrines = ShrineTable.Empty;
+if (GameDataLocation.TryResolve(GameDataLocation.ShrinesFile, out var shrineFile))
+{
+    shrines = ShrineTable.Load(shrineFile);
+}
+else
+{
+    Log.Logger.Warning(
+        "No {File} in {DataDirectory}, so shrines are not recognised. Generate it with: MpqData --gamedir \"<Diablo 2 install>\" --out \"{DataDirectory}\"",
+        GameDataLocation.ShrinesFile,
+        dataDirectory);
+}
+
+hostBuilder.Services.AddSingleton(shrines);
+
 hostBuilder.Services.AddSingleton<IBotFactory, BotFactory>();
 
 var host = hostBuilder.Build();

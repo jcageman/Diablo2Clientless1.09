@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Helpers;
+using ConsoleBot.Helpers;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Enums;
@@ -40,7 +40,6 @@ internal sealed class CowManager
     private readonly List<Client> _killingClients;
     private readonly HashSet<Client> _listeners;
     private readonly IMapApiService mapApiService;
-    private readonly HashSet<NPCCode> _huntedMonsters;
     private readonly SpatialGrid<AliveMonster> _aliveMonsters = new();
     private readonly ClusterRegistry _clusters = new();
     private readonly Stopwatch _activePhase = new();
@@ -59,15 +58,14 @@ internal sealed class CowManager
     /// one monster is counted several times and, worse, is put back into its cluster as alive.
     /// </summary>
     private readonly ConcurrentDictionary<uint, byte> _confirmedDead = new();
-    private int _huntedKilled;
+    private int _killed;
 
-    public CowManager(List<Client> killingclients, List<Client> listeningClients, IMapApiService mapApiService,
-        IReadOnlyCollection<NPCCode> huntedMonsters)
+    public CowManager(List<Client> killingclients, List<Client> listeningClients, IMapApiService mapApiService, bool activeMode)
     {
         _killingClients = killingclients;
         this.mapApiService = mapApiService;
-        _huntedMonsters = huntedMonsters == null ? [] : [.. huntedMonsters];
         _listeners = [.. killingclients, .. listeningClients];
+        ActiveMode = activeMode;
     }
 
     /// <summary>
@@ -147,9 +145,7 @@ internal sealed class CowManager
     }
 
     /// <summary>Whether the party hunts monsters of its own on top of the sorceresses clearing cows.</summary>
-    public bool ActiveMode => _huntedMonsters.Count > 0;
-
-    public IReadOnlyCollection<NPCCode> HuntedMonsters => _huntedMonsters;
+    public bool ActiveMode { get; }
 
     public async Task<List<Point>> GetPossibleStartingLocations(Game game)
     {
@@ -249,24 +245,51 @@ internal sealed class CowManager
         }
     }
 
+    /// <summary>
+    /// Whether this is the Cow King, who arrives as an ordinary Hell Bovine with the boss flag set.
+    /// </summary>
+    /// <remarks>
+    /// superuniques.bin record 39, "The Cow King", gives his base class as 391 - Hell Bovine - and
+    /// he is the only Hell Bovine super unique, so the class and the super unique marker identify
+    /// him between them. The boss flag alone does not: the level is full of randomly uniqued cow
+    /// packs that carry it too. <see cref="NPCCode.CowKing"/> is no use here either - 773 is a DS1
+    /// preset id, which is the map API's key for a placed unit, and the server never sends it.
+    /// </remarks>
+    private static bool IsCowKing(AssignNpcPacket packet)
+        => packet.UniqueCode == NPCCode.HellBovine
+            && packet.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique);
+
     private void HandleAssignNPC(AssignNpcPacket packet)
     {
-        var isHunted = _huntedMonsters.Contains(packet.UniqueCode);
-        if (packet.UniqueCode != NPCCode.HellBovine && !isHunted)
+        if (IsCowKing(packet))
         {
-            return;
+            // His lightning immunity needs no special case: he arrives as a Hell Bovine, which is
+            // zero across the board in Hell, carrying LightningEnchanted and MagicResistant, and
+            // 0 + 75 + 40 clears the immunity threshold on its own. A nova sorceress is told he is
+            // beyond her by the ordinary resistance check.
+            Log.Information("Cow King assigned at {Location}, enchantments {Enchantments}, active mode {ActiveMode}",
+                packet.Location, string.Join(", ", packet.MonsterEnchantments), ActiveMode);
+
+            if (!ActiveMode)
+            {
+                // Nobody here can finish him when only the nova sorceresses are killing, so the
+                // party stays clear rather than walking over and stalling on him.
+                return;
+            }
         }
 
+        // Everything in the level counts. Which character can hurt a given monster is decided from
+        // its resistances when the attack is chosen, so there is nothing to configure here and
+        // nothing to leave out - a monster type nobody thought to list used to be invisible.
         if (_confirmedDead.ContainsKey(packet.EntityId))
         {
             return;
         }
 
-        var kind = isHunted ? ClusterKind.Hunted : ClusterKind.Cow;
-        var cluster = _clusters.FindOrRegister(packet.Location, kind, out var created);
+        var cluster = _clusters.FindOrRegister(packet.Location, out var created);
         if (created)
         {
-            Log.Information($"Adding new {kind} cluster at {packet.Location}");
+            Log.Information($"Adding new cluster at {packet.Location}");
         }
 
         var added = _aliveMonsters.TryAdd(packet.EntityId, packet.Location, new AliveMonster
@@ -275,7 +298,6 @@ internal sealed class CowManager
             Location = packet.Location,
             NPCCode = packet.UniqueCode,
             MonsterEnchantments = packet.MonsterEnchantments,
-            IsHunted = isHunted,
             ClusterId = cluster.Id
         });
 
@@ -307,40 +329,7 @@ internal sealed class CowManager
         return _aliveMonsters.Within(location, distance, numberOfMonsters);
     }
 
-    /// <summary>
-    /// Bovines only. The hunted monsters are lightning immune, so a nova sorceress that treats one
-    /// as a target stands there doing nothing to it until something else kills it.
-    /// </summary>
-    public List<AliveMonster> GetNearbyAliveCows(Client client, double distance, int numberOfCows)
-    {
-        return GetNearbyAliveCows(client.Game.Me.Location, distance, numberOfCows);
-    }
 
-    public List<AliveMonster> GetNearbyAliveCows(Point location, double distance, int numberOfCows)
-    {
-        var nearby = _aliveMonsters.Within(location, distance, int.MaxValue);
-        var cows = new List<AliveMonster>(Math.Min(nearby.Count, numberOfCows));
-        foreach (var monster in nearby)
-        {
-            if (monster.IsHunted)
-            {
-                continue;
-            }
-
-            cows.Add(monster);
-            if (cows.Count == numberOfCows)
-            {
-                break;
-            }
-        }
-
-        return cows;
-    }
-
-    public bool HasNearbyHuntedMonsters(Point location, double distance)
-    {
-        return _aliveMonsters.Any(location, distance, m => m.IsHunted);
-    }
 
     /// <summary>Whether the level has been picked over and a fresh one is worth more than staying.</summary>
     private bool IsProducingTooSlowly()
@@ -349,11 +338,11 @@ internal sealed class CowManager
     }
 
     /// <summary>Souls per minute over the hunt so far, the number the whole run is judged on.</summary>
-    public double HuntedPerMinute => _timeInLevel.Elapsed.TotalMinutes > 0
-        ? _huntedKilled / _timeInLevel.Elapsed.TotalMinutes
+    public double KilledPerMinute => _timeInLevel.Elapsed.TotalMinutes > 0
+        ? _killed / _timeInLevel.Elapsed.TotalMinutes
         : 0;
 
-    public int HuntedKilled => _huntedKilled;
+    public int Killed => _killed;
 
     /// <summary>Whether every monster that belonged to this cluster is dead.</summary>
     public bool IsClusterCleared(MonsterCluster cluster)
@@ -417,11 +406,8 @@ internal sealed class CowManager
             return;
         }
 
-        if (monster.IsHunted)
-        {
-            _huntedKilled++;
-            _sinceLastKill.Restart();
-        }
+        _killed++;
+        _sinceLastKill.Restart();
     }
 
     /// <summary>Returns a cluster to the pool so another client can pick it up.</summary>
@@ -437,27 +423,50 @@ internal sealed class CowManager
     }
 
     /// <summary>
-    /// Claims a cow cluster for a killer. <paramref name="anchor"/> is where the clearing should
-    /// happen - the walking party - rather than where the killer happens to be standing.
-    ///
-    /// Nearest to that anchor rather than in route order, so the two of them clear one area
-    /// together and the soul packs that open up are ones the party can reach. Working the route
-    /// independently spread them across the level, and the party was then sent to whichever distant
-    /// pack happened to be eligible while nearer ones were still undiscovered.
+    /// Claims the next cluster for a killer. <paramref name="anchor"/> is where the clearing should
+    /// happen - the walking party - rather than where the killer happens to be standing, so the
+    /// group works one area together and everything that opens up is reachable.
     /// </summary>
-    public MonsterCluster ClaimNextCowCluster(Client client, int fromSweepIndex = 0, Point anchor = null)
+    /// <summary>
+    /// Takes the next cluster this client should work, optionally skipping the ones it cannot hurt.
+    /// </summary>
+    /// <param name="canHarm">
+    /// Whether this client can damage a given monster. A claimant that takes a pack it cannot shift
+    /// holds it until it gives up and then hands it back marked done, so the characters who could
+    /// have killed it are never offered it. Clusters with no monster currently tracked are still
+    /// claimable: not knowing what is there is not a reason to leave it, and treating unknown as
+    /// unworkable would leave clusters nobody ever takes and a level that never finishes.
+    /// </param>
+    public MonsterCluster ClaimNextCluster(
+        Client client,
+        int fromSweepIndex = 0,
+        Point anchor = null,
+        double maxDistance = double.MaxValue,
+        Func<AliveMonster, bool> canHarm = null)
     {
         var from = anchor ?? client.Game.Me.Location;
-        return _clusters.ClaimNearest(from, ClusterKind.Cow, fromSweepIndex, double.MaxValue, nearestFirst: anchor != null);
-    }
+        Func<MonsterCluster, bool> canWork = null;
+        if (canHarm != null)
+        {
+            // Bucketed once per claim rather than per candidate cluster: the claim walks every
+            // cluster, and asking the monster grid inside that walk would turn one pass into two
+            // nested ones.
+            var known = new HashSet<uint>();
+            var harmable = new HashSet<uint>();
+            foreach (var monster in _aliveMonsters.Snapshot())
+            {
+                known.Add(monster.ClusterId);
+                if (canHarm(monster))
+                {
+                    harmable.Add(monster.ClusterId);
+                }
+            }
 
-    public MonsterCluster ClaimNextHuntedCluster(Client client, int fromSweepIndex = 0, double maxDistance = double.MaxValue)
-    {
-        return _clusters.ClaimNearest(client.Game.Me.Location, ClusterKind.Hunted, fromSweepIndex, maxDistance);
-    }
+            canWork = cluster => !known.Contains(cluster.Id) || harmable.Contains(cluster.Id);
+        }
 
-    /// <summary>Whether the killers have finished, so nothing new will open up near the party.</summary>
-    public bool CowsAllDone => _clusters.AllDone(ClusterKind.Cow);
+        return _clusters.ClaimNearest(from, fromSweepIndex, maxDistance, nearestFirst: anchor != null, canWork);
+    }
 
     /// <summary>Starts the overall hunt budget, on the first cluster the party sets off towards.</summary>
     public void NotifyHuntStarted()
@@ -488,25 +497,16 @@ internal sealed class CowManager
             return true;
         }
 
-        if (!_clusters.AllDone(ClusterKind.Cow))
-        {
-            return false;
-        }
-
-        // Nothing claimable rather than everything done. A cluster that never became eligible never
-        // will once the cows are finished, so waiting on it only burned the ninety second patience
-        // timer at the end of every game - a fifth of the run spent standing in a cleared level.
-        return !ActiveMode || !_clusters.AnyPending(ClusterKind.Hunted);
+        // Nothing left that can be claimed, rather than every cluster marked done: one that cannot
+        // be worked will never become workable, and waiting on it only burned the patience timer at
+        // the end of every game.
+        return !_clusters.AnyPending();
     }
 
     public string DescribeProgress()
     {
-        var cows = $"cow clusters {_clusters.DoneCountOf(ClusterKind.Cow)}/{_clusters.CountOf(ClusterKind.Cow)}";
-        if (!ActiveMode)
-        {
-            return cows;
-        }
-
-        return $"{cows}, hunted clusters {_clusters.DoneCountOf(ClusterKind.Hunted)}/{_clusters.CountOf(ClusterKind.Hunted)} ({_clusters.EligibleHuntedCount()} eligible), {_huntedKilled} killed at {HuntedPerMinute:F1}/min";
+        var abandoned = _clusters.AbandonedCount();
+        var abandonedNote = abandoned > 0 ? $" ({abandoned} abandoned)" : string.Empty;
+        return $"clusters {_clusters.DoneCount()}/{_clusters.Count()}{abandonedNote}, {_killed} killed at {KilledPerMinute:F1}/min";
     }
 }

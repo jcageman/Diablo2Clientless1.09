@@ -1,4 +1,4 @@
-using ConsoleBot.Attack;
+﻿using ConsoleBot.Attack;
 using ConsoleBot.Chicken;
 using ConsoleBot.Enums;
 using ConsoleBot.Helpers;
@@ -387,7 +387,7 @@ public class RushProbeBot : IBotInstance
     }
 
     private static MovementMode GetMovementMode(Client client)
-        => client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+        => MovementHelpers.PreferredMovement(client.Game);
 
     /// <summary>
     /// Walks the rusher to Andariel and stops just short of her, which is where the portal for the
@@ -6039,7 +6039,7 @@ public class RushProbeBot : IBotInstance
 
     private async Task MoveToLocation(Client client, Point location)
     {
-        var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+        var movementMode = MovementHelpers.PreferredMovement(client.Game);
         if (client.Game.Me.Location.Distance(location) <= 10)
         {
             return;

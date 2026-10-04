@@ -12,7 +12,8 @@ namespace D2NG.Mule;
 /// </summary>
 public static class MuleSkipRule
 {
-    public static readonly TimeSpan FreshFor = TimeSpan.FromDays(7);
+    /// <summary>A week sent the first mule run after a three week pause past seventeen full mules, two and a half minutes for one item.</summary>
+    public static readonly TimeSpan FreshFor = TimeSpan.FromDays(30);
 
     public static bool ShouldSkip(MuleCharacterDb lastSeen, DateTimeOffset now)
     {

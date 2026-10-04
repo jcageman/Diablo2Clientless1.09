@@ -68,6 +68,9 @@ public abstract class MultiClientBotBase : IBotInstance
     /// be holding when something goes wrong, so they displace lesser potions rather than queue
     /// behind them.</summary>
     private const int FullRejuvenationsWanted = 6;
+
+    /// <summary>Fifteen at most in the inventory, the user's number; anything beyond is left on the ground.</summary>
+    protected const int RejuvenationsToKeep = 15;
     private readonly SpatialGrid<Item> _pickitPotionsOnGround = new();
     private readonly List<Client> _clients = [];
 
@@ -128,8 +131,27 @@ public abstract class MultiClientBotBase : IBotInstance
         });
 
         int gameCount = 1;
+        var gamesRun = 0;
         while (true)
         {
+            // A stop file beside the log is the clean way out. Killing the process leaves every
+            // character in its game on the realm for minutes, and the next start cannot join them.
+            var stopFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(_config.LogFile)) ?? ".", "stop.txt");
+            if (System.IO.File.Exists(stopFile))
+            {
+                System.IO.File.Delete(stopFile);
+                RequestStop("stop file found");
+            }
+
+            if (StopBatch)
+            {
+                Log.Fatal("Ending the batch: {Reason}", StopReason);
+                // The clients' listener and ping threads are foreground threads; with them still
+                // connected the process outlived every batch end and had to be killed by hand.
+                await LeaveGameAndDisconnectWithAllClients(clients);
+                return;
+            }
+
             _pickitItemsOnGround.Clear();
             _pickitPotionsOnGround.Clear();
             _itemFirstSeen.Clear();
@@ -140,6 +162,11 @@ public abstract class MultiClientBotBase : IBotInstance
             {
                 playerInGame.Value.Reset();
             }
+
+            // Declared for the bots and never called: the chaos sanctuary's state ran on from game to
+            // game, so a Diablo portal flag from the first game let every later benched chicken back
+            // into a seal, and dead bosses from earlier games hid new ones under reused ids.
+            ResetForNextRun();
 
             NextGame = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             Log.Information($"Joining next game {_config.GameNamePrefix}{gameCount}");
@@ -217,7 +244,7 @@ public abstract class MultiClientBotBase : IBotInstance
                 {
                     var account = _multiClientConfig.Accounts[i];
                     var client = clients[i];
-                    var numberOfSecondsToWait = i > 2 ? TimeSpan.FromSeconds(15) : TimeSpan.Zero;
+                    var numberOfSecondsToWait = JoinDelayFor(i);
                     prepareTasks.Add(InternalPrepareForRun(client, account, numberOfSecondsToWait, gameCount));
                 }
 
@@ -255,6 +282,8 @@ public abstract class MultiClientBotBase : IBotInstance
                 firstFiller.Game.InvitePlayer(player);
             }
 
+            _currentGameCount = gameCount;
+            _partyLeader = firstFiller;
             try
             {
                 var clientTasks = new List<Task<bool>>();
@@ -274,6 +303,12 @@ public abstract class MultiClientBotBase : IBotInstance
                 Log.Error($"Failed one or more tasks with exception {e}");
             }
 
+            gamesRun++;
+            if (_multiClientConfig.MaxGames > 0 && gamesRun >= _multiClientConfig.MaxGames)
+            {
+                RequestStop($"{gamesRun} games run, the configured maximum");
+            }
+
             Log.Information($"Going to next game");
             gameCount++;
         }
@@ -282,6 +317,61 @@ public abstract class MultiClientBotBase : IBotInstance
     protected virtual Task PostInitializeAllJoined(List<Client> clients)
     {
         return Task.CompletedTask;
+    }
+
+    private int _currentGameCount;
+
+    private Client _partyLeader;
+
+    /// <summary>
+    /// Puts a client that left the running game back into it - after a chicken, the rest of the game
+    /// is still worth its share of the experience - and back into the party, without which it would
+    /// get none of it.
+    /// </summary>
+    protected async Task<bool> RejoinCurrentGame(Client client, AccountConfig account)
+    {
+        Log.Information("{Client} rejoining game {Prefix}{Count}", client.LoggedInUserName(), _config.GameNamePrefix, _currentGameCount);
+        if (!await LeaveGameAndRejoinMCPWithRetry(client, account)
+            || !await RealmConnectHelpers.JoinGameWithRetry(_currentGameCount, client, _config, account))
+        {
+            Log.Warning("{Client} could not rejoin game {Prefix}{Count}", client.LoggedInUserName(), _config.GameNamePrefix, _currentGameCount);
+            return false;
+        }
+
+        if (!GeneralHelpers.TryWithTimeout(
+            (_) => client.Game.Me != null && client.Game.Me.Location.X != 0 && client.Game.Me.Location.Y != 0,
+            TimeSpan.FromSeconds(5)))
+        {
+            return false;
+        }
+
+        var leader = _partyLeader;
+        if (leader != null && leader != client && leader.Game.IsInGame())
+        {
+            var me = leader.Game.Players.FirstOrDefault(p => p.Id == client.Game.Me.Id);
+            if (me != null)
+            {
+                leader.Game.InvitePlayer(me);
+            }
+        }
+
+        return true;
+    }
+
+    private const int ClientsJoiningImmediately = 3;
+
+    private static readonly TimeSpan JoinStagger = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Spreads the logins after the first few rather than holding them all back. The flat fifteen
+    /// seconds this replaces was the same wait whether a client was fourth or tenth, and it is idle
+    /// time the rest of the party waits through: on a hundred second chaos sanctuary game the taxi
+    /// stood in town for eleven of them. A refused join is already handled by JoinGameWithRetry,
+    /// which backs off and reconnects, so the stagger only has to avoid asking for everything at once.
+    /// </summary>
+    private static TimeSpan JoinDelayFor(int clientIndex)
+    {
+        return JoinStagger * Math.Max(0, clientIndex - (ClientsJoiningImmediately - 1));
     }
 
     private async Task<bool> InternalPrepareForRun(Client client, AccountConfig account, TimeSpan waitToJoinTime, int gameCount)
@@ -354,6 +444,29 @@ public abstract class MultiClientBotBase : IBotInstance
         }
 
         return nearest;
+    }
+
+    protected bool StopBatch { get; private set; }
+
+    protected string StopReason { get; private set; }
+
+    /// <summary>
+    /// A stopped batch must end the process. The program restarts a bot whose run returns unless it
+    /// runs once, and a stopped bot returns at once, so without this it spun on the stop message ten
+    /// times a second with the clients still logged on.
+    /// </summary>
+    public bool RunsOnce => StopBatch;
+
+    protected void RequestStop(string reason)
+    {
+        if (!StopBatch)
+        {
+            StopBatch = true;
+            StopReason = reason;
+            Log.Fatal("Stop requested: {Reason}", reason);
+        }
+
+        NextGame.TrySetResult(true);
     }
 
     protected async Task PickupItemsAndPotions(Client client, AccountConfig account, double distance, Point anchor = null)
@@ -568,7 +681,19 @@ public abstract class MultiClientBotBase : IBotInstance
         _pickitItemsOnGround.TryAdd(item.Id, item.Location, item);
     }
 
-    private List<Item> GetPickitList(Client client, double distance, Point anchor)
+    /// <summary>
+    /// The items on the list within <paramref name="distance"/>, left on it. GetPickitList takes what
+    /// it returns off the list, so choosing a target with it lost the one not chosen: a sweep over a
+    /// rich seal dropped a rare breastplate that way and never went back for it.
+    /// </summary>
+    protected List<Item> PeekPickitList(Client client, double distance, Point anchor)
+    {
+        return _pickitItemsOnGround.Within(anchor ?? client.Game.Me.Location, distance)
+            .Where(i => !_pickedUp.ContainsKey(i.Id) && !IsReservedForAnotherClient(client, i))
+            .ToList();
+    }
+
+    protected List<Item> GetPickitList(Client client, double distance, Point anchor)
     {
         var resultPickitList = new List<Item>();
         var listItems = _pickitItemsOnGround.Within(anchor ?? client.Game.Me.Location, distance);
@@ -581,6 +706,11 @@ public abstract class MultiClientBotBase : IBotInstance
 
             if (_pickitItemsOnGround.TryRemove(tryItem.Id, out var item))
             {
+                if (_pickedUp.ContainsKey(item.Id))
+                {
+                    continue;
+                }
+
                 resultPickitList.Add(item);
                 if (resultPickitList.Count == 2)
                 {
@@ -634,7 +764,11 @@ public abstract class MultiClientBotBase : IBotInstance
         // a full one is worth more than the lesser one it displaces, which is worth more again than
         // any plain potion. Room is made for it below rather than the pickup being skipped.
         var rejuvenationRange = Math.Max(distance, RejuvenationPickupRadius);
-        var fullRejuvenations = TakePotionsByName(client, rejuvenationRange, FullRejuvenationsWanted, ItemName.FullRejuvenationPotion);
+        // Capped by what is carried: taken unconditionally, full rejuvenations filled the paladin's
+        // and the barbarian's inventories to the last cell, which left no room for the healing
+        // potion spares and had them running dry mid-fight.
+        var carriedRejuvenations = client.Game.Inventory.Items.Count(i => i.Classification == ClassificationType.RejuvenationPotion);
+        var fullRejuvenations = TakePotionsByName(client, rejuvenationRange, Math.Clamp(RejuvenationsToKeep - carriedRejuvenations, 0, FullRejuvenationsWanted), ItemName.FullRejuvenationPotion);
         resultPickitList.AddRange(fullRejuvenations);
 
         // Further than the rest. A rejuvenation refills life and mana at once and is the only thing
@@ -691,7 +825,7 @@ public abstract class MultiClientBotBase : IBotInstance
 
     protected async Task MoveToLocation(Client client, Point location, CancellationToken? token = null)
     {
-        var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+        var movementMode = MovementHelpers.PreferredMovement(client.Game);
         var distance = client.Game.Me.Location.Distance(location);
         if (distance > 15)
         {
@@ -733,13 +867,18 @@ public abstract class MultiClientBotBase : IBotInstance
         }
     }
 
+    protected Task PickupPotionsOnly(Client client, AccountConfig account, double distance)
+    {
+        return PickupNearbyPotionsIfNeeded(client, account, distance);
+    }
+
     private async Task PickupNearbyPotionsIfNeeded(Client client, AccountConfig account, double distance)
     {
         var totalRejuvanationPotions = client.Game.Inventory.Items.Count(i => i.Name == ItemName.RejuvenationPotion || i.Name == ItemName.FullRejuvenationPotion);
 
-        var missingHealthPotions = (int)client.Game.Belt.Height * account.HealthSlots.Count - client.Game.Belt.GetHealthPotionsInSlots(account.HealthSlots).Count;
-        var missingManaPotions = (int)client.Game.Belt.Height * account.ManaSlots.Count - client.Game.Belt.GetManaPotionsInSlots(account.ManaSlots).Count;
-        var missingRevPotions = Math.Max(6 - client.Game.Inventory.Items.Count(i => i.Name == ItemName.FullRejuvenationPotion || i.Name == ItemName.RejuvenationPotion), 0);
+        var missingHealthPotions = account.HealthPotionTarget(client.Game.Belt.Height) - client.Game.Belt.GetHealthPotionsInSlots(account.HealthSlots).Count;
+        var missingManaPotions = account.ManaPotionTarget(client.Game.Belt.Height) - client.Game.Belt.GetManaPotionsInSlots(account.ManaSlots).Count;
+        var missingRevPotions = Math.Max(6 - client.Game.Inventory.Items.Count(i => i.Classification == ClassificationType.RejuvenationPotion), 0);
         //Log.Information($"Client {client.Game.Me.Name} missing {missingHealthPotions} healthpotions and missing {missingManaPotions} mana");
         var pickitList = GetPotionPickupList(client, distance, missingRevPotions, missingHealthPotions, missingManaPotions);
         foreach (var item in pickitList)
@@ -769,6 +908,17 @@ public abstract class MultiClientBotBase : IBotInstance
                     client.Game.UsePotion(lesser);
                     await Task.Delay(150);
                 }
+            }
+
+            // A potion the belt cannot take needs a cell; walking to one there is no room for is
+            // waiting time and nothing else.
+            var beltHasRoom = item.Classification == ClassificationType.HealthPotion
+                ? client.Game.Belt.NumOfHealthPotions() < account.HealthPotionTarget(client.Game.Belt.Height)
+                : item.Classification == ClassificationType.ManaPotion && client.Game.Belt.NumOfManaPotions() < account.ManaPotionTarget(client.Game.Belt.Height);
+            if (!beltHasRoom && client.Game.Inventory.FindFreeSpace(item) == null)
+            {
+                ReturnItemToPickitList(client, item);
+                continue;
             }
 
             Log.Information($"Client {client.Game.Me.Name} picking up {item.Name}");
@@ -805,12 +955,22 @@ public abstract class MultiClientBotBase : IBotInstance
         var picks = 0;
         var startLocation = client.Game.Me.Location;
         var pickitList = new List<Item>();
+        var pickedHere = new List<Item>();
         do
         {
             picks++;
             pickitList = GetPickitList(client, distance, anchor);
             foreach (var item in pickitList)
             {
+                // The same item can come off the list twice in one take, under its old id and the
+                // one it got coming back into sight; the second went for an item already in the
+                // inventory and waited three seconds for it.
+                if (_pickedUp.ContainsKey(item.Id)
+                    || pickedHere.Any(p => p.Name == item.Name && p.Location.Distance(item.Location) <= 2))
+                {
+                    continue;
+                }
+
                 if (client.Game.Me.HasSkill(Skill.Vigor))
                 {
                     client.Game.ChangeSkill(Skill.Vigor, Hand.Right);
@@ -873,6 +1033,11 @@ public abstract class MultiClientBotBase : IBotInstance
                         // exactly like an item missing from Game.Items.
                         _pickedUp[item.Id] = true;
                         _pickedUp[target.Id] = true;
+                        // The other id's entry goes too: left on the list, the sweep walked back to
+                        // every item it had just taken and waited three seconds for nothing.
+                        _pickitItemsOnGround.TryRemove(target.Id, out _);
+                        pickedHere.Add(target);
+                        Log.Information("Client {ClientName} picked up {Amount} {Item}", client.Game.Me.Name, target.Amount, target.Name);
                         InventoryHelpers.MoveInventoryItemsToCube(client.Game);
                     }
                     else

@@ -1,4 +1,4 @@
-using ConsoleBot.Bots.Types.Cows;
+﻿using ConsoleBot.Bots.Types.Cows;
 using ConsoleBot.Helpers;
 
 namespace ConsoleBot.Tests;
@@ -69,7 +69,7 @@ public class RouteDisciplineTests
         var registry = new ClusterRegistry();
         foreach (var point in ScatteredClusters(40, seed))
         {
-            registry.FindOrRegister(point, ClusterKind.Cow, out _);
+            registry.FindOrRegister(point, out _);
         }
 
         registry.SetSweep(sweep);
@@ -84,7 +84,7 @@ public class RouteDisciplineTests
         while (true)
         {
             var sweepIndex = NearestSweepIndex(sweep, at);
-            var cluster = registry.ClaimNearest(at, ClusterKind.Cow, sweepIndex);
+            var cluster = registry.ClaimNearest(at, sweepIndex);
             if (cluster == null)
             {
                 break;
@@ -151,7 +151,7 @@ public class RouteDisciplineTests
         var registry = new ClusterRegistry();
         foreach (var point in ScatteredClusters(40, seed: 1))
         {
-            registry.FindOrRegister(point, ClusterKind.Cow, out _);
+            registry.FindOrRegister(point, out _);
         }
 
         registry.SetSweep(sweep);
@@ -160,7 +160,7 @@ public class RouteDisciplineTests
         var taken = new List<int>();
         while (true)
         {
-            var cluster = registry.ClaimNearest(at, ClusterKind.Cow, NearestSweepIndex(sweep, at));
+            var cluster = registry.ClaimNearest(at, NearestSweepIndex(sweep, at));
             if (cluster == null)
             {
                 break;

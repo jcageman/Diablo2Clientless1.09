@@ -5,6 +5,10 @@
     <File Path="Directory.Packages.props" />
     <File Path="global.json" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/MpqData/MpqData.csproj" />
+    <Project Path="tools/MpqDump/MpqDump.csproj" />
+  </Folder>
   <Project Path="src/ConsoleBot.Tests/ConsoleBot.Tests.csproj" />
   <Project Path="src/ConsoleBot/ConsoleBot.csproj" />
   <Project Path="src/D2NG.Core.Tests/D2NG.Core.Tests.csproj" />

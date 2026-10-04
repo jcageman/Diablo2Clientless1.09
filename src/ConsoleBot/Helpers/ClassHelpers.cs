@@ -1,4 +1,4 @@
-﻿using D2NG.Core;
+using D2NG.Core;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
@@ -51,6 +51,8 @@ public static class ClassHelpers
         return !client.Game.ClientCharacter.IsExpansion || LifePercentage > 60;
     }
 
+    private static readonly TimeSpan FindItemRecastInterval = TimeSpan.FromMilliseconds(700);
+
     public static async Task<bool> FindItemOnDeadEnemy(Game game, IPathingService pathingService, IMapApiService mapApiService, WorldObject monster)
     {
         if(!game.Me.HasSkill(Skill.FindItem) || monster.NPCCode == NPCCode.Diablo)
@@ -58,6 +60,7 @@ public static class ClassHelpers
             return true;
         }
 
+        var lastCast = DateTime.MinValue;
         return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
             if (!game.IsInGame() || monster.State == EntityState.Dieing)
@@ -75,8 +78,14 @@ public static class ClassHelpers
                 await MovementHelpers.MoveToWorldObject(game, pathingService, mapApiService, monster, MovementMode.Walking);
             }
 
+            if (DateTime.Now.Subtract(lastCast) < FindItemRecastInterval)
+            {
+                return false;
+            }
+
             await game.MoveToAsync(monster.Location);
             game.UseFindItem(monster);
+            lastCast = DateTime.Now;
 
             return monster.Effects.Contains(EntityEffect.CorpseNoDraw);
 

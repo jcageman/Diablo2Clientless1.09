@@ -14,4 +14,15 @@
     <ProjectReference Include="..\D2NG.Core\D2NG.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The item tables live with the run configs now; the tests keep their own copy so they do not
+         depend on a folder outside the repository. -->
+    <None Update="data\item_data.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="data\item_properties.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

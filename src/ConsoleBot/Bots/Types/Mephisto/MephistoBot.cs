@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using ConsoleBot.TownManagement;
@@ -23,6 +23,7 @@ public class MephistoBot : SingleClientBotBase, IBotInstance
 {
     private readonly IPathingService _pathingService;
     private readonly ITownManagementService _townManagementService;
+    private readonly MephistoConfiguration _mephistoConfig;
 
     public MephistoBot(
         IOptions<BotConfiguration> config,
@@ -34,6 +35,7 @@ public class MephistoBot : SingleClientBotBase, IBotInstance
     {
         _pathingService = pathingService;
         _townManagementService = townManagementService;
+        _mephistoConfig = mephconfig.Value;
     }
 
     public string GetName()
@@ -62,6 +64,15 @@ public class MephistoBot : SingleClientBotBase, IBotInstance
         {
             NeedsMule = true;
             return true;
+        }
+
+        // Every other bot stops here. Without it a character that never reached Ormus - no tome, no
+        // potions - walked into Durance anyway and the run failed later, somewhere that had nothing
+        // to do with the shopping.
+        if (!townTaskResult.Succes)
+        {
+            Log.Warning($"Town tasks failed for {client.Game.Me.Name}, taking a new game");
+            return false;
         }
 
         Log.Information("Taking DuranceOfHateLevel2 Waypoint");
@@ -169,6 +180,11 @@ public class MephistoBot : SingleClientBotBase, IBotInstance
             return false;
         }
 
+        // Splits the kill for the KPI. The two halves are quite different - the first spams Static
+        // Field down to 30% while the second only casts Frozen Orb - and until they are timed apart
+        // there is no way to tell which of them the kill seconds are actually in.
+        var staticDuringOrb = _mephistoConfig.StaticDuringOrbPhase;
+        Log.Information($"Mephisto at {mephisto.LifePercentage:F0}% life, finishing with Frozen Orb{(staticDuringOrb ? " and Static Field" : "")}");
         if (!GeneralHelpers.TryWithTimeout((_) =>
         {
             client.Game.UseRightHandSkillOnEntity(Skill.FrozenOrb, mephisto);
@@ -178,8 +194,17 @@ public class MephistoBot : SingleClientBotBase, IBotInstance
                 return true;
             }
 
-            return GeneralHelpers.TryWithTimeout((_) => mephisto.State == EntityState.Dead || mephisto.State == EntityState.Dieing,
-                TimeSpan.FromSeconds(0.7));
+            return GeneralHelpers.TryWithTimeout((waitCount) =>
+            {
+                // Once per wait, not once per poll: the poll runs every 20ms and this is a repeat
+                // cast, so the server keeps casting on its own until the next orb changes the hand.
+                if (staticDuringOrb && waitCount == 0 && mephisto.Location.Distance(client.Game.Me.Location) < 30)
+                {
+                    client.Game.RepeatRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
+                }
+
+                return mephisto.State == EntityState.Dead || mephisto.State == EntityState.Dieing;
+            }, TimeSpan.FromSeconds(0.7));
         }, TimeSpan.FromSeconds(50)))
         {
             Log.Warning($"Killing Mephisto failed at location {client.Game.Me.Location}");
@@ -198,8 +223,11 @@ public class MephistoBot : SingleClientBotBase, IBotInstance
     private static bool PickupNearbyItems(Client client)
     {
         PickitAudit.LogGroundItems(client.Game, "Mephisto", shouldPickupGoldItems: true);
-        var pickupItems = client.Game.Items.Values.Where(i => i.Ground && D2NG.Pickit.Pickit.ShouldPickupItem(client.Game, i, true)).OrderBy(n => n.Location.Distance(client.Game.Me.Location));
-        Log.Information($"Killed Mephisto, picking up {pickupItems.Count()} items ");
+        var pickupItems = client.Game.Items.Values
+            .Where(i => i.Ground && D2NG.Pickit.Pickit.ShouldPickupItem(client.Game, i, true))
+            .OrderBy(n => n.Location.Distance(client.Game.Me.Location))
+            .ToList();
+        Log.Information($"Killed Mephisto, picking up {pickupItems.Count} items ");
         foreach (var item in pickupItems)
         {
             if (item.Location.Distance(client.Game.Me.Location) > 30)
@@ -213,17 +241,28 @@ public class MephistoBot : SingleClientBotBase, IBotInstance
                 return false;
             }
 
-            InventoryHelpers.MoveInventoryItemsToCube(client.Game);
+            // Only cube when the item genuinely will not fit. Cubing is two server round trips plus
+            // opening the cube, and it was paid for every item picked up even though Mephisto drops a
+            // handful into an inventory with fifty free cells. The full-inventory fallback below is
+            // unchanged, so nothing that used to be picked up can now be missed.
             if (client.Game.Inventory.FindFreeSpace(item) == null)
             {
-                Log.Warning($"Skipped {item.GetFullDescription()} since inventory is full");
-                continue;
+                InventoryHelpers.MoveInventoryItemsToCube(client.Game);
+                if (client.Game.Inventory.FindFreeSpace(item) == null)
+                {
+                    Log.Warning($"Skipped {item.GetFullDescription()} since inventory is full");
+                    continue;
+                }
             }
 
             if (!GeneralHelpers.TryWithTimeout((retryCount =>
             {
                 if (client.Game.Me.Location.Distance(item.Location) >= 5)
                 {
+                    // Re-sent on every 20ms retry, deliberately. Throttling this to one send per
+                    // 400ms was measured and made pickup slower at every item count (+0.27s to
+                    // +1.03s, worse the more items dropped) while every other phase stayed flat.
+                    // The repeats are what get the character onto the item, not waste.
                     client.Game.TeleportToLocation(item.Location);
                     client.Game.MoveTo(item.Location);
                     return false;
@@ -246,6 +285,10 @@ public class MephistoBot : SingleClientBotBase, IBotInstance
             }
         }
 
+        // Closes the pickup phase for the KPI. Without it the seconds between the last item and the
+        // next game - leaving, rejoining the MCP and the fixed delay in the game loop - were being
+        // billed to pickup, which made the pickup loop look about three seconds worse than it is.
+        Log.Information($"Picked up {pickupItems.Count} items, leaving game");
         return true;
     }
 }
