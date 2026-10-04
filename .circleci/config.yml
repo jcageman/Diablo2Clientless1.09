@@ -1,4 +1,4 @@
-version: 2
+version: 2.1
 jobs:
   checkout_code:
     docker:
@@ -33,7 +33,6 @@ jobs:
       - run: dotnet test
 
 workflows:
-  version: 2
   build-test-and-docker:
     jobs:
       - checkout_code
