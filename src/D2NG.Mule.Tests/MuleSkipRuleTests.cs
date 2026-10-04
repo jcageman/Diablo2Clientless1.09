@@ -26,15 +26,15 @@ public class MuleSkipRuleTests
     }
 
     [Fact]
-    public void FullCharacterSeenJustUnderAWeekAgoIsSkipped()
+    public void FullCharacterSeenJustUnderThirtyDaysAgoIsSkipped()
     {
-        Assert.True(MuleSkipRule.ShouldSkip(Seen(0, TimeSpan.FromDays(7) - TimeSpan.FromMinutes(1)), Now));
+        Assert.True(MuleSkipRule.ShouldSkip(Seen(0, MuleSkipRule.FreshFor - TimeSpan.FromMinutes(1)), Now));
     }
 
     [Fact]
-    public void FullCharacterSeenAWeekAgoIsVisitedAgain()
+    public void FullCharacterSeenThirtyDaysAgoIsVisitedAgain()
     {
-        Assert.False(MuleSkipRule.ShouldSkip(Seen(0, TimeSpan.FromDays(7)), Now));
+        Assert.False(MuleSkipRule.ShouldSkip(Seen(0, MuleSkipRule.FreshFor), Now));
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class MuleSkipRuleTests
     [Fact]
     public void StaleProfileIsIgnored()
     {
-        var seen = Seen(6, TimeSpan.FromDays(8));
+        var seen = Seen(6, MuleSkipRule.FreshFor + TimeSpan.FromDays(1));
         seen.FitProfile = [0, 0, 0, 0, 0];
 
         Assert.False(MuleSkipRule.ShouldSkip(seen, Now, [new Shape(1, 1)]));

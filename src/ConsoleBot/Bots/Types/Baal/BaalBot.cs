@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Attack;
+using ConsoleBot.Attack;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
@@ -118,7 +118,7 @@ public class BaalBot : MultiClientBotBase
         else
         {
             var tpLocation = new Point(5100, 5025);
-            var movementMode = client.Game.Me.HasSkill(Skill.Teleport) ? MovementMode.Teleport : MovementMode.Walking;
+            var movementMode = MovementHelpers.PreferredMovement(client.Game);
             var pathBack = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, Area.Harrogath, client.Game.Me.Location, tpLocation, movementMode);
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBack, movementMode))
             {

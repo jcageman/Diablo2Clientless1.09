@@ -59,6 +59,11 @@ public class Belt : Container
         return _items.Values.Where(i => IsManaPotion(i)).Count();
     }
 
+    public int NumOfRejuvenationPotions()
+    {
+        return _items.Values.Count(i => i.Classification == ClassificationType.RejuvenationPotion);
+    }
+
     public Item FirstOrDefaultManaPotion()
     {
         return _items.Values.FirstOrDefault(i => IsManaPotion(i));

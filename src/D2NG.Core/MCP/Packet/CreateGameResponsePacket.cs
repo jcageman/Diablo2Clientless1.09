@@ -30,19 +30,19 @@ internal class CreateGameResponsePacket : McpPacket
                 Log.Debug("Game created successfully");
                 break;
             case 0x1E:
-                Log.Debug("Invalid Game Name");
+                Log.Warning("Create refused: invalid game name");
                 break;
             case 0x1F:
-                Log.Debug("Game name already exists");
+                Log.Warning("Create refused: game name already exists (d2cs NAME_EXIST - the previous game of this name has not been closed by d2gs yet)");
                 break;
             case 0x20:
-                Log.Debug("Game servers are down");
+                Log.Warning("Create refused: game servers are down");
                 break;
             case 0x6E:
-                Log.Debug("A dead hardcore character cannot create games");
+                Log.Warning("Create refused: dead hardcore character");
                 break;
             default:
-                Log.Debug("Unknown game creation failure");
+                Log.Warning("Create refused: unknown reason, result {Result:X2}", ResultCode);
                 break;
         }
     }

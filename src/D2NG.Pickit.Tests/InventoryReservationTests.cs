@@ -1,4 +1,4 @@
-﻿using D2NG.Core.D2GS;
+using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Enums;
 
 namespace D2NG.Pickit.Tests;

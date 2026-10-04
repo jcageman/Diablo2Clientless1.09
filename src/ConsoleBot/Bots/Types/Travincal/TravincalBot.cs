@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Attack;
+using ConsoleBot.Attack;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
@@ -6,8 +6,10 @@ using ConsoleBot.TownManagement;
 using D2NG.Core;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
+using Attribute = D2NG.Core.D2GS.Players.Attribute;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
@@ -27,11 +29,13 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
     private readonly ITownManagementService _townManagementService;
     private readonly IAttackService _attackService;
     private readonly IMapApiService _mapApiService;
+    private readonly TravincalConfiguration _travConfig;
 
     public TravincalBot(IOptions<BotConfiguration> config, IOptions<TravincalConfiguration> travconfig, IExternalMessagingClient externalMessagingClient, IPathingService pathingService,
         IMuleService muleService, ITownManagementService townManagementService, IAttackService attackService, IMapApiService mapApiService)
     : base(config.Value, travconfig.Value, externalMessagingClient, muleService)
     {
+        _travConfig = travconfig.Value;
         _pathingService = pathingService;
         _townManagementService = townManagementService;
         _attackService = attackService;
@@ -45,25 +49,47 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
 
     public async Task Run()
     {
+        if (_travConfig.IdentifyWithTome)
+        {
+            D2NG.Pickit.Pickit.ReserveInventoryItem(ItemName.TomeofIdentify);
+        }
+
         var client = new Client();
         _externalMessagingClient.RegisterClient(client);
         await CreateGameLoop(client);
     }
 
-    protected override async Task<bool> RunSingleGame(Client client)
+    private static readonly TimeSpan GameDeadline = TimeSpan.FromMinutes(4);
+
+    private int _itemsPickedUp;
+
+    protected override Task<bool> RunSingleGame(Client client)
     {
+        return GeneralHelpers.WithDeadline(() => RunTravincal(client), GameDeadline, "Travincal run");
+    }
+
+    private async Task<bool> RunTravincal(Client client)
+    {
+        _itemsPickedUp = 0;
+        client.Game.MovementSpeedFactor = _travConfig.MovementSpeedFactor;
         if (client.Game.Me.Class != CharacterClass.Barbarian)
         {
             throw new NotSupportedException("Only barbarian is supported on travincal");
         }
 
-        var townManagementOptions = new TownManagementOptions(_accountConfig, Act.Act4);
+        var townManagementOptions = new TownManagementOptions(_accountConfig, Act.Act4) { IdentifyWithTome = _travConfig.IdentifyWithTome };
 
         var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
         if (townTaskResult.ShouldMule)
         {
             NeedsMule = true;
             return true;
+        }
+
+        if (!townTaskResult.Succes)
+        {
+            Log.Warning($"Town tasks failed for {client.Game.Me.Name}, taking a new game");
+            return false;
         }
 
         Log.Information("Taking travincal wp");
@@ -113,6 +139,11 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
             Log.Information("Pickup nearby items 2 failed");
         }
 
+        if (_travConfig.IdentifyWithTome)
+        {
+            InventoryHelpers.SendIdentifyRequests(client.Game);
+        }
+
         Log.Information("Moving to town");
         if (!await _townManagementService.TakeTownPortalToTown(client))
         {
@@ -125,6 +156,16 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
         {
             NeedsMule = true;
         }
+
+        if (!townTaskResult.Succes)
+        {
+            Log.Warning($"Town tasks after the run failed for {client.Game.Me.Name}");
+        }
+
+        var onPerson = client.Game.Me.Attributes.GetValueOrDefault(Attribute.GoldOnPerson, 0);
+        var inStash = client.Game.Me.Attributes.GetValueOrDefault(Attribute.GoldInStash, 0);
+        Log.Information("Run yield: {Items} items picked up, gold {OnPerson} on person, {InStash} in stash, {Total} total",
+            _itemsPickedUp, onPerson, inStash, onPerson + inStash);
 
         Log.Information("Successfully finished game");
         return true;
@@ -146,7 +187,8 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
             }
 
             InventoryHelpers.MoveInventoryItemsToCube(game);
-            if (game.Inventory.FindFreeSpace(item) == null)
+
+            if (!item.IsGold && game.Inventory.FindFreeSpace(item) == null)
             {
                 continue;
             }
@@ -166,6 +208,7 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
             if (game.Me.Location.Distance(item.Location) < 5)
             {
                 game.PickupItem(item);
+                _itemsPickedUp++;
             }
         }
 
@@ -175,23 +218,31 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
 
     private async Task<bool> UseFindItemOnCouncilMembers(Game game)
     {
-        List<WorldObject> councilMembers = GetCouncilMembers(game);
-        var nearestMembers = councilMembers.Where(m => m.State == EntityState.Dead || m.State == EntityState.Dieing).OrderBy(n => game.Me.Location.Distance(n.Location));
+        var remaining = GetCouncilMembers(game)
+            .Where(m => m.State == EntityState.Dead || m.State == EntityState.Dieing)
+            .ToList();
 
-        foreach (var nearestMember in nearestMembers)
+        while (remaining.Count > 0)
         {
-            await PickupNearbyItems(game, 10);
-
-            bool result = await ClassHelpers.FindItemOnDeadEnemy(game, _pathingService, _mapApiService, nearestMember);
-            if (!result)
-            {
-                Log.Warning("Failed to do find item on corpse");
-            }
-
             if (!game.IsInGame())
             {
                 return false;
             }
+
+            var nearest = remaining.MinBy(m => game.Me.Location.Distance(m.Location));
+            remaining.Remove(nearest);
+
+            if (nearest.Effects.Contains(EntityEffect.CorpseNoDraw))
+            {
+                continue;
+            }
+
+            if (!await ClassHelpers.FindItemOnDeadEnemy(game, _pathingService, _mapApiService, nearest))
+            {
+                Log.Warning("Failed to do find item on corpse");
+            }
+
+            await PickupNearbyItems(game, 10);
         }
 
         return true;

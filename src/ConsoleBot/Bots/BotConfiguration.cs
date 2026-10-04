@@ -101,4 +101,17 @@ public class BotConfiguration
     /// </summary>
     [Required]
     public string LogFile { get; set; }
+
+    /// <summary>
+    /// Upper bound of a random pause before each game is created, in milliseconds. Zero, the
+    /// default, keeps the old behaviour.
+    /// </summary>
+    /// <remarks>
+    /// Several bots on one machine drift into creating games within a second of each other - four
+    /// Mephisto bots on ~30s runs did it for 60% of their creations whatever the start stagger -
+    /// and this realm answers a clump of simultaneous creations with silence rather than a refusal
+    /// code. The cost of the jitter is a fraction of a run; the cost of a collision is the whole
+    /// run plus a backoff.
+    /// </remarks>
+    public int GameCreationJitterMs { get; set; }
 }

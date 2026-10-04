@@ -3,33 +3,27 @@ using D2NG.Core.D2GS;
 using System.Collections.Generic;
 using System.Threading;
 
+using System;
+
 namespace ConsoleBot.Bots.Types.Cows;
 
 /// <summary>
-/// Tracks the monster clusters discovered during a run and hands them out to clients. Hunted
-/// clusters are additionally gated on the nearest cow clusters having been done, so the walking
-/// party is only sent into ground the sorceresses have already been over.
+/// Tracks the monster clusters discovered during a run and hands them out to clients. One pool for
+/// the whole level: everything in it is something to kill, and whether a given character can hurt a
+/// given cluster is answered from monster resistances at the point of attack, not by sorting
+/// monsters into categories here.
 /// </summary>
 public sealed class ClusterRegistry
 {
     /// <summary>Monsters within this distance of an existing cluster belong to that cluster.</summary>
     public const double ClusterRadius = 30.0;
 
-    /// <summary>How many of the nearest cow clusters must be done before a hunted cluster opens up.</summary>
-    public const int RequiredDoneCowClusters = 4;
-
-    /// <summary>
-    /// A cluster this close is taken even when the route says to go elsewhere. Far enough to be
-    /// worth the detour, near enough that it does not become a reason to leave the route.
-    /// </summary>
-
-    private readonly SpatialGrid<MonsterCluster> _cowGrid = new();
-    private readonly SpatialGrid<MonsterCluster> _huntedGrid = new();
-    private readonly List<MonsterCluster> _cows = [];
-    private readonly List<MonsterCluster> _hunted = [];
+    private readonly SpatialGrid<MonsterCluster> _grid = new();
+    private readonly List<MonsterCluster> _clusters = [];
     private readonly Lock _lock = new();
     private uint _nextId = 1;
     private double _maxDistance = double.MaxValue;
+    private Func<MonsterCluster, bool> _canWork;
     private IReadOnlyList<Point> _sweep = [];
 
     /// <summary>Whether any cluster has been discovered yet, so an empty registry is not finished.</summary>
@@ -39,31 +33,29 @@ public sealed class ClusterRegistry
         {
             lock (_lock)
             {
-                return _cows.Count > 0 || _hunted.Count > 0;
+                return _clusters.Count > 0;
             }
         }
     }
 
     /// <summary>
-    /// The cluster of this kind covering <paramref name="location"/>, creating one when nothing
-    /// covers it yet. <paramref name="created"/> reports which happened.
+    /// The cluster covering <paramref name="location"/>, creating one when nothing covers it yet.
+    /// <paramref name="created"/> reports which happened.
     /// </summary>
-    public MonsterCluster FindOrRegister(Point location, ClusterKind kind, out bool created)
+    public MonsterCluster FindOrRegister(Point location, out bool created)
     {
         lock (_lock)
         {
-            var grid = kind == ClusterKind.Cow ? _cowGrid : _huntedGrid;
-            var covering = grid.Within(location, ClusterRadius, 1);
+            var covering = _grid.Within(location, ClusterRadius, 1);
             if (covering.Count > 0)
             {
                 created = false;
                 return covering[0];
             }
 
-            var cluster = new MonsterCluster { Id = _nextId++, Location = location, Kind = kind, SweepIndex = SweepIndexOf(location) };
-            grid.TryAdd(cluster.Id, location, cluster);
-            (kind == ClusterKind.Cow ? _cows : _hunted).Add(cluster);
-            RecomputeEligibility();
+            var cluster = new MonsterCluster { Id = _nextId++, Location = location, SweepIndex = SweepIndexOf(location) };
+            _grid.TryAdd(cluster.Id, location, cluster);
+            _clusters.Add(cluster);
             created = true;
             return cluster;
         }
@@ -82,9 +74,7 @@ public sealed class ClusterRegistry
     {
         lock (_lock)
         {
-            var cluster = _cowGrid.TryGetValue(clusterId, out var cow) ? cow
-                : _huntedGrid.TryGetValue(clusterId, out var hunted) ? hunted
-                : null;
+            var cluster = _grid.TryGetValue(clusterId, out var found) ? found : null;
             if (cluster == null)
             {
                 return;
@@ -120,12 +110,7 @@ public sealed class ClusterRegistry
         lock (_lock)
         {
             _sweep = sweep ?? [];
-            foreach (var cluster in _cows)
-            {
-                cluster.SweepIndex = SweepIndexOf(cluster.Location);
-            }
-
-            foreach (var cluster in _hunted)
+            foreach (var cluster in _clusters)
             {
                 cluster.SweepIndex = SweepIndexOf(cluster.Location);
             }
@@ -148,12 +133,18 @@ public sealed class ClusterRegistry
     /// <paramref name="from"/> while no route is set or for clusters that share a waypoint. Hunted
     /// clusters are only handed out once eligible.
     /// </summary>
-    public MonsterCluster ClaimNearest(Point from, ClusterKind kind, int fromSweepIndex = 0, double maxDistance = double.MaxValue, bool nearestFirst = false)
+    public MonsterCluster ClaimNearest(
+        Point from,
+        int fromSweepIndex = 0,
+        double maxDistance = double.MaxValue,
+        bool nearestFirst = false,
+        Func<MonsterCluster, bool> canWork = null)
     {
         lock (_lock)
         {
             _maxDistance = maxDistance;
-            RetireKilledClusters(kind);
+            _canWork = canWork;
+            RetireKilledClusters();
             // Prefer the next cluster ahead on the route. Something left behind is still taken, but
             // only once nothing is left in front - and then the closest one, not the earliest.
             //
@@ -162,8 +153,8 @@ public sealed class ClusterRegistry
             // then swept forward over ground it had already covered. Hunted clusters become orphans
             // routinely: one is only eligible once the cow clusters around it are done, so packs
             // passed early come up for work long after the group has moved beyond them.
-            var best = PickPending(from, kind, fromSweepIndex, nearestFirst)
-                ?? PickPending(from, kind, 0, nearestFirst: true);
+            var best = PickPending(from, fromSweepIndex, nearestFirst)
+                ?? PickPending(from, 0, nearestFirst: true);
 
             if (best != null)
             {
@@ -172,7 +163,7 @@ public sealed class ClusterRegistry
             }
 
             // Nothing pending, so join a cluster someone else is already on rather than idling.
-            foreach (var cluster in kind == ClusterKind.Cow ? _cows : _hunted)
+            foreach (var cluster in _clusters)
             {
                 if (!cluster.Done && cluster.Claimed && from.Distance(cluster.Location) <= _maxDistance)
                 {
@@ -191,10 +182,9 @@ public sealed class ClusterRegistry
     /// stood still, AllDone never came true, and the hunting party stayed capped to its short range
     /// with eligible work sitting outside it - the whole party idle until the patience timer.
     /// </summary>
-    private void RetireKilledClusters(ClusterKind kind)
+    private void RetireKilledClusters()
     {
-        var retiredCow = false;
-        foreach (var cluster in kind == ClusterKind.Cow ? _cows : _hunted)
+        foreach (var cluster in _clusters)
         {
             if (cluster.Done || cluster.Claimed || cluster.TotalMembers == 0
                 || cluster.KilledMembers < cluster.TotalMembers)
@@ -203,12 +193,6 @@ public sealed class ClusterRegistry
             }
 
             cluster.Done = true;
-            retiredCow |= kind == ClusterKind.Cow;
-        }
-
-        if (retiredCow)
-        {
-            RecomputeEligibility();
         }
     }
 
@@ -217,13 +201,13 @@ public sealed class ClusterRegistry
     /// eligible. Once the cows are finished nothing further can become eligible, so a game with
     /// none of these left has nothing to wait for.
     /// </summary>
-    public bool AnyPending(ClusterKind kind)
+    public bool AnyPending()
     {
         lock (_lock)
         {
-            foreach (var cluster in kind == ClusterKind.Cow ? _cows : _hunted)
+            foreach (var cluster in _clusters)
             {
-                if (!cluster.Done && (kind == ClusterKind.Cow || cluster.Eligible))
+                if (!cluster.Done)
                 {
                     return true;
                 }
@@ -250,10 +234,11 @@ public sealed class ClusterRegistry
             }
 
             cluster.Done = true;
-            if (cluster.Kind == ClusterKind.Cow)
-            {
-                RecomputeEligibility();
-            }
+            // Monsters we can still see alive, not monsters we did not kill. A member that walked
+            // out of view is pruned without being counted as killed, so measuring this against the
+            // kill count marked half the cleared clusters abandoned and made the party look far
+            // worse than it was.
+            cluster.Abandoned = cluster.AliveMembers > 0;
         }
     }
 
@@ -271,12 +256,30 @@ public sealed class ClusterRegistry
         }
     }
 
-    /// <summary>Whether every discovered cluster of this kind has been done.</summary>
-    public bool AllDone(ClusterKind kind)
+    /// <summary>How many clusters were given up on with monsters still standing.</summary>
+    public int AbandonedCount()
     {
         lock (_lock)
         {
-            foreach (var cluster in kind == ClusterKind.Cow ? _cows : _hunted)
+            var count = 0;
+            foreach (var cluster in _clusters)
+            {
+                if (cluster.Abandoned)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>Whether every discovered cluster of this kind has been done.</summary>
+    public bool AllDone()
+    {
+        lock (_lock)
+        {
+            foreach (var cluster in _clusters)
             {
                 if (!cluster.Done)
                 {
@@ -288,20 +291,20 @@ public sealed class ClusterRegistry
         }
     }
 
-    public int CountOf(ClusterKind kind)
+    public int Count()
     {
         lock (_lock)
         {
-            return (kind == ClusterKind.Cow ? _cows : _hunted).Count;
+            return _clusters.Count;
         }
     }
 
-    public int DoneCountOf(ClusterKind kind)
+    public int DoneCount()
     {
         lock (_lock)
         {
             var done = 0;
-            foreach (var cluster in kind == ClusterKind.Cow ? _cows : _hunted)
+            foreach (var cluster in _clusters)
             {
                 if (cluster.Done)
                 {
@@ -313,33 +316,11 @@ public sealed class ClusterRegistry
         }
     }
 
-    public int EligibleHuntedCount()
-    {
-        lock (_lock)
-        {
-            var eligible = 0;
-            foreach (var cluster in _hunted)
-            {
-                if (cluster.Eligible)
-                {
-                    eligible++;
-                }
-            }
-
-            return eligible;
-        }
-    }
-
-    /// <summary>
-    /// Grants eligibility to every hunted cluster whose nearest <see cref="RequiredDoneCowClusters"/>
-    /// cow clusters are all done. Eligibility is never taken away again, and this only runs when a
-    /// cluster is discovered or completed rather than on the client loops.
-    /// </summary>
     /// <summary>
     /// The pending cluster earliest on the route at or after <paramref name="minSweepIndex"/>,
     /// tie-broken by distance from <paramref name="from"/>.
     /// </summary>
-    private MonsterCluster PickPending(Point from, ClusterKind kind, int minSweepIndex, bool nearestFirst = false)
+    private MonsterCluster PickPending(Point from, int minSweepIndex, bool nearestFirst = false)
     {
         MonsterCluster best = null;
         var bestSweep = int.MaxValue;
@@ -349,10 +330,9 @@ public sealed class ClusterRegistry
         // was tried twice: both times the party doubled back on over a third of its turns. Taking
         // anything out of order advances the group's own sweep position, which orphans everything
         // behind it, and the orphans then have to be collected in a second pass across the level.
-        foreach (var cluster in kind == ClusterKind.Cow ? _cows : _hunted)
+        foreach (var cluster in _clusters)
         {
-            if (cluster.Done || cluster.Claimed || (kind == ClusterKind.Hunted && !cluster.Eligible)
-                || cluster.SweepIndex < minSweepIndex)
+            if (cluster.Done || cluster.Claimed || cluster.SweepIndex < minSweepIndex)
             {
                 continue;
             }
@@ -365,6 +345,14 @@ public sealed class ClusterRegistry
             // well, so testing AliveMembers alone threw away every pack the party had not walked up
             // to yet - three quarters of the level in one measured game.
             if (cluster.TotalMembers > 0 && cluster.KilledMembers >= cluster.TotalMembers)
+            {
+                continue;
+            }
+
+            // Nothing here this claimant can hurt. Taking it anyway is what left packs standing: a
+            // nova sorceress would claim a pack of lightning immunes, fail to shift it, and hand it
+            // back marked done, so the characters who could kill it were never offered it.
+            if (_canWork != null && !_canWork(cluster))
             {
                 continue;
             }
@@ -405,60 +393,5 @@ public sealed class ClusterRegistry
         }
 
         return best;
-    }
-
-    private void RecomputeEligibility()
-    {
-        if (_hunted.Count == 0 || _cows.Count < RequiredDoneCowClusters)
-        {
-            return;
-        }
-
-        var nearest = new double[RequiredDoneCowClusters];
-        var nearestClusters = new MonsterCluster[RequiredDoneCowClusters];
-        foreach (var hunted in _hunted)
-        {
-            if (hunted.Eligible)
-            {
-                continue;
-            }
-
-            var filled = 0;
-            foreach (var cow in _cows)
-            {
-                var distance = hunted.Location.Distance(cow.Location);
-                if (filled == RequiredDoneCowClusters && distance >= nearest[filled - 1])
-                {
-                    continue;
-                }
-
-                var insertAt = filled < RequiredDoneCowClusters ? filled : RequiredDoneCowClusters - 1;
-                while (insertAt > 0 && nearest[insertAt - 1] > distance)
-                {
-                    nearest[insertAt] = nearest[insertAt - 1];
-                    nearestClusters[insertAt] = nearestClusters[insertAt - 1];
-                    insertAt--;
-                }
-
-                nearest[insertAt] = distance;
-                nearestClusters[insertAt] = cow;
-                if (filled < RequiredDoneCowClusters)
-                {
-                    filled++;
-                }
-            }
-
-            var allDone = true;
-            for (var i = 0; i < filled; i++)
-            {
-                if (!nearestClusters[i].Done)
-                {
-                    allDone = false;
-                    break;
-                }
-            }
-
-            hunted.Eligible = allDone;
-        }
     }
 }

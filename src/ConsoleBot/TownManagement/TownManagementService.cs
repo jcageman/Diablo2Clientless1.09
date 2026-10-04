@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using System.Collections.Concurrent;
 using D2NG.Core;
@@ -147,7 +147,9 @@ public class TownManagementService : ITownManagementService
             }
 
             // An item left on the cursor makes the server ignore interactions.
-            client.Game.CleanupCursorItem();
+            // Forced: standing on the portal and being refused is proof enough that whatever the
+            // cursor is holding is real, whatever the item's own container field claims.
+            client.Game.CleanupCursorItem(force: retryCount > 0);
             client.Game.InteractWithEntity(portal);
             return await GeneralHelpers.TryWithTimeout(async _ =>
             {
@@ -213,6 +215,16 @@ public class TownManagementService : ITownManagementService
 
     public async Task<bool> CreateTownPortal(Client client)
     {
+        // A town portal cannot be cast inside a town, so this is not a thing to retry for twenty
+        // seconds - it is a sign the caller believes it is somewhere it is not. Failing at once
+        // says so, and hands the caller the same false it would have got the slow way.
+        if (client.Game.Area == WayPointHelpers.MapTownArea(client.Game.Act))
+        {
+            _logger.LogError("Client {ClientName} asked for a town portal while still in {Area} - it never left town",
+                client.Game.Me.Name, client.Game.Area);
+            return false;
+        }
+
         if (!await GeneralHelpers.TryWithTimeout(async (_) =>
         {
             return await client.Game.CreateTownPortal();
@@ -294,6 +306,8 @@ public class TownManagementService : ITownManagementService
             return true;
         }
 
+        var switchStarted = DateTime.Now;
+
         if(!client.Game.IsInTown())
         {
             if(!await TakeTownPortalToTown(client))
@@ -336,20 +350,33 @@ public class TownManagementService : ITownManagementService
             return false;
         }
 
-        _logger.LogDebug("Client {ClientName} taking waypoint to {TargetTownArea}", client.Game.Me.Name, targetTownArea);
-        if (!GeneralHelpers.TryWithTimeout((_) =>
+        _logger.LogInformation("{Character} walked to the {Act} waypoint in {Seconds:0.0}s, taking it to {TargetTownArea}",
+            client.Game.Me.Name, client.Game.Act, DateTime.Now.Subtract(switchStarted).TotalSeconds, targetTownArea);
+        if (!await GeneralHelpers.TryWithTimeout(async (_) =>
         {
             if(!client.Game.TakeWaypoint(townWaypoint, act.MapTownWayPoint()))
             {
                 return false;
             }
-            return GeneralHelpers.TryWithTimeout((_) => client.Game.Area == targetTownArea, TimeSpan.FromSeconds(2));
+
+            // Game.Area lags a transition, so waiting on it spent the timeout and then took the
+            // waypoint again from the place it had already arrived at. Position settles first.
+            return await GeneralHelpers.TryWithTimeout(async (_) =>
+            {
+                client.Game.RequestUpdate(client.Game.Me.Id);
+                await Task.Delay(50);
+                return client.Game.Area == targetTownArea
+                    || await _pathingService.IsNavigatablePointInArea(
+                        client.Game.MapId, client.Game.Difficulty, targetTownArea, client.Game.Me.Location);
+            }, TimeSpan.FromSeconds(2));
         }, TimeSpan.FromSeconds(5)))
         {
             _logger.LogDebug("Client {ClientName} moving to {Act} failed", client.Game.Me.Name, act);
             return false;
         }
 
+        _logger.LogInformation("{Character} arrived in {TargetTownArea}, act switch took {Seconds:0.0}s",
+            client.Game.Me.Name, targetTownArea, DateTime.Now.Subtract(switchStarted).TotalSeconds);
         return true;
     }
 
@@ -382,7 +409,7 @@ public class TownManagementService : ITownManagementService
 
         var townArea = WayPointHelpers.MapTownArea(game.Act);
 
-        if (!await IdentifyItems(game, movementMode))
+        if (!await IdentifyItems(game, movementMode, options))
         {
             return result;
         }
@@ -465,12 +492,20 @@ public class TownManagementService : ITownManagementService
             ? MovementMode.Teleport : MovementMode.Walking;
     }
 
-    private async Task<bool> IdentifyItems(Game game, MovementMode movementMode)
+    private async Task<bool> IdentifyItems(Game game, MovementMode movementMode, TownManagementOptions options)
     {
         var unidentifiedItemCount = game.Inventory.Items.Count(i => !i.IsIdentified) +
     game.Cube.Items.Count(i => !i.IsIdentified);
         if (unidentifiedItemCount > 6)
         {
+            if (options.IdentifyWithTome
+                && game.Inventory.Items.Any(i => i.Name == ItemName.TomeofIdentify))
+            {
+                _logger.LogInformation("{Character} identifying from the tome, skipping Cain", game.Me.Name);
+                InventoryHelpers.IdentifyItems(game);
+                return true;
+            }
+
             _logger.LogDebug("Client {ClientName} Visiting Deckard Cain with {UnidCount} unidentified items", game.Me.Name, unidentifiedItemCount);
             var deckhardCainCode = NPCHelpers.GetDeckardCainForAct(game.Act);
 
@@ -518,7 +553,10 @@ public class TownManagementService : ITownManagementService
     private async Task<bool> RefreshAndSellItems(Game game, MovementMode movementMode, TownManagementOptions options)
     {
         var sellItemCount = game.Inventory.Items.Count(i => D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i) && !D2NG.Pickit.Pickit.ShouldKeepItem(game, i)) + game.Cube.Items.Count(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i));
+        var surplusRejuvenations = options.RejuvenationsToKeep is int keep
+            && game.Inventory.Items.Count(i => i.Classification == ClassificationType.RejuvenationPotion) > keep;
         if (NPCHelpers.ShouldRefreshCharacterAtNPC(game, options)
+            || surplusRejuvenations
             || sellItemCount > 5
             || options.ItemsToBuy?.Count > 0
             || options.HealthPotionsToBuy > 0
@@ -544,6 +582,28 @@ public class TownManagementService : ITownManagementService
                 {
                     _logger.LogWarning("Client {ClientName} Did not find {SellNpc} at {Location}", game.Me.Name, sellNpc, game.Me.Location);
                     return false;
+                }
+
+                // Taking the path can report success without arriving, and the shop then does
+                // nothing: the character trades from wherever it stopped, buys neither potions nor
+                // town portal tomes, and the run dies later for want of a tome. One more attempt
+                // from where it actually is costs a second and fixes most of them.
+                // Re-read the NPC rather than trusting the object we pathed towards: town folk wander,
+                // so the position that path was built for is already old by the time it finishes.
+                // A character can arrive exactly where she was standing and still be seventy units
+                // from where she is now, and then trade with nobody.
+                game.RequestUpdate(game.Me.Id);
+                uniqueNPC = NPCHelpers.GetUniqueNPC(game, sellNpc) ?? uniqueNPC;
+                var toNpc = game.Me.Location.Distance(uniqueNPC.Location);
+                if (toNpc > 10)
+                {
+                    _logger.LogWarning("Client {ClientName} finished pathing to {SellNpc} but is {Distance:F0} away, trying once more",
+                        game.Me.Name, sellNpc, toNpc);
+                    var retryPath = await _pathingService.GetPathToLocation(game, uniqueNPC.Location, movementMode);
+                    if (retryPath.Count > 0)
+                    {
+                        await MovementHelpers.TakePathOfLocations(game, retryPath, movementMode);
+                    }
                 }
 
                 if (!NPCHelpers.SellItemsAndRefreshPotionsAtNPC(game, uniqueNPC, options))

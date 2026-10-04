@@ -34,13 +34,30 @@ public class AccountConfig
     /// Belt columns (0-3) reserved for healing potions. Together with <see cref="ManaSlots"/>
     /// these must cover all four columns without overlapping. Defaults to the two left columns.
     /// </summary>
-    public List<int> HealthSlots = [0, 1];
+    public List<int> HealthSlots { get; set; }
 
     /// <summary>
     /// Belt columns (0-3) reserved for mana potions. Together with <see cref="HealthSlots"/>
     /// these must cover all four columns without overlapping. Defaults to the two right columns.
     /// </summary>
-    public List<int> ManaSlots = [2, 3];
+    public List<int> ManaSlots { get; set; }
+
+    /// <summary>
+    /// Belt rows to keep filled, counted from the top. Defaults to every row of the belt the
+    /// character happens to wear. A sorceress wants four healing and four mana potions; on a
+    /// three row belt the default buys her six of each, and the two extra rows are gold spent on
+    /// potions the run never reaches.
+    /// </summary>
+    public int? BeltRowsToFill { get; set; }
+
+    /// <summary>How many healing potions the belt should hold.</summary>
+    public int HealthPotionTarget(uint beltHeight) => RowsToFill(beltHeight) * (HealthSlots ?? DefaultHealthSlots).Count;
+
+    /// <summary>How many mana potions the belt should hold.</summary>
+    public int ManaPotionTarget(uint beltHeight) => RowsToFill(beltHeight) * (ManaSlots ?? DefaultManaSlots).Count;
+
+    private int RowsToFill(uint beltHeight) =>
+        BeltRowsToFill is int rows ? System.Math.Min(rows, (int)beltHeight) : (int)beltHeight;
 
     /// <summary>
     /// When this character drinks and when it abandons a game. Overrides
@@ -60,8 +77,17 @@ public class AccountConfig
     /// Validates that the credentials are filled in and that the belt slot assignment covers
     /// columns 0-3 exactly once.
     /// </summary>
+    // No initialisers on the lists: the configuration binder appends to a list it finds populated,
+    // so [0, 1] plus a configured [0, 1, 2] read as five slots and failed the overlap check.
+    private static readonly List<int> DefaultHealthSlots = [0, 1];
+
+    private static readonly List<int> DefaultManaSlots = [2, 3];
+
     public virtual void Validate()
     {
+        HealthSlots ??= [.. DefaultHealthSlots];
+        ManaSlots ??= [.. DefaultManaSlots];
+
         if (string.IsNullOrEmpty(Username))
         {
             throw new ValidationException($"{nameof(Username)} is required on account");

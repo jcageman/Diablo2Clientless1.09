@@ -19,6 +19,12 @@ public class MultiClientConfiguration
     public bool ShouldCreateGames { get; set; } = true;
 
     /// <summary>
+    /// Ends the batch after this many games have been run, so a batch is judged at a planned size
+    /// instead of running until someone stops it. Zero means no limit.
+    /// </summary>
+    public int MaxGames { get; set; }
+
+    /// <summary>
     /// The accounts and characters taking part in the run, one entry per client. The first entry
     /// is the client that creates the game when <see cref="ShouldCreateGames"/> is enabled.
     /// </summary>

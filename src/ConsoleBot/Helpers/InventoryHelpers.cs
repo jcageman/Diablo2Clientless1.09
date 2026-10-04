@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Bots.Types;
+using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using D2NG.Core;
@@ -30,12 +30,23 @@ public static class InventoryHelpers
     {
         return game.Items.TryGetValue(cursor.Id, out var known)
             && known.Container is ContainerType.Inventory or ContainerType.Cube
-                or ContainerType.Stash or ContainerType.Stash2 or ContainerType.Belt;
+                or ContainerType.Stash or ContainerType.Stash2 or ContainerType.Belt
+                // A trade window counts as placed too. Without these, a mule pass reads its own
+                // offered items as stuck on the cursor and tries to cube and then drop them: seven
+                // seconds of failed attempts per item, on a perfect skull and an amulet mid trade.
+                // The drops were refused, so nothing was lost - but only because they were refused.
+                or ContainerType.ForTrade or ContainerType.TradeOffer;
     }
 
-    public static void CleanupCursorItem(this Game game)
+    /// <summary>
+    /// Puts whatever is on the cursor away. <paramref name="force"/> skips the staleness check, for
+    /// callers that already have proof the cursor is really blocking them - an interaction refused
+    /// while standing on top of its target is exactly that proof, and trusting the container field
+    /// there left a character stuck on an open portal until the game was lost.
+    /// </summary>
+    public static void CleanupCursorItem(this Game game, bool force = false)
     {
-        if (game.CursorItem != null && CursorIsStale(game, game.CursorItem))
+        if (!force && game.CursorItem != null && CursorIsStale(game, game.CursorItem))
         {
             Log.Debug($"{game.Me.Name}: cursor reports {game.CursorItem.Name} but it is already in a container, ignoring");
             return;
@@ -186,6 +197,24 @@ public static class InventoryHelpers
         game.ClickButton(ClickType.CloseStash);
         Thread.Sleep(100);
         game.ClickButton(ClickType.CloseStash);
+    }
+
+    /// <summary>
+    /// What a vendor may be handed from the inventory: junk the pickit does not want, less the
+    /// potions being drunk from and anything reserved.
+    /// </summary>
+    /// <remarks>
+    /// Shared because it drifted. The gambling loop had only the pickit test, so it sold the town
+    /// portal tome and the whole healing reserve along with the junk - and the portal character,
+    /// the only one with the gold to gamble at all, is the one whose missing tome leaves the party
+    /// waiting in town for a portal that cannot come.
+    /// </remarks>
+    public static List<Item> InventoryItemsToSell(Game game)
+    {
+        return [.. game.Inventory.Items
+            .Where(i => !IsDrinkable(i)
+                && !D2NG.Pickit.Pickit.ShouldKeepItem(game, i)
+                && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i))];
     }
 
     public static MoveItemResult StashItemsAndGold(Game game, List<Item> items, int gold)
@@ -560,7 +589,7 @@ public static class InventoryHelpers
             return;
         }
 
-        IdentifyMagicItems(game, tomeOfIdentify, game.Inventory.Items);
+        IdentifyWithTome(game, tomeOfIdentify, game.Inventory.Items);
 
         var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
         if (cube == null)
@@ -575,71 +604,90 @@ public static class InventoryHelpers
             return;
         }
 
-        IdentifyMagicItems(game, tomeOfIdentify, game.Cube.Items);
-        Task.Delay(50);
-
-        foreach (var item in game.Inventory.Items)
-        {
-            if (CanDropItemToSaveSpace(game, item))
-            {
-                Log.Information($"{game.Me.Name}: Dropping magic inventory item {item.GetFullDescription()}");
-                game.RemoveItemFromContainer(item);
-                bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
-                if (!resultToBuffer)
-                {
-                    Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
-                    continue;
-                }
-                game.DropItem(item);
-            }
-        }
-
-        foreach (var item in game.Cube.Items)
-        {
-            if (!CanDropItemToSaveSpace(game, item))
-            {
-                continue;
-            }
-
-            Log.Information($"{game.Me.Name}: Dropping magic cube item {item.GetFullDescription()}");
-            Point location = game.Inventory.FindFreeSpace(item);
-            if (location == null)
-            {
-                continue;
-            }
-
-            game.RemoveItemFromContainer(item);
-
-            bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
-            if (!resultToBuffer)
-            {
-                Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
-                continue;
-            }
-
-            game.DropItem(item);
-        }
+        IdentifyWithTome(game, tomeOfIdentify, game.Cube.Items);
         game.ClickButton(ClickType.CloseHoradricCube);
     }
 
-    private static bool CanDropItemToSaveSpace(Game game, Item item)
+    private static readonly TimeSpan IdentifyTimeout = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>
+    /// Asks for everything to be identified without waiting for any of it. Called before leaving the
+    /// level, the answers arrive while the character is taking its portal and walking through town,
+    /// so the town step finds nothing left to identify and skips both the identify and the walk to
+    /// Deckard Cain.
+    /// </summary>
+    public static void SendIdentifyRequests(Game game)
     {
-        return item.Quality == QualityType.Magical
-            && item.IsIdentified
-            && !D2NG.Pickit.Pickit.ShouldKeepItem(game, item)
-            && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, item);
+        var tomeOfIdentify = game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeofIdentify);
+        if (tomeOfIdentify == null)
+        {
+            return;
+        }
+
+        Send(game.Inventory.Items);
+
+        var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
+        if (cube == null || !game.ActivateCube(cube))
+        {
+            return;
+        }
+
+        Send(game.Cube.Items);
+        game.ClickButton(ClickType.CloseHoradricCube);
+
+        void Send(List<Item> items)
+        {
+            var pending = items
+                .Where(i => !i.IsIdentified && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i))
+                .ToList();
+            if (pending.Count == 0)
+            {
+                return;
+            }
+
+            game.ActivateTomeOfIdentify(tomeOfIdentify);
+            foreach (var item in pending)
+            {
+                game.SendIdentifyItem(tomeOfIdentify, item);
+            }
+
+            Log.Information($"{game.Me.Name}: asked for {pending.Count} items to be identified while leaving");
+        }
     }
 
-    private static void IdentifyMagicItems(Game game, Item tomeOfIdentify, List<Item> items)
+    private static void IdentifyWithTome(Game game, Item tomeOfIdentify, List<Item> items)
     {
-        foreach (var item in items)
+        var pending = items
+            .Where(i => !i.IsIdentified && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i))
+            .ToList();
+        if (pending.Count == 0)
         {
-            if (item.Quality == QualityType.Magical && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, item) && !item.IsIdentified)
-            {
-                Log.Information($"{game.Me.Name}: Identifying magic item {item.Id} - {item.Name}");
-                game.ActivateTomeOfIdentify(tomeOfIdentify);
-                game.IdentifyItem(tomeOfIdentify, item);
-            }
+            return;
+        }
+
+        game.ActivateTomeOfIdentify(tomeOfIdentify);
+        foreach (var item in pending)
+        {
+            Log.Information($"{game.Me.Name}: Identifying {item.Quality} item {item.Id} - {item.Name}");
+            game.SendIdentifyItem(tomeOfIdentify, item);
+        }
+
+        // By id against the live dictionary, not against the captured items: an update replaces the
+        // Item rather than mutating it, so the references gathered above never flip and the wait ran
+        // its full length every time while the items were in fact identified.
+        var pendingIds = pending.Select(i => i.Id).ToList();
+        bool StillPending(uint id)
+        {
+            var live = game.Inventory.FindItemById(id) ?? game.Cube.FindItemById(id);
+            return live != null && !live.IsIdentified;
+        }
+
+        GeneralHelpers.TryWithTimeout((retryCount) => !pendingIds.Exists(StillPending), IdentifyTimeout);
+
+        var unfinished = pendingIds.Count(StillPending);
+        if (unfinished > 0)
+        {
+            Log.Warning($"{game.Me.Name}: {unfinished} of {pending.Count} items still unidentified after {IdentifyTimeout.TotalSeconds}s");
         }
     }
 

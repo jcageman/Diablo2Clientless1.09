@@ -2,18 +2,10 @@
 
 namespace ConsoleBot.Bots.Types.Cows;
 
-public enum ClusterKind
-{
-    /// <summary>A pack of hell bovines, worked by the killing sorceresses.</summary>
-    Cow,
-
-    /// <summary>A pack of the monsters the party actively hunts in active mode.</summary>
-    Hunted
-}
-
 /// <summary>
-/// A pack of monsters at a fixed location. Clusters are discovered as monsters are assigned and
-/// live until they are released, which is what marks them done.
+/// A knot of monsters the killers work as one piece of the level. There is only one kind: whatever
+/// is standing there is what gets killed, and which character can hurt it is decided from its
+/// resistances rather than from a list of monster types kept by hand.
 /// </summary>
 public sealed class MonsterCluster
 {
@@ -21,9 +13,7 @@ public sealed class MonsterCluster
 
     public Point Location { get; init; }
 
-    public ClusterKind Kind { get; init; }
-
-    /// <summary>Whether a client is currently working this cluster.</summary>
+    /// <summary>Whether a client has taken this cluster and is on its way.</summary>
     public bool Claimed { get; set; }
 
     /// <summary>
@@ -60,10 +50,12 @@ public sealed class MonsterCluster
     public bool Done { get; set; }
 
     /// <summary>
-    /// Hunted clusters only: whether the nearest cow clusters have been done. Sticky, so the party
-    /// never turns around halfway to a cluster that was eligible when it set off.
+    /// Done because the party gave up on it with monsters still standing, not because they died.
+    /// Counting these as cleared made the progress line report a full sweep - "54/54" - on a level
+    /// that still had living packs in it, so a change that quietly abandoned more ground still read
+    /// as perfect.
     /// </summary>
-    public bool Eligible { get; set; }
+    public bool Abandoned { get; set; }
 
-    public override string ToString() => $"{Kind} cluster at {Location}";
+    public override string ToString() => $"cluster at {Location}";
 }

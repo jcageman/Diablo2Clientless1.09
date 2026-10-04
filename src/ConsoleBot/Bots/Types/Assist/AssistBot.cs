@@ -1,4 +1,4 @@
-﻿using ConsoleBot.Chicken;
+using ConsoleBot.Chicken;
 using ConsoleBot.Attack;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
@@ -253,8 +253,8 @@ public class AssistBot : IBotInstance
 
             var townManagementOptions = new TownManagementOptions(c.Item1, client.Game.Act)
             {
-                HealthPotionsToBuy = Math.Max(0, client.Game.Belt.Height * c.Item1.HealthSlots.Count + 10 - InventoryHelpers.GetTotalHealthPotions(client.Game)),
-                ManaPotionsToBuy = Math.Max(0, client.Game.Belt.Height * c.Item1.ManaSlots.Count + 5 - InventoryHelpers.GetTotalManaPotions(client.Game))
+                HealthPotionsToBuy = Math.Max(0, c.Item1.HealthPotionTarget(client.Game.Belt.Height) + 10 - InventoryHelpers.GetTotalHealthPotions(client.Game)),
+                ManaPotionsToBuy = Math.Max(0, c.Item1.ManaPotionTarget(client.Game.Belt.Height) + 5 - InventoryHelpers.GetTotalManaPotions(client.Game))
             };
 
             var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
@@ -441,8 +441,8 @@ public class AssistBot : IBotInstance
 
         var townManagementOptions = new TownManagementOptions(account, client.Game.Act)
         {
-            HealthPotionsToBuy = Math.Max(0, client.Game.Belt.Height * account.HealthSlots.Count + 10 - InventoryHelpers.GetTotalHealthPotions(client.Game)),
-            ManaPotionsToBuy = Math.Max(0, client.Game.Belt.Height * account.ManaSlots.Count + 5 - InventoryHelpers.GetTotalManaPotions(client.Game))
+            HealthPotionsToBuy = Math.Max(0, account.HealthPotionTarget(client.Game.Belt.Height) + 10 - InventoryHelpers.GetTotalHealthPotions(client.Game)),
+            ManaPotionsToBuy = Math.Max(0, account.ManaPotionTarget(client.Game.Belt.Height) + 5 - InventoryHelpers.GetTotalManaPotions(client.Game))
         };
         var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
         if (!townTaskResult.Succes)
@@ -594,8 +594,8 @@ public class AssistBot : IBotInstance
 
     private async Task PickupNearbyPotionsIfNeeded(Client client, AccountConfig account)
     {
-        var missingHealthPotions = 10 + client.Game.Belt.Height * account.HealthSlots.Count - InventoryHelpers.GetTotalHealthPotions(client.Game);
-        var missingManaPotions = 5 + client.Game.Belt.Height * account.ManaSlots.Count - InventoryHelpers.GetTotalManaPotions(client.Game);
+        var missingHealthPotions = 10 + account.HealthPotionTarget(client.Game.Belt.Height) - InventoryHelpers.GetTotalHealthPotions(client.Game);
+        var missingManaPotions = 5 + account.ManaPotionTarget(client.Game.Belt.Height) - InventoryHelpers.GetTotalManaPotions(client.Game);
         var missingRevPotions = Math.Max(6 - client.Game.Inventory.Items.Count(i => i.Classification == ClassificationType.RejuvenationPotion), 0);
         var pickitList = client.Game.Items.Values
             .Where(i => i.Ground && i.Classification == ClassificationType.HealthPotion &&

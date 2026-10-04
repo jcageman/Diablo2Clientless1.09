@@ -99,6 +99,11 @@ public abstract class SingleClientBotBase
                 {
                     gameCount++;
                     totalCount++;
+                    if (_config.GameCreationJitterMs > 0)
+                    {
+                        await Task.Delay(Random.Shared.Next(_config.GameCreationJitterMs));
+                    }
+
                     if (await client.CreateGame(_config.Difficulty, $"{_config.GameNamePrefix}{gameCount}", _config.GamePassword, _config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)))
                     {
                         Log.Information("In game");

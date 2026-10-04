@@ -1,5 +1,6 @@
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
+using D2NG.Core.ObjectData;
 using D2NG.Navigation.Services.MapApi;
 using Roy_T.AStar.Graphs;
 using Roy_T.AStar.Grids;
@@ -34,6 +35,16 @@ public static class AreaMapExtensions
     public static bool IsMovable(int value)
     {
         return value % 2 == 0;
+    }
+
+    /// <summary>
+    /// The shrines the level's preset data places, with their positions for this seed. Shrines that
+    /// come from a level's random object groups (Travincal's, for instance) are not preset and are
+    /// missing here; they only show up as world objects once in view.
+    /// </summary>
+    public static IReadOnlyList<ShrineLocation> Shrines(this AreaMap areaMap, ShrineTable shrines)
+    {
+        return shrines.Locations(areaMap.Objects);
     }
 
     public static float GetVelocityWithAdjacency(this AreaMap areaMap, int i, int j, int columns, int rows)

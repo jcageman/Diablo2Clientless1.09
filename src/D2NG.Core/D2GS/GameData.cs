@@ -1,4 +1,4 @@
-﻿using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Items.Containers;
 using D2NG.Core.D2GS.Objects;
@@ -44,6 +44,8 @@ internal class GameData
                 walkingSpeedIncreasedMultiplier += (13 + 2.5 * vigorSkill) / 100;
             }
 
+            Serilog.Log.Information("Walking speed multiplier resolved to {Multiplier} from {ItemCount} equipped items",
+                walkingSpeedIncreasedMultiplier, speedItems.Count());
             return walkingSpeedIncreasedMultiplier;
         });
     }
