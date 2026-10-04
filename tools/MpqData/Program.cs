@@ -12,7 +12,7 @@ using System.Linq;
 // Regenerates the game-data files the bot reads, straight out of a Diablo 2 install. Run it after
 // the realm patches; nothing calls it at runtime.
 //
-//   MpqData --gamedir "C:\Diablo II 1.09" --out "D:\projects\diablo2bot\data"
+//   MpqData --gamedir "C:\Diablo II 1.09" --out "<bot folder>\data"
 
 var options = ParseArgs(args);
 if (options == null && ProbeArgs(args) == null)

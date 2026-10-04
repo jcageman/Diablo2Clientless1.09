@@ -1,17 +1,19 @@
 # AGENTS.md
 
-## Accounts and characters stay out of the repository
+## Accounts, characters and local setup stay out of the repository
 
 This repository is public. Never put account names, character names, passwords, keys, connection
-strings or the realm address in code, comments, tests, fixtures, commit messages or pull requests.
-They live only in the run configs and logs under `D:\projects\diablo2bot`. Refer to a character
-by role instead - the taxi sorceress, the amazon, a mule - and rename captured fixtures (mule
-fixtures carry the account and character in the file name and the `Character` field) before
-committing them.
+strings, the realm address or paths from your own machine in code, comments, tests, fixtures,
+commit messages or pull requests. Refer to a character by role instead - the taxi sorceress, the
+amazon, a mule - and rename captured fixtures (mule fixtures carry the account and character in the
+file name and the `Character` field) before committing them.
+
+The run configs, start scripts, logs, game data, analysis scripts and nips live in a folder outside
+the repo whose location differs per machine. This file calls it `<bot folder>`.
 
 ## Building
 
-The start scripts in `D:\projects\diablo2bot` run
+The start scripts in `<bot folder>` run
 `src\ConsoleBot\bin\Release\net10.0\ConsoleBot.exe`, so that binary is the only build that counts:
 
 ```
@@ -29,7 +31,7 @@ redirecting the output makes the build pass while the stale binary stays where t
 When two bots need to be worked on at once, give one of them its own binary instead of taking turns:
 
 ```
-dotnet publish src/ConsoleBot/ConsoleBot.csproj -c Release -o "D:/projects/diablo2bot/meph-build" --artifacts-path "<scratch dir outside the repo>"
+dotnet publish src/ConsoleBot/ConsoleBot.csproj -c Release -o "<bot folder>/meph-build" --artifacts-path "<scratch dir outside the repo>"
 ```
 
 `--artifacts-path` is the part that matters: with `-o` alone the intermediates still go through
@@ -62,7 +64,7 @@ extract the pure part rather than reaching through a `Client`. New projects go i
 ## Measuring the cow bot
 
 ```
-python D:/projects/diablo2bot/scripts/cow_kpi.py src/ConsoleBot/bin/Release/net10.0/testlog.txt
+python "<bot folder>"/scripts/cow_kpi.py src/ConsoleBot/bin/Release/net10.0/testlog.txt
 ```
 
 The KPI is experience per minute of wall clock. Experience is level wide, so one character's
@@ -92,7 +94,7 @@ batch still matters.
 `ConsoleBot` is the farming bot. Setup and experiment code - creating mule characters, probing
 packet formats, one-off migrations - does not belong in it. Reusable tooling gets its own project in
 `tools/` (`MpqData`, `MpqDump`). Analysis scripts and true one-offs live outside this repo, in
-`D:\projects\diablo2bot\scripts`, so the bot stays the thing that farms and the repo does not
+`<bot folder>\scripts`, so the bot stays the thing that farms and the repo does not
 accumulate scripts that only ran once.
 
 ## Muling
@@ -104,7 +106,7 @@ Rounds are planned by `D2NG.Mule/Packing` (planner, server room check, stash pac
 
 ## Game data
 
-The game data files live in a `data` folder beside the run configs (`D:\projects\diablo2bot\data`),
+The game data files live in a `data` folder beside the run configs (`<bot folder>\data`),
 not in the build. `ConsoleBot` resolves that folder from the `--config` file's directory, overridable
 with `--datadir`, and a file missing there falls back to a `data` folder beside the assembly - which
 is how the test projects supply their own copies. `GameDataLocation` is the only thing that knows
@@ -118,7 +120,7 @@ decodes item packets too and needs `datadir=<folder>` for the same reason.
 `monster-resists.json` is optional and generated. Regenerate it after the realm patches:
 
 ```
-dotnet run --project tools/MpqData -c Release -- --gamedir "C:\Diablo II 1.09" --out "D:\projects\diablo2bot\data"
+dotnet run --project tools/MpqData -c Release -- --gamedir "C:\Diablo II 1.09" --out "<bot folder>\data"
 ```
 
 Without it the bot still runs, logs a warning, and falls back to the immunity cases hardcoded in
@@ -137,7 +139,7 @@ The same run writes `item-affixes.json` (`ItemAffixTable`): magic prefixes, suff
 item types, bases and cube recipes, decoded from the patch bins. Add `--report <dir>` to also get
 `affixes-classic.md` and `affixes-expansion.md`, which list per item type every affix that can roll,
 for magic and for rare/crafted, with the best range of each property. Those are the reference for
-pickit rules - they live in `D:\projects\diablo2bot\nips`. The d2exp txt files are an older revision
+pickit rules - they live in `<bot folder>\nips`. The d2exp txt files are an older revision
 than these bins (fewer item types and bases, different ranges and levels), and the bins carry
 recipes for items no wiki knows (`rcr`, `rca`, `rce`, `rcp`), so take affix values from the report
 and not from a wiki. Nothing reads `item-affixes.json` at runtime yet.
