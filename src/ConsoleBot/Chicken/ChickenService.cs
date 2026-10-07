@@ -49,6 +49,16 @@ public static class ChickenService
         private bool _awaitingDamage;
         private volatile bool _leaving;
 
+        private DateTime _lastRejuvenationAt = DateTime.MinValue;
+
+        private int _maxLifeBeforeRise;
+
+        private DateTime _maxLifeRoseAt = DateTime.MinValue;
+
+        private static readonly TimeSpan BuffedMaximumGrace = TimeSpan.FromSeconds(10);
+
+        private static readonly TimeSpan RejuvenationGap = TimeSpan.FromMilliseconds(500);
+
         public ChickenWatch(Client client, ChickenConfiguration config)
         {
             _client = client;
@@ -118,7 +128,21 @@ public static class ChickenService
             }
         }
 
+        private readonly object _evaluateGate = new();
+
+        /// <summary>
+        /// One evaluation at a time: the listener thread and the backstop both call in, and both
+        /// passed the rejuvenation gap together - two full rejuvenations 18ms apart at one life.
+        /// </summary>
         private void Evaluate()
+        {
+            lock (_evaluateGate)
+            {
+                EvaluateLocked();
+            }
+        }
+
+        private void EvaluateLocked()
         {
             var game = _client.Game;
             try
@@ -144,6 +168,11 @@ public static class ChickenService
                 var maxLife = me.MaxLife;
                 var maximumRose = maxLife > _previousMaxLife || me.MaxMana > _previousMaxMana;
                 var lostLife = life < _previousLife;
+                if (maxLife > _previousMaxLife && _previousMaxLife > 0)
+                {
+                    _maxLifeBeforeRise = _previousMaxLife;
+                    _maxLifeRoseAt = DateTime.Now;
+                }
 
                 _previousLife = life;
                 _previousMaxLife = maxLife;
@@ -189,8 +218,15 @@ public static class ChickenService
                     return;
                 }
 
+                // Leaving is judged against the maximum before Battle Orders for a few seconds after
+                // it: the shouts doubled the taxi's maximum while Storm Casters at the star had her
+                // at 59%, and against the new maximum that read 30% and chickened her. Drinking is
+                // not: judged the same way, a taxi at 563 of 1795 drank a healing potion instead of
+                // a rejuvenation and chickened two seconds later. The absolute floor above guards
+                // those seconds.
+                var leaveOf = DateTime.Now - _maxLifeRoseAt < BuffedMaximumGrace ? Math.Min(maxLife, _maxLifeBeforeRise) : maxLife;
                 var lifeFraction = (double)life / maxLife;
-                if (lifeFraction <= _config.LifeChickenPercent)
+                if ((double)life / leaveOf <= _config.LifeChickenPercent)
                 {
                     RequestLeave($"{me.Name} at {life} of {maxLife} life ({lifeFraction:P0})");
                     return;
@@ -199,7 +235,22 @@ public static class ChickenService
                 var canDrink = PotionIntervalElapsed(game);
                 if (lifeFraction < _config.UseRejuvenationPercent)
                 {
-                    if (canDrink && !game.UseRejuvenationPotion() && !game.UseHealthPotions() && _config.LeaveWhenOutOfHealthPotions)
+                    // A rejuvenation heals at once, so it does not wait out the healing potion
+                    // interval: the taxi drank a healing potion at 46%, sat locked out
+                    // for a second and a half while she fell from 769 to 471, and chickened with
+                    // fifteen rejuvenations in her inventory. The short gap lets the new life value
+                    // arrive before a second one is spent.
+                    if (game.Inventory.Items.Any(i => i.Classification == ClassificationType.RejuvenationPotion))
+                    {
+                        if (DateTime.Now - _lastRejuvenationAt > RejuvenationGap && game.UseRejuvenationPotion())
+                        {
+                            _lastRejuvenationAt = DateTime.Now;
+                        }
+
+                        return;
+                    }
+
+                    if (canDrink && !game.UseHealthPotions() && _config.LeaveWhenOutOfHealthPotions)
                     {
                         RequestLeave($"{me.Name} out of healing and rejuvenation potions at {life} of {maxLife} life");
                     }

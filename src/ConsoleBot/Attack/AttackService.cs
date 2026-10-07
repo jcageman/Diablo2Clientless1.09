@@ -62,6 +62,21 @@ public class AttackService : IAttackService
     /// <summary>The amazon shoots only along lines this many units clear on either side.</summary>
     private const int AmazonSightClearance = 2;
 
+    /// <summary>
+    /// How close the ranged followers go to a boss the party has committed to. Committing only
+    /// changed their targets: at a De Seis 54 out the amazon shot at his escort from the kill spot,
+    /// at the edge of what the client sees, and the necromancer cursed nothing, while the paladin
+    /// fought him alone.
+    /// </summary>
+    private const double AmazonFocusReach = 30;
+
+    private const double NecromancerFocusReach = 20;
+
+    /// <summary>The barbarian anchors on the amazon and she on him, so neither moved for a De Seis 57 out.</summary>
+    private const double BarbarianFocusReach = 10;
+
+    private const int FocusStepMs = 1500;
+
     private static readonly HashSet<NPCCode> CurseCasters = [NPCCode.OblivionKnight, NPCCode.AbyssKnight];
 
     /// <summary>Four: at three the left seal's thirty-strong swarm outlived the party; the 80% whirl floor is what keeps a cursed whirl survivable.</summary>
@@ -245,10 +260,12 @@ public class AttackService : IAttackService
         {
             if (movementMode == MovementMode.Teleport)
             {
+                // Out of the game a teleport fails at once, and retrying it for the four seconds held
+                // the party in a game the taxi had chickened out of.
                 if (await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
-                    return await client.Game.TeleportToLocationAsync(spot);
-                }, TimeSpan.FromSeconds(4)))
+                    return !client.Game.IsInGame() || await client.Game.TeleportToLocationAsync(spot);
+                }, TimeSpan.FromSeconds(4)) && client.Game.IsInGame())
                 {
                     return true;
                 }
@@ -309,6 +326,21 @@ public class AttackService : IAttackService
         return true;
     }
 
+    private async Task<bool> CloseOnFocus(Client client, Point focus, double reach)
+    {
+        var me = client.Game.Me.Location;
+        if (focus == null || me.Distance(focus) <= reach)
+        {
+            return false;
+        }
+
+        var toward = me.GetPointBeforePointInSameDirection(focus, reach - 3);
+        var cancel = new System.Threading.CancellationTokenSource();
+        cancel.CancelAfter(FocusStepMs);
+        await MovementHelpers.MoveToLocation(client.Game, _pathingService, _mapApiService, toward, MovementMode.Walking, cancel.Token);
+        return true;
+    }
+
     private async Task IdleReposition(Client client, Point anchor)
     {
         var threats = NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 20, IdleDangerRadius).ToList();
@@ -365,6 +397,13 @@ public class AttackService : IAttackService
             return true;
         }
 
+        if (await CloseOnFocus(client, focus, AmazonFocusReach))
+        {
+            return true;
+        }
+
+        // Committed to a boss she stays where she got to; the kill spot is behind her.
+        var anchor = focus != null ? me.Location : standAt ?? player.Location;
         var nearest = await GetNearestInSight(client, enemies, AmazonSightClearance);
         if (nearest == null)
         {
@@ -381,7 +420,7 @@ public class AttackService : IAttackService
                 return true;
             }
 
-            await IdleReposition(client, standAt ?? player.Location);
+            await IdleReposition(client, anchor);
             return true;
         }
 
@@ -434,7 +473,7 @@ public class AttackService : IAttackService
         }
         else
         {
-            await IdleReposition(client, standAt ?? player.Location);
+            await IdleReposition(client, anchor);
         }
 
         return true;
@@ -819,13 +858,19 @@ public class AttackService : IAttackService
             acted = true;
         }
 
+        if (await CloseOnFocus(client, focus, NecromancerFocusReach))
+        {
+            return true;
+        }
+
+        var anchor = focus != null ? me.Location : player.Location;
         var enemies = NPCHelpers.GetNearbyNPCs(client, focus ?? player.Location, 10, 30).ToList();
         var nearest = enemies.FirstOrDefault();
         if (nearest == null)
         {
             if (!acted)
             {
-                await IdleReposition(client, player.Location);
+                await IdleReposition(client, anchor);
             }
 
             return true;
@@ -931,7 +976,7 @@ public class AttackService : IAttackService
 
         if (!acted)
         {
-            await IdleReposition(client, player.Location);
+            await IdleReposition(client, anchor);
         }
 
         return true;
@@ -941,6 +986,12 @@ public class AttackService : IAttackService
     {
         var me = client.Game.Me;
         await ClassHelpers.CastAllShouts(client);
+        if (await CloseOnFocus(client, focus, BarbarianFocusReach))
+        {
+            return true;
+        }
+
+        var anchor = focus != null ? me.Location : player.Location;
 
         var enemies = Prioritize(NPCHelpers.GetNearbyNPCs(client, focus ?? player.Location, 10, 20).ToList(), priorityCodes);
         // In the Sanctuary there is always a knight close enough to curse him, so distance is no
@@ -961,7 +1012,7 @@ public class AttackService : IAttackService
                 return true;
             }
 
-            await IdleReposition(client, player.Location);
+            await IdleReposition(client, anchor);
             return true;
         }
 
@@ -997,7 +1048,7 @@ public class AttackService : IAttackService
             if (me.Life < me.MaxLife * BarbarianWhirlMinLife)
             {
                 _logger.LogInformation("{Character} standing back at {Life} of {MaxLife} life", me.Name, me.Life, me.MaxLife);
-                await IdleReposition(client, player.Location);
+                await IdleReposition(client, anchor);
                 return true;
             }
 
@@ -1010,7 +1061,7 @@ public class AttackService : IAttackService
                 else
                 {
                     _logger.LogInformation("{Character} out of mana and mana potions, standing back", me.Name);
-                    await IdleReposition(client, player.Location);
+                    await IdleReposition(client, anchor);
                 }
 
                 return true;
@@ -1033,7 +1084,7 @@ public class AttackService : IAttackService
                 return true;
             }
 
-            await IdleReposition(client, player.Location);
+            await IdleReposition(client, anchor);
             return true;
         }
 
@@ -1061,6 +1112,26 @@ public class AttackService : IAttackService
     /// mana is spent for nothing; crossing the pack keeps enough of them on the path to leech the
     /// mana back.
     /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<uint, DateTime> _ironMaidenSeen = new();
+
+    /// <summary>
+    /// The curse is held for a few seconds after it was last seen: a barbarian started a whirl
+    /// between two readings that both had Iron Maiden on him and went from 2034 to 292 in a second.
+    /// </summary>
+    private static readonly TimeSpan IronMaidenMemory = TimeSpan.FromSeconds(3);
+
+    public bool IsUnderIronMaiden(Client client)
+    {
+        var me = client.Game.Me;
+        if (me.Effects.ContainsKey(EntityEffect.Ironmaiden))
+        {
+            _ironMaidenSeen[me.Id] = DateTime.Now;
+            return true;
+        }
+
+        return _ironMaidenSeen.TryGetValue(me.Id, out var seen) && DateTime.Now - seen < IronMaidenMemory;
+    }
+
     private async Task<bool> WhirlWindThroughPack(Client client, List<WorldObject> pack)
     {
         var me = client.Game.Me;
@@ -1085,7 +1156,7 @@ public class AttackService : IAttackService
         // Iron Maiden only. Holding for Amplify Damage as well kept him out of a whole top seal
         // fight (the knights recast it faster than it expires), the pack stood untouched on the
         // party and four of five left the game.
-        if (me.Effects.ContainsKey(EntityEffect.Ironmaiden))
+        if (IsUnderIronMaiden(client))
         {
             _logger.LogInformation("{Character} cursed, not starting a whirl", me.Name);
             return false;
@@ -1117,7 +1188,7 @@ public class AttackService : IAttackService
                 return true;
             }
 
-            if (!whirling && !started && me.Effects.ContainsKey(EntityEffect.Ironmaiden))
+            if (!whirling && !started && IsUnderIronMaiden(client))
             {
                 cursed = true;
                 return true;

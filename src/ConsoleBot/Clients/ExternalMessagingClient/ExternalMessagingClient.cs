@@ -22,6 +22,8 @@ public class ExternalMessagingClient : IExternalMessagingClient
     private readonly List<Client> _clients = [];
     private readonly ILogger<ExternalMessagingClient> _logger;
 
+    private const byte ObjectUnitType = 2;
+
     public ExternalMessagingClient(IOptions<ExternalMessagingConfiguration> externalConfiguration, ILogger<ExternalMessagingClient> logger)
     {
         _externalConfiguration = externalConfiguration.Value ?? throw new ArgumentNullException(nameof(externalConfiguration), $"ExternalMessagingClient constructor fails due to {nameof(externalConfiguration)} being null");
@@ -102,7 +104,9 @@ public class ExternalMessagingClient : IExternalMessagingClient
     private void HandleChatMessageEvent(Client client, D2gsPacket obj)
     {
         var packet = new ChatPacket(obj);
-        if (packet.ChatType != 0x04)
+        // Shrines speak through the same packet, as an object with a string table number for text;
+        // only what players say goes out.
+        if (packet.ChatType != 0x04 && packet.EntityType != ObjectUnitType)
         {
             _logger.LogDebug("Chat message: {Text}", packet.RenderText());
             if (packet.CharacterName != client.Game.Me?.Name)
