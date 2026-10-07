@@ -341,6 +341,13 @@ public class Game
 
     public async Task<bool> TeleportToLocationAsync(Point point)
     {
+        // After a chicken nothing answers: the taxi's escape went on waiting out every hop, and the
+        // party fought on for eighteen seconds of a game she had already left.
+        if (!IsInGame())
+        {
+            return false;
+        }
+
         if(Me.Location.Distance(point)<10)
         {
             return true;
@@ -351,7 +358,7 @@ public class Game
         // the move arrives lands the first cast after the animation ends; the extra ones fall inside
         // an animation and are dropped.
         var reAssignPlayer = _gameServer.GetResetEventOfType(InComingPacket.ReassignPlayer);
-        for (var waited = 0; waited < TeleportReplyTimeoutMs; waited += TeleportRecastIntervalMs)
+        for (var waited = 0; waited < TeleportReplyTimeoutMs && IsInGame(); waited += TeleportRecastIntervalMs)
         {
             UseRightHandSkillOnLocation(Skill.Teleport, point);
             if (await reAssignPlayer.AsTask(TimeSpan.FromMilliseconds(TeleportRecastIntervalMs)))
@@ -459,6 +466,11 @@ public class Game
 
     public async Task<bool> CreateTownPortal()
     {
+        if (!IsInGame())
+        {
+            return false;
+        }
+
         var existingTownPortalId = GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalOwnerId == Me.Id)?.Id;
         var portalOwner = _gameServer.GetResetEventOfType(InComingPacket.PortalOwner);
         var cts = new CancellationTokenSource();

@@ -18,8 +18,8 @@ public class MuleConfiguration
 
     /// <summary>
     /// Items that are never worth a mule slot and are sold instead. An item is excluded when it
-    /// matches any one of these filters. Omit the key to use the built-in list of flawless gems;
-    /// give an empty list to mule everything.
+    /// matches any one of these filters; omit the key to mule everything. List the flawless gems
+    /// here: three of a kind cube into a perfect one, which is the gem worth muling.
     /// </summary>
     public List<MuleFilter> NeverMule { get; set; }
 

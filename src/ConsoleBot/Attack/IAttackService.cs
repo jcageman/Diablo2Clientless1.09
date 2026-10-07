@@ -12,6 +12,9 @@ namespace ConsoleBot.Attack;
 
 public interface IAttackService
 {
+    /// <summary>Under Iron Maiden now, or seen under it in the last few seconds.</summary>
+    bool IsUnderIronMaiden(Client client);
+
     /// <param name="focus">Fight around this point instead of the player, for closing on a boss the pack has left alone.</param>
     Task<bool> AssistPlayer(Client client, Player player, IReadOnlyCollection<NPCCode> priorityCodes = null, Point focus = null, Point standAt = null);
 

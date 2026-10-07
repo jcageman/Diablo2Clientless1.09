@@ -57,6 +57,14 @@ public static class Pickit
             useKeepRules: useKeepRules,
             includeGoldItems: shouldPickupGoldItems && !useKeepRules);
 
+        // An identified item never reaches the property-only pickup pass, so a line with nothing right
+        // of '#' - pick up to sell, never keep - would otherwise do nothing for runes, essences or bases.
+        if (rule == null && useKeepRules)
+        {
+            var context = new NipEvaluationContext(item, characterClass);
+            rule = NipRules.Value.FirstOrDefault(r => !r.PickupOnly && r.StatCondition == null && r.MatchesPickup(context));
+        }
+
         return rule == null ? PickitVerdict.NoRule() : PickitVerdict.Matched(rule);
     }
 

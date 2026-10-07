@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using System.Collections.Concurrent;
@@ -107,10 +108,21 @@ public class TownManagementService : ITownManagementService
     {
         var movementMode = GetMovementMode(client.Game);
         WorldObject portal = null;
+        // Only after a click that did not take: in town the character's position is already known,
+        // and the blocking update request cost every trip half a second before it started.
+        var clicked = false;
+        // Where a trip's time goes before the click: followers reached the star 5-6s after the taxi's
+        // portal opened, and the click itself is only the last 0.1s of it.
+        var tripClock = Stopwatch.StartNew();
+        double? startDistance = null;
         if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
-            client.Game.RequestUpdate(client.Game.Me.Id);
-            await Task.Delay(100);
+            if (clicked)
+            {
+                client.Game.RequestUpdate(client.Game.Me.Id);
+                await Task.Delay(100);
+            }
+
             if (await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location))
             {
                 return true;
@@ -130,6 +142,7 @@ public class TownManagementService : ITownManagementService
             }
 
             var distance = client.Game.Me.Location.Distance(portal.Location);
+            startDistance ??= distance;
             if (distance > 15)
             {
                 var pathToPortal = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, await ResolveCurrentArea(client), client.Game.Me.Location, portal.Location, movementMode);
@@ -150,13 +163,36 @@ public class TownManagementService : ITownManagementService
             // Forced: standing on the portal and being refused is proof enough that whatever the
             // cursor is holding is real, whatever the item's own container field claims.
             client.Game.CleanupCursorItem(force: retryCount > 0);
-            client.Game.InteractWithEntity(portal);
-            return await GeneralHelpers.TryWithTimeout(async _ =>
+            if (!clicked)
             {
-                await Task.Delay(250);
-                client.Game.RequestUpdate(client.Game.Me.Id);
+                _logger.LogInformation("Client {ClientName} clicked the portal to {Area} {Seconds:F2}s into the trip, {Distance:F0} from it at the start",
+                    client.Game.Me.Name, area, tripClock.Elapsed.TotalSeconds, startDistance ?? -1);
+            }
+
+            client.Game.InteractWithEntity(portal);
+            clicked = true;
+            // The server's own position packet puts the character on the far side 0.03-0.07s after
+            // the click; asking for an update first noticed it only after 0.65s, every trip, and the
+            // followers stood at the seal for it. The update request stays as the fallback.
+            var clickClock = Stopwatch.StartNew();
+            var arrived = await GeneralHelpers.TryWithTimeout(async _ =>
+            {
+                await Task.Delay(20);
                 return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location);
-            }, TimeSpan.FromSeconds(3));
+            }, TimeSpan.FromSeconds(1.5))
+                || await GeneralHelpers.TryWithTimeout(async _ =>
+                {
+                    await Task.Delay(250);
+                    client.Game.RequestUpdate(client.Game.Me.Id);
+                    return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location);
+                }, TimeSpan.FromSeconds(3));
+            if (arrived)
+            {
+                _logger.LogInformation("Client {ClientName} through the portal to {Area}: noticed after {Noticed:F2}s",
+                    client.Game.Me.Name, area, clickClock.Elapsed.TotalSeconds);
+            }
+
+            return arrived;
         }, TimeSpan.FromSeconds(20)))
         {
             if (portal == null)
@@ -256,6 +292,11 @@ public class TownManagementService : ITownManagementService
         var townportal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
         if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
+            if (!client.Game.IsInGame())
+            {
+                return true;
+            }
+
             if(!await client.Game.MoveToAsync(townportal))
             {
                 return false;
@@ -275,6 +316,11 @@ public class TownManagementService : ITownManagementService
         }, TimeSpan.FromSeconds(5.0)))
         {
             _logger.LogError("Client {ClientName} Moving to town failed with area {Area}", client.Game.Me.Name, client.Game.Area);
+            return false;
+        }
+
+        if (!client.Game.IsInGame())
+        {
             return false;
         }
 

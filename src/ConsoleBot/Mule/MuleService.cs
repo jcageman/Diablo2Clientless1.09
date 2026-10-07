@@ -319,22 +319,9 @@ public class MuleService : IMuleService
         return isMatch;
     }
 
-    // Used when the configuration does not say otherwise: a flawless gem is not worth a mule slot.
-    private static readonly List<MuleFilter> DefaultNeverMule =
-    [
-        new() { ItemName = ItemName.FlawlessSkull },
-        new() { ItemName = ItemName.FlawlessAmethyst },
-        new() { ItemName = ItemName.FlawlessDiamond },
-        new() { ItemName = ItemName.FlawlessEmerald },
-        new() { ItemName = ItemName.FlawlessRuby },
-        new() { ItemName = ItemName.FlawlessSapphire },
-        new() { ItemName = ItemName.FlawlessTopaz }
-    ];
-
     private bool IsMuleItem(Client client, Item item)
     {
-        var neverMule = _muleConfig.NeverMule ?? DefaultNeverMule;
-        if (neverMule.Any(filter => MatchesFilter(item, filter)))
+        if (_muleConfig.NeverMule?.Any(filter => MatchesFilter(item, filter)) == true)
         {
             return false;
         }

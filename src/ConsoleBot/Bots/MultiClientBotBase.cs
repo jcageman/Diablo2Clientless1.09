@@ -693,6 +693,17 @@ public abstract class MultiClientBotBase : IBotInstance
             .ToList();
     }
 
+    /// <summary>
+    /// Items on the list within <paramref name="distance"/> that are still held for a nearer client
+    /// in their first seconds on the ground.
+    /// </summary>
+    protected List<Item> PeekClaimedByOthers(Client client, double distance, Point anchor)
+    {
+        return _pickitItemsOnGround.Within(anchor ?? client.Game.Me.Location, distance)
+            .Where(i => !_pickedUp.ContainsKey(i.Id) && IsReservedForAnotherClient(client, i))
+            .ToList();
+    }
+
     protected List<Item> GetPickitList(Client client, double distance, Point anchor)
     {
         var resultPickitList = new List<Item>();

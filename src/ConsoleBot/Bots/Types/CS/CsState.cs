@@ -43,6 +43,15 @@ internal sealed class CsState
     /// <summary>Set once the third seal boss is down, which is when the shrine becomes worth a detour.</summary>
     public bool SealsDone { get; set; }
 
+    /// <summary>
+    /// The seal boss whichever client saw die, cleared when the next seal starts. The taxi fought on
+    /// 51 from the spot after Vizier died out of her sight, the paladin waiting at the corpse for her
+    /// portal, until the safety net called it 25 seconds later. It is the boss, not a flag, because a
+    /// follower reporting Vizier a moment after the reset ended the top seal the instant De Seis
+    /// spawned; read against the earlier bosses, a late report counts for nothing.
+    /// </summary>
+    public volatile WorldObject DeadSealBoss;
+
     /// <summary>Set once the taxi's portal at the star is up, which is the one a benched follower waits for.</summary>
     public bool DiabloPortalUp { get; set; }
 

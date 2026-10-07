@@ -1,6 +1,6 @@
 ---
 name: d2-bot
-description: Build and debug clientless Diablo 2 1.09 bots in this repo. Use when writing or changing a bot or a step, when a character will not move, interact, travel or take quest credit, when a step times out, when adding an outgoing packet, or when reading D2GS logs and captures.
+description: Build and debug clientless Diablo 2 1.09 bots in this repo. Use when writing or changing a bot or a step, when a character will not move, interact, travel or take quest credit, when a step times out, when adding an outgoing packet, when reading D2GS logs and captures, when a party bot's clients disagree or strand each other, or when tuning potions, chickens and retreats.
 ---
 
 # Diablo 2 clientless bots
@@ -32,10 +32,12 @@ call sites.
 
 - **`Game.Area` lags every transition** — portal, warp, resurrect, act change. It has reported
   `DurielsLair` for a character standing in town next to Warriv. Decide location by position:
-  `RequestUpdate` → wait ~500ms → `IPathingService.IsNavigatablePointInArea(mapId, difficulty, expectedArea, Me.Location)`.
-- **`Me.Location` lags movement.** Call `RequestUpdate(Me.Id)` at the top of each attempt, before any
-  distance comparison. A character sat 23 units from a portal while its cache claimed 5, and clicked
-  ten times into empty space.
+  `IPathingService.IsNavigatablePointInArea(mapId, difficulty, expectedArea, Me.Location)`. After a
+  portal the server sends the new position by itself within 0.1s, so poll it; `RequestUpdate` blocks
+  400ms and is the fallback for a position that never came.
+- **`Me.Location` lags movement on a retry.** After an attempt that did not land, call
+  `RequestUpdate(Me.Id)` before the next distance comparison. A character sat 23 units from a portal
+  while its cache claimed 5, and clicked ten times into empty space.
 - **Objects created or streamed during play are not pathable, and are streamed once.**
   `MoveToAsync` returns false instantly and sends nothing — an all-ping stretch of log with no
   movement packets is this bug. Reach them the way `EnterDurielsLair` does: alternate
@@ -94,12 +96,12 @@ bytes are not in a capture, go find a capture — `DEBUGGING.md` covers where th
   `https://localhost:8080`. Runs fail immediately without it.
 - **Run a bot** from `src/ConsoleBot/bin/Debug/net10.0`:
   `ConsoleBot.exe config=<path> muleconfig=<path> pickitconfig=<path>` — all three are required.
-- **Tests**: `dotnet test` runs all 633 across `D2NG.Core.Tests` and `D2NG.Pickit.Tests`. Running the
-  core test executable directly covers only 133 of them, so prefer `dotnet test`.
+- **Tests and builds**: follow `AGENTS.md` — it names the build that counts and the test command.
 - **Accounts cap at 18 characters**, and a full account fails as `RealmLogin failed`. The `cleanup`
   step deletes exactly the names in `characterNames`, and only for accounts in `deletableAccounts`.
 - **Always use `gs1` as the game description.** Other realms in the list are not reliable.
-- Configs hold credentials. Reference them by path; keep them out of documents and commits.
+- Configs hold credentials. Reference them by path; keep them out of documents and commits, and
+  name characters by role (the taxi, the amazon) — the repository is public.
 
 ## Reference
 
@@ -108,5 +110,8 @@ bytes are not in a capture, go find a capture — `DEBUGGING.md` covers where th
 - **`PACKETS.md`** — the packet and quest facts already established: what each opcode carries, the
   quest bit meanings, and the traps in existing helpers. Read it before adding an outgoing packet or
   touching quest logic.
+- **`PARTY.md`** — multi-client bots: state shared between clients, portals that close or strand,
+  leaving mid-run, potion and chicken thresholds, drop reservations, and how to measure a change.
+  Read it before changing a party bot or any survival setting.
 - **`%TEMP%\rush-bot-handoff.md`** — the rush bot's own history: solved chains, measured portal spots,
   what is still open. Project record, not technique.
