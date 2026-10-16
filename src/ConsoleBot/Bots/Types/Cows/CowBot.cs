@@ -1458,7 +1458,13 @@ public class CowBot : MultiClientBotBase
 
             executeStaticField.Stop();
             executeNova.Stop();
-            await PickupItemsAndPotions(client, account, TeleportPickupRadius);
+            // Giving up a lightning-enchanted pack used to end here too, and the pickup teleported her
+            // onto its fresh drops while the others' novas set off its charged bolts: 2513 life to 0 in
+            // under 0.4s. The end of level sweep collects them once the pack is dead.
+            if (!lightningEnhancedCows)
+            {
+                await PickupItemsAndPotions(client, account, TeleportPickupRadius);
+            }
 
             SetShouldFollowLead(client, false);
 
