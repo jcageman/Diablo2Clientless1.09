@@ -444,6 +444,24 @@ public static class NPCHelpers
         return true;
     }
 
+    /// <summary>
+    /// Healing potions the belt can still take: the target for the health columns minus every cell
+    /// of those columns already taken, whatever potion is in it.
+    /// </summary>
+    private static int BeltRoomForHealingPotions(Game game, Bots.Types.AccountConfig account)
+        => BeltRoom(game, account.HealthSlots, account.HealthPotionTarget(game.Belt.Height));
+
+    /// <summary>
+    /// Potions the belt can still take in these columns: the target minus every cell of them already
+    /// taken, whatever potion is in it. Counting only one kind of potion read a column half full of
+    /// rejuvenations as short forever.
+    /// </summary>
+    public static int BeltRoom(Game game, List<int> columns, int target)
+    {
+        var taken = game.Belt.Items.Count(i => columns.Contains(i.Location.X));
+        return Math.Max(0, target - taken);
+    }
+
     public static bool ShouldRefreshCharacterAtNPC(Game game, TownManagementOptions options)
     {
         return game.Belt.Height * options.AccountConfig.HealthSlots.Count - game.Belt.NumOfHealthPotions() > 1
@@ -528,6 +546,8 @@ public static class NPCHelpers
         game.TownFolkAction(npc, TownFolkActionType.Trade);
         Item healingPotion = null;
         Item manaPotion = null;
+        var stockSeen = 0;
+        var stockSince = DateTime.Now;
 
         // Longer than the three seconds this used to allow, and the trade is asked for again along
         // the way. The stock arrives in its own packet, and when the server is slow it had not come
@@ -543,7 +563,21 @@ public static class NPCHelpers
 
             healingPotion = game.Items.Values.Where(i => i.IsInMerchantTab() && i.Type.StartsWith("hp", StringComparison.OrdinalIgnoreCase)).OrderByDescending(i => (int)i.Type.Last()).FirstOrDefault();
             manaPotion = game.Items.Values.Where(i => i.IsInMerchantTab() && i.Type.StartsWith("mp", StringComparison.OrdinalIgnoreCase)).OrderByDescending(i => (int)i.Type.Last()).FirstOrDefault();
-            return healingPotion != null && manaPotion != null;
+            if (healingPotion != null && manaPotion != null)
+            {
+                return true;
+            }
+
+            // A vendor that sells no potions (Anya) held the trade up the full twelve seconds; once her
+            // stock has arrived and stopped growing there is nothing more to wait for.
+            var stock = game.Items.Values.Count(i => i.IsInMerchantTab());
+            if (stock != stockSeen)
+            {
+                stockSeen = stock;
+                stockSince = DateTime.Now;
+            }
+
+            return stock > 0 && DateTime.Now - stockSince > TimeSpan.FromMilliseconds(300);
         }, TimeSpan.FromSeconds(12)))
         {
             Log.Warning($"Did not find healing or mana potions at {npc.NPCCode} {game.Me.Location} after 12s, {game.Items.Values.Count(i => i.IsInMerchantTab())} items in the merchant tab - nothing bought here will have worked");
@@ -567,6 +601,16 @@ public static class NPCHelpers
             game.SellItem(npc, item);
         }
 
+        // Identifying at Cain leaves a tome two cells of nothing.
+        if (!options.IdentifyWithTome)
+        {
+            foreach (var tome in game.Inventory.Items.Where(i => i.Name == ItemName.TomeofIdentify).ToList())
+            {
+                Log.Information("{Character} selling the tome of identify", game.Me.Name);
+                game.SellItem(npc, tome);
+            }
+        }
+
         // Full rejuvenations were picked up without limit and filled the paladin's inventory to the
         // last cell; the cap on pickups stops the growth, this clears what is already there.
         if (options.RejuvenationsToKeep is int keep)
@@ -583,6 +627,29 @@ public static class NPCHelpers
             }
         }
 
+        // With no buy amount set the healing potions belong in the belt, and the belt's health
+        // columns can be partly taken by other potions. Buying the target minus what the belt holds
+        // then bought the same shortfall every visit into the inventory: the portal sorceress
+        // carried fifty of them, had no cell left for a town portal tome and could not open the
+        // portal at all. The surplus goes back to the vendor before the tome is bought.
+        var beltRoomForHealing = BeltRoomForHealingPotions(game, options.AccountConfig);
+        if (options.HealthPotionsToBuy == null)
+        {
+            var surplusHealing = game.Inventory.Items
+                .Where(i => i.Classification == ClassificationType.HealthPotion)
+                .Skip(beltRoomForHealing)
+                .ToList();
+            if (surplusHealing.Count > 0)
+            {
+                Log.Information("{Character} selling {Count} healing potions the belt has no room for", game.Me.Name, surplusHealing.Count);
+            }
+
+            foreach (var potion in surplusHealing)
+            {
+                game.SellItem(npc, potion);
+            }
+        }
+
         RestockTome(game, npc, ItemName.TomeOfTownPortal, ItemName.ScrollofTownPortal);
 
         if (options.IdentifyWithTome)
@@ -592,7 +659,8 @@ public static class NPCHelpers
 
         if(healingPotion != null)
         {
-            var numberOfHealthPotions = options.HealthPotionsToBuy ?? options.AccountConfig.HealthPotionTarget(game.Belt.Height) - game.Belt.NumOfHealthPotions();
+            var numberOfHealthPotions = options.HealthPotionsToBuy
+                ?? beltRoomForHealing - game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion);
             // Buying is fire and forget: with no gold every call fails and the character walks out
             // with an empty belt looking like it shopped. Report what it actually came away with.
             var wanted = numberOfHealthPotions;

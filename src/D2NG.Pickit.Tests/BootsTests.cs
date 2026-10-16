@@ -14,7 +14,7 @@ public class BootsTests
         TestItemFactory.AddStat(item, StatType.LightningResistance, 40);
         TestItemFactory.AddStat(item, StatType.Life, 60);
 
-        Assert.True(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -26,6 +26,6 @@ public class BootsTests
         TestItemFactory.AddStat(item, StatType.LightningResistance, 20);
         TestItemFactory.AddStat(item, StatType.Life, 40);
 
-        Assert.False(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 }

@@ -43,6 +43,7 @@ public enum ClassificationType
     PaladinShield,
     Polearm,
     QuestItem,
+    Reagent,
     RejuvenationPotion,
     Ring,
     Rune,

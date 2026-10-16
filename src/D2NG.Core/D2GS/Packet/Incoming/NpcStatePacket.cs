@@ -26,6 +26,9 @@ public class NpcStatePacket : D2gsPacket
         var x = reader.ReadUInt16();
         var y = reader.ReadUInt16();
         Location = new Point(x, y);
-        LifePercentage = reader.ReadByte() / 1.28;
+        // Only the get-hit state carries the 0x80 monster type flag of NpcHitPacket; in the others 0x80
+        // is full life.
+        var life = reader.ReadByte();
+        LifePercentage = (EntityState == EntityState.BeingHit ? life & 0x7F : life) / 1.28;
     }
 }

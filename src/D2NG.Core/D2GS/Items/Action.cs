@@ -22,6 +22,11 @@ public enum Action
     AutoUnequip = 0x11,
     ToCursor = 0x12,
     ItemInSocket = 0x13,
+    /// <summary>
+    /// Seen when an equipped quiver runs out: the server unequips the empty one and moves the next
+    /// quiver of the same kind from the inventory onto the body with this action.
+    /// </summary>
+    RefillFromInventory = 0x14,
     UpdateStats = 0x15,
     WeaponSwitch = 0x17
 }

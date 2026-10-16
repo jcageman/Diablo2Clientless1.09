@@ -22,6 +22,7 @@ using Serilog;
 using Serilog.Events;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 var hostBuilder = Host.CreateApplicationBuilder(args);
@@ -121,11 +122,9 @@ Log.Logger = new LoggerConfiguration()
     // Debug and below only ever reach the file: the console cannot keep up with that volume and
     // the clients stall behind it.
     .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
-    .WriteTo.File(
-        logfileName,
-        fileSizeLimitBytes: 20_000_000,
-        rollOnFileSizeLimit: true
-    )
+    // One file per run, never rolled or capped: startup deletes it anyway, and a rolled log split a
+    // run over several files that every script then had to know about.
+    .WriteTo.File(logfileName, fileSizeLimitBytes: null)
     .CreateLogger();
 
 // Optional second log holding one line per item the pickit judged, so the main log stays readable.
@@ -135,10 +134,7 @@ if (!string.IsNullOrEmpty(pickitLogFile))
     File.Delete(pickitLogFile);
     PickitAudit.Configure(new LoggerConfiguration()
         .MinimumLevel.Information()
-        .WriteTo.File(
-            pickitLogFile,
-            fileSizeLimitBytes: 20_000_000,
-            rollOnFileSizeLimit: true)
+        .WriteTo.File(pickitLogFile, fileSizeLimitBytes: null)
         .CreateLogger());
     Log.Logger.Information("Writing pickit decisions to {PickitLogFile}", pickitLogFile);
 }
@@ -209,6 +205,16 @@ hostBuilder.Services.AddSingleton<IBotFactory, BotFactory>();
 var host = hostBuilder.Build();
 var botFactory = host.Services.GetRequiredService<IBotFactory>();
 D2NG.Pickit.Pickit.Configure(host.Services.GetRequiredService<IOptions<PickitConfiguration>>().Value);
+
+// Nip rules with a '[maxquantity]' count what is already on the mules, not just what the character holds.
+var muleRepository = host.Services.GetService<IMuleRepository>();
+if (muleRepository != null)
+{
+    var muleAccounts = host.Services.GetRequiredService<IOptions<MuleConfiguration>>().Value.Accounts?.Select(a => a.Username) ?? [];
+    var muledItemStock = new MuledItemStock(muleRepository, muleAccounts, host.Services.GetRequiredService<ILogger<MuledItemStock>>());
+    await muledItemStock.Refresh();
+    D2NG.Pickit.Pickit.MuledItems = muledItemStock.Current;
+}
 
 // The bot cannot path anywhere without the map API, so check it before logging on rather than
 // creating games that abort the moment they need a path.

@@ -47,3 +47,21 @@
 // rules, so this must be type-scoped - without it the rule kept any rare helm, amulet or
 // armour carrying 3+ combined barbarian and war cries skills.
 ([type] == sword || [type] == axe || [type] == mace || [type] == club || [type] == hammer || [type] == dagger || [type] == bow || [type] == crossbow || [type] == spear || [type] == javelin || [type] == polearm || [type] == throwingaxe || [type] == throwingknife || [type] == assassinkatar) && ([quality] == magic || [quality] == rare) # [barbarianskills]+[warcriesskilltab] >= 3
+
+// Reroll bases for 3 Chipped gems + sword = magic socketed sword (cube row 15). The output's item
+// level falls below these bases' quality level, so the game uses the quality level and the affix
+// level lands at 55-77: Cruel (201-300% ED, affix level 51) can roll. Phase Blade lands at 47 and
+// never can. Item level of the input does not matter. Three of each is plenty to roll from; the
+// ethereal ones are Fury bases and are kept above without a limit.
+([quality] == normal || [quality] == superior) && [flag] != ethereal && [name] == crypticsword # 1 == 1 # [maxquantity] == 3
+([quality] == normal || [quality] == superior) && [flag] != ethereal && [name] == colossussword # 1 == 1 # [maxquantity] == 3
+([quality] == normal || [quality] == superior) && [flag] != ethereal && [name] == conquestsword # 1 == 1 # [maxquantity] == 3
+([quality] == normal || [quality] == superior) && [flag] != ethereal && [name] == championsword # 1 == 1 # [maxquantity] == 3
+([quality] == normal || [quality] == superior) && [flag] != ethereal && [name] == colossusblade # 1 == 1 # [maxquantity] == 3
+([quality] == normal || [quality] == superior) && [flag] != ethereal && [name] == mythicalsword # 1 == 1 # [maxquantity] == 3
+
+// Chance to cast Amplify Damage on striking ("of Damage Amplification": 5%, level 1, any weapon).
+// Amplify Damage doubles the physical damage taken, so it pairs with a high damage prefix - the
+// ladder armory has a 185% ED Fanged Knife with it. High ED only comes from Ferocious and Cruel.
+([type] == sword || [type] == axe || [type] == mace || [type] == club || [type] == hammer || [type] == dagger || [type] == spear || [type] == javelin || [type] == polearm || [type] == throwingaxe || [type] == throwingknife || [type] == assassinkatar || [type] == scepter || [type] == bow || [type] == crossbow) && [quality] == magic # [ed] >= 150 && [ctcamplifydamage] >= 1
+([type] == sword || [type] == axe || [type] == mace || [type] == club || [type] == hammer || [type] == dagger || [type] == spear || [type] == javelin || [type] == polearm || [type] == throwingaxe || [type] == throwingknife || [type] == assassinkatar || [type] == scepter || [type] == bow || [type] == crossbow) && [quality] == rare # [ed] >= 120 && [ctcamplifydamage] >= 1

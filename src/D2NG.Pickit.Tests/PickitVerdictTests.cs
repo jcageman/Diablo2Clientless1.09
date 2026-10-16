@@ -10,7 +10,7 @@ public class PickitVerdictTests
     {
         var item = TestItemFactory.Create(ClassificationType.Rune, ItemName.JahRune, QualityType.Normal, identified: false);
 
-        var verdict = Pickit.ExplainPickup(CharacterClass.Sorceress, shouldPickupGoldItems: true, item);
+        var verdict = Pickit.ExplainPickup(shouldPickupGoldItems: true, item);
 
         Assert.True(verdict.Result);
 
@@ -21,9 +21,9 @@ public class PickitVerdictTests
     [Fact]
     public void ExplainPickup_ReportsWhenNothingMatched()
     {
-        var item = TestItemFactory.Create(ClassificationType.Rune, ItemName.TirRune, QualityType.Normal, identified: false);
+        var item = TestItemFactory.Create(ClassificationType.Rune, ItemName.IoRune, QualityType.Normal, identified: false);
 
-        var verdict = Pickit.ExplainPickup(CharacterClass.Sorceress, shouldPickupGoldItems: true, item);
+        var verdict = Pickit.ExplainPickup(shouldPickupGoldItems: true, item);
 
         Assert.False(verdict.Result);
         Assert.Equal("no matching rule", verdict.Reason);
@@ -34,7 +34,7 @@ public class PickitVerdictTests
     {
         var item = TestItemFactory.Create(ClassificationType.Ring, ItemName.Ring, QualityType.Rare, identified: false);
 
-        var verdict = Pickit.ExplainKeep(CharacterClass.Sorceress, item);
+        var verdict = Pickit.ExplainKeep(item);
 
         Assert.True(verdict.Result);
         Assert.Equal("unidentified", verdict.Reason);
@@ -52,18 +52,15 @@ public class PickitVerdictTests
     {
         var item = TestItemFactory.Create(classification, name, quality, identified);
 
-        foreach (var characterClass in new[] { CharacterClass.Sorceress, CharacterClass.Paladin, CharacterClass.Barbarian })
+        foreach (var goldItems in new[] { true, false })
         {
-            foreach (var goldItems in new[] { true, false })
-            {
-                Assert.Equal(
-                    Pickit.ShouldPickupItem(characterClass, goldItems, item),
-                    Pickit.ExplainPickup(characterClass, goldItems, item).Result);
-            }
-
             Assert.Equal(
-                Pickit.ShouldKeepItem(characterClass, item),
-                Pickit.ExplainKeep(characterClass, item).Result);
+                Pickit.ShouldPickupItem(goldItems, item),
+                Pickit.ExplainPickup(goldItems, item).Result);
         }
+
+        Assert.Equal(
+            Pickit.ShouldKeepItem(item),
+            Pickit.ExplainKeep(item).Result);
     }
 }

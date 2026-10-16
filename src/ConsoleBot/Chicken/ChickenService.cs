@@ -1,12 +1,18 @@
 ﻿using D2NG.Core;
 using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Packet;
+using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Items;
+using D2NG.Core.D2GS.Players;
+using ConsoleBot.Helpers;
 using Serilog;
 using System;
+using System.Runtime.CompilerServices;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace ConsoleBot.Chicken;
 
@@ -23,10 +29,37 @@ namespace ConsoleBot.Chicken;
 /// </remarks>
 public static class ChickenService
 {
-    public static void Attach(Client client, ChickenConfiguration configuration)
+    private static readonly ConditionalWeakTable<Client, ChickenWatch> Watches = new();
+
+    /// <param name="stayForCorpse">
+    /// Stay in the game when the character has died rather than leave: the server keeps 75% of the
+    /// experience lost on the corpse for as long as the game lasts, and gives it back to whoever picks it
+    /// up. Only for party bots that can bring the character back to its body; see <see cref="DeathLocation"/>.
+    /// </param>
+    public static void Attach(Client client, ChickenConfiguration configuration, bool stayForCorpse = false)
     {
         ArgumentNullException.ThrowIfNull(client);
-        new ChickenWatch(client, configuration ?? new ChickenConfiguration()).Start();
+        var watch = new ChickenWatch(client, configuration ?? new ChickenConfiguration(), stayForCorpse);
+        Watches.AddOrUpdate(client, watch);
+        watch.Start();
+    }
+
+    /// <summary>Where the character died in the current game when it stayed for its corpse; null when it has not.</summary>
+    public static Point DeathLocation(Client client) => Watches.TryGetValue(client, out var watch) ? watch.DeathLocation : null;
+
+    /// <summary>
+    /// For a barbarian about to whirl: drinks a rejuvenation first when life is under the rejuvenation
+    /// line, and says whether to hold the whirl for it. Nothing can be drunk once the whirl has started.
+    /// </summary>
+    public static bool HoldForRejuvenation(Client client) => Watches.TryGetValue(client, out var watch) && watch.HoldForRejuvenation();
+
+    /// <summary>Back to normal chickening, after the corpse was picked up or at the end of the game.</summary>
+    public static void ClearDeath(Client client)
+    {
+        if (Watches.TryGetValue(client, out var watch))
+        {
+            watch.DeathLocation = null;
+        }
     }
 
     private sealed class ChickenWatch
@@ -40,7 +73,17 @@ public static class ChickenService
         private bool _leaveSignalled;
 
         private int _previousLife;
+        private DateTime _previousLifeAt = DateTime.MinValue;
+
+        /// <summary>
+        /// Iron Maiden returned 2116 of a barbarian's 3684 life in 128ms; with 1682 left he drank a
+        /// rejuvenation and read 0 life 440ms later. A hit this recent that is as big as what is left
+        /// is one hit from death, and no potion beats the next one.
+        /// </summary>
+        private static readonly TimeSpan KillingBurstWindow = TimeSpan.FromMilliseconds(500);
         private int _previousMaxLife;
+        private object _loggedLifeAboveMaximumFor;
+        private object _loggedManaAboveMaximumFor;
         private DateTime _lastDamageAt = DateTime.MinValue;
         private int _previousMaxMana;
 
@@ -59,10 +102,17 @@ public static class ChickenService
 
         private static readonly TimeSpan RejuvenationGap = TimeSpan.FromMilliseconds(500);
 
-        public ChickenWatch(Client client, ChickenConfiguration config)
+        private static readonly TimeSpan RespawnDelay = TimeSpan.FromMilliseconds(500);
+
+        private readonly bool _stayForCorpse;
+
+        public volatile Point DeathLocation;
+
+        public ChickenWatch(Client client, ChickenConfiguration config, bool stayForCorpse)
         {
             _client = client;
             _config = config;
+            _stayForCorpse = stayForCorpse;
         }
 
         public void Start()
@@ -72,6 +122,12 @@ public static class ChickenService
             _client.OnReceivedPacketEvent(InComingPacket.AddAttributeByte, _ => Evaluate());
             _client.OnReceivedPacketEvent(InComingPacket.AddAttributeWord, _ => Evaluate());
             _client.OnReceivedPacketEvent(InComingPacket.AddAttributeDword, _ => Evaluate());
+            _client.OnReceivedPacketEvent(InComingPacket.CorpseAssign, p => ReportCorpse(new CorpseAssignPacket(p)));
+            // The end of a whirl is a state update, not a life packet: without these the drink that was
+            // held for it waited for the next hit.
+            _client.OnReceivedPacketEvent(InComingPacket.UpdateEntityEffects, p => EvaluateIfMine(new UpdateEntityEffectsPacket(p).EntityId));
+            _client.OnReceivedPacketEvent(InComingPacket.AddEntityEffect, p => EvaluateIfMine(new AddEntityEffectPacket(p).EntityId));
+            _client.OnReceivedPacketEvent(InComingPacket.AddEntityEffect2, p => EvaluateIfMine(new AddEntityEffectPacket2(p).EntityId));
 
             new Thread(LeaveAndBackstopLoop)
             {
@@ -130,6 +186,41 @@ public static class ChickenService
 
         private readonly object _evaluateGate = new();
 
+        private void EvaluateIfMine(uint entityId)
+        {
+            if (entityId == _client.Game.Me?.Id)
+            {
+                Evaluate();
+            }
+        }
+
+        public bool HoldForRejuvenation()
+        {
+            lock (_evaluateGate)
+            {
+                var game = _client.Game;
+                var me = game.Me;
+                if (me == null || me.MaxLife <= 0 || _leaving || DeathLocation != null
+                    || (double)me.Life / me.MaxLife >= _config.UseRejuvenationPercent
+                    || RejuvenationStock(game) == 0)
+                {
+                    return false;
+                }
+
+                if (DateTime.Now - _lastRejuvenationAt <= RejuvenationGap)
+                {
+                    return true;
+                }
+
+                if (game.UseRejuvenationPotion())
+                {
+                    _lastRejuvenationAt = DateTime.Now;
+                }
+
+                return true;
+            }
+        }
+
         /// <summary>
         /// One evaluation at a time: the listener thread and the backstop both call in, and both
         /// passed the rejuvenation gap together - two full rejuvenations 18ms apart at one life.
@@ -158,6 +249,12 @@ public static class ChickenService
                     return;
                 }
 
+                if (DeathLocation != null)
+                {
+                    GuardCorpseRun(me);
+                    return;
+                }
+
                 if (me.Effects.ContainsKey(EntityEffect.Playerbody))
                 {
                     RequestLeave($"{me.Name} has died");
@@ -166,15 +263,35 @@ public static class ChickenService
 
                 var life = me.Life;
                 var maxLife = me.MaxLife;
+                if (life <= 0 && _previousLife > 0)
+                {
+                    _zeroLifeAt = DateTime.Now;
+                }
+
                 var maximumRose = maxLife > _previousMaxLife || me.MaxMana > _previousMaxMana;
                 var lostLife = life < _previousLife;
+                var loss = _previousLife - life;
+                var sincePrevious = DateTime.Now - _previousLifeAt;
                 if (maxLife > _previousMaxLife && _previousMaxLife > 0)
                 {
                     _maxLifeBeforeRise = _previousMaxLife;
                     _maxLifeRoseAt = DateTime.Now;
                 }
 
+                if (_loggedLifeAboveMaximumFor != me && maxLife > 0 && life > maxLife * 1.05)
+                {
+                    _loggedLifeAboveMaximumFor = me;
+                    Log.Information("{Character} life {Life} above computed maximum {MaxLife}: {Breakdown}", me.Name, life, maxLife, me.MaxLifeBreakdown);
+                }
+
+                if (_loggedManaAboveMaximumFor != me && me.MaxMana > 0 && me.Mana > me.MaxMana * 1.05)
+                {
+                    _loggedManaAboveMaximumFor = me;
+                    Log.Information("{Character} mana {Mana} above computed maximum {MaxMana}: {Breakdown}", me.Name, me.Mana, me.MaxMana, me.MaxManaBreakdown);
+                }
+
                 _previousLife = life;
+                _previousLifeAt = DateTime.Now;
                 _previousMaxLife = maxLife;
                 _previousMaxMana = me.MaxMana;
 
@@ -213,6 +330,12 @@ public static class ChickenService
                     return;
                 }
 
+                if (lostLife && loss >= life && sincePrevious <= KillingBurstWindow)
+                {
+                    RequestLeave($"{me.Name} lost {loss} in {(int)sincePrevious.TotalMilliseconds}ms with {life} of {maxLife} left, one more hit like it kills");
+                    return;
+                }
+
                 if (_awaitingDamage || maxLife <= 0)
                 {
                     return;
@@ -229,6 +352,20 @@ public static class ChickenService
                 if ((double)life / leaveOf <= _config.LifeChickenPercent)
                 {
                     RequestLeave($"{me.Name} at {life} of {maxLife} life ({lifeFraction:P0})");
+                    return;
+                }
+
+                // Leaving still works mid-whirl and is judged here; a drink would only be ignored and
+                // start the rejuvenation gap, so it waits for the state update that ends the whirl.
+                // Under Iron Maiden every hit of the rest of the whirl comes back doubled with no potion
+                // possible: seven of eight rejuvenations drunk like that ended in a leave at no life.
+                if (ClassHelpers.IsWhirling(me))
+                {
+                    if (lifeFraction < _config.UseRejuvenationPercent && me.Effects.ContainsKey(EntityEffect.Ironmaiden))
+                    {
+                        RequestLeave($"{me.Name} whirling under Iron Maiden at {life} of {maxLife} life, below the rejuvenation line with no potion possible");
+                    }
+
                     return;
                 }
 
@@ -294,6 +431,68 @@ public static class ChickenService
             }
         }
 
+        private DateTime _leaveRequestedAt = DateTime.MinValue;
+        private DateTime _zeroLifeAt = DateTime.MinValue;
+
+        /// <summary>
+        /// The server assigns a corpse when the death animation ends, and that is the only certain sign
+        /// of a death: twelve of thirteen leaves at 0 life lost no experience. When it comes before any
+        /// leave - a barbarian whirling read no life for 1.7s and was dead before the 0 arrived - the
+        /// leave can only throw away the experience still on the body.
+        /// </summary>
+        private void ReportCorpse(CorpseAssignPacket packet)
+        {
+            var game = _client.Game;
+            var me = game.Me;
+            if (me == null || packet.PlayerId != me.Id || !packet.CorpseAdded)
+            {
+                return;
+            }
+
+            var now = DateTime.Now;
+            // A body from an earlier death is assigned right after joining, when the area can still lag;
+            // a death always comes with damage just taken.
+            if (_stayForCorpse && !_leaving && game.IsInGame() && game.Area != Area.None && !game.IsInTown()
+                && now - _lastDamageAt < UnharmedGracePeriod)
+            {
+                DeathLocation = me.Location;
+                Log.Warning("{Character} died at {Location} in {Area}, staying in the game for the corpse", me.Name, me.Location, game.Area);
+                Task.Delay(RespawnDelay).ContinueWith(_ =>
+                {
+                    if (game.IsInGame())
+                    {
+                        game.Resurrect();
+                    }
+                });
+            }
+
+            Log.Warning("{Character} corpse {Corpse} assigned in {Area} at {Location}, in game {InGame}, leaving {Leaving}, {SinceLeave} since the leave request, {SinceZero} since life read 0",
+                me.Name, packet.CorpseId, _client.Game.Area, me.Location, _client.Game.IsInGame(), _leaving,
+                _leaveRequestedAt == DateTime.MinValue ? "never" : $"{(int)(now - _leaveRequestedAt).TotalMilliseconds}ms",
+                _zeroLifeAt == DateTime.MinValue ? "never" : $"{(int)(now - _zeroLifeAt).TotalMilliseconds}ms");
+        }
+
+        /// <summary>
+        /// Back at the body without its gear there is no belt to drink from, so leaving is all that is
+        /// left: the experience still on the corpse costs far less than a second death. Only the
+        /// percentage counts here, since a character without its gear can sit below the absolute floor
+        /// at full life.
+        /// </summary>
+        private void GuardCorpseRun(Self me)
+        {
+            var life = me.Life;
+            var maxLife = me.MaxLife;
+            if (life <= 0 || maxLife <= 0)
+            {
+                return;
+            }
+
+            if ((double)life / maxLife <= _config.LifeChickenPercent)
+            {
+                RequestLeave($"{me.Name} at {life} of {maxLife} life on the way back to its corpse");
+            }
+        }
+
         private void RequestLeave(string reason)
         {
             if (_leaving)
@@ -302,6 +501,7 @@ public static class ChickenService
             }
 
             _leaving = true;
+            _leaveRequestedAt = DateTime.Now;
             Log.Information("Leaving game: {Reason}", reason);
             lock (_leaveGate)
             {
@@ -309,6 +509,9 @@ public static class ChickenService
                 Monitor.Pulse(_leaveGate);
             }
         }
+
+        private static int RejuvenationStock(Game game) =>
+            game.Belt.NumOfRejuvenationPotions() + game.Inventory.Items.Count(i => i.Classification == ClassificationType.RejuvenationPotion);
 
         private bool PotionIntervalElapsed(Game game)
         {

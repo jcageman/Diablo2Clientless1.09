@@ -49,6 +49,7 @@ public abstract class SingleClientBotBase
             int totalCount = 0;
             int gameCount = 0;
             int successiveFailures = 0;
+            int muleFailuresInARow = 0;
             int gameDescriptionIndex = 0;
             while (true)
             {
@@ -76,16 +77,25 @@ public abstract class SingleClientBotBase
 
                 if (NeedsMule)
                 {
-                    await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: needs mule, starting mule");
+                    Log.Information("{Account}: needs mule, starting mule", client.LoggedInUserName());
                     if (await _muleService.MuleItemsForClient(client))
                     {
                         NeedsMule = false;
-                        await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: finished mule");
+                        muleFailuresInARow = 0;
+                        Log.Information("{Account}: finished mule", client.LoggedInUserName());
                     }
                     else
                     {
+                        // One failed mule pass usually succeeds on the retry; only a second one in a row
+                        // is worth a message.
+                        muleFailuresInARow++;
+                        Log.Warning("{Account}: failed to mule all items ({Count} in a row), trying again", client.LoggedInUserName(), muleFailuresInARow);
+                        if (muleFailuresInARow >= 2)
+                        {
+                            await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: failed to mule all items {muleFailuresInARow} times in a row, trying again");
+                        }
+
                         await Task.Delay(Math.Pow(successiveFailures, 1.3) * TimeSpan.FromSeconds(5));
-                        await _externalMessagingClient.SendMessage($"{client.LoggedInUserName()}: failed to mule all items, trying again");
                         if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, _accountConfig, 10))
                         {
                             throw new Exception("Could not connect to realm");
@@ -99,6 +109,11 @@ public abstract class SingleClientBotBase
                 {
                     gameCount++;
                     totalCount++;
+                    if (!client.IsRealmConnected() && !await RealmConnectHelpers.RejoinRealm(client, _config, _accountConfig))
+                    {
+                        throw new Exception("Could not connect to realm");
+                    }
+
                     if (_config.GameCreationJitterMs > 0)
                     {
                         await Task.Delay(Random.Shared.Next(_config.GameCreationJitterMs));
@@ -133,14 +148,9 @@ public abstract class SingleClientBotBase
                         await client.Game.LeaveGame();
                     }
 
-                    if (!await client.RejoinMCP())
+                    if (!await RealmConnectHelpers.RejoinRealm(client, _config, _accountConfig))
                     {
-                        var reconnectMessage = $"Reconnecting to MCP failed, reconnecting to realm instead";
-                        Log.Warning(reconnectMessage);
-                        if (!await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, _accountConfig, 10))
-                        {
-                            throw new Exception("Could not connect to realm");
-                        }
+                        throw new Exception("Could not connect to realm");
                     }
                     else
                     {

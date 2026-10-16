@@ -11,6 +11,8 @@ namespace D2NG.Core.D2GS;
 
 internal class GameServerConnection : Connection
 {
+    // 0x9A has the layout of 0x4D, 15 bytes on 1.09. It was 24 here: every 0x9A threw the rest of the
+    // packet out of step, the next size lookup failed and the client dropped its own game connection.
     internal static readonly short[] PacketSizes =
     [
         1, 8, 1, 12, 1, 1, 1, 6, 6, 11, 6, 6, 9, 13, 12, 16,
@@ -22,7 +24,7 @@ internal class GameServerConnection : Connection
         7, 2, 7, 21, 0, 7, 7, 15, 20, 12, 12, 16, 16, 10, 1, 1,
         1, 1, 1, 32, 10, 13, 6, 2, 21, 6, 13, 8, 6, 18, 5, 10,
         4, 20, 29, 0, 0, 0, 0, 0, 0, 2, 6, 6, 11, 7, 10, 33,
-        13, 26, 6, 8, 0, 13, 9, 1, 7, 16, 24, 7, 0, 0, 7, 8,
+        13, 26, 6, 8, 0, 13, 9, 1, 7, 16, 15, 7, 0, 0, 7, 8,
         10, 7, 8, 24, 3, 8, 0, 7, 1, 7, 0, 7, 0, 0, 0, 0,
         1
     ];
@@ -45,7 +47,7 @@ internal class GameServerConnection : Connection
         var packet2 = _stream.ReadByte();
         if (0xa7 != packet1 || 0x01 != packet2)
         {
-            throw new UnableToConnectException("Unexpected packet");
+            throw new UnableToConnectException($"Unexpected packet {packet1:X2} {packet2:X2} instead of A7 01");
         }
     }
 

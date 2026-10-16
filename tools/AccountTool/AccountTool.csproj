@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>AccountTool</RootNamespace>
+    <AssemblyName>AccountTool</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\D2NG.Core\D2NG.Core.csproj" />
+    <ProjectReference Include="..\..\src\D2NG.Mule\D2NG.Mule.csproj" />
+    <ProjectReference Include="..\..\src\D2NG.Pickit\D2NG.Pickit.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+</Project>

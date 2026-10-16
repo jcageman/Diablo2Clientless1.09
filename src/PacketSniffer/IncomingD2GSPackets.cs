@@ -226,8 +226,8 @@ public static class IncomingD2GSPackets
                 Log.Information($"{incomingPacketType} -> Id: {parseItemPacket.Item.Id} ({parseItemPacket.Item.Level}) Action: {parseItemPacket.Item.Action} " +
                     $"Container: {parseItemPacket.Item.Container} Quality: {parseItemPacket.Item.Quality} Name: {parseItemPacket.Item.Name} " +
                     $"Type: {parseItemPacket.Item.Type} Location: {parseItemPacket.Item.Location} Entity: {parseItemPacket.Item.EntityType} Player {parseItemPacket.Item.PlayerId}" +
-                    $"ShouldPickup: {Pickit.ShouldPickupItem(CharacterClass.Sorceress, true, parseItemPacket.Item)}" +
-                    $"ShouldKeep: {Pickit.ShouldKeepItem( CharacterClass.Sorceress, parseItemPacket.Item)}" +
+                    $"ShouldPickup: {Pickit.ShouldPickupItem(true, parseItemPacket.Item)}" +
+                    $"ShouldKeep: {Pickit.ShouldKeepItem(parseItemPacket.Item)}" +
                     $"CanTouch: {Pickit.CanTouchInventoryItem(CharacterClass.Sorceress, parseItemPacket.Item, inventoryHeight: 8)}" +
                     $"print: {parseItemPacket.Raw.ToPrintString()} with description {parseItemPacket.Item.GetFullDescription()}");
 

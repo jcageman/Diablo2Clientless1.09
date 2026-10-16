@@ -312,7 +312,7 @@ public class PathingService : IPathingService
             return [];
         }
 
-        Log.Warning("Pathing in {Area} fell back to the nearest navigable points, {From} -> {To} became {SnappedFrom} -> {SnappedTo}",
+        Log.Information("Pathing in {Area} fell back to the nearest navigable points, {From} -> {To} became {SnappedFrom} -> {SnappedTo}",
             area, fromLocation, toLocation, from, to);
 
         if (snappedStart)

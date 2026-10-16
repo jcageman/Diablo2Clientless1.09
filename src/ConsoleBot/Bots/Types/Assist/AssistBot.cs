@@ -211,13 +211,7 @@ public class AssistBot : IBotInstance
             await client.Game.LeaveGame();
         }
 
-        if (!await client.RejoinMCP())
-        {
-            Log.Warning($"Disconnecting client {cowAccount.Username} since reconnecting to MCP failed, reconnecting to realm");
-            return await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, cowAccount, 10);
-        }
-
-        return true;
+        return await RealmConnectHelpers.RejoinRealm(client, _config, cowAccount);
     }
 
     public async Task GameLoop(List<Tuple<AccountConfig, Client, AssistBotClientState>> clients, int gameCount)
@@ -227,9 +221,9 @@ public class AssistBot : IBotInstance
         {
             if (!IsHostClient(c.Item1))
             {
-                var numberOfSecondsToWait = (i > 3 ? 15 : 0);
-                Log.Information($"Waiting {numberOfSecondsToWait} seconds for joining game with {c.Item1.Character}");
-                await Task.Delay(TimeSpan.FromSeconds(numberOfSecondsToWait));
+                var joinDelay = RealmConnectHelpers.JoinDelayFor(i);
+                Log.Information($"Waiting {joinDelay.TotalSeconds} seconds for joining game with {c.Item1.Character}");
+                await Task.Delay(joinDelay);
                 Log.Information($"Starting joining game with {c.Item1.Character}");
                 if (!await RealmConnectHelpers.JoinGameWithRetry(gameCount, c.Item2, _config, c.Item1))
                 {

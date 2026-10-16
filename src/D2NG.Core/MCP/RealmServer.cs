@@ -25,6 +25,7 @@ public sealed class RealmServer : IDisposable
     private readonly McpEvent JoinGameEvent = new();
     private readonly McpEvent CreateCharacterEvent = new();
     private readonly McpEvent DeleteCharacterEvent = new();
+    private readonly McpEvent UpgradeCharacterEvent = new();
 
     private Thread _listener;
 
@@ -40,6 +41,7 @@ public sealed class RealmServer : IDisposable
         OnReceivedPacketEvent(Mcp.JOINGAME, JoinGameEvent.Set);
         OnReceivedPacketEvent(Mcp.CHARCREATE, CreateCharacterEvent.Set);
         OnReceivedPacketEvent(Mcp.CHARDELETE, DeleteCharacterEvent.Set);
+        OnReceivedPacketEvent(Mcp.CHARUPGRADE, UpgradeCharacterEvent.Set);
     }
 
     internal void Connect(IPAddress ip, short port)
@@ -152,6 +154,22 @@ public sealed class RealmServer : IDisposable
         }
 
         return new DeleteCharacterResponsePacket(packet).Success;
+    }
+
+    /// <summary>
+    /// Converts a classic character to expansion and returns the raw result code, 0x00 meaning success.
+    /// </summary>
+    internal async Task<uint?> UpgradeCharacter(string name)
+    {
+        UpgradeCharacterEvent.Reset();
+        Connection.WritePacket(new UpgradeCharacterRequestPacket(name));
+        var packet = await UpgradeCharacterEvent.WaitForPacket(5000);
+        if (packet == null)
+        {
+            return null;
+        }
+
+        return new UpgradeCharacterResponsePacket(packet).Result;
     }
 
     internal async Task<bool> CreateGame(Difficulty difficulty, string gameName, string password, string description)

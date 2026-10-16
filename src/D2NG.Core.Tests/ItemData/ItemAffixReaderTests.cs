@@ -188,6 +188,52 @@ public class ItemAffixReaderTests
     }
 
     [Fact]
+    public void AWeaponDecodesItsDamageBonusesAndRequirements()
+    {
+        var raw = Table(ItemAffixReader.BaseItemSize, 1);
+        const int s = 4;
+        Put(raw, s, "Rune Bow");
+        Put(raw, s + 0x144, "8sw ");
+        Put(raw, s + 0x170, -10);
+        raw[s + 0x197] = 49;
+        raw[s + 0x19C] = 14;
+        raw[s + 0x19D] = 35;
+        raw[s + 0x1A0] = 100;
+        raw[s + 0x1A1] = 73;
+        raw[s + 0x1A2] = 103;
+        raw[s + 0x1B3] = 0xFF;
+        raw[s + 0x1B4] = 0xFF;
+
+        var item = Assert.Single(ItemAffixReader.DecodeBaseItems(raw, "weapons.bin", BaseItemKind.Weapon, TypeCodes));
+
+        Assert.Equal(-10, item.Speed);
+        Assert.Equal((0, 0), (item.MinDamage, item.MaxDamage));
+        Assert.Equal((14, 35), (item.TwoHandMinDamage, item.TwoHandMaxDamage));
+        Assert.Equal((0, 100), (item.StrengthBonus, item.DexterityBonus));
+        Assert.Equal((73, 103), (item.RequiredStrength, item.RequiredDexterity));
+    }
+
+    [Fact]
+    public void AnArmorDecodesItsDefenseRange()
+    {
+        var raw = Table(ItemAffixReader.BaseItemSize, 1);
+        Put(raw, 4, "Tower Shield");
+        Put(raw, 4 + 0x144, "tow ");
+        Put(raw, 4 + 0x164, 22);
+        Put(raw, 4 + 0x168, 25);
+        raw[4 + 0x1A1] = 75;
+        raw[4 + 0x1A6] = 24;
+        raw[4 + 0x1B3] = 0xFF;
+        raw[4 + 0x1B4] = 0xFF;
+
+        var item = Assert.Single(ItemAffixReader.DecodeBaseItems(raw, "armor.bin", BaseItemKind.Armor, TypeCodes));
+
+        Assert.Equal((22, 25), (item.MinDefense, item.MaxDefense));
+        Assert.Equal(24, item.Block);
+        Assert.Equal(75, item.RequiredStrength);
+    }
+
+    [Fact]
     public void ACubeRecipeKeepsItsStringsAndFixedMods()
     {
         var raw = Table(ItemAffixReader.CubeRecipeSize, 1);

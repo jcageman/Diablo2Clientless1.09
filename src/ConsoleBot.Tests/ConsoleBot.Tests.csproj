@@ -17,6 +17,13 @@
     <Using Include="D2NG.Core.D2GS" />
   </ItemGroup>
 
+  <!-- Muled items get their code and size from the item table, so these tests need it too: the copy
+       the core tests keep. -->
+  <ItemGroup>
+    <None Include="..\D2NG.Core.Tests\data\item_data.txt" Link="data\item_data.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\D2NG.Core.Tests\data\item_properties.txt" Link="data\item_properties.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\ConsoleBot\ConsoleBot.csproj" />
     <ProjectReference Include="..\D2NG.Core\D2NG.Core.csproj" />

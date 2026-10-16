@@ -31,7 +31,7 @@ public static class PickitAudit
     /// </summary>
     public static void LogItemDrop(Game game, Item item, bool shouldPickupGoldItems)
     {
-        var verdict = Pickit.ExplainPickup(game.Me.Class, shouldPickupGoldItems, item);
+        var verdict = Pickit.ExplainPickup(game, shouldPickupGoldItems, item);
         Write(game, "drop", item, verdict.Result ? "PICKUP" : "leave", verdict.Reason, verdict.Result);
     }
 
@@ -56,7 +56,7 @@ public static class PickitAudit
         var matched = 0;
         foreach (var item in groundItems)
         {
-            var verdict = Pickit.ExplainPickup(game.Me.Class, shouldPickupGoldItems, item);
+            var verdict = Pickit.ExplainPickup(game, shouldPickupGoldItems, item);
             if (verdict.Result)
             {
                 matched++;
@@ -101,7 +101,7 @@ public static class PickitAudit
         var kept = 0;
         foreach (var item in decidable)
         {
-            var verdict = Pickit.ExplainKeep(game.Me.Class, item);
+            var verdict = Pickit.ExplainKeep(game, item);
             if (verdict.Result)
             {
                 kept++;

@@ -122,8 +122,22 @@ public static class ItemAffixReader
                 Kind = kind,
                 Name = ReadString(raw, start, 64, file, i),
                 Code = ReadString(raw, start + 0x144, 4, file, i).Trim(),
+                MinDefense = BitConverter.ToInt32(raw, start + 0x164),
+                MaxDefense = BitConverter.ToInt32(raw, start + 0x168),
+                Speed = BitConverter.ToInt32(raw, start + 0x170),
                 Version = BitConverter.ToUInt16(raw, start + 0x190),
                 Level = raw[start + 0x197],
+                MinDamage = raw[start + 0x198],
+                MaxDamage = raw[start + 0x199],
+                MissileMinDamage = raw[start + 0x19A],
+                MissileMaxDamage = raw[start + 0x19B],
+                TwoHandMinDamage = raw[start + 0x19C],
+                TwoHandMaxDamage = raw[start + 0x19D],
+                StrengthBonus = raw[start + 0x19F],
+                DexterityBonus = raw[start + 0x1A0],
+                RequiredStrength = raw[start + 0x1A1],
+                RequiredDexterity = raw[start + 0x1A2],
+                Block = raw[start + 0x1A6],
                 Type = TypeReference(raw[start + 0x1B3], typeCodes, file, i),
                 Type2 = TypeReference(raw[start + 0x1B4], typeCodes, file, i),
                 LevelRequirement = raw[start + 0x1CC]
@@ -245,7 +259,7 @@ public static class ItemAffixReader
         return recipes;
     }
 
-    private static int RecordCount(byte[] raw, string file, int recordSize)
+    internal static int RecordCount(byte[] raw, string file, int recordSize)
     {
         if (raw.Length < 4)
         {
@@ -294,7 +308,7 @@ public static class ItemAffixReader
         return properties[value];
     }
 
-    private static CharacterClass? ClassReference(byte value)
+    internal static CharacterClass? ClassReference(byte value)
         => value <= (byte)CharacterClass.Assassin ? (CharacterClass)value : null;
 
     private static string Unquote(string value) => value.Trim('"');
@@ -303,7 +317,7 @@ public static class ItemAffixReader
     /// A NUL-terminated printable string at the given offset. A field that is not one means the
     /// layout moved, which is the cheapest check that a record size really is the version assumed.
     /// </summary>
-    private static string ReadString(byte[] raw, int start, int length, string file, int record)
+    internal static string ReadString(byte[] raw, int start, int length, string file, int record)
     {
         var end = 0;
         while (end < length && raw[start + end] != 0)
@@ -320,7 +334,7 @@ public static class ItemAffixReader
         return Encoding.ASCII.GetString(raw, start, end);
     }
 
-    private static (string Archive, byte[] Raw) ReadRawTable(string gameDirectory, string file)
+    internal static (string Archive, byte[] Raw) ReadRawTable(string gameDirectory, string file)
     {
         foreach (var archive in ArchivePriority)
         {

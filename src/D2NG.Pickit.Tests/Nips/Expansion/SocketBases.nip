@@ -10,3 +10,16 @@
 
 // Four socket body armour with a real life roll.
 [type] == armor && [quality] == magic # [sockets] == 4 && [maxhp] >= 40
+
+// Wealth (Lem Ko Tir: 300% gold find, 100% magic find) and jewel bases: 3-4 socket normal or
+// superior elite body armour, ethereal too - top gold-find barbarians and their mercenaries wear it.
+[type] == armor && ([quality] == normal || [quality] == superior) && [itemtype] == u* && [sockets] >= 3 # [sockets] >= 3
+// Only exactly 3 sockets becomes Wealth; a 4 socket body stays a jewel base.
+
+// Rhyme (Shael Eth): 2 socket exceptional and elite shields - Pavise, Grim Shield and Monarch on
+// the ladder armory.
+[type] == shield && ([quality] == normal || [quality] == superior) && ([itemtype] == x* || [itemtype] == u*) # [sockets] == 2
+
+// Honor (Amn El Ith Tir Sol, 5 sockets) and Silence (Dol Eld Hel Ist Tir Vex, 6 sockets, worn by
+// mercenaries): elite weapons. Elite weapon codes start with 7.
+([quality] == normal || [quality] == superior) && [itemtype] == 7* # [sockets] == 5 || [sockets] == 6

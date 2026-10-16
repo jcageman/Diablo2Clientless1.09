@@ -40,3 +40,9 @@
 [type] == amulet # [amazonskills] >= 1 && [mindamage] >= 7 && [barbarianlife] >= 40 && [crlrfr] >= 60
 [type] == amulet # [amazonskills] >= 1 && ([lifeleech]+[manaleech]) >= 4 && [mindamage] >= 5 && [barbarianlife] >= 30 && [crlrfr] >= 60
 [type] == amulet # [lifeleech] >= 5 && [mindamage] >= 7 && [dexterity] >= 10
+
+// Teleport charges ("of Teleportation": Teleport level 3-20 on amulets) give every class a teleport.
+// Ladder armory, 10 Oct 2026: ten top characters carry one - with +2 class or +3 tab skills, leech,
+// resists or gold find. Those are kept outright; a plain one is kept until ten are held.
+[type] == amulet # [chargesteleport] >= 1 && (([amazonskills]+[sorceressskills]+[necromancerskills]+[paladinskills]+[barbarianskills]+[druidskills]+[assassinskills]) >= 2 || [itemaddskilltab] >= 2 || [lifeleech] >= 3 || [crlrfr] >= 40 || [itemmagicbonus] >= 7 || [itemgoldbonus] >= 50)
+[type] == amulet # [chargesteleport] >= 1 # [maxquantity] == 10

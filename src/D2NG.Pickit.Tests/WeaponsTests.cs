@@ -11,7 +11,7 @@ public class WeaponsTests
         TestItemFactory.AddStat(item, StatType.EnhancedDamage, 170);
         TestItemFactory.AddStat(item, StatType.RepairsDurability, 1);
 
-        Assert.True(Pickit.ShouldKeepItem(characterClass: CharacterClass.Barbarian, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -21,6 +21,6 @@ public class WeaponsTests
         TestItemFactory.AddStat(item, StatType.EnhancedDamage, 120);
         TestItemFactory.AddStat(item, StatType.RepairsDurability, 1);
 
-        Assert.False(Pickit.ShouldKeepItem(characterClass: CharacterClass.Barbarian, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 }

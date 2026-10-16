@@ -15,4 +15,10 @@ public class MuleItemDb
     public uint Sockets { get; set; }
     public List<StatDb> Stats { get; set; }
     public List<string> StatTypes { get; set; }
+
+    /// <summary>
+    /// An item the bots never move, such as a charm in the inventory rows kept for charms. Planners
+    /// that work from the database skip it: no trade can hand it over.
+    /// </summary>
+    public bool Untouchable { get; set; }
 }

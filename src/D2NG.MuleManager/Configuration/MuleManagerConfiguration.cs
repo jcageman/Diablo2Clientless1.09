@@ -35,4 +35,11 @@ public class MuleManagerConfiguration
     /// </summary>
     [Required]
     public List<MuleManagerAccount> Accounts { get; set; }
+
+    /// <summary>
+    /// The bots' pickit config file. Its inventory layout decides which items are recorded as
+    /// untouchable, the charms in the rows the bots never move.
+    /// </summary>
+    [Required]
+    public string PickitConfigFile { get; set; }
 }

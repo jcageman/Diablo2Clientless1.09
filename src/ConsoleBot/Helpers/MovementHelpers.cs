@@ -215,6 +215,8 @@ public static class MovementHelpers
         return true;
     }
 
+    private const double FinalHopMinDistance = 3;
+
     private static async Task<bool> TeleportViaPath(Game game, List<Point> path, CancellationToken? token)
     {
         if (path.Count == 0)
@@ -223,8 +225,13 @@ public static class MovementHelpers
             return false;
         }
 
-        foreach (var point in path)
+        for (var i = 0; i < path.Count; i++)
         {
+            var point = path[i];
+            // Teleporting skips a point within ten, which is right on the way but left the destination
+            // itself up to ten short: returning to a kill spot 8.6 away spent the full four-second retry
+            // standing still, every time.
+            var minDistance = i == path.Count - 1 ? FinalHopMinDistance : 10;
             if (token.HasValue && token.Value.IsCancellationRequested)
             {
                 break;
@@ -235,7 +242,7 @@ public static class MovementHelpers
                 {
                     return true;
                 }
-                if (!await game.TeleportToLocationAsync(point))
+                if (!await game.TeleportToLocationAsync(point, minDistance))
                 {
                     Log.Debug($"Teleport to {point} failing retrying at location: {game.Me.Location}");
                     return false;

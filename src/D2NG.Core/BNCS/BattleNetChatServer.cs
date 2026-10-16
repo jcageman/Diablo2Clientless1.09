@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Sockets;
 using System.Threading;
 
 namespace D2NG.Core.BNCS;
@@ -24,6 +25,8 @@ internal class BattleNetChatServer : IDisposable
     protected ConcurrentDictionary<Sid, Action<BncsPacket>> PacketSentEventHandlers { get; } = new ConcurrentDictionary<Sid, Action<BncsPacket>>();
 
     private readonly StateMachine<State, Trigger> _machine = new(State.NotConnected);
+
+    private int _connectionGeneration;
 
     private readonly StateMachine<State, Trigger>.TriggerWithParameters<string> _connectTrigger;
     private readonly StateMachine<State, Trigger>.TriggerWithParameters<string, string> _loginTrigger;
@@ -174,18 +177,31 @@ internal class BattleNetChatServer : IDisposable
         return true;
     }
 
-    private void Listen()
+    /// <summary>
+    /// The server closes the chat connection the moment the same account logs on anywhere else - another
+    /// bot sharing it - while the realm and game connections carry on. Marking it closed is what lets the
+    /// next realm logon fail at once and the bot reconnect, instead of writing into a dead socket.
+    /// </summary>
+    private void Listen(int generation)
     {
-        while (_machine.IsInState(State.Connected))
+        while (_machine.IsInState(State.Connected) && generation == _connectionGeneration)
         {
             try
             {
                 _ = Connection.ReadPacket();
             }
-            catch (Exception)
+            catch (IOException e) when (e.InnerException is SocketException { SocketErrorCode: SocketError.TimedOut })
             {
-                Log.Debug("Chat Connection was terminated");
-                Thread.Sleep(300);
+            }
+            catch (Exception e)
+            {
+                if (generation == _connectionGeneration && Connection.Connected)
+                {
+                    Log.Information("Chat connection for {Account} was closed by the server: {Reason}", Context?.Username, e.Message);
+                    Connection.Terminate();
+                }
+
+                return;
             }
         }
     }
@@ -262,7 +278,10 @@ internal class BattleNetChatServer : IDisposable
     {
         Connection.Connect(realm);
 
-        var listener = new Thread(Listen);
+        // The listener of the previous connection may still be unwinding; the generation stops it from
+        // reading the new stream.
+        var generation = Interlocked.Increment(ref _connectionGeneration);
+        var listener = new Thread(() => Listen(generation));
         listener.Start();
     }
 
@@ -360,8 +379,16 @@ internal class BattleNetChatServer : IDisposable
 
     public void Disconnect()
     {
-        Connection.Terminate();
-        _machine.Fire(Trigger.Disconnect);
+        Interlocked.Increment(ref _connectionGeneration);
+        if (Connection.Connected)
+        {
+            Connection.Terminate();
+        }
+
+        if (_machine.CanFire(Trigger.Disconnect))
+        {
+            _machine.Fire(Trigger.Disconnect);
+        }
     }
 
     public void Dispose()

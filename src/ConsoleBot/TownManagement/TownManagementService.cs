@@ -289,7 +289,7 @@ public class TownManagementService : ITownManagementService
         }
 
         var previousArea = client.Game.Area;
-        var townportal = client.Game.GetEntityByCode(EntityCode.TownPortal).First(t => t.TownPortalOwnerId == client.Game.Me.Id);
+        var townportal = client.Game.OwnTownPortal();
         if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
             if (!client.Game.IsInGame())
@@ -315,7 +315,9 @@ public class TownManagementService : ITownManagementService
             }, TimeSpan.FromSeconds(0.5));
         }, TimeSpan.FromSeconds(5.0)))
         {
-            _logger.LogError("Client {ClientName} Moving to town failed with area {Area}", client.Game.Me.Name, client.Game.Area);
+            _logger.LogError("Client {ClientName} Moving to town failed with area {Area}, cursor {Cursor}, {Unidentified} unidentified items, portal {Portal} away",
+                client.Game.Me.Name, client.Game.Area, client.Game.CursorItem?.Name, client.Game.Inventory.Items.Count(i => !i.IsIdentified), (int)client.Game.Me.Location.Distance(townportal.Location));
+            client.Game.LogRecentPackets($"{client.Game.Me.Name} could not take town portal {townportal.Id}");
             return false;
         }
 
@@ -508,17 +510,8 @@ public class TownManagementService : ITownManagementService
                     stuck);
                 _unmulableItems[game.Me.Name] = carried;
                 result.ShouldMule = true;
-            }
-        }
 
-        if (CubeHelpers.AnyGemsToTransmuteInStash(client.Game))
-        {
-            var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, townArea, game.Me.Location, EntityCode.Stash, movementMode);
-            if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))
-            {
-                _logger.LogWarning("Client {ClientName} {MovementMode} failed at location {Location}", client.Game.Me.Name, movementMode, game.Me.Location);
             }
-            CubeHelpers.TransmuteGems(client.Game, _logger);
         }
 
         if (!await GambleItems(client, movementMode))
@@ -538,11 +531,19 @@ public class TownManagementService : ITownManagementService
             ? MovementMode.Teleport : MovementMode.Walking;
     }
 
-    private async Task<bool> IdentifyItems(Game game, MovementMode movementMode, TownManagementOptions options)
+    private async Task<bool> IdentifyItems(Game game, MovementMode movementMode, TownManagementOptions options, bool always = false)
     {
         var unidentifiedItemCount = game.Inventory.Items.Count(i => !i.IsIdentified) +
     game.Cube.Items.Count(i => !i.IsIdentified);
-        if (unidentifiedItemCount > 6)
+
+        // A cube that cannot be emptied is waiting on the unidentified drops beside it: until they are
+        // identified they are neither sold nor stashed. Held back under the six-item threshold, six of
+        // them left the cow portal character no room to empty the cube for the transmute.
+        // Together, not one by one: a crescent and a pair of gloves each found a spot in eight free
+        // cells, and between them needed ten.
+        var cubeBlocked = game.Cube.Items.Any(i => game.Inventory.FindFreeSpace(i) == null)
+            || game.Cube.Items.Sum(i => i.Width * i.Height) > game.Inventory.FreeCellCount();
+        if (unidentifiedItemCount > 6 || (unidentifiedItemCount > 0 && (always || cubeBlocked)))
         {
             if (options.IdentifyWithTome
                 && game.Inventory.Items.Any(i => i.Name == ItemName.TomeofIdentify))
@@ -550,6 +551,11 @@ public class TownManagementService : ITownManagementService
                 _logger.LogInformation("{Character} identifying from the tome, skipping Cain", game.Me.Name);
                 InventoryHelpers.IdentifyItems(game);
                 return true;
+            }
+
+            if (cubeBlocked)
+            {
+                _logger.LogInformation("{Character} taking {Count} unidentified items to Cain: the cube does not fit the inventory", game.Me.Name, unidentifiedItemCount);
             }
 
             _logger.LogDebug("Client {ClientName} Visiting Deckard Cain with {UnidCount} unidentified items", game.Me.Name, unidentifiedItemCount);
@@ -596,13 +602,95 @@ public class TownManagementService : ITownManagementService
         return true;
     }
 
-    private async Task<bool> RefreshAndSellItems(Game game, MovementMode movementMode, TownManagementOptions options)
+    public async Task<bool> IdentifyAtCainAndSell(Client client)
+    {
+        var game = client.Game;
+        if (!game.IsInGame())
+        {
+            return false;
+        }
+
+        if (!game.IsInTown() && !await TakeTownPortalToTown(client))
+        {
+            _logger.LogWarning("{Character} could not get back to town to identify before muling", game.Me.Name);
+            return false;
+        }
+
+        var options = new TownManagementOptions(new Bots.Types.AccountConfig { HealthSlots = [0, 1], ManaSlots = [2, 3] }, game.Act)
+        {
+            HealthPotionsToBuy = 0,
+            ManaPotionsToBuy = 0,
+            IdentifyWithTome = game.Inventory.Items.Any(i => i.Name == ItemName.TomeofIdentify)
+        };
+        var movementMode = GetMovementMode(game);
+        if (!await IdentifyItems(game, movementMode, options, always: true))
+        {
+            return false;
+        }
+
+        PickitAudit.LogKeepDecisions(game, "before-mule");
+        return await RefreshAndSellItems(game, movementMode, options, sellAny: true);
+    }
+
+    public async Task<bool> IdentifyAndSell(Client client)
+    {
+        var game = client.Game;
+        var unidentified = game.Inventory.Items.Count(i => !i.IsIdentified && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i))
+            + game.Cube.Items.Count(i => !i.IsIdentified);
+        // Selling only: nothing is bought, and the belt layout only matters for what would be bought.
+        var options = new TownManagementOptions(new Bots.Types.AccountConfig { HealthSlots = [0, 1], ManaSlots = [2, 3] }, game.Act)
+        {
+            HealthPotionsToBuy = 0,
+            ManaPotionsToBuy = 0,
+            IdentifyWithTome = game.Inventory.Items.Any(i => i.Name == ItemName.TomeofIdentify)
+        };
+        var start = game.Me.Location;
+        var movementMode = GetMovementMode(game);
+        if (unidentified > 0 && game.Inventory.Items.Any(i => i.Name == ItemName.TomeofIdentify))
+        {
+            _logger.LogInformation("{Character} identifying {Count} items from the tome", game.Me.Name, unidentified);
+            InventoryHelpers.IdentifyItems(game);
+        }
+        else if (unidentified > 0)
+        {
+            _logger.LogWarning("{Character} brings {Count} unidentified items to the mules and has no tome; they stay", game.Me.Name, unidentified);
+        }
+
+        if (unidentified > 0)
+        {
+            PickitAudit.LogKeepDecisions(game, "identify-and-sell");
+        }
+
+        var sold = await RefreshAndSellItems(game, movementMode, options, sellAny: true);
+
+        // Back to where the mules arrive: a trade request only reaches a player standing close by,
+        // and left at the vendor the farmer never saw one.
+        if (game.Me.Location.Distance(start) > 5)
+        {
+            var pathBack = await _pathingService.GetPathToLocation(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, start, movementMode);
+            if (!await MovementHelpers.TakePathOfLocations(game, pathBack, movementMode))
+            {
+                _logger.LogWarning("{Character} could not walk back from {Location} to {Start} after selling", game.Me.Name, game.Me.Location, start);
+            }
+        }
+
+        return sold;
+    }
+
+    private async Task<bool> RefreshAndSellItems(Game game, MovementMode movementMode, TownManagementOptions options, bool sellAny = false)
     {
         var sellItemCount = game.Inventory.Items.Count(i => D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i) && !D2NG.Pickit.Pickit.ShouldKeepItem(game, i)) + game.Cube.Items.Count(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i));
         var surplusRejuvenations = options.RejuvenationsToKeep is int keep
             && game.Inventory.Items.Count(i => i.Classification == ClassificationType.RejuvenationPotion) > keep;
-        if (NPCHelpers.ShouldRefreshCharacterAtNPC(game, options)
+        if (sellAny && sellItemCount == 0)
+        {
+            return true;
+        }
+
+        if (sellAny
+            || NPCHelpers.ShouldRefreshCharacterAtNPC(game, options)
             || surplusRejuvenations
+            || !options.IdentifyWithTome && game.Inventory.Items.Any(i => i.Name == ItemName.TomeofIdentify)
             || sellItemCount > 5
             || options.ItemsToBuy?.Count > 0
             || options.HealthPotionsToBuy > 0
@@ -640,8 +728,10 @@ public class TownManagementService : ITownManagementService
                 // from where she is now, and then trade with nobody.
                 game.RequestUpdate(game.Me.Id);
                 uniqueNPC = NPCHelpers.GetUniqueNPC(game, sellNpc) ?? uniqueNPC;
+                // Within twenty the trade's own approach closes the gap: it moves towards the NPC unit itself
+                // and so follows her as she wanders, where a second path ends wherever she was again.
                 var toNpc = game.Me.Location.Distance(uniqueNPC.Location);
-                if (toNpc > 10)
+                if (toNpc > 20)
                 {
                     _logger.LogWarning("Client {ClientName} finished pathing to {SellNpc} but is {Distance:F0} away, trying once more",
                         game.Me.Name, sellNpc, toNpc);

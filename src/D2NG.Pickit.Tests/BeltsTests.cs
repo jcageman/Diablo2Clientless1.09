@@ -13,7 +13,7 @@ public class BeltsTests
         TestItemFactory.AddStat(item, StatType.FireResistance, 20);
         TestItemFactory.AddStat(item, StatType.LightningResistance, 20);
 
-        Assert.True(Pickit.ShouldKeepItem(characterClass: CharacterClass.Barbarian, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -24,6 +24,6 @@ public class BeltsTests
         TestItemFactory.AddStat(item, StatType.FireResistance, 20);
         TestItemFactory.AddStat(item, StatType.LightningResistance, 20);
 
-        Assert.False(Pickit.ShouldKeepItem(characterClass: CharacterClass.Barbarian, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 }

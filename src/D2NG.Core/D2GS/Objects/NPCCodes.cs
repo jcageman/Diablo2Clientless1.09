@@ -506,5 +506,6 @@ public enum NPCCode : ushort
     BaalsMinion2 = 573,
     BaalsMinion3 = 574,
     WorldstoneEffect = 575,
-    CowKing = 773
+    // Not a monstats class: the DS1 preset id the map API reports for him on 1.09d (773 on 1.13c).
+    CowKing = 651
 }

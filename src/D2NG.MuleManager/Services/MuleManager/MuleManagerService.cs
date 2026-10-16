@@ -3,10 +3,13 @@ using D2NG.Core.D2GS.Enums;
 using D2NG.Core.MCP;
 using D2NG.Mule;
 using D2NG.MuleManager.Configuration;
+using D2NG.Pickit;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Serilog;
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,6 +26,7 @@ public class MuleManagerService : IMuleManagerService
     {
         _configuration = configuration.Value;
         _muleRepository = muleRepository;
+        Pickit.Pickit.Configure(new ConfigurationBuilder().AddJsonFile(Path.GetFullPath(_configuration.PickitConfigFile)).Build().GetSection("pickit").Get<PickitConfiguration>());
     }
 
     public async Task<bool> UpdateAllAccounts()
@@ -95,7 +99,7 @@ public class MuleManagerService : IMuleManagerService
 
             await Task.Delay(TimeSpan.FromSeconds(0.5));
 
-            await _muleRepository.UpdateCharacter(account.Name, character.Name, MuleCharacterSnapshot.Take(client.Game));
+            await _muleRepository.UpdateCharacter(account.Name, character.Name, MuleCharacterSnapshot.Take(client.Game, i => Pickit.Pickit.CanTouchInventoryItem(client.Game, i)));
             if(client.Game.IsInGame())
             {
                 await client.Game.LeaveGame();

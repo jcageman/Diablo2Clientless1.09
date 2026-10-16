@@ -1,4 +1,5 @@
-using D2NG.Core.D2GS.Act;
+﻿using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Items.Containers;
 using D2NG.Core.D2GS.Objects;
@@ -68,6 +69,20 @@ internal class GameData
 
     public Item CursorItem { get; internal set; }
 
+    /// <summary>
+    /// The item this client asked to lift out of a container and has not put down yet. A completed trade
+    /// removes every item from both players' trade grids with the same packet a lift gets, so only the
+    /// asked-for item goes to the cursor.
+    /// </summary>
+    internal uint? LiftRequested { get; set; }
+
+    /// <summary>
+    /// Items this client sold and the server has not taken yet. A sale takes the item out of its
+    /// container with the same packet a lift gets and nothing follows to say it is gone, so without
+    /// this the last item sold sat on the cursor for the rest of the game.
+    /// </summary>
+    internal ConcurrentDictionary<uint, byte> SellRequested { get; } = new();
+
     public List<Player> Players { get; internal set; } = [];
 
     public ConcurrentDictionary<uint, Item> Items { get; private set; } = new ConcurrentDictionary<uint, Item>();
@@ -85,7 +100,7 @@ internal class GameData
     {
         if (packet.Name == ClientCharacter.Name && packet.Class == ClientCharacter.Class)
         {
-            Me ??= new Self(packet);
+            Me ??= NewSelf(new Self(packet));
 
             Me.Location = packet.Location;
             Me.Area = Act.Area;
@@ -103,11 +118,17 @@ internal class GameData
         }
     }
 
+    private Self NewSelf(Self self)
+    {
+        self.CarriedCharms = () => Inventory.Items.Where(i => i.Classification is ClassificationType.SmallCharm or ClassificationType.LargeCharm or ClassificationType.GrandCharm);
+        return self;
+    }
+
     internal void PlayerJoin(PlayerInGamePacket packet)
     {
         if (packet.Name == ClientCharacter.Name && packet.Class == ClientCharacter.Class && Me == null)
         {
-            Me = new Self(packet);
+            Me = NewSelf(new Self(packet));
         }
 
         var player = Players.Where(p => p.Id == packet.Id).FirstOrDefault();
@@ -415,10 +436,29 @@ internal class GameData
 
     internal void ItemUpdate(ParseItemPacket packet)
     {
-        var item = packet.Item;
-        Items[item.Id] = packet.Item;
+        ItemUpdate(packet.Item);
+    }
+
+    internal void ItemUpdate(Item item)
+    {
+        if (Items.TryGetValue(item.Id, out var previous) && previous != item && item.SocketedItems.IsEmpty)
+        {
+            foreach (var gem in previous.SocketedItems)
+            {
+                item.SocketedItems[gem.Key] = gem.Value;
+            }
+        }
+
+        Items[item.Id] = item;
         switch (item.Action)
         {
+            case Action.ItemInSocket:
+                // The owner field of a socketed item's packet is the id of the item it sits in.
+                if (Items.TryGetValue(item.PlayerId, out var parent))
+                {
+                    parent.SocketedItems[item.Id] = item;
+                }
+                break;
             case Action.Equip:
 
                 if (item.EntityType == EntityType.Player)
@@ -430,6 +470,7 @@ internal class GameData
                             Belt.UpdateBeltRows(item.BeltRows);
                         }
                         Me.EquipItem(item);
+
                     }
 
                 }
@@ -452,8 +493,25 @@ internal class GameData
                     }
                 }
                 break;
+            case Action.RefillFromInventory:
+                if (item.EntityType == EntityType.Player && item.PlayerId == Me?.Id)
+                {
+                    // The unequip just before put the empty quiver on the cursor, where the bot then
+                    // spent seven seconds a time trying to put away arrows that no longer existed.
+                    if (CursorItem?.Name == item.Name)
+                    {
+                        CursorItem = null;
+                    }
+
+                    Inventory.Remove(item.Id);
+                    Me.EquipItem(item);
+                }
+                break;
             case Action.PutInContainer:
                 PutInContainer(item);
+                break;
+            case Action.SwapInContainer:
+                SwapInContainer(item);
                 break;
             case Action.RemoveFromContainer:
                 RemoveFromContainer(item);
@@ -511,34 +569,35 @@ internal class GameData
 
     private void RemoveFromContainer(Item item)
     {
+        var lifted = !SellRequested.TryRemove(item.Id, out _);
         switch (item.Container)
         {
             case ContainerType.Stash:
-                if (Stash.Remove(item))
+                if (Stash.Remove(item) && lifted)
                 {
                     CursorItem = item;
                 }
                 break;
             case ContainerType.Stash2:
-                if (Stash.Remove(item))
+                if (Stash.Remove(item) && lifted)
                 {
                     CursorItem = item;
                 }
                 break;
             case ContainerType.Belt:
-                if (Belt.Remove(item))
+                if (Belt.Remove(item) && lifted)
                 {
                     CursorItem = item;
                 }
                 break;
             case ContainerType.Cube:
-                if (Cube.Remove(item))
+                if (Cube.Remove(item) && lifted)
                 {
                     CursorItem = item;
                 }
                 break;
             case ContainerType.Inventory:
-                if(Inventory.Remove(item))
+                if (Inventory.Remove(item) && lifted)
                 {
                     CursorItem = item;
                 }
@@ -547,7 +606,10 @@ internal class GameData
             case ContainerType.ForTrade:
             case ContainerType.TradeOffer:
                 // Lifted off the trade grid: the trade page is not modelled, but the item is on the cursor now.
-                CursorItem = item;
+                if (LiftRequested == item.Id)
+                {
+                    CursorItem = item;
+                }
                 break;
             default:
                 // Do nothing we don't know how to handle this
@@ -555,11 +617,54 @@ internal class GameData
         }
     }
 
+    /// <summary>
+    /// The cursor item was put down on top of another one (a 0x1F swap): it lands in that item's
+    /// place, and the item it displaced goes to the cursor. The server reports only the item that
+    /// landed, so the displaced one is found by the cells they share.
+    /// </summary>
+    private void SwapInContainer(Item item)
+    {
+        var container = item.Container switch
+        {
+            ContainerType.Stash or ContainerType.Stash2 => Stash,
+            ContainerType.Inventory => Inventory,
+            ContainerType.Cube => Cube,
+            _ => null
+        };
+
+        var displaced = container?.Items
+            .Where(other => other.Id != item.Id && other.Container == item.Container && Overlaps(other, item))
+            .ToList() ?? [];
+        foreach (var other in displaced)
+        {
+            container.Remove(other);
+        }
+
+        PutInContainer(item);
+        if (displaced.Count == 1)
+        {
+            CursorItem = displaced[0];
+        }
+    }
+
+    private static bool Overlaps(Item a, Item b)
+    {
+        return a.Location.X < b.Location.X + Math.Max((int)b.Width, 1)
+            && b.Location.X < a.Location.X + Math.Max((int)a.Width, 1)
+            && a.Location.Y < b.Location.Y + Math.Max((int)b.Height, 1)
+            && b.Location.Y < a.Location.Y + Math.Max((int)a.Height, 1);
+    }
+
     private void PutInContainer(Item item)
     {
         if (CursorItem?.Id == item.Id)
         {
             CursorItem = null;
+        }
+
+        if (LiftRequested == item.Id)
+        {
+            LiftRequested = null;
         }
 
         switch (item.Container)

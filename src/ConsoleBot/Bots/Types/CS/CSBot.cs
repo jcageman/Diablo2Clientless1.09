@@ -1,4 +1,5 @@
 ﻿using ConsoleBot.Attack;
+using ConsoleBot.Chicken;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
@@ -418,7 +419,30 @@ public class CSBot : MultiClientBotBase
         _deathsSeen.Clear();
         _retreated.Clear();
         _benchedUntilDiablo.Clear();
+        _corpses.Clear();
+        foreach (var client in _clients)
+        {
+            ChickenService.ClearDeath(client);
+        }
     }
+
+    /// <summary>
+    /// The taxi keeps the party's portals, so only followers stay for their corpse: a dead taxi has
+    /// nobody to open a portal to her body.
+    /// </summary>
+    protected override bool StaysForCorpse(AccountConfig account) =>
+        !account.Character.Equals(_csconfig.TeleportCharacterName, StringComparison.OrdinalIgnoreCase);
+
+    private readonly ConcurrentDictionary<string, Point> _corpses = new();
+
+    private readonly ConcurrentDictionary<string, byte> _recoveredDeaths = new();
+
+    /// <summary>Nothing alive this close to a body, as the taxi sees it, before she opens a portal to it.</summary>
+    private const int CorpseSafeRadius = 20;
+
+    private const double CorpseReach = 10;
+
+    private static readonly TimeSpan CorpsePickupWait = TimeSpan.FromSeconds(20);
 
     private static void LogExperience(Client client, string moment)
     {
@@ -433,7 +457,9 @@ public class CSBot : MultiClientBotBase
 
     private void LogDeath(Client client)
     {
-        if (!client.Game.IsInGame() || client.Game.Me == null)
+        // Not in town: a client that rejoins after a chicken at 0 life keeps reading 0 there until the
+        // server next sends its life, and that stopped a batch over a character that never died.
+        if (!client.Game.IsInGame() || client.Game.Me == null || client.Game.IsInTown() || ChickenService.DeathLocation(client) != null)
         {
             return;
         }
@@ -551,14 +577,10 @@ public class CSBot : MultiClientBotBase
         // dry for most of every fight. They carry spares and the health buffer gives up the cells.
         var manaSpares = IsTeleportClient(client) ? 0 : Math.Clamp(roomForPotions / 3, 0, FollowerManaSpares);
         var buffer = IsTeleportClient(client) ? TaxiPotionBuffer : Math.Clamp(roomForPotions - manaSpares, 0, TaxiPotionBuffer);
+        // The taxi always buys back to full: she visits Jamella to sell anyway, so topping up costs about
+        // half a second, while skipping it above half her spares once left her with none for a whole
+        // seal fight (17 potions in one game, five on a typical one).
         townManagementOptions.HealthPotionsToBuy = Math.Max(0, Math.Max(0, beltShortfall) + buffer - carried);
-        // The taxi's town time is everyone's: the approach waits on it. She drinks from the inventory
-        // first, about five a game, and topping fourteen back up every game cost a walk to Jamella
-        // for two to five potions. Below half she buys back to full; above it she goes straight on.
-        if (IsTeleportClient(client) && beltShortfall <= 0 && carried >= TaxiPotionBuffer / 2)
-        {
-            townManagementOptions.HealthPotionsToBuy = 0;
-        }
         if (manaSpares > 0)
         {
             townManagementOptions.ManaPotionsToBuy = Math.Max(0, account.ManaPotionTarget(client.Game.Belt.Height) + manaSpares - InventoryHelpers.GetTotalManaPotions(client.Game));
@@ -703,6 +725,13 @@ public class CSBot : MultiClientBotBase
         }
 
         var lost = last - client.Game.Me.Experience;
+        if (lost > DeathExperienceFloor && lost < last / 5 && _recoveredDeaths.TryRemove(client.Game.Me.Name, out _))
+        {
+            Log.Warning("{Character} died last game and picked up the corpse: {Lost} lost against the last sample", client.Game.Me.Name, lost);
+            _lastExperience[client.Game.Me.Name] = client.Game.Me.Experience;
+            return;
+        }
+
         if (lost > DeathExperienceFloor && lost < last / 5)
         {
             Log.Fatal("{Character} died: experience fell from {Last} to {Now}, {Lost} lost",
@@ -736,10 +765,16 @@ public class CSBot : MultiClientBotBase
     {
         if (IsTeleportClient(client))
         {
-            var result = await TaxiCs(client, account);
-            NextGame.TrySetResult(true);
-
-            return result;
+            // In a finally: the server dropping her connection throws, and without the signal the
+            // followers spent 30s rejoining a game that no longer existed.
+            try
+            {
+                return await TaxiCs(client, account);
+            }
+            finally
+            {
+                NextGame.TrySetResult(true);
+            }
         }
         else
         {
@@ -770,8 +805,10 @@ public class CSBot : MultiClientBotBase
                 return false;
             }, TimeSpan.FromSeconds(10)))
             {
-                Log.Debug($"Client {client.Game.Me.Name} Taking townportal to {Area.ChaosSanctuary} failed");
-                return false;
+                // A client that joined after the first group finds the star portal gone once the
+                // shouts are done; it takes the next one, as a rejoined chicken does.
+                Log.Information("{Character} missed the portal to the star, following the taxi's next portal", client.Game.Me.Name);
+                return await BaseCsBot(client, account, action);
             }
 
             if (!await WaitForBo(client, account, action))
@@ -886,6 +923,11 @@ public class CSBot : MultiClientBotBase
         while (!await IsNextGame() && client.Game.IsInGame())
         {
             await Task.Delay(100);
+            if (ChickenService.DeathLocation(client) is { } diedAt)
+            {
+                await AwaitCorpseRecovery(client, diedAt, ownState);
+                continue;
+            }
             if (!client.Game.IsInTown() && (OutOfHealthPotions(client) || OutOfManaPotions(client)))
             {
                 await RestockFollower(client, account, ownState);
@@ -955,6 +997,11 @@ public class CSBot : MultiClientBotBase
                 await TryTakeExperienceShrine(client);
                 if (!await KillBosses(client, account, null, action, ownState, _state, true))
                 {
+                    if (ChickenService.DeathLocation(client) != null)
+                    {
+                        continue;
+                    }
+
                     return false;
                 }
 
@@ -1181,7 +1228,115 @@ public class CSBot : MultiClientBotBase
             await TryTakeExperienceShrine(client);
             return true;
         });
-        return await Phase(client, "diablo", () => KillDiablo(client, account, _state));
+        var diabloDown = await Phase(client, "diablo", () => KillDiablo(client, account, _state));
+        if (diabloDown && !_corpses.IsEmpty)
+        {
+            await Phase(client, "corpses", () => RecoverCorpses(client));
+        }
+
+        return diabloDown;
+    }
+
+    /// <summary>
+    /// A follower that stayed after dying waits in town without its gear, which lies on the body. Once
+    /// the taxi has a portal beside the body it goes through and picks it up: the 75% of the experience
+    /// the server keeps on a corpse comes back, which leaving the game would have thrown away.
+    /// </summary>
+    private async Task AwaitCorpseRecovery(Client client, Point diedAt, CsState ownState)
+    {
+        var me = client.Game.Me;
+        _corpses.TryAdd(me.Name, diedAt);
+        if (me.Life <= 0)
+        {
+            return;
+        }
+
+        if (!client.Game.IsInTown())
+        {
+            if (_state.CorpsePortalFor == me.Name)
+            {
+                var experienceBefore = me.Experience;
+                if (await GeneralHelpers.PickupCorpseIfExists(client, _pathingService) && client.Game.Me.CorpseId == null)
+                {
+                    Log.Warning("{Character} picked up its corpse, experience {Before} -> {After}", me.Name, experienceBefore, client.Game.Me.Experience);
+                    _recoveredDeaths.TryAdd(me.Name, 0);
+                    _corpses.TryRemove(me.Name, out _);
+                    ChickenService.ClearDeath(client);
+                }
+            }
+
+            return;
+        }
+
+        var portal = _state.TeleportId;
+        if (_state.CorpsePortalFor != me.Name || portal == null || portal == ownState.TeleportId)
+        {
+            return;
+        }
+
+        Log.Information("{Character} going back to its corpse at {Location} through portal {Portal}", me.Name, diedAt, portal);
+        var taxi = client.Game.Players.FirstOrDefault(p => p.Name.Equals(_csconfig.TeleportCharacterName, StringComparison.OrdinalIgnoreCase));
+        if (taxi != null && await _townManagementService.TakeTownPortalToArea(client, taxi, Area.ChaosSanctuary))
+        {
+            ownState.TeleportId = portal;
+        }
+    }
+
+    /// <summary>
+    /// After Diablo, the taxi visits each body of a follower that stayed: she opens a portal beside it
+    /// only if nothing alive is within <see cref="CorpseSafeRadius"/>, since a follower walking out
+    /// without its gear would only die again and lose more.
+    /// </summary>
+    private async Task<bool> RecoverCorpses(Client client)
+    {
+        foreach (var (name, at) in _corpses.ToArray())
+        {
+            var owner = _clients.FirstOrDefault(c => c.Game.Me?.Name == name);
+            if (owner == null || !owner.Game.IsInGame() || ChickenService.DeathLocation(owner) == null)
+            {
+                continue;
+            }
+
+            var path = await _pathingService.GetPathToLocation(client.Game, at, MovementMode.Teleport);
+            if (path == null || !await MovementHelpers.TakePathOfLocations(client.Game, path, MovementMode.Teleport)
+                || client.Game.Me.Location.Distance(at) > CorpseReach)
+            {
+                Log.Warning("{Character} could not reach the corpse of {Owner} at {Location}, at {Me}", client.Game.Me.Name, name, at, client.Game.Me.Location);
+                continue;
+            }
+
+            var threat = NPCHelpers.GetNearbyNPCs(client, at, 1, CorpseSafeRadius).FirstOrDefault();
+            if (threat != null)
+            {
+                Log.Warning("{Character} leaves the corpse of {Owner} at {Location}: {Threat} {Distance:F0} from it", client.Game.Me.Name, name, at, threat.NPCCode, threat.Location.Distance(at));
+                continue;
+            }
+
+            if (!await GeneralHelpers.TryWithTimeout(async (_) => await _townManagementService.CreateTownPortal(client), TimeSpan.FromSeconds(5)))
+            {
+                Log.Warning("{Character} could not open a portal at the corpse of {Owner}", client.Game.Me.Name, name);
+                continue;
+            }
+
+            var portal = client.Game.GetEntityByCode(EntityCode.TownPortal).LastOrDefault(t => t.TownPortalOwnerId == client.Game.Me.Id);
+            if (portal == null)
+            {
+                continue;
+            }
+
+            _state.CorpsePortalFor = name;
+            _state.TeleportId = portal.Id;
+            Log.Information("{Character} opened portal {Portal} beside the corpse of {Owner} at {Location}", client.Game.Me.Name, portal.Id, name, at);
+            var waited = Stopwatch.StartNew();
+            while (waited.Elapsed < CorpsePickupWait && owner.Game.IsInGame() && client.Game.IsInGame() && ChickenService.DeathLocation(owner) != null)
+            {
+                await Task.Delay(200);
+            }
+
+            Log.Information("The corpse of {Owner} {Result} after {Seconds:F1}s", name, ChickenService.DeathLocation(owner) == null ? "was picked up" : "still lies there", waited.Elapsed.TotalSeconds);
+        }
+
+        return true;
     }
 
     private async Task<bool> WaitForBo(Client client, AccountConfig account, Func<Task> action)
@@ -1316,18 +1471,17 @@ public class CSBot : MultiClientBotBase
 
     private const double TownShoutRange = 10;
 
-    private static bool StillWaitingForShouts(Client client, TimeSpan waited)
+    private bool StillWaitingForShouts(Client client, TimeSpan waited)
     {
         if (client.Game.Me.Class == CharacterClass.Barbarian)
         {
             // Only for whoever is actually beside him, and no longer than the others wait: he used
             // to stand alone at the star for a player whose shouts his client never saw, after the
             // rest had long moved on to the first seal.
+            // The same test the cast uses: waiting for a player the cast will not reach, or for the late
+            // group still arriving, held him at the star six to ten seconds in a fifth of the games.
             return waited < PartyShoutGrace
-                && client.Game.Players.Any(p => p.Id != client.Game.Me.Id
-                    && p.Location != null
-                    && p.Location.Distance(client.Game.Me.Location) < 15
-                    && ClassHelpers.IsMissingShouts(p));
+                && client.Game.Players.Any(p => ClassHelpers.NeedsShoutFrom(client.Game.Me, p) && !IsLateJoiner(p.Name));
         }
 
         if (ClassHelpers.IsMissingShouts(client.Game.Me))
@@ -1335,7 +1489,15 @@ public class CSBot : MultiClientBotBase
             return true;
         }
 
-        return waited < PartyShoutGrace && ClassHelpers.AnyPlayerIsMissingShouts(client);
+        // Not for a client that joins after the first group: it is still in town, and waiting for it
+        // stretched the star from 5.6 to 14.4 seconds a game.
+        return waited < PartyShoutGrace && client.Game.Players.Any(p => ClassHelpers.IsMissingShouts(p) && !IsLateJoiner(p.Name));
+    }
+
+    private bool IsLateJoiner(string character)
+    {
+        var index = _csconfig.Accounts.FindIndex(a => a.Character.Equals(character, StringComparison.OrdinalIgnoreCase));
+        return index >= RealmConnectHelpers.ClientsPerConnectionWindow;
     }
 
 
@@ -1365,7 +1527,9 @@ public class CSBot : MultiClientBotBase
                 break;
             }
 
-            if (item.Location.Distance(me) > SweepPickupReach)
+            // The pickup only takes items strictly inside its radius, so one exactly at the reach was
+            // neither travelled to nor picked up, and the sweep spun on it until its budget ran out.
+            if (item.Location.Distance(me) >= SweepPickupReach)
             {
                 var path = await _pathingService.GetPathToLocation(client.Game, item.Location, MovementMode.Teleport);
                 if (!await MovementHelpers.TakePathOfLocations(client.Game, path, MovementMode.Teleport))
@@ -1475,7 +1639,7 @@ public class CSBot : MultiClientBotBase
         }
 
         var action = GetSorceressKillAction(client, account);
-        if (!await KillBosses(client, account, null, action, csState, csState, true))
+        if (!await KillBosses(client, account, null, action, csState, csState, true, diabloFight: true))
         {
             return false;
         }
@@ -1592,7 +1756,9 @@ public class CSBot : MultiClientBotBase
 
         if (!await GeneralHelpers.TryWithTimeout(async (_) =>
         {
-            return await client.Game.TeleportToLocationAsync(killLocation);
+            // The seal stands 8.6 from this spot, inside teleport's default ten minimum, so without a
+            // smaller one she stayed at the seal and the kill spot was only reached by the retry later.
+            return await client.Game.TeleportToLocationAsync(killLocation, KillSpotHopMinDistance);
         }, TimeSpan.FromSeconds(5)))
         {
             return false;
@@ -1709,6 +1875,8 @@ public class CSBot : MultiClientBotBase
     }
 
     private const double KillLocationTolerance = 8;
+
+    private const double KillSpotHopMinDistance = 3;
 
     /// <summary>
     /// The path back from a seal ends short in about a quarter of left-variant games: it runs
@@ -1886,7 +2054,7 @@ public class CSBot : MultiClientBotBase
             // The server only sends what is within sight of her. From the corridor spot of the
             // seal1-above layout Vizier's far-east spawn is out of it, and six games in fifty were
             // thrown away as "no spawn" with him alive in the room. A hop into the room finds him.
-            Log.Warning("{Character} sees no boss from {Kill} after {Wait}s, scouting from {Scout}", client.Game.Me.Name, csState.KillLocation, BossSpawnWait.TotalSeconds, scoutPoint);
+            Log.Information("{Character} sees no boss from {Kill} after {Wait}s, scouting from {Scout}", client.Game.Me.Name, csState.KillLocation, BossSpawnWait.TotalSeconds, scoutPoint);
             var pathToScout = await _pathingService.GetPathToLocation(client.Game, scoutPoint, MovementMode.Teleport);
             if (await MovementHelpers.TakePathOfLocations(client.Game, pathToScout, MovementMode.Teleport))
             {
@@ -2094,7 +2262,7 @@ public class CSBot : MultiClientBotBase
 
         if (!await GeneralHelpers.TryWithTimeout(async (_) =>
         {
-            return await client.Game.TeleportToLocationAsync(leftSealKillLocation);
+            return await client.Game.TeleportToLocationAsync(leftSealKillLocation, KillSpotHopMinDistance);
         }, TimeSpan.FromSeconds(5)))
         {
             return false;
@@ -2277,10 +2445,10 @@ public class CSBot : MultiClientBotBase
             }
 
             var nearbyPlayer = client.Game.Players
-            .Where(p => p.Id != client.Game.Me.Id && p.Location != null && (p.Class == CharacterClass.Amazon))
+            .Where(p => IsAnchorCandidate(client, p) && (p.Class == CharacterClass.Amazon))
             .OrderBy(p => p.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
             nearbyPlayer ??= client.Game.Players
-            .Where(p => p.Id != client.Game.Me.Id && p.Location != null && (p.Class == CharacterClass.Paladin))
+            .Where(p => IsAnchorCandidate(client, p) && (p.Class == CharacterClass.Paladin))
             .OrderBy(p => p.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
             nearbyPlayer ??= client.Game.Me;
             if (nearbyPlayer != null)
@@ -2291,6 +2459,16 @@ public class CSBot : MultiClientBotBase
         });
         return action;
     }
+
+    /// <summary>
+    /// A party member a follower can fight beside. Only one actually near: an amazon who rejoined and was
+    /// stuck in town anchored every barbarian and the paladin to her town position for a whole Diablo
+    /// fight, and nobody attacked him.
+    /// </summary>
+    private static bool IsAnchorCandidate(Client client, Player p) =>
+        p.Id != client.Game.Me.Id && p.Location != null && p.Location.Distance(client.Game.Me.Location) < AnchorReach;
+
+    private const double AnchorReach = 60;
 
     private Func<Task> GetPaladinKillAction(Client client, AccountConfig account)
     {
@@ -2346,10 +2524,10 @@ public class CSBot : MultiClientBotBase
             }
 
             var nearbyPlayer = client.Game.Players
-            .Where(p => p.Id != client.Game.Me.Id && p.Location != null && (p.Class == CharacterClass.Amazon))
+            .Where(p => IsAnchorCandidate(client, p) && (p.Class == CharacterClass.Amazon))
             .OrderBy(p => p.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
             nearbyPlayer ??= client.Game.Players
-            .Where(p => p.Id != client.Game.Me.Id && p.Location != null && (p.Class == CharacterClass.Barbarian))
+            .Where(p => IsAnchorCandidate(client, p) && (p.Class == CharacterClass.Barbarian))
             .OrderBy(p => p.Location.Distance(client.Game.Me.Location)).FirstOrDefault();
             nearbyPlayer ??= client.Game.Me;
             await _attackService.AssistPlayer(client, nearbyPlayer, null, bossFocus.Update(client, _state));
@@ -2509,7 +2687,7 @@ public class CSBot : MultiClientBotBase
                 // with Vizier long dead and the followers in town.
                 if (_state.KillLocation != null && client.Game.Me.Location.Distance(_state.KillLocation) > TaxiStrayDistance)
                 {
-                    Log.Warning("{Character} is {Distance} from the kill spot with nothing in reach, going back", client.Game.Me.Name, (int)client.Game.Me.Location.Distance(_state.KillLocation));
+                    Log.Information("{Character} is {Distance} from the kill spot with nothing in reach, going back", client.Game.Me.Name, (int)client.Game.Me.Location.Distance(_state.KillLocation));
                     var back = await _pathingService.GetPathToLocation(client.Game, _state.KillLocation, MovementMode.Teleport);
                     await MovementHelpers.TakePathOfLocations(client.Game, back, MovementMode.Teleport);
                 }
@@ -2574,7 +2752,7 @@ public class CSBot : MultiClientBotBase
             if (_state.KillLocation != null && DateTime.Now - escapedAt > TaxiEscapeHold
                 && client.Game.Me.Location.Distance(_state.KillLocation) > TaxiStrayDistance)
             {
-                Log.Warning("{Character} is {Distance} from the kill spot after an escape, going back", client.Game.Me.Name, (int)client.Game.Me.Location.Distance(_state.KillLocation));
+                Log.Information("{Character} is {Distance} from the kill spot after an escape, going back", client.Game.Me.Name, (int)client.Game.Me.Location.Distance(_state.KillLocation));
                 var back = await _pathingService.GetPathToLocation(client.Game, _state.KillLocation, MovementMode.Teleport);
                 await MovementHelpers.TakePathOfLocations(client.Game, back, MovementMode.Teleport);
                 return;
@@ -2723,7 +2901,9 @@ public class CSBot : MultiClientBotBase
                 // With nothing to cast she does not stand and wait either: a hop to the quietest
                 // ground five to ten out, the old safe spot near the anchor when there is none.
                 var hopTo = await QuietSpotNear(client, enemies, anchor, TaxiStepMin, TaxiStepMax);
-                if (hopTo != null && await client.Game.TeleportToLocationAsync(hopTo))
+                // The hops are five to ten long, and the default ten minimum turned every one into a
+                // no-op that reported success: she stood frozen out of static range for half a minute.
+                if (hopTo != null && await client.Game.TeleportToLocationAsync(hopTo, TaxiStepMin - 2))
                 {
                     moveTimer.Restart();
                 }
@@ -2967,7 +3147,8 @@ public class CSBot : MultiClientBotBase
                             Func<Task> action,
                             CsState ownState,
                             CsState newState,
-                            bool checkBossDead = false)
+                            bool checkBossDead = false,
+                            bool diabloFight = false)
     {
         var sealMaxTimeout = new Stopwatch();
         sealMaxTimeout.Start();
@@ -2980,6 +3161,7 @@ public class CSBot : MultiClientBotBase
         var lastChange = new Dictionary<uint, (Point At, double Life, DateTime Since)>();
         var fightActive = true;
         var movedToLiveBoss = false;
+        var lookedWhereLastSeen = false;
         do
         {
             await Task.Delay(100);
@@ -2990,7 +3172,7 @@ public class CSBot : MultiClientBotBase
                 // the next seal; its timeout then threw away a game that was going fine.
                 if (!IsTeleportClient(client))
                 {
-                    Log.Warning("{Character} reached the seal timeout, following the portal", client.Game.Me.Name);
+                    Log.Information("{Character} reached the seal timeout, following the portal", client.Game.Me.Name);
                     return true;
                 }
 
@@ -3121,6 +3303,35 @@ public class CSBot : MultiClientBotBase
                         await RelocatePartyToBoss(client, ownState, liveBoss);
                         quietFor.Restart();
                         continue;
+                    }
+
+                    // Out of sight is not dead: De Seis spawned 53 out and was never seen to die, the
+                    // seal was taken as won and Diablo never came. One look where he was last seen
+                    // either finds him alive, for the branch above, or his corpse, for the death check.
+                    if (!diabloFight && !lookedWhereLastSeen && ownState.BossId is uint seenBossId)
+                    {
+                        var lastSeen = client.Game.WorldObjects.GetValueOrDefault((seenBossId, EntityType.NPC));
+                        var lookAt = lastSeen?.Location ?? bossAt;
+                        if (lookAt != null && lastSeen?.State is not (EntityState.Dead or EntityState.Dieing))
+                        {
+                            lookedWhereLastSeen = true;
+                            Log.Warning("{Character}: quiet here but the seal boss was never seen to die, looking where he was last seen {Distance:F0} away",
+                                client.Game.Me.Name, lookAt.Distance(client.Game.Me.Location));
+                            var look = await _pathingService.GetPathToLocation(client.Game, lookAt, MovementMode.Teleport);
+                            await MovementHelpers.TakePathOfLocations(client.Game, look, MovementMode.Teleport);
+                            quietFor.Restart();
+                            continue;
+                        }
+                    }
+
+                    // Diablo only spawns once all three seal bosses are dead, so a quiet star without
+                    // him means one of them is still alive somewhere: calling that won reported a lost
+                    // run as a finished one. Every real Diablo kill (114 of 115) ended on his death.
+                    if (diabloFight)
+                    {
+                        Log.Warning("{Character}: quiet at the star and Diablo was never seen to die, a seal boss must still be alive; giving up the game", client.Game.Me.Name);
+                        NextGame.TrySetResult(true);
+                        return false;
                     }
 
                     // Bosses were killed and nobody noticed: the experience jumped, then the party

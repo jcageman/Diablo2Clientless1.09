@@ -27,6 +27,8 @@ public class NpcHitPacket : D2gsPacket
         EntityId = reader.ReadUInt32();
         EntityState = (EntityState)reader.ReadByte();
         reader.ReadByte();
-        LifePercentage = reader.ReadByte() / 1.28;
+        // Life is 0-127 of 128 and the server ORs 0x80 in as a monster type flag (D2MOO MonsterMsg.cpp):
+        // Pindleskin's hits read 0xFB, 0x77, 0xF3, 0x6F, which is 96, 93, 90, 87%.
+        LifePercentage = (reader.ReadByte() & 0x7F) / 1.28;
     }
 }

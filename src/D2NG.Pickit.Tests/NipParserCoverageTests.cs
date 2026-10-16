@@ -78,7 +78,7 @@ public class NipParserCoverageTests
     {
         var rule = NipParser.ParseFile(source).Single(parsedRule => parsedRule.Line == line);
         var item = CreateRepresentativeItem(ClassificationType.Ring);
-        var context = new NipEvaluationContext(item, CharacterClass.Sorceress);
+        var context = new NipEvaluationContext(item);
 
         Assert.NotNull(rule.PropertyCondition);
         rule.PropertyCondition!.Evaluate(context);
@@ -109,7 +109,7 @@ public class NipParserCoverageTests
         foreach (var classification in Enum.GetValues<ClassificationType>())
         {
             var item = CreateRepresentativeItem(classification);
-            var context = new NipEvaluationContext(item, CharacterClass.Sorceress);
+            var context = new NipEvaluationContext(item);
 
             foreach (var rule in rules)
             {
@@ -125,7 +125,7 @@ public class NipParserCoverageTests
     [MemberData(nameof(NipDirectories))]
     public void EveryFieldReferenceInEveryNipFileResolves(string directory)
     {
-        var context = new NipEvaluationContext(CreateRepresentativeItem(ClassificationType.Ring), CharacterClass.Sorceress);
+        var context = new NipEvaluationContext(CreateRepresentativeItem(ClassificationType.Ring));
         var unresolved = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var file in GetNipFiles(Path.GetFileName(directory)))
@@ -134,6 +134,9 @@ public class NipParserCoverageTests
             {
                 var commentStart = line.IndexOf("//", StringComparison.Ordinal);
                 var code = commentStart >= 0 ? line[..commentStart] : line;
+
+                // The third section is '[maxquantity] == n', read by the parser itself, not a field.
+                code = string.Join('#', code.Split('#').Take(2));
 
                 foreach (var field in Regex.Matches(code, @"\[([A-Za-z0-9_]+)\]").Select(match => match.Groups[1].Value))
                 {
@@ -186,7 +189,7 @@ public class NipParserCoverageTests
         gold.IsGold = true;
         gold.Amount = amount;
 
-        return new NipEvaluationContext(gold, CharacterClass.Sorceress);
+        return new NipEvaluationContext(gold);
     }
 
     [Theory]

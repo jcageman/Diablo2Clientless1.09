@@ -9,7 +9,7 @@ public class SetsTests
     {
         var item = TestItemFactory.Create(ClassificationType.Armor, ItemName.LacqueredPlate, QualityType.Set, identified: false);
 
-        Assert.True(Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: true, item));
+        Assert.True(Pickit.ShouldPickupItem(shouldPickupGoldItems: true, item));
     }
 
     [Fact]
@@ -17,6 +17,6 @@ public class SetsTests
     {
         var item = TestItemFactory.Create(ClassificationType.Belt, ItemName.HeavyBelt, QualityType.Set, identified: false);
 
-        Assert.False(Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: true, item));
+        Assert.False(Pickit.ShouldPickupItem(shouldPickupGoldItems: true, item));
     }
 }

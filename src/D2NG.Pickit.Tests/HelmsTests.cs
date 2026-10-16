@@ -9,7 +9,7 @@ public class HelmsTests
     {
         var item = TestItemFactory.Create(ClassificationType.Helm, ItemName.Shako, QualityType.Unique);
 
-        Assert.True(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -17,6 +17,6 @@ public class HelmsTests
     {
         var item = TestItemFactory.Create(ClassificationType.Helm, ItemName.Shako, QualityType.Unique, ethereal: true);
 
-        Assert.False(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 }
