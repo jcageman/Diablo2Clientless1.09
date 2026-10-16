@@ -10,26 +10,7 @@
 [name] == standardofheroes
 [name] == tokenofabsolution
 
-// High value runes
-[type] == rune && [name] == solrune
-[type] == rune && [name] == nefrune
-[type] == rune && [name] == lemrune
-[type] == rune && [name] == pulrune
-[type] == rune && [name] == umrune
-[type] == rune && [name] == malrune
-[type] == rune && [name] == istrune
-[type] == rune && [name] == gulrune
-[type] == rune && [name] == vexrune
-[type] == rune && [name] == ohmrune
-[type] == rune && [name] == lorune
-[type] == rune && [name] == surrune
-[type] == rune && [name] == berrune
-[type] == rune && [name] == jahrune
-[type] == rune && [name] == chamrune
-[type] == rune && [name] == zodrune
-
-// Identified high-value runes and special items are also kept.
-[type] == rune && ([name] == solrune || [name] == nefrune || [name] == lemrune || [name] == pulrune || [name] == umrune || [name] == malrune || [name] == istrune || [name] == gulrune || [name] == vexrune || [name] == ohmrune || [name] == lorune || [name] == surrune || [name] == berrune || [name] == jahrune || [name] == chamrune || [name] == zodrune) # 1 == 1
+// Special items are also kept.
 [name] == essenceofanguish # 1 == 1
 [name] == essenceofpain # 1 == 1
 [name] == essenceofsuffering # 1 == 1

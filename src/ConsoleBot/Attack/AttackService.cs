@@ -1,4 +1,5 @@
-﻿using ConsoleBot.Helpers;
+﻿using ConsoleBot.Chicken;
+using ConsoleBot.Helpers;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
@@ -82,7 +83,7 @@ public class AttackService : IAttackService
     /// <summary>Four: at three the left seal's thirty-strong swarm outlived the party; the 80% whirl floor is what keeps a cursed whirl survivable.</summary>
     private const int MaxWhirlwindTargets = 4;
 
-    /// <summary>At 0.6 a whirl started at 2218 life ended at 205; a curse landing mid-whirl returns about 2000, so he starts one only with that much to spare.</summary>
+    /// <summary>At 0.6 a whirl started at 2218 life ended at 205; a curse landing mid-whirl returns about 2000, so in the Sanctuary he starts one only with that much to spare.</summary>
     private const double BarbarianWhirlMinLife = 0.8;
 
     private const double CorpseExplosionRadius = 6;
@@ -189,15 +190,17 @@ public class AttackService : IAttackService
             y0 = y1;
             y1 = t;
         }
-        ushort dx = (ushort)(x1 - x0);
-        ushort dy = (ushort)(Math.Abs(y1 - y0));
-        ushort error = (ushort)(dx / 2);
-        ushort ystep = (ushort)((y0 < y1) ? 1 : -1);
-        ushort y = y0;
-        for (ushort x = x0; x <= x1; x++)
+        // Signed on purpose: as ushort the error term wrapped instead of going negative, so the line never
+        // stepped along its minor axis and every diagonal sight check tested a straight row of cells.
+        int dx = x1 - x0;
+        int dy = Math.Abs(y1 - y0);
+        int error = dx / 2;
+        int ystep = y0 < y1 ? 1 : -1;
+        int y = y0;
+        for (int x = x0; x <= x1; x++)
         {
-            yield return new Point((steep ? y : x), (steep ? x : y));
-            error = (ushort)(error - dy);
+            yield return new Point((ushort)(steep ? y : x), (ushort)(steep ? x : y));
+            error -= dy;
             if (error < 0)
             {
                 y += ystep;
@@ -209,6 +212,13 @@ public class AttackService : IAttackService
 
     public async Task<bool> IsVisitable(Client client, Point point)
     {
+        // A path to a point in a wall still comes back, ending on the nearest walkable cell instead, so
+        // a spot search would accept the wall and log a fallback warning for every such candidate.
+        if (!await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, client.Game.Area, point))
+        {
+            return false;
+        }
+
         var path = await _pathingService.GetPathToLocation(client.Game, point, MovementMode.Walking);
         return path.Count != 0;
     }
@@ -264,11 +274,17 @@ public class AttackService : IAttackService
                 // the party in a game the taxi had chickened out of.
                 if (await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
-                    return !client.Game.IsInGame() || await client.Game.TeleportToLocationAsync(spot);
+                    // Safe spots lie five to twenty out; teleport's default ten minimum reported the
+                    // nearer ones as reached without casting.
+                    return !client.Game.IsInGame() || await client.Game.TeleportToLocationAsync(spot, 3);
                 }, TimeSpan.FromSeconds(4)) && client.Game.IsInGame())
                 {
                     return true;
                 }
+
+                if (_logger.IsEnabled(LogLevel.Warning))
+                    _logger.LogWarning("Teleport to safe spot {Spot} failed for {Name} at {Location}", spot, client.Game.Me.Name, client.Game.Me.Location);
+                return false;
             }
             else
             {
@@ -1043,9 +1059,7 @@ public class AttackService : IAttackService
                 .Take(MaxWhirlwindTargets)
                 .ToList();
 
-            // A whirl started at 58% life through three Venom Lords, cursed on the way, ended at 154
-            // life. Below this he stands back until the potions have him whole enough to take one.
-            if (me.Life < me.MaxLife * BarbarianWhirlMinLife)
+            if (client.Game.Area == Area.ChaosSanctuary && me.Life < me.MaxLife * BarbarianWhirlMinLife)
             {
                 _logger.LogInformation("{Character} standing back at {Life} of {MaxLife} life", me.Name, me.Life, me.MaxLife);
                 await IdleReposition(client, anchor);
@@ -1162,6 +1176,12 @@ public class AttackService : IAttackService
             return false;
         }
 
+        if (ChickenService.HoldForRejuvenation(client))
+        {
+            _logger.LogInformation("{Character} drinking a rejuvenation at {Life} of {MaxLife} before whirling", me.Name, me.Life, me.MaxLife);
+            return false;
+        }
+
         _logger.LogInformation("{Character} attacking {Count} {NPCCode} with {Skill} towards {Target} covering {Covered}",
             me.Name, pack.Count, pack[0].NPCCode, Skill.Whirlwind, target, aim.Covered);
 
@@ -1172,13 +1192,15 @@ public class AttackService : IAttackService
         var manaBefore = me.Mana;
         var result = GeneralHelpers.TryWithTimeout((retryCount) =>
         {
-            var whirling = me.Effects.ContainsKey(EntityEffect.Skillmove)
-                && me.Effects.ContainsKey(EntityEffect.Uninterruptable);
-            if (whirling)
+            // Over when the server says so. Arriving near the target used to end the wait while the
+            // whirl still ran, and the next action - or the log line saying it was over - came early.
+            if (ClassHelpers.IsWhirling(me))
             {
                 started = true;
+                return false;
             }
-            else if (started)
+
+            if (started)
             {
                 return true;
             }
@@ -1188,13 +1210,13 @@ public class AttackService : IAttackService
                 return true;
             }
 
-            if (!whirling && !started && IsUnderIronMaiden(client))
+            if (!started && IsUnderIronMaiden(client))
             {
                 cursed = true;
                 return true;
             }
 
-            if (!whirling && DateTime.Now.Subtract(lastCast) >= WhirlwindRetryInterval)
+            if (DateTime.Now.Subtract(lastCast) >= WhirlwindRetryInterval)
             {
                 client.Game.RepeatRightHandSkillOnLocation(Skill.Whirlwind, target);
                 lastCast = DateTime.Now;
@@ -1209,9 +1231,8 @@ public class AttackService : IAttackService
             return false;
         }
 
-        var manaBurn = pack.Any(e => e.MonsterEnchantments.Contains(MonsterEnchantment.ManaBurn))
-            ? ", mana burn"
-            : string.Empty;
+        var manaBurn = (pack.Any(e => e.MonsterEnchantments.Contains(MonsterEnchantment.ManaBurn)) ? ", mana burn" : string.Empty)
+            + (pack.Any(e => e.MonsterEnchantments.Contains(MonsterEnchantment.StoneSkin)) ? ", stone skin" : string.Empty);
         _logger.LogInformation("{Character} whirled through {Count} over {Distance:0} units, mana {Before} to {After}, delta {Delta}{ManaBurn}, covering {Covered}",
             me.Name, pack.Count, distance, manaBefore, me.Mana, me.Mana - manaBefore, manaBurn, aim.Covered);
 

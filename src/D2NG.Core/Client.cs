@@ -8,6 +8,7 @@ using D2NG.Core.MCP.Packet;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -143,6 +144,31 @@ public class Client
     }
 
     /// <summary>
+    /// Converts a classic character on the account currently logged on to expansion. There is no way
+    /// back, and a converted character can no longer join a classic game.
+    /// </summary>
+    /// <returns>The character as the realm lists it afterwards, or <see langword="null"/> when the realm refused</returns>
+    public async Task<Character> UpgradeCharacter(string name)
+    {
+        var result = await Mcp.UpgradeCharacter(name);
+        if (result == null)
+        {
+            Log.Warning($"Converting {name} to expansion timed out");
+            return null;
+        }
+
+        if (result != 0x00)
+        {
+            Log.Warning($"Converting {name} to expansion failed with result 0x{result:X2}");
+            return null;
+        }
+
+        Log.Information($"Converted {name} to expansion");
+        var characters = await Mcp.ListCharacters();
+        return characters.Find(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Select one of the available characters on the account.
     /// </summary>
     /// <param name="character">Character with name matching one of the account characters</param>
@@ -183,6 +209,7 @@ public class Client
         var packet = await Mcp.JoinGame(name, password);
         if (packet == null)
         {
+            Log.Warning("Join of {Game} with {Account} got no answer from the realm", name, LoggedInUserName());
             return false;
         }
 
@@ -192,13 +219,15 @@ public class Client
         }
 
         Mcp.Disconnect();
+        await GameServerConnectionGate.WaitForSlot(LoggedInUserName(), packet.D2gsIp);
         Log.Debug($"Connecting to D2GS Server {packet.D2gsIp}");
         try
         {
             D2gs.Connect(packet.D2gsIp);
         }
-        catch
+        catch (Exception e)
         {
+            Log.Warning("Connecting {Account} to the game server failed: {Error}", LoggedInUserName(), e.Message);
             if (D2gs.IsConnected())
             {
                 D2gs.Disconnect();
@@ -215,7 +244,20 @@ public class Client
             }
             return false;
         }
-        Bncs.NotifyJoin(name, password);
+        // Only a courtesy to the chat server, which is gone when the account was logged on elsewhere; the
+        // game itself is joined either way.
+        try
+        {
+            if (Bncs.IsConnected())
+            {
+                Bncs.NotifyJoin(name, password);
+            }
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException)
+        {
+            Log.Information("Telling the chat server about {Game} failed, the chat connection is gone", name);
+        }
+
         return true;
     }
 
@@ -238,21 +280,30 @@ public class Client
 
     private async Task<bool> RealmLogon()
     {
-        _mcpRealm ??= Bncs.ListMcpRealms()?.First();
-
-        if (_mcpRealm == null)
-        {
-            Log.Warning("RealmLogin failed, no mcp realm found");
-            return false;
-        }
-
         if (!Bncs.IsConnected())
         {
-            Log.Warning("RealmLogin failed, bncs is not connected");
+            Log.Information("RealmLogin failed, bncs is not connected");
             return false;
         }
 
-        var packet = Bncs.RealmLogon(_mcpRealm);
+        RealmLogonResponsePacket packet;
+        try
+        {
+            _mcpRealm ??= Bncs.ListMcpRealms()?.First();
+            if (_mcpRealm == null)
+            {
+                Log.Warning("RealmLogin failed, no mcp realm found");
+                return false;
+            }
+
+            packet = Bncs.RealmLogon(_mcpRealm);
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException)
+        {
+            Log.Information("RealmLogin failed, the chat connection is gone: {Reason}", e.Message);
+            return false;
+        }
+
         if (packet == null)
         {
             Log.Warning("RealmLogin failed");
@@ -272,10 +323,9 @@ public class Client
 
     public void Disconnect()
     {
-        if (Bncs.IsConnected())
-        {
-            Bncs.Disconnect();
-        }
+        // Also when the server already closed it: the chat state has to go back to not connected for
+        // the next Connect to be accepted.
+        Bncs.Disconnect();
 
         if (Mcp.IsConnected())
         {

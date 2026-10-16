@@ -15,36 +15,78 @@ public static class Pickit
     private static readonly Lazy<IReadOnlyList<NipRule>> NipRules = new(LoadNipRules);
     private static PickitConfiguration? Configuration { get; set; }
 
+    private static readonly Lazy<IReadOnlyList<NipRule>> UnlimitedKeepRules =
+        new(() => NipRules.Value.Where(r => !r.PickupOnly && r.MaxQuantity == null).ToList());
+
+    /// <summary>
+    /// Items held outside the current game - on the mules - counted against a rule's
+    /// '[maxquantity]'. Unset, only what the character itself carries and stashes is counted.
+    /// </summary>
+    public static Func<MuledStock>? MuledItems { get; set; }
+
     public static void Configure(PickitConfiguration configuration)
     {
         Configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        QuietRules = LoadQuietRules(configuration);
     }
 
 
     public static bool ShouldPickupItem(Game game, Item item, bool shouldPickupGoldItems)
     {
-        return ShouldPickupItem(game.Me.Class, shouldPickupGoldItems, item);
+        return ExplainPickup(game, shouldPickupGoldItems, item).Result;
     }
 
-    public static bool ShouldPickupItem(CharacterClass characterClass, bool shouldPickupGoldItems, Item item)
+    /// <param name="heldItems">Items already held, counted against '[maxquantity]'. Null ignores the limits.</param>
+    /// <param name="muledStock">Counted on top of <paramref name="heldItems"/>, and only when that is given.</param>
+    public static bool ShouldPickupItem(bool shouldPickupGoldItems, Item item, IReadOnlyCollection<Item>? heldItems = null, MuledStock? muledStock = null)
     {
-        return ExplainPickup(characterClass, shouldPickupGoldItems, item).Result;
-    }
-    public static bool ShouldKeepItem(Game game, Item item)
-    {
-        return ShouldKeepItem(game.Me.Class, item);
-    }
-
-    public static bool ShouldKeepItem(CharacterClass characterClass, Item item)
-    {
-        return ExplainKeep(characterClass, item).Result;
+        return ExplainPickup(shouldPickupGoldItems, item, heldItems, muledStock).Result;
     }
 
     /// <summary>
-    /// Same decision as <see cref="ShouldPickupItem(CharacterClass, bool, Item)"/>, but also
+    /// Stashed items are always kept: '[maxquantity]' only decides about new finds, so a limit
+    /// that is already reached never sells or drops the stock that reached it.
+    /// </summary>
+    public static bool ShouldKeepItem(Game game, Item item)
+    {
+        return ExplainKeep(game, item).Result;
+    }
+
+    public static PickitVerdict ExplainKeep(Game game, Item item)
+    {
+        var stashed = item.Container == ContainerType.Stash || item.Container == ContainerType.Stash2;
+        return stashed ? ExplainKeep(item) : ExplainKeep(item, OwnItems(game, item), MuledItems?.Invoke());
+    }
+
+    /// <param name="heldItems">Items already held, counted against '[maxquantity]'. Null ignores the limits.</param>
+    /// <param name="muledStock">Counted on top of <paramref name="heldItems"/>, and only when that is given.</param>
+    public static bool ShouldKeepItem(Item item, IReadOnlyCollection<Item>? heldItems = null, MuledStock? muledStock = null)
+    {
+        return ExplainKeep(item, heldItems, muledStock).Result;
+    }
+
+    public static PickitVerdict ExplainPickup(Game game, bool shouldPickupGoldItems, Item item)
+    {
+        return ExplainPickup(shouldPickupGoldItems, item, OwnItems(game, item), MuledItems?.Invoke());
+    }
+
+    /// <summary>
+    /// What the character carries and stashes, minus <paramref name="item"/> itself.
+    /// </summary>
+    private static List<Item> OwnItems(Game game, Item item)
+    {
+        var held = game.Stash.Items;
+        held.AddRange(game.Inventory.Items);
+        held.AddRange(game.Cube.Items);
+        held.RemoveAll(i => i.Id == item.Id);
+        return held;
+    }
+
+    /// <summary>
+    /// Same decision as <see cref="ShouldPickupItem(bool, Item, IReadOnlyCollection{Item}, MuledStock)"/>, but also
     /// reports which nip rule decided it. Used for auditing what the bot leaves on the ground.
     /// </summary>
-    public static PickitVerdict ExplainPickup(CharacterClass characterClass, bool shouldPickupGoldItems, Item item)
+    public static PickitVerdict ExplainPickup(bool shouldPickupGoldItems, Item item, IReadOnlyCollection<Item>? heldItems = null, MuledStock? muledStock = null)
     {
         // Gold piles arrive with the identified flag set, like everything the game never asks Cain
         // about, but gold never lands in the inventory so no keep rule can ever speak for it. Judging
@@ -53,36 +95,37 @@ public static class Pickit
 
         var rule = EvaluateNipRules(
             item,
-            characterClass,
             useKeepRules: useKeepRules,
-            includeGoldItems: shouldPickupGoldItems && !useKeepRules);
+            includeGoldItems: shouldPickupGoldItems && !useKeepRules,
+            heldItems,
+            muledStock);
 
         // An identified item never reaches the property-only pickup pass, so a line with nothing right
         // of '#' - pick up to sell, never keep - would otherwise do nothing for runes, essences or bases.
         if (rule == null && useKeepRules)
         {
-            var context = new NipEvaluationContext(item, characterClass);
-            rule = NipRules.Value.FirstOrDefault(r => !r.PickupOnly && r.StatCondition == null && r.MatchesPickup(context));
+            var context = new NipEvaluationContext(item);
+            rule = NipRules.Value.FirstOrDefault(r => !r.PickupOnly && r.StatCondition == null && r.MatchesPickup(context) && HasRoom(r, heldItems, muledStock));
         }
 
         return rule == null ? PickitVerdict.NoRule() : PickitVerdict.Matched(rule);
     }
 
     /// <summary>
-    /// Same decision as <see cref="ShouldKeepItem(CharacterClass, Item)"/>, but also reports why.
+    /// Same decision as <see cref="ShouldKeepItem(Item, IReadOnlyCollection{Item}, MuledStock)"/>, but also reports why.
     /// </summary>
-    public static PickitVerdict ExplainKeep(CharacterClass characterClass, Item item)
+    public static PickitVerdict ExplainKeep(Item item, IReadOnlyCollection<Item>? heldItems = null, MuledStock? muledStock = null)
     {
         if (!item.IsIdentified)
         {
             return PickitVerdict.Unidentified();
         }
 
-        var rule = EvaluateNipRules(item, characterClass, useKeepRules: true, includeGoldItems: false);
+        var rule = EvaluateNipRules(item, useKeepRules: true, includeGoldItems: false, heldItems, muledStock);
         return rule == null ? PickitVerdict.NoRule() : PickitVerdict.Matched(rule);
     }
 
-    private static NipRule? EvaluateNipRules(Item item, CharacterClass characterClass, bool useKeepRules, bool includeGoldItems)
+    private static NipRule? EvaluateNipRules(Item item, bool useKeepRules, bool includeGoldItems, IReadOnlyCollection<Item>? heldItems, MuledStock? muledStock)
     {
         var rules = NipRules.Value;
         if (rules.Count == 0)
@@ -90,12 +133,12 @@ public static class Pickit
             return null;
         }
 
-        var context = new NipEvaluationContext(item, characterClass);
+        var context = new NipEvaluationContext(item);
         if (useKeepRules)
         {
             foreach (var rule in rules)
             {
-                if (!rule.PickupOnly && rule.MatchesKeep(context))
+                if (!rule.PickupOnly && rule.MatchesKeep(context) && HasRoom(rule, heldItems, muledStock))
                 {
                     return rule;
                 }
@@ -106,13 +149,54 @@ public static class Pickit
 
         foreach (var rule in rules)
         {
-            if ((!rule.PickupOnly || includeGoldItems) && rule.MatchesPickup(context))
+            if ((!rule.PickupOnly || includeGoldItems) && rule.MatchesPickup(context) && HasRoom(rule, heldItems, muledStock))
             {
                 return rule;
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// False when the rule has a '[maxquantity]' and at least that many held and muled items count
+    /// towards it, so the next rule gets its turn. The muled count is worked out once per stock.
+    /// </summary>
+    private static bool HasRoom(NipRule rule, IReadOnlyCollection<Item>? heldItems, MuledStock? muledStock)
+    {
+        if (rule.MaxQuantity is not { } maxQuantity || heldItems == null)
+        {
+            return true;
+        }
+
+        var held = CountTowards(rule, heldItems) + (muledStock?.CountTowards(rule, CountTowards) ?? 0);
+        return held < maxQuantity;
+    }
+
+    /// <summary>
+    /// How many of the items count towards the rule's limit: those this rule would keep and no rule
+    /// without a limit would. An amulet kept for its skills is not crafting stock.
+    /// </summary>
+    private static int CountTowards(NipRule rule, IReadOnlyCollection<Item> items)
+    {
+        var unlimited = UnlimitedKeepRules.Value;
+        return items
+            .Select(i => new NipEvaluationContext(i))
+            .Count(context => rule.MatchesKeep(context) && !unlimited.Any(r => r.MatchesKeep(context)));
+    }
+
+    /// <summary>
+    /// The nip files with a keep rule for the item, limits ignored. The mule run uses it to send
+    /// items kept only by one file - crafting stock - to their own mule.
+    /// </summary>
+    public static IReadOnlyList<string> KeepRuleSources(Item item)
+    {
+        var context = new NipEvaluationContext(item);
+        return NipRules.Value
+            .Where(r => !r.PickupOnly && r.MatchesKeep(context))
+            .Select(r => Path.GetFileName(r.Source))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static IReadOnlyList<NipRule> LoadNipRules()
@@ -264,14 +348,43 @@ public static class Pickit
         return true;
     }
 
+    private static IReadOnlyList<NipRule> QuietRules = [];
+
     public static bool SendItemToKeepToExternalClient(Item item)
     {
-        return SendItemToKeepToExternalClient(item, GetConfiguration());
+        return SendItemToKeepToExternalClient(item, QuietRules);
     }
 
-    public static bool SendItemToKeepToExternalClient(Item item, PickitConfiguration configuration)
+    /// <summary>
+    /// False for a kept item a line of the quiet nip matches: routine loot such as gems, and
+    /// crafting stock no other keep file wants.
+    /// </summary>
+    public static bool SendItemToKeepToExternalClient(Item item, IReadOnlyList<NipRule> quietRules)
     {
-        return !configuration.ExternalItemBlacklist.Any(rule => rule.Matches(item));
+        var context = new NipEvaluationContext(item)
+        {
+            KeepRuleSources = () => KeepRuleSources(item)
+        };
+        return !quietRules.Any(rule => rule.MatchesExpression(context));
+    }
+
+    /// <summary>
+    /// Read when the pickit is configured, so a mistyped path stops the bot at startup rather than
+    /// at the first stash.
+    /// </summary>
+    public static IReadOnlyList<NipRule> LoadQuietRules(PickitConfiguration configuration)
+    {
+        if (string.IsNullOrEmpty(configuration.QuietNip))
+        {
+            return [];
+        }
+
+        if (!File.Exists(configuration.QuietNip))
+        {
+            throw new FileNotFoundException($"Quiet nip file {configuration.QuietNip} does not exist", configuration.QuietNip);
+        }
+
+        return NipParser.ParseFile(configuration.QuietNip);
     }
 
     private static PickitConfiguration GetConfiguration()

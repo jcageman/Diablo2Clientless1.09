@@ -199,10 +199,19 @@ public class MuleTransfer
 
     /// <summary>
     /// A fresh character carries a scroll of town portal and a scroll of identify in its inventory. On a mule those two
-    /// cells are worth more than the scrolls, so they are dropped. Nothing else is ever dropped.
+    /// cells are worth more than the scrolls, so they are dropped, and so are the ones older mules stashed.
+    /// Nothing else is ever dropped.
     /// </summary>
-    private void DropStarterScrolls(Client client)
+    public void DropStarterScrolls(Client client)
     {
+        var stashed = client.Game.Stash.Items
+            .Where(i => i.Name is ItemName.ScrollofTownPortal or ItemName.ScrollofIdentify)
+            .ToList();
+        if (stashed.Count > 0 && client.Game.Inventory.FindFreeSpace(stashed[0]) != null)
+        {
+            InventoryHelpers.MoveStashItemsToInventory(client.Game, stashed);
+        }
+
         var scrolls = client.Game.Inventory.Items
             .Where(i => i.Name is ItemName.ScrollofTownPortal or ItemName.ScrollofIdentify)
             .ToList();

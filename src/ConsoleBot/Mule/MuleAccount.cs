@@ -21,10 +21,12 @@ public class MuleAccount
     public string Password { get; set; }
 
     /// <summary>
-    /// Rules deciding which items this account accepts; an item is accepted when it matches at
-    /// least one rule. An empty list, the default, accepts every muleable item.
+    /// Nip file deciding which items this account accepts: an item is accepted when any line of it
+    /// matches. A file name is looked up in <see cref="MuleConfiguration.NipDirectory"/>. Required,
+    /// so an account can never end up accepting everything by accident.
     /// </summary>
-    public List<MuleRule> MatchesAny { get; set; } = [];
+    [Required]
+    public string Nip { get; set; }
 
     /// <summary>
     /// Characters on this account that may be filled, by name. Leave empty to log on and use
@@ -38,4 +40,12 @@ public class MuleAccount
     /// automatically. Matching is case-insensitive.
     /// </summary>
     public List<string> ExcludedCharacters { get; set; } = [];
+
+    /// <summary>
+    /// Send each item to the character on this account that already holds the most items of its
+    /// classification, rather than filling the characters in order. Meant for the crafting
+    /// material mules, so the gloves, the amulets and the rings each gather on their own character
+    /// and a craft needs as few logins as possible. Reads the mule database; off by default.
+    /// </summary>
+    public bool PlaceWithSameClassification { get; set; }
 }

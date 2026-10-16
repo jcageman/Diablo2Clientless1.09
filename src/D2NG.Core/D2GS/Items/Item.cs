@@ -1,7 +1,9 @@
 ﻿using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace D2NG.Core.D2GS.Items;
 
@@ -97,10 +99,42 @@ public class Item
 
     public Dictionary<StatType, ItemProperty> Properties { get; set; }
 
+    /// <summary>
+    /// Gems in this item's sockets. Their stats are not in the item's own property list, and a
+    /// perfect ruby in a helm or body armor is 38 life the maximum would otherwise miss.
+    /// </summary>
+    public ConcurrentDictionary<uint, Item> SocketedItems { get; } = new();
+
+    /// <summary>Life the rubies in this item's sockets add; only helms and body armor turn a ruby into life.</summary>
+    public int SocketedLife()
+    {
+        if (Classification != ClassificationType.Helm && Classification != ClassificationType.Circlet
+            && Classification != ClassificationType.BarbarianHelm && Classification != ClassificationType.DruidPelt
+            && Classification != ClassificationType.Armor)
+        {
+            return 0;
+        }
+
+        return SocketedItems.Values.Sum(gem => gem.Name switch
+        {
+            ItemName.ChippedRuby => 10,
+            ItemName.FlawedRuby => 17,
+            ItemName.Ruby => 24,
+            ItemName.FlawlessRuby => 31,
+            ItemName.PerfectRuby => 38,
+            _ => 0
+        });
+    }
+
 
     public int GetValueOfStatType(StatType statType)
     {
         var result = Properties.GetValueOrDefault(statType)?.Value ?? 0;
+        // Per level stats carry their amount in PerLevel (raw eighths, as nip rules write them) and Value 0.
+        if (result == 0)
+        {
+            result = Properties.GetValueOrDefault(statType)?.PerLevel ?? 0;
+        }
         switch (statType)
         {
             case StatType.MaximumDamage:
@@ -295,7 +329,12 @@ public class Item
                     fullDescription += $"\t{property.Key} : {property.Value.Value}{maximumDamageValue} \r\n";
                     break;
                 case StatType.SkillTab1:
-                    fullDescription += $"\t{property.Value.SkillTab} : {property.Value.Value} \r\n";
+                case StatType.SkillTab2:
+                case StatType.SkillTab3:
+                case StatType.SkillTab4:
+                case StatType.SkillTab5:
+                case StatType.SkillTab6:
+                    fullDescription += $"\t+{property.Value.Value} {SkillTabNames.Name(property.Value.SkillTab)} \r\n";
                     break;
                 case StatType.SkillOnHit:
                 case StatType.SkillWhenStruck1:
@@ -307,7 +346,10 @@ public class Item
                     fullDescription += $"\t{property.Key} : with skill {property.Value.Skill} level {property.Value.SkillLevel} with {property.Value.MaximumCharges} charges \r\n";
                     break;
                 default:
-                    fullDescription += $"\t{property.Key} : {property.Value.Value} \r\n";
+                    // Per level stats arrive in PerLevel with Value 0: a Legendary Mallet read "MaximumDamagePerLevel : 0".
+                    fullDescription += property.Value.PerLevel != 0
+                        ? $"\t{property.Key} : {PerLevelAmount(property.Key, property.Value.PerLevel)} per character level \r\n"
+                        : $"\t{property.Key} : {property.Value.Value} \r\n";
                     break;
             }
             
@@ -315,6 +357,12 @@ public class Item
 
         return fullDescription;
     }
+
+    /// <summary>
+    /// What a per level stat adds per character level: the server sends eighths, attack rating halves.
+    /// </summary>
+    public static double PerLevelAmount(StatType type, int perLevel)
+        => type is StatType.AttackRatingPerLevel or StatType.BonusToAttackRatingPerLevel ? perLevel / 2.0 : perLevel / 8.0;
 
     public bool IsInMerchantTab()
     {

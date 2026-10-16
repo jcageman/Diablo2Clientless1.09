@@ -344,3 +344,6 @@ healthchecksdb
 log.txt
 src/ConsoleBot/Properties/launchSettings.json
 /data
+
+# playwright-cli page snapshots
+.playwright-cli/

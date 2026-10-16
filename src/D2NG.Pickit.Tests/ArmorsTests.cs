@@ -11,7 +11,7 @@ public class ArmorsTests
         TestItemFactory.AddStat(item, StatType.ColdResistance, 34);
         TestItemFactory.AddStat(item, StatType.AllSkills, 1);
 
-        Assert.True(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -21,6 +21,6 @@ public class ArmorsTests
         TestItemFactory.AddStat(item, StatType.ColdResistance, 20);
         TestItemFactory.AddStat(item, StatType.AllSkills, 1);
 
-        Assert.False(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 }

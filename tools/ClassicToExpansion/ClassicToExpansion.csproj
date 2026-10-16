@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ClassicToExpansion</RootNamespace>
+    <AssemblyName>ClassicToExpansion</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ConsoleBot\ConsoleBot.csproj" />
+  </ItemGroup>
+
+</Project>

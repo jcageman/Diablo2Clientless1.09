@@ -27,6 +27,16 @@ public class RecipeResult
     public ClassificationType? Classification { get; set; }
 
     /// <summary>
+    /// True when the item passes every filter that is set.
+    /// </summary>
+    public bool Matches(Item item)
+    {
+        return (ItemNames == null || ItemNames.Contains(item.Name))
+            && (Classification == null || Classification == item.Classification)
+            && (Quality == null || Quality == item.Quality);
+    }
+
+    /// <summary>
     /// Validates that at least one of <see cref="Classification"/>, <see cref="ItemNames"/> or
     /// <see cref="Quality"/> is set.
     /// </summary>

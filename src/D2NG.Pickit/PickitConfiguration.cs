@@ -8,8 +8,8 @@ namespace D2NG.Pickit;
 /// <summary>
 /// Pickit settings, bound from the root <c>pickit</c> section of the separate file passed via the
 /// <c>pickitconfig</c> command line parameter. What to pick up and what to keep is decided by
-/// the nip rules in <see cref="NipDirectory"/>; the properties here cover the two decisions that
-/// nip rules do not express - gambling and what is forwarded to the external client.
+/// the nip rules in <see cref="NipDirectory"/>; the properties here cover gambling, which nip
+/// rules do not express, and the quiet nip deciding what is not forwarded to the external client.
 /// </summary>
 public sealed class PickitConfiguration
 {
@@ -28,11 +28,12 @@ public sealed class PickitConfiguration
     public required GambleConfiguration Gamble { get; set; }
 
     /// <summary>
-    /// Items that are kept but not reported to the external messaging client, so routine loot does
-    /// not flood the chat.
+    /// Nip file of kept items that are not reported to the external messaging client, so routine
+    /// loot does not flood the chat. Read by expression only, like the mule rules, so
+    /// '[keptonlyby] == craftbases' covers crafting stock. Keep it outside <see cref="NipDirectory"/>,
+    /// which loads every nip file below it as a keep rule. Omit it to report every kept item.
     /// </summary>
-    [Required]
-    public required List<ExternalItemBlacklistRule> ExternalItemBlacklist { get; set; }
+    public string? QuietNip { get; set; }
 
     /// <summary>
     /// How the bot treats the inventory it is carrying. Optional; the defaults match the layout the
@@ -87,40 +88,4 @@ public sealed class GambleRule
     /// any level.
     /// </summary>
     public uint MinimumCharacterLevel { get; set; }
-}
-
-/// <summary>
-/// One blacklist rule for external reporting. Every property that is set must match; the ones left
-/// unset are ignored, so a rule with nothing set blacklists every item.
-/// </summary>
-public sealed class ExternalItemBlacklistRule
-{
-    /// <summary>
-    /// Item names this rule covers. An empty list, the default, matches any name.
-    /// </summary>
-    public List<ItemName> ItemNames { get; set; } = [];
-
-    /// <summary>
-    /// Classification this rule covers, for example <c>Gem</c>. Leave unset to match any
-    /// classification.
-    /// </summary>
-    public ClassificationType? Classification { get; set; }
-
-    /// <summary>
-    /// Quality this rule covers, for example <c>Unique</c>. Leave unset to match any quality.
-    /// </summary>
-    public QualityType? Quality { get; set; }
-
-    /// <summary>
-    /// Returns whether <paramref name="item"/> is covered by this rule, meaning it should not be
-    /// reported to the external client.
-    /// </summary>
-    public bool Matches(Item item)
-    {
-        var nameMatches = ItemNames.Count == 0 || ItemNames.Contains(item.Name);
-        var classificationMatches = !Classification.HasValue || Classification == item.Classification;
-        var qualityMatches = !Quality.HasValue || Quality == item.Quality;
-
-        return nameMatches && classificationMatches && qualityMatches;
-    }
 }

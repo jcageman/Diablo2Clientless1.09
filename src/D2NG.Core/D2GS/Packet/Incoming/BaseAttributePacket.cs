@@ -21,7 +21,9 @@ internal class BaseAttributePacket : D2gsPacket
                 Value = reader.ReadByte();
                 break;
             case InComingPacket.AddAttributeWord:
-                Value = reader.ReadInt16();
+                // Unsigned: a sorceress's base maximum mana, 231 in 1/256ths, is 0xE700 and read signed
+                // it came out as -25, so her maximum mana was computed at 122 against 1100 in hand.
+                Value = reader.ReadUInt16();
                 break;
             case InComingPacket.AddAttributeDword:
                 Value = reader.ReadInt32();

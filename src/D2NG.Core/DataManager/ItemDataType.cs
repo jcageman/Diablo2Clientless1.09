@@ -125,7 +125,8 @@ internal class ItemDataType
             ["Torch"] = ClassificationType.Torch,
             ["Wand"] = ClassificationType.Wand,
             ["Essence"] = ClassificationType.Essence,
-            ["Token"] = ClassificationType.Token
+            ["Token"] = ClassificationType.Token,
+            ["Reagent"] = ClassificationType.Reagent
         };
         return classificationMap;
     }
@@ -793,7 +794,14 @@ internal class ItemDataType
             ["Essence Of Pain"] = ItemName.EssenceOfPain,
             ["Essence Of Suffering"] = ItemName.EssenceOfSuffering,
             ["Essence Of Anguish"] = ItemName.EssenceOfAnguish,
-            ["Token Of Absolution"] = ItemName.TokenOfAbsolution
+            ["Token Of Absolution"] = ItemName.TokenOfAbsolution,
+            ["Rare Skull"] = ItemName.RareSkull,
+            ["Rare Ruby"] = ItemName.RareRuby,
+            ["Rare Amethyst"] = ItemName.RareAmethyst,
+            ["Rare Diamond"] = ItemName.RareDiamond,
+            ["Rare Emerald"] = ItemName.RareEmerald,
+            ["Rare Topaz"] = ItemName.RareTopaz,
+            ["Rare Sapphire"] = ItemName.RareSapphire
         };
         return itemNameMap;
     }

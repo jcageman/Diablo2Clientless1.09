@@ -44,6 +44,90 @@ public class GameDataTests
         Assert.Null(exception);
     }
 
+    // A stash gem put down on an inventory gem (0x1F): the server reports the gem that landed with
+    // SwapInContainer, and the gem it displaced is then on the cursor.
+    [Fact]
+    public void SwapInContainer_LandsTheItemAndLiftsTheOneItDisplaced()
+    {
+        var data = CreateGameWithAssignedPlayer();
+        var stashGem = Gem(0x7C, D2NG.Core.D2GS.Items.ContainerType.Stash, 7, 1, D2NG.Core.D2GS.Items.Action.PutInContainer);
+        var inventoryGem = Gem(0x7E, D2NG.Core.D2GS.Items.ContainerType.Inventory, 2, 2, D2NG.Core.D2GS.Items.Action.PutInContainer);
+        data.ItemUpdate(stashGem);
+        data.ItemUpdate(inventoryGem);
+        data.ItemUpdate(Gem(0x7C, D2NG.Core.D2GS.Items.ContainerType.Stash, 7, 1, D2NG.Core.D2GS.Items.Action.RemoveFromContainer));
+        Assert.Equal(0x7CU, data.CursorItem?.Id);
+
+        data.ItemUpdate(Gem(0x7C, D2NG.Core.D2GS.Items.ContainerType.Inventory, 2, 2, D2NG.Core.D2GS.Items.Action.SwapInContainer));
+
+        Assert.NotNull(data.Inventory.FindItemById(0x7C));
+        Assert.Null(data.Inventory.FindItemById(0x7E));
+        Assert.Equal(0x7EU, data.CursorItem?.Id);
+    }
+
+    // A completed trade empties both trade grids with the same removal a lift gets (seen live, 10 Oct
+    // 2026); those items are gone, not on the cursor.
+    [Fact]
+    public void TradeGridRemoval_ReachesTheCursorOnlyWhileTheItemIsBeingLifted()
+    {
+        var data = CreateGameWithAssignedPlayer();
+        data.LiftRequested = 0x22;
+        data.ItemUpdate(Gem(0x22, D2NG.Core.D2GS.Items.ContainerType.ForTrade, 0, 0, D2NG.Core.D2GS.Items.Action.PutInContainer));
+        data.ItemUpdate(Gem(0x22, D2NG.Core.D2GS.Items.ContainerType.ForTrade, 0, 0, D2NG.Core.D2GS.Items.Action.RemoveFromContainer));
+        Assert.Null(data.CursorItem);
+
+        data.LiftRequested = 0x23;
+        data.ItemUpdate(Gem(0x23, D2NG.Core.D2GS.Items.ContainerType.ForTrade, 1, 0, D2NG.Core.D2GS.Items.Action.RemoveFromContainer));
+        Assert.Equal(0x23U, data.CursorItem?.Id);
+    }
+
+    private static D2NG.Core.D2GS.Items.Item Gem(uint id, D2NG.Core.D2GS.Items.ContainerType container, ushort x, ushort y, D2NG.Core.D2GS.Items.Action action)
+    {
+        return new D2NG.Core.D2GS.Items.Item
+        {
+            Id = id,
+            Container = container,
+            Location = new Point(x, y),
+            Width = 1,
+            Height = 1,
+            Action = action,
+            Properties = []
+        };
+    }
+
+    // Packets a sorceress received on joining: her base maximum life as attribute 7 (815 in 256ths),
+    // a Grim Helm with 40 life and the perfect ruby in its socket, whose owner field is the helm's id.
+    [Fact]
+    public void MaximumLifeCountsServerBaseLifeAndSocketedRuby()
+    {
+        var data = CreateGameWithAssignedPlayer();
+        data.SetAttribute(new BaseAttributePacket(new D2gsPacket(System.Convert.FromHexString("1F07002F0300"))));
+        data.ItemUpdate(new ParseItemPacket(new D2gsPacket(System.Convert.FromHexString(
+            "9D063700030000000001000000110880000124008087960312A6E109F400C3D005DBF0062580084A4640101380B402E200D2090C2785FF"))));
+        Assert.Equal(815 + 40, data.Me.MaxLife);
+
+        data.ItemUpdate(new ParseItemPacket(new D2gsPacket(System.Convert.FromHexString(
+            "9D1319100400000004030000001800A00001186E7006270702"))));
+
+        Assert.Equal(815 + 40 + 38, data.Me.MaxLife);
+    }
+
+    // Battle Orders cast while a character is still loading into an area arrives only in the state
+    // list (0x12), without the 98% that 0x13 carries; the last percentage this character got stands in.
+    [Fact]
+    public void BattleOrdersFromStateListUsesLastKnownPercentage()
+    {
+        var earlier = CreateGameWithAssignedPlayer();
+        earlier.AddEntityEffect(new AddEntityEffectPacket(new D2gsPacket(System.Convert.FromHexString("1300010000002000000062000000"))));
+        Assert.Equal(98, earlier.Me.BattleOrdersLifePercentage);
+
+        var data = CreateGameWithAssignedPlayer();
+        data.SetAttribute(new BaseAttributePacket(new D2gsPacket(System.Convert.FromHexString("1F07002F0300"))));
+        data.UpdateEntityEffects(new UpdateEntityEffectsPacket(new D2gsPacket(System.Convert.FromHexString(
+            "1200010000000000000001000000000000000000000000000000"))));
+
+        Assert.Equal((int)(815 * 1.98), data.Me.MaxLife);
+    }
+
     private static GameData CreateGameWithAssignedPlayer()
     {
         var gameFlags = new GameFlags(new D2gsPacket([0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));

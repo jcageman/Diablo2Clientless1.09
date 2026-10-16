@@ -8,6 +8,10 @@ public enum Attribute
     Vitality = 0x03,
     StatRemaining = 0x04,
     SkillRemaining = 0x05,
+    /// <summary>Base maximum life in 256ths: level, vitality and quest life, without items or buffs.</summary>
+    MaxLife = 0x07,
+    /// <summary>Base maximum mana in 256ths.</summary>
+    MaxMana = 0x09,
     Level = 0x0C,
     Experience = 0x0D,
     GoldOnPerson = 0x0E,

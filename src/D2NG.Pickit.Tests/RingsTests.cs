@@ -10,6 +10,6 @@ public class RingsTests
         var item = TestItemFactory.Create(ClassificationType.Ring, ItemName.Ring, QualityType.Unique);
         TestItemFactory.AddStat(item, StatType.AllSkills, 1);
 
-        Assert.True(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 }

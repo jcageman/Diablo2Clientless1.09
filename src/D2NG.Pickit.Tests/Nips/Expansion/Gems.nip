@@ -21,3 +21,7 @@
 [type] == gem && [name] == chippedsapphire # 1 == 1
 [type] == gem && [name] == flawlesssapphire # 1 == 1
 [type] == gem && [name] == perfectsapphire # 1 == 1
+
+// Catalysts for the background cube bot: 3 Lum + Flawed Amethyst = Ko, 3 Fal + Flawed Ruby = Lem.
+[type] == gem && [name] == flawedamethyst # 1 == 1
+[type] == gem && [name] == flawedruby # 1 == 1

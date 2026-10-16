@@ -1,17 +1,4 @@
-// Desired runes
-[type] == rune && [name] == solrune
-[type] == rune && [name] == nefrune
-[type] == rune && [name] == lemrune
-[type] == rune && [name] == pulrune
-[type] == rune && [name] == umrune
-[type] == rune && [name] == malrune
-[type] == rune && [name] == istrune
-[type] == rune && [name] == gulrune
-[type] == rune && [name] == vexrune
-[type] == rune && [name] == ohmrune
-[type] == rune && [name] == lorune
-[type] == rune && [name] == surrune
-[type] == rune && [name] == berrune
-[type] == rune && [name] == jahrune
-[type] == rune && [name] == chamrune
-[type] == rune && [name] == zodrune
+// Runes (RUNES-AND-GEMS-PROPOSAL.md): every rune but Io. Runeword runes (Wealth, Silence, Fury,
+// Rhyme, Honor), Blood craft runes (Nef Tal Ral Ort Thul Amn Sol Eth Ith), cube feeders (Lum, Fal)
+// and the high runes for trading. Io only feeds Lum.
+[type] == rune && [name] != iorune # 1 == 1

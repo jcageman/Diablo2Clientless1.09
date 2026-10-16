@@ -7,6 +7,7 @@ using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,6 +33,67 @@ internal class GameServer : IDisposable
 
     private Thread _listener;
 
+    private const int RecentPacketCount = 3000;
+
+    private static readonly TimeSpan BeforeLastReceived = TimeSpan.FromSeconds(3);
+
+    private const int SentAfterLastReceivedShown = 10;
+
+    /// <summary>
+    /// The last packets both ways, kept so a connection the server closes can be explained: it
+    /// removes a client for one packet it rejects, and nothing else in the log says which.
+    /// </summary>
+    private readonly ConcurrentQueue<(DateTime At, bool Sent, byte[] Raw)> _recentPackets = new();
+
+    private static readonly TimeSpan ReportedSilence = TimeSpan.FromSeconds(8);
+
+    private DateTime _lastReceived = DateTime.MinValue;
+
+    private void Remember(bool sent, byte[] raw)
+    {
+        var now = DateTime.Now;
+        if (!sent)
+        {
+            if (InGame && _lastReceived != DateTime.MinValue && now - _lastReceived > ReportedSilence)
+            {
+                Log.Warning("Instance {InstanceId} game server was silent for {Seconds:F1}s and then resumed", InstanceId, (now - _lastReceived).TotalSeconds);
+            }
+
+            _lastReceived = now;
+        }
+
+        _recentPackets.Enqueue((now, sent, raw.Length > 32 ? raw[..32] : raw));
+        while (_recentPackets.Count > RecentPacketCount && _recentPackets.TryDequeue(out _))
+        {
+        }
+    }
+
+    internal void LogRecentPackets(string reason)
+    {
+        var packets = _recentPackets.ToArray();
+        var lastReceived = Array.FindLastIndex(packets, p => !p.Sent);
+        var from = lastReceived < 0 ? 0 : Array.FindIndex(packets, p => p.At >= packets[lastReceived].At - BeforeLastReceived);
+        var after = packets.Skip(lastReceived + 1).ToArray();
+        var shown = packets[from..(lastReceived + 1)].Concat(after.Take(SentAfterLastReceivedShown));
+        var lines = string.Join(Environment.NewLine, shown.Select(p =>
+            $"  {p.At:HH:mm:ss.fff} {(p.Sent ? "sent" : "recv")} {p.Raw.ToPrintString()}"));
+        var silence = lastReceived < 0 ? "nothing received in the last " + packets.Length + " packets" : $"last received {packets[lastReceived].At:HH:mm:ss.fff}";
+        var sentSince = string.Join(" ", after.GroupBy(p => p.Raw[0]).Select(g => $"0x{g.Key:X2}x{g.Count()}"));
+        Log.Warning("Instance {InstanceId} {Reason}, {Silence}, sent since: {SentSince}, packets from {Before}s before it:{NewLine}{Packets}",
+            InstanceId, reason, silence, sentSince, BeforeLastReceived.TotalSeconds, Environment.NewLine, lines);
+    }
+
+    internal void LogPacketsSince(string reason, DateTime since)
+    {
+        var packets = _recentPackets.ToArray();
+        var shown = packets.Where(p => p.At >= since).ToArray();
+        var lines = string.Join(Environment.NewLine, shown.Select(p =>
+            $"  {p.At:HH:mm:ss.fff} {(p.Sent ? "sent" : "recv")} {p.Raw.ToPrintString()}"));
+        var cut = packets.Length > 0 && packets[0].At > since ? $", the oldest kept is {packets[0].At:HH:mm:ss.fff}" : "";
+        Log.Warning("Instance {InstanceId} {Reason}, {Count} packets since {Since:HH:mm:ss.fff}{Cut}:{NewLine}{Packets}",
+            InstanceId, reason, shown.Length, since, cut, Environment.NewLine, lines);
+    }
+
     public GameServer()
     {
         InstanceId = ++instanceCounter;
@@ -39,6 +101,7 @@ internal class GameServer : IDisposable
 
         Connection.PacketReceived += (obj, eventArgs) =>
         {
+            Remember(false, eventArgs.Raw);
             if (Enum.IsDefined(typeof(InComingPacket), eventArgs.Type))
             {
                 var incomingPacketType = (InComingPacket)eventArgs.Type;
@@ -58,6 +121,7 @@ internal class GameServer : IDisposable
 
         Connection.PacketSent += (obj, eventArgs) =>
         {
+            Remember(true, eventArgs.Raw);
             if (Enum.IsDefined(typeof(OutGoingPacket), eventArgs.Type))
             {
                 var outgoingPacketType = (OutGoingPacket)eventArgs.Type;
@@ -109,6 +173,11 @@ internal class GameServer : IDisposable
                     exception,
                     "InstanceId {InstanceId} GameServer connection was terminated",
                     InstanceId);
+                if (InGame)
+                {
+                    LogRecentPackets($"game server closed the connection mid-game ({exception.Message})");
+                }
+
                 InGame = false;
                 Connection.Terminate();
                 break;

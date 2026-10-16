@@ -64,6 +64,9 @@ internal sealed class CsState
     /// <summary>Claimed by the taker before it heads out, so nobody tries twice.</summary>
     public bool ExperienceShrineTaken { get; set; }
 
+    /// <summary>Whose corpse the taxi's newest portal stands beside.</summary>
+    public string CorpsePortalFor { get; set; }
+
     public bool TeleportHasChanged(CsState otherState)
     {
         return TeleportId != otherState.TeleportId;

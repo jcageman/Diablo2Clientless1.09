@@ -17,9 +17,9 @@ public class PickitReviewRegressionTests
     private static readonly string ClassicNipDirectory = Path.Combine(AppContext.BaseDirectory, "Nips", "Classic");
 
     // Pickit.Configure points at the Expansion tree, so classic rules are evaluated directly.
-    private static bool ClassicKeeps(Item item, CharacterClass characterClass)
+    private static bool ClassicKeeps(Item item)
     {
-        var context = new NipEvaluationContext(item, characterClass);
+        var context = new NipEvaluationContext(item);
         return NipParser.ParseDirectory(ClassicNipDirectory).Any(rule => rule.MatchesKeep(context));
     }
 
@@ -30,7 +30,7 @@ public class PickitReviewRegressionTests
     {
         var item = TestItemFactory.Create(ClassificationType.Boots, ItemName.BattleBoots, QualityType.Unique);
 
-        Assert.True(Pickit.ShouldKeepItem(CharacterClass.Barbarian, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class PickitReviewRegressionTests
     {
         var item = TestItemFactory.Create(ClassificationType.Boots, ItemName.WarBoots, QualityType.Unique, ethereal: true);
 
-        Assert.True(Pickit.ShouldKeepItem(CharacterClass.Barbarian, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -46,7 +46,7 @@ public class PickitReviewRegressionTests
     {
         var item = TestItemFactory.Create(ClassificationType.Boots, ItemName.WarBoots, QualityType.Unique);
 
-        Assert.False(Pickit.ShouldKeepItem(CharacterClass.Barbarian, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public class PickitReviewRegressionTests
         var item = TestItemFactory.Create(ClassificationType.BarbarianHelm, ItemName.SlayerGuard, QualityType.Unique);
         TestItemFactory.AddSkillTab(item, SkillTab.BarbarianCombatSkills, 1);
 
-        Assert.True(Pickit.ShouldKeepItem(CharacterClass.Barbarian, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public class PickitReviewRegressionTests
         TestItemFactory.AddSkillTab(item, SkillTab.BarbarianWarcries, 2);
         TestItemFactory.AddSingleSkill(item, Skill.BattleOrders, 1);
 
-        Assert.True(Pickit.ShouldKeepItem(CharacterClass.Barbarian, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public class PickitReviewRegressionTests
     {
         var item = TestItemFactory.Create(ClassificationType.Gem, ItemName.PerfectSkull, QualityType.Normal);
 
-        Assert.True(Pickit.ShouldKeepItem(CharacterClass.Sorceress, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public class PickitReviewRegressionTests
         TestItemFactory.AddStat(item, StatType.MinimumDamage, 7);
         TestItemFactory.AddStat(item, StatType.Dexterity, 10);
 
-        Assert.True(Pickit.ShouldKeepItem(CharacterClass.Barbarian, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     // ---------- Classic ----------
@@ -98,7 +98,7 @@ public class PickitReviewRegressionTests
         var item = TestItemFactory.Create(ClassificationType.Helm, ItemName.Cap, QualityType.Rare);
         TestItemFactory.AddStat(item, StatType.Life, 30);
 
-        Assert.False(ClassicKeeps(item, CharacterClass.Barbarian));
+        Assert.False(ClassicKeeps(item));
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public class PickitReviewRegressionTests
         TestItemFactory.AddSingleSkill(item, Skill.BlessedHammer, 2);
         TestItemFactory.AddSingleSkill(item, Skill.Concentration, 2, StatType.SingleSkill2);
 
-        Assert.True(ClassicKeeps(item, CharacterClass.Paladin));
+        Assert.True(ClassicKeeps(item));
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class PickitReviewRegressionTests
         var item = TestItemFactory.Create(ClassificationType.Ring, ItemName.Ring, QualityType.Unique);
         TestItemFactory.AddStat(item, StatType.CannotBeFrozen, 1);
 
-        Assert.False(ClassicKeeps(item, CharacterClass.Barbarian));
+        Assert.False(ClassicKeeps(item));
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public class PickitReviewRegressionTests
         var item = TestItemFactory.Create(ClassificationType.Armor, ItemName.MagePlate, QualityType.Magical, sockets: 4);
         TestItemFactory.AddStat(item, StatType.Life, 40);
 
-        Assert.False(ClassicKeeps(item, CharacterClass.Sorceress));
+        Assert.False(ClassicKeeps(item));
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public class PickitReviewRegressionTests
     {
         var item = TestItemFactory.Create(ClassificationType.Gem, ItemName.FlawlessSkull, QualityType.Normal);
 
-        Assert.True(ClassicKeeps(item, CharacterClass.Barbarian));
+        Assert.True(ClassicKeeps(item));
     }
 
     [Fact]
@@ -147,6 +147,6 @@ public class PickitReviewRegressionTests
         // Gems.ShouldKeepItemClassic keeps skulls only; every other gem branch is commented out.
         var item = TestItemFactory.Create(ClassificationType.Gem, ItemName.PerfectRuby, QualityType.Normal);
 
-        Assert.False(ClassicKeeps(item, CharacterClass.Barbarian));
+        Assert.False(ClassicKeeps(item));
     }
 }

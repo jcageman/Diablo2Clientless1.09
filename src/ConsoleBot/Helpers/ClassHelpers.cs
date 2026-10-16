@@ -17,8 +17,7 @@ public static class ClassHelpers
     {
         if (client != null && client.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0) > 0)
         {
-            var nearbyPlayers = client.Game.Players.Where(p => p.Area == client.Game.Area && p.Location?.Distance(client.Game.Me.Location) < 10 && IsMissingShouts(p));
-            if (nearbyPlayers.Any())
+            if (client.Game.Players.Any(p => NeedsShoutFrom(client.Game.Me, p)))
             {
                 client.Game.UseRightHandSkillOnLocation(Skill.BattleCommand, client.Game.Me.Location);
                 await Task.Delay(TimeSpan.FromSeconds(0.5));
@@ -28,11 +27,30 @@ public static class ClassHelpers
                 await Task.Delay(TimeSpan.FromSeconds(0.5));
             }
 
-            return client.Game.Players.Where(p => p.Area == client.Game.Area && p.Location?.Distance(client.Game.Me.Location) < 10 && IsMissingShouts(p)).Any();
+            return client.Game.Players.Any(p => NeedsShoutFrom(client.Game.Me, p));
         }
 
         return true;
     }
+
+    /// <summary>
+    /// A player close enough for this barbarian's shouts to reach who is still missing them. Judged by
+    /// position only: a player's area lags its transitions, and a stale one kept a player five units
+    /// away from ever being shouted while the barbarian waited for him.
+    /// </summary>
+    public static bool NeedsShoutFrom(Player barbarian, Player player) =>
+        player.Location != null
+        && player.Location.Distance(barbarian.Location) < ShoutReach
+        && IsMissingShouts(player);
+
+    private const double ShoutReach = 10;
+
+    /// <summary>
+    /// The server holds both states on a barbarian for exactly the length of a whirl; it ignores a potion
+    /// drunk while they are on (stock unchanged, life still falling) and takes one the moment they clear.
+    /// </summary>
+    public static bool IsWhirling(Player player) =>
+        player.Effects.ContainsKey(EntityEffect.Skillmove) && player.Effects.ContainsKey(EntityEffect.Uninterruptable);
 
     public static bool AnyPlayerIsMissingShouts(Client client)
     {

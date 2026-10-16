@@ -659,3 +659,10 @@ Essence Of Suffering|eos|Essence|1|1|0|0|0
 Essence Of Anguish|eoa|Essence|1|1|0|0|0
 Token Of Absolution|toa|Token|1|1|0|0|0
 Standard of Heroes|soh|Token|1|1|0|0|0
+Rare Skull|rcs|Reagent|1|1|0|0|0
+Rare Ruby|rcr|Reagent|1|1|0|0|0
+Rare Amethyst|rca|Reagent|1|1|0|0|0
+Rare Diamond|rcd|Reagent|1|1|0|0|0
+Rare Emerald|rce|Reagent|1|1|0|0|0
+Rare Topaz|rct|Reagent|1|1|0|0|0
+Rare Sapphire|rcp|Reagent|1|1|0|0|0

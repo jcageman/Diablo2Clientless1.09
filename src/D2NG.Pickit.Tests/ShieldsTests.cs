@@ -10,7 +10,7 @@ public class ShieldsTests
         var item = TestItemFactory.Create(ClassificationType.Shield, ItemName.Monarch, QualityType.Magical, sockets: 4);
         TestItemFactory.AddStat(item, StatType.IncreasedBlocking, 10);
 
-        Assert.True(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -19,6 +19,6 @@ public class ShieldsTests
         var item = TestItemFactory.Create(ClassificationType.Shield, ItemName.Monarch, QualityType.Magical, sockets: 2);
         TestItemFactory.AddStat(item, StatType.FasterBlockRate, 10);
 
-        Assert.False(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 }

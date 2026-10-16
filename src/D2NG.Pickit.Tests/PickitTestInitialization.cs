@@ -21,19 +21,7 @@ internal static class PickitTestInitialization
                     new() { ItemNames = [ItemName.Amulet], MinimumCharacterLevel = 90 },
                     new() { ItemNames = [ItemName.Boots, ItemName.HeavyBoots], MinimumCharacterLevel = 0 }
                 ]
-            },
-            ExternalItemBlacklist =
-            [
-                new() { ItemNames = [ItemName.Ring], Quality = QualityType.Unique },
-                new() { Classification = ClassificationType.Gem },
-                new() { ItemNames = [ItemName.SolRune] },
-                new() { ItemNames = [ItemName.NefRune] },
-                new()
-                {
-                    ItemNames = [ItemName.HeavyGloves, ItemName.SharkskinGloves, ItemName.VampireboneGloves],
-                    Quality = QualityType.Magical
-                }
-            ]
+            }
         });
     }
 }

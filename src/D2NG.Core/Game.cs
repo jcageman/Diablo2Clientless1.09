@@ -50,6 +50,7 @@ public class Game
             if (IsInGame())
             {
                 Log.Information($"{selectedCharacter?.Name}: Game loading..., About to drop");
+                _gameServer.LogRecentPackets($"{selectedCharacter?.Name} got game loading mid-game");
                 LeaveGame().Wait();
             }
         }
@@ -162,7 +163,6 @@ public class Game
             // every teardown. Waking it is free.
             _leavingGame = true;
             pingThread.Join();
-            await Task.Delay(1000);
         }
     }
 
@@ -257,6 +257,8 @@ public class Game
         return WorldObjects.Values.Where(o => o.NPCCode == npcCode).ToList();
     }
 
+    public void LogPacketsSince(string reason, DateTime since) => _gameServer.LogPacketsSince(reason, since);
+
     public WarpData GetNearestWarp()
     {
         return Warps.Values.SelectMany(l => l).OrderBy(w => w.Location.Distance(Me.Location)).ThenByDescending(w => w.EntityId).FirstOrDefault();
@@ -264,7 +266,15 @@ public class Game
 
     public void RemoveItemFromContainer(Item item)
     {
+        Data.LiftRequested = item.Id;
+        Data.SellRequested.TryRemove(item.Id, out _);
         _gameServer.SendPacket(new RemoveItemFromContainerPacket(item));
+    }
+
+    /// <summary>Drops the item on the cursor into the cube without opening it.</summary>
+    public void PutCursorItemInCube(Item item, Item cube)
+    {
+        _gameServer.SendPacket(new ItemToCubePacket(item, cube));
     }
 
     public void RemoveItemFromBelt(Item item)
@@ -305,15 +315,25 @@ public class Game
         return useStackableItem.WaitOne(50);
     }
 
+    /// <summary>
+    /// Held from selecting the right hand skill until its cast is sent. Casting threads and the
+    /// teleporting loop used to switch the skill under each other, and a cast then went out as
+    /// whichever skill the other thread had just selected.
+    /// </summary>
+    private readonly Lock _rightHand = new();
+
     public bool UseRightHandSkillOnLocation(Skill skill, Point location)
     {
-        if (!ChangeSkill(skill, Hand.Right))
+        lock (_rightHand)
         {
-            return false;
-        }
+            if (!ChangeSkill(skill, Hand.Right))
+            {
+                return false;
+            }
 
-        _gameServer.SendPacket(new RightSkillOnLocationPacket(location));
-        return true;
+            _gameServer.SendPacket(new RightSkillOnLocationPacket(location));
+            return true;
+        }
     }
 
     public bool LeftHandSkillHoldOnEntity(Skill skill, Entity entity)
@@ -339,7 +359,8 @@ public class Game
         return reAssignPlayer.WaitOne(200) && Me.Location.Distance(point) < 10;
     }
 
-    public async Task<bool> TeleportToLocationAsync(Point point)
+    /// <param name="minDistance">Closer than this the character is taken to be there already.</param>
+    public async Task<bool> TeleportToLocationAsync(Point point, double minDistance = 10)
     {
         // After a chicken nothing answers: the taxi's escape went on waiting out every hop, and the
         // party fought on for eighteen seconds of a game she had already left.
@@ -348,7 +369,7 @@ public class Game
             return false;
         }
 
-        if(Me.Location.Distance(point)<10)
+        if (Me.Location.Distance(point) < minDistance)
         {
             return true;
         }
@@ -363,7 +384,7 @@ public class Game
             UseRightHandSkillOnLocation(Skill.Teleport, point);
             if (await reAssignPlayer.AsTask(TimeSpan.FromMilliseconds(TeleportRecastIntervalMs)))
             {
-                return Me.Location.Distance(point) < 10;
+                return Me.Location.Distance(point) < Math.Max(minDistance, 5);
             }
         }
 
@@ -392,12 +413,24 @@ public class Game
 
             if (!Me.ActiveSkills.TryGetValue(hand, out var check) || check != skill)
             {
+                _unconfirmedSelects++;
+                if (_unconfirmedSelects % UnconfirmedSelectReport == 0)
+                {
+                    Log.Warning("{Character}: {Skill} on the {Hand} hand not confirmed {Count} times in a row, the client still has {Current}",
+                        Me.Name, skill, hand, _unconfirmedSelects, Me.ActiveSkills.TryGetValue(hand, out var current) ? current : null);
+                }
+
                 return false;
             }
         }
 
+        _unconfirmedSelects = 0;
         return true;
     }
+
+    private const int UnconfirmedSelectReport = 10;
+
+    private int _unconfirmedSelects;
 
     public bool ShiftHoldLeftHandSkillOnLocation(Skill skill, Point location)
     {
@@ -471,7 +504,7 @@ public class Game
             return false;
         }
 
-        var existingTownPortalId = GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalOwnerId == Me.Id)?.Id;
+        var existingTownPortalIds = GetEntityByCode(EntityCode.TownPortal).Where(t => t.TownPortalOwnerId == Me.Id).Select(t => t.Id).ToHashSet();
         var portalOwner = _gameServer.GetResetEventOfType(InComingPacket.PortalOwner);
         var cts = new CancellationTokenSource();
         cts.CancelAfter(500);
@@ -480,15 +513,22 @@ public class Game
         {
             if (await portalOwner.AsTask(TimeSpan.FromMilliseconds(500)))
             {
-                var townPortal = GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalOwnerId == Me.Id);
-                return townPortal != null && existingTownPortalId != townPortal.Id;
+                var townPortal = OwnTownPortal();
+                return townPortal != null && !existingTownPortalIds.Contains(townPortal.Id);
             };
             portalOwner = _gameServer.GetResetEventOfType(InComingPacket.PortalOwner);
         } while (!cts.IsCancellationRequested);
         
-        var townPortalNearby = GetEntityByCode(EntityCode.TownPortal).FirstOrDefault(t => t.TownPortalOwnerId == Me.Id);
-        return townPortalNearby != null && existingTownPortalId != townPortalNearby.Id;
+        var townPortalNearby = OwnTownPortal();
+        return townPortalNearby != null && !existingTownPortalIds.Contains(townPortalNearby.Id);
     }
+
+    /// <summary>
+    /// The newest of this character's portals. A recast after a late reply leaves the replaced portal in the
+    /// records, and interacting with that one is ignored by the server.
+    /// </summary>
+    public WorldObject OwnTownPortal() =>
+        GetEntityByCode(EntityCode.TownPortal).Where(t => t.TownPortalOwnerId == Me.Id).MaxBy(t => t.Id);
 
     public void InsertItemIntoContainer(Item item, Point location, ItemContainer container)
     {
@@ -497,6 +537,15 @@ public class Game
             _gameServer.SendPacket(new InsertItemIntoContainerPacket(item, new Point(location.X, (ushort)(location.Y - 8)), ItemContainer.Stash2));
         }
         _gameServer.SendPacket(new InsertItemIntoContainerPacket(item, location, container));
+    }
+
+    /// <summary>
+    /// Puts the cursor item down on top of <paramref name="target"/>, which the server then hands to
+    /// the cursor: how a full container trades one item for another.
+    /// </summary>
+    public void SwapCursorItemWith(Item held, Item target)
+    {
+        _gameServer.SendPacket(new SwapCursorAndBufferItemPacket(held, target));
     }
 
     public void ClickButton(ClickType clickType)
@@ -536,6 +585,22 @@ public class Game
         return false;
     }
 
+    private static readonly TimeSpan RunResendInterval = TimeSpan.FromMilliseconds(150);
+
+    private Point _lastRunTarget;
+
+    private DateTime _lastRunAt = DateTime.MinValue;
+
+    private TimeSpan RunResendWait(Point location) =>
+        location == _lastRunTarget ? RunResendInterval - (DateTime.Now - _lastRunAt) : TimeSpan.Zero;
+
+    private void SendRun(Point location)
+    {
+        _gameServer.SendPacket(new RunToLocationPacket(location));
+        _lastRunTarget = location;
+        _lastRunAt = DateTime.Now;
+    }
+
     public void MoveTo(ushort x, ushort y) => MoveTo(new Point(x, y));
     public bool MoveTo(Point location)
     {
@@ -551,9 +616,13 @@ public class Game
             lastTeleport = DateTime.Now;
             Thread.Sleep((int)(120 / MovementSpeed));
         }
+        else if (RunResendWait(location) is var wait && wait > TimeSpan.Zero)
+        {
+            Thread.Sleep(wait);
+        }
         else
         {
-            _gameServer.SendPacket(new RunToLocationPacket(location));
+            SendRun(location);
             Thread.Sleep((int)(distance * 80 / MovementSpeed));
         }
         Me.Location = location;
@@ -574,9 +643,13 @@ public class Game
             lastTeleport = DateTime.Now;
             await Task.Delay((int)(120 / MovementSpeed));
         }
+        else if (RunResendWait(location) is var wait && wait > TimeSpan.Zero)
+        {
+            await Task.Delay(wait);
+        }
         else
         {
-            _gameServer.SendPacket(new RunToLocationPacket(location));
+            SendRun(location);
             await Task.Delay((int)(distance * 80 / MovementSpeed));
         }
         Me.Location = location;
@@ -653,7 +726,9 @@ public class Game
         _gameServer.SendPacket(new MakeEntityMovePacket(Me, entity));
         Thread.Sleep(50);
         _gameServer.SendPacket(new InteractWithEntityPacket(entity));
-        return npcInfoPacket.WaitOne(1500);
+        // An answer comes within 0.8s (median 0.28s over 273); one that does not come means she was not
+        // reached, and waiting the old 1.5s for it held up every second shop visit before the retry.
+        return npcInfoPacket.WaitOne(900);
     }
 
     public bool PickupBody(Player player)
@@ -861,6 +936,8 @@ public class Game
         _gameServer.SendPacket(new RepairPacket(entity));
         nPCTransactionPacket.WaitOne(200);
     }
+    public void LogRecentPackets(string reason) => _gameServer.LogRecentPackets(reason);
+
     public void RequestUpdate(uint id)
     {
         _gameServer.SendPacket(new RequestUpdatePacket(id));
@@ -897,6 +974,7 @@ public class Game
 
     public void SellItem(Entity entity, Item item)
     {
+        Data.SellRequested[item.Id] = 0;
         _gameServer.SendPacket(new SellItemPacket(entity, item));
         Thread.Sleep(30);
     }

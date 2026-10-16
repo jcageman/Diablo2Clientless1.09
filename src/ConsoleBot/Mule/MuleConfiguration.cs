@@ -17,11 +17,18 @@ public class MuleConfiguration
     public List<MuleAccount> Accounts { get; set; }
 
     /// <summary>
-    /// Items that are never worth a mule slot and are sold instead. An item is excluded when it
-    /// matches any one of these filters; omit the key to mule everything. List the flawless gems
-    /// here: three of a kind cube into a perfect one, which is the gem worth muling.
+    /// Nip file of items that are never worth a mule slot and are sold instead. Omit it to mule
+    /// every item an account's nip accepts.
     /// </summary>
-    public List<MuleFilter> NeverMule { get; set; }
+    public string NeverMuleNip { get; set; }
+
+    /// <summary>
+    /// Folder holding the mule nip files named by <see cref="MuleAccount.Nip"/> and
+    /// <see cref="NeverMuleNip"/>. Keep it apart from the pickit's nip folder, which loads every
+    /// nip file below it as a keep rule.
+    /// </summary>
+    [Required]
+    public string NipDirectory { get; set; }
 
     /// <summary>
     /// Postgres connection string of the mule database shared with the mule manager. When set, the

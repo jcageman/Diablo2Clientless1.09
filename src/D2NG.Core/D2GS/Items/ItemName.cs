@@ -662,5 +662,12 @@ public enum ItemName
     EssenceOfPain,
     EssenceOfSuffering,
     EssenceOfAnguish,
-    TokenOfAbsolution
+    TokenOfAbsolution,
+    RareSkull,
+    RareRuby,
+    RareAmethyst,
+    RareDiamond,
+    RareEmerald,
+    RareTopaz,
+    RareSapphire
 }

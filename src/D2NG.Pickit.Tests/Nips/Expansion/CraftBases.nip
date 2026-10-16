@@ -1,0 +1,22 @@
+// Blood craft inputs (Perfect Ruby + magic jewel + rune + magic base, cube rows 72-80 and 222-227),
+// kept so the crafts can be made later. The cube rerolls the affixes, so only the base and its item
+// level matter: these keep any magic roll and limit the stock instead. A crafted item's level is
+// half the crafter's level plus half the base's, and 71+ gives all four affixes, so with a level 90
+// crafter a base needs item level 52; 60 leaves room.
+//
+// A limit counts every held item the rule would keep, including magic amulets and rings kept by
+// their own stat rules elsewhere.
+
+// Blood amulet (Amn) and Blood ring (Sol)
+[type] == amulet && [quality] == magic # [level] >= 60 # [maxquantity] == 20
+[type] == ring && [quality] == magic # [level] >= 60 # [maxquantity] == 20
+
+// Blood gloves (Nef), belt (Tal), helm (Ral), boots (Eth); the recipes take the exceptional and
+// elite versions of the base too
+[quality] == magic && ([name] == heavygloves || [name] == sharkskingloves || [name] == vampirebonegloves) # [level] >= 60 # [maxquantity] == 10
+[quality] == magic && ([name] == belt || [name] == meshbelt || [name] == mithrilcoil) # [level] >= 60 # [maxquantity] == 10
+[quality] == magic && ([name] == helm || [name] == casque || [name] == armet) # [level] >= 60 # [maxquantity] == 10
+[quality] == magic && ([name] == lightplatedboots || [name] == battleboots || [name] == mirroredboots) # [level] >= 60 # [maxquantity] == 10
+
+// Any magic jewel goes into a craft
+[type] == jewel && [quality] == magic # 1 == 1 # [maxquantity] == 30

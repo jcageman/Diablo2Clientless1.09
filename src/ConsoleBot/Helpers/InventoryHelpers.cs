@@ -68,7 +68,7 @@ public static class InventoryHelpers
                     game.Inventory.FindItemById(item.Id) != null || CursorIsStale(game, item), MoveItemTimeout);
                 if (!resultMove)
                 {
-                    Log.Warning($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to inventory failed, dropping it instead");
+                    Log.Warning($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to inventory failed, trying the cube");
                 }
             }
 
@@ -94,7 +94,7 @@ public static class InventoryHelpers
                     game.Cube.FindItemById(item.Id) != null || CursorIsStale(game, item), MoveItemTimeout);
                 if (!resultMove)
                 {
-                    Log.Warning($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to cube failed, dropping it instead");
+                    Log.Warning($"{game.Me.Name}: Moving item {item.Id} - {item.Name} from cursor to cube failed, trying the stash");
                 }
             }
 
@@ -104,25 +104,44 @@ public static class InventoryHelpers
                 return;
             }
 
-            // Dropped rather than carried. An item left on the cursor makes the server ignore every
-            // interaction the character attempts afterwards, so holding on to it costs the whole
-            // run: the character stands on an open town portal, or in front of a merchant, and is
-            // refused over and over with nothing in the log to say why. One belt on the floor is far
-            // cheaper than that.
+            // Never dropped (user decision 2026-10-10: dropping risks losing the item). The stash is the
+            // last place to try: while an item is held the server opens it without the confirmation
+            // OpenStash waits for, but an insert into a free stash cell is still accepted - that is how
+            // a mule left holding a gem after a failed swap was put right. An item that fits nowhere
+            // stays on the cursor; the character then cannot interact until it is put away, which
+            // costs the run, never the item.
             item = game.CursorItem;
+            var freeSpaceStash = game.Stash.FindFreeSpace(item);
+            if (freeSpaceStash != null)
+            {
+                var stash = game.GetEntityByCode(EntityCode.Stash).FirstOrDefault();
+                if (stash != null)
+                {
+                    game.OpenStash(stash);
+                }
+
+                game.InsertItemIntoContainer(item, freeSpaceStash, ItemContainer.Stash);
+                GeneralHelpers.TryWithTimeout((retryCount) =>
+                    game.Stash.FindItemById(item.Id) != null || CursorIsStale(game, item), MoveItemTimeout);
+                game.ClickButton(ClickType.CloseStash);
+            }
+
+            if (game.CursorItem == null || game.Stash.FindItemById(item.Id) != null
+                || CursorIsStale(game, game.CursorItem))
+            {
+                return;
+            }
 
             // Traced, because "still on the cursor" is exactly what a stale CursorItem looks like
             // too. If the item is reported here as sitting in a container or on the ground, then it
-            // was put away and only the flag is wrong - and every drop that follows is a no-op on
-            // something that is not there.
+            // was put away and only the flag is wrong.
             var cursor = game.CursorItem;
             game.RequestUpdate(game.Me.Id);
             // "Known" is the field that decides it. An item the game no longer knows about at all has
             // been sold or consumed, and the cursor is merely stale; one the game still knows about
-            // is really being held and the drops are being refused. Reporting only "on the ground"
-            // could not tell those apart - it reads false for both.
+            // is really being held.
             var isKnown = game.Items.TryGetValue(cursor.Id, out var known);
-            Log.Warning("{Character}: cursor still shows {Item} id {Id} - known to the game {Known}, container {Container}, ground {OnGround}, inventory {InInventory}, cube {InCube}, stash {InStash}, cursor id now {CursorNow}",
+            Log.Error("{Character}: {Item} id {Id} fits in no inventory, cube or stash cell and stays on the cursor (never dropped) - known to the game {Known}, container {Container}, ground {OnGround}, inventory {InInventory}, cube {InCube}, stash {InStash}, cursor id now {CursorNow}",
                 game.Me.Name, cursor.Name, cursor.Id,
                 isKnown,
                 isKnown ? known.Container.ToString() : "n/a",
@@ -131,25 +150,6 @@ public static class InventoryHelpers
                 game.Cube.FindItemById(cursor.Id) != null,
                 game.Stash.FindItemById(cursor.Id) != null,
                 game.CursorItem?.Id.ToString() ?? "none");
-
-            if (game.CursorItem == null)
-            {
-                return;
-            }
-
-            Log.Warning($"{game.Me.Name}: {item.Name} could not be put away, dropping it rather than letting it block every interaction");
-
-            // Windows first. This runs in the middle of stash and cube work, and the server refuses
-            // a drop while one of those is open - every drop attempted here was refused, and the
-            // item stayed on the cursor blocking the character exactly as before. Closing something
-            // that is not open is ignored, so this is safe either way.
-            game.ClickButton(ClickType.CloseHoradricCube);
-            game.ClickButton(ClickType.CloseStash);
-            game.DropItem(item);
-            if (!GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null, MoveItemTimeout))
-            {
-                Log.Error($"{game.Me.Name}: {item.Name} is still on the cursor after dropping it, the character will refuse interactions until this clears");
-            }
         }
     }
 
@@ -322,6 +322,21 @@ public static class InventoryHelpers
         return StashItemsAndGold(game, itemsToKeep, goldOnPerson);
     }
 
+    /// <summary>
+    /// Transmutes with the cube already open and leaves it open, so a run of transmutes pays for
+    /// opening the cube once. True when the cube holds something new afterwards.
+    /// </summary>
+    public static bool TransmuteInOpenCube(Game game)
+    {
+        var oldItems = game.Cube.Items.Select(i => i.Id).ToHashSet();
+        game.ClickButton(ClickType.TransmuteItems);
+        return GeneralHelpers.TryWithTimeout((retryCount) =>
+        {
+            var newItems = game.Cube.Items.Select(i => i.Id).ToHashSet();
+            return newItems.Count > 0 && !newItems.Intersect(oldItems).Any();
+        }, MoveItemTimeout);
+    }
+
     public static bool TransmuteItemsInCube(Game game, bool newItemsSpawn)
     {
         var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
@@ -431,39 +446,6 @@ public static class InventoryHelpers
         return MoveItemResult.Succes;
     }
 
-    public static MoveItemResult DropItemFromCube(Game game, Item item)
-    {
-        var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
-        if (cube == null)
-        {
-            Log.Error($"{game.Me.Name}: Cube not found");
-            return MoveItemResult.Failed;
-        }
-        if (!game.ActivateCube(cube))
-        {
-            Log.Error($"{game.Me.Name}: Opening cube for {item.Id} - {item.GetFullDescription()} failed with cursor {game.CursorItem?.Id}");
-            return MoveItemResult.Failed;
-        }
-        game.RemoveItemFromContainer(item);
-        bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
-        if (!resultToBuffer)
-        {
-            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
-            game.ClickButton(ClickType.CloseHoradricCube);
-            return MoveItemResult.Failed;
-        }
-        game.DropItem(item);
-        bool resultMove = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null, MoveItemTimeout);
-        if (!resultMove)
-        {
-            Log.Error($"{game.Me.Name}: Dropping item {item.Id} - {item.Name} failed");
-            game.ClickButton(ClickType.CloseHoradricCube);
-            return MoveItemResult.Failed;
-        }
-        game.ClickButton(ClickType.CloseHoradricCube);
-        return MoveItemResult.Succes;
-    }
-
     public static MoveItemResult PutCubeItemInInventory(Game game, Item item)
     {
         Point location = game.Inventory.FindFreeSpace(item);
@@ -524,14 +506,45 @@ public static class InventoryHelpers
             return MoveItemResult.Failed;
         }
 
+        var moved = MoveIntoOpenCube(game, item, point);
+        game.ClickButton(ClickType.CloseHoradricCube);
+        return moved ? MoveItemResult.Succes : MoveItemResult.Failed;
+    }
+
+    private static bool DropOnCube(Game game, Item item, Item cube)
+    {
+        var from = item.Location;
+        game.RemoveItemFromContainer(item);
+        if (!GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout))
+        {
+            Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
+            return false;
+        }
+
+        game.PutCursorItemInCube(item, cube);
+        if (GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem == null && game.Cube.FindItemById(item.Id) != null, MoveItemTimeout))
+        {
+            return true;
+        }
+
+        Log.Error($"{game.Me.Name}: Dropping item {item.Id} - {item.Name} on the cube failed, putting it back at {from}");
+        if (game.CursorItem?.Id == item.Id)
+        {
+            game.InsertItemIntoContainer(item, from, ItemContainer.Inventory);
+        }
+
+        return false;
+    }
+
+    public static bool MoveIntoOpenCube(Game game, Item item, Point point)
+    {
         game.RemoveItemFromContainer(item);
 
         bool resultToBuffer = GeneralHelpers.TryWithTimeout((retryCount) => game.CursorItem?.Id == item.Id, MoveItemTimeout);
         if (!resultToBuffer)
         {
             Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to buffer failed");
-            game.ClickButton(ClickType.CloseHoradricCube);
-            return MoveItemResult.Failed;
+            return false;
         }
 
         game.InsertItemIntoContainer(item, point, ItemContainer.Cube);
@@ -540,12 +553,10 @@ public static class InventoryHelpers
         if (!resultMove)
         {
             Log.Error($"{game.Me.Name}: Moving item {item.Id} - {item.Name} to cube failed");
-            game.ClickButton(ClickType.CloseHoradricCube);
-            return MoveItemResult.Failed;
+            return false;
         }
 
-        game.ClickButton(ClickType.CloseHoradricCube);
-        return MoveItemResult.Succes;
+        return true;
     }
 
     /// <summary>
@@ -561,22 +572,35 @@ public static class InventoryHelpers
 
     public static void MoveInventoryItemsToCube(Game game)
     {
-        foreach (var item in game.Inventory.Items)
+        // Cubing the reserve is how characters reached the cow level with a full belt and nothing to
+        // fall back on: it went in the cube on the first item they picked up.
+        var items = game.Inventory.Items
+            .Where(item => !IsDrinkable(item) && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, item) && game.Cube.FindFreeSpace(item) != null)
+            .ToList();
+        if (items.Count == 0)
         {
-            if (IsDrinkable(item))
+            return;
+        }
+
+        var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
+        if (cube == null)
+        {
+            Log.Error($"{game.Me.Name}: Cube not found");
+            return;
+        }
+
+        // Dropped on the cube (0x2A) rather than put in an opened one: about 0.24s an item instead of
+        // 0.5s, verified on the realm over 391 drops.
+        foreach (var item in items)
+        {
+            if (game.Cube.FindFreeSpace(item) == null)
             {
-                // Cubing the reserve is how characters reached the cow level with a full belt and
-                // nothing to fall back on: it went in the cube on the first item they picked up.
                 continue;
             }
 
-            if (D2NG.Pickit.Pickit.CanTouchInventoryItem(game, item))
+            if (!DropOnCube(game, item, cube))
             {
-                var freeSpace = game.Cube.FindFreeSpace(item);
-                if (freeSpace != null)
-                {
-                    PutInventoryItemInCube(game, item, freeSpace);
-                }
+                break;
             }
         }
     }
@@ -645,9 +669,9 @@ public static class InventoryHelpers
                 return;
             }
 
-            game.ActivateTomeOfIdentify(tomeOfIdentify);
             foreach (var item in pending)
             {
+                game.ActivateTomeOfIdentify(tomeOfIdentify);
                 game.SendIdentifyItem(tomeOfIdentify, item);
             }
 
@@ -665,13 +689,6 @@ public static class InventoryHelpers
             return;
         }
 
-        game.ActivateTomeOfIdentify(tomeOfIdentify);
-        foreach (var item in pending)
-        {
-            Log.Information($"{game.Me.Name}: Identifying {item.Quality} item {item.Id} - {item.Name}");
-            game.SendIdentifyItem(tomeOfIdentify, item);
-        }
-
         // By id against the live dictionary, not against the captured items: an update replaces the
         // Item rather than mutating it, so the references gathered above never flip and the wait ran
         // its full length every time while the items were in fact identified.
@@ -682,12 +699,27 @@ public static class InventoryHelpers
             return live != null && !live.IsIdentified;
         }
 
-        GeneralHelpers.TryWithTimeout((retryCount) => !pendingIds.Exists(StillPending), IdentifyTimeout);
+        // Each activation of the tome is good for one identify: the server deactivates it after every
+        // item (UseStackableItem 0xFF) and ignores an identify without a fresh one. Sent in a burst it
+        // identified four of eight, and the rest brought the character back to identify next visit.
+        var started = DateTime.Now;
+        foreach (var item in pending)
+        {
+            if (DateTime.Now - started > IdentifyTimeout * 3)
+            {
+                break;
+            }
+
+            Log.Information($"{game.Me.Name}: Identifying {item.Quality} item {item.Id} - {item.Name}");
+            game.ActivateTomeOfIdentify(tomeOfIdentify);
+            game.SendIdentifyItem(tomeOfIdentify, item);
+            GeneralHelpers.TryWithTimeout((retryCount) => !StillPending(item.Id), TimeSpan.FromMilliseconds(500));
+        }
 
         var unfinished = pendingIds.Count(StillPending);
         if (unfinished > 0)
         {
-            Log.Warning($"{game.Me.Name}: {unfinished} of {pending.Count} items still unidentified after {IdentifyTimeout.TotalSeconds}s");
+            Log.Warning($"{game.Me.Name}: {unfinished} of {pending.Count} items still unidentified after {(DateTime.Now - started).TotalSeconds:F1}s");
         }
     }
 

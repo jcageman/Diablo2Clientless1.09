@@ -6,7 +6,10 @@
     <File Path="global.json" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tools/AccountTool/AccountTool.csproj" />
+    <Project Path="tools/ClassicToExpansion/ClassicToExpansion.csproj" />
     <Project Path="tools/MpqData/MpqData.csproj" />
+    <Project Path="tools/MuleConsolidate/MuleConsolidate.csproj" />
     <Project Path="tools/MpqDump/MpqDump.csproj" />
   </Folder>
   <Project Path="src/ConsoleBot.Tests/ConsoleBot.Tests.csproj" />

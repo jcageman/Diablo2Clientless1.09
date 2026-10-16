@@ -152,6 +152,19 @@ public sealed record NipRule(
         return !context.Item.IsGold || StatCondition == null || StatCondition.Evaluate(context);
     }
 
+    /// <summary>
+    /// The decision for the mule and quiet lists: every section the line has must hold, and a line
+    /// with only a property section is complete. The type and quality pre-filters are skipped on purpose: they read each
+    /// '[type] == x' in the text as required, which is wrong for a mule rule like
+    /// '[type] != gem || [name] == perfectskull'. '[maxquantity]' means nothing here.
+    /// </summary>
+    public bool MatchesExpression(NipEvaluationContext context)
+    {
+        return (PropertyCondition != null || StatCondition != null)
+            && (PropertyCondition?.Evaluate(context) ?? true)
+            && (StatCondition?.Evaluate(context) ?? true);
+    }
+
     public bool MatchesKeep(NipEvaluationContext context)
     {
         if (PropertyCondition == null || StatCondition == null || !MatchesFilters(context))
@@ -238,18 +251,22 @@ public readonly struct NipEvaluationContext
     private readonly string _nipType;
     private readonly string _nipQuality;
 
-    public NipEvaluationContext(Item item, CharacterClass characterClass)
+    public NipEvaluationContext(Item item)
     {
         Item = item;
-        CharacterClass = characterClass;
         _nipType = NipFieldMaps.ClassificationToType(item.Classification);
         _nipQuality = NipFieldMaps.QualityToText(item.Quality);
     }
 
     public Item Item { get; }
-    public CharacterClass CharacterClass { get; }
     public string NipType => _nipType;
     public string NipQuality => _nipQuality;
+
+    /// <summary>
+    /// The nip files whose keep rules keep the item, for '[keptonlyby]'. Only the mule rules set
+    /// it; a keep rule cannot ask which keep rules keep the item.
+    /// </summary>
+    public Func<IReadOnlyList<string>>? KeepRuleSources { get; init; }
 
     public bool TryResolve(string identifier, out NipValue value)
     {
@@ -272,6 +289,12 @@ public readonly struct NipEvaluationContext
             return true;
         }
 
+        if (string.Equals(identifier, "keptonlyby", StringComparison.OrdinalIgnoreCase))
+        {
+            value = NipValue.FromText(KeptOnlyBy());
+            return true;
+        }
+
         if (TextResolvers.TryGetValue(identifier, out var text))
         {
             value = NipValue.FromText(text(Item));
@@ -289,21 +312,71 @@ public readonly struct NipEvaluationContext
         return true;
     }
 
+    /// <summary>
+    /// The one nip file keeping the item, without its extension - 'craftbases' for an amulet kept
+    /// only as crafting stock. 'none' when no file or several keep it: an empty text would compare
+    /// equal to every word.
+    /// </summary>
+    private string KeptOnlyBy()
+    {
+        var sources = KeepRuleSources?.Invoke() ?? [];
+        return sources.Count == 1 ? Path.GetFileNameWithoutExtension(sources[0]).ToLowerInvariant() : "none";
+    }
+
+    // The game's own wording: StatType.SkillOnHit is "on striking", SkillOnStriking is "on attack".
+    private static readonly StatType[] OffensiveChanceToCast = [StatType.SkillOnHit, StatType.SkillOnStriking];
+    private static readonly StatType[] WhenStruckChanceToCast = [StatType.SkillWhenStruck1, StatType.SkillWhenStruck2, StatType.SkillWhenStruck3];
+
+    /// <summary>
+    /// '[skillteleport]' is +levels to the skill, '[chargesteleport]' the level of its charges,
+    /// '[ctcamplifydamage]' the chance to cast it on attack or on striking and
+    /// '[whenstruckteleport]' the chance to cast it when struck.
+    /// </summary>
     private bool TryResolveSkillAlias(string identifier, out int value)
     {
         value = 0;
-        if (!identifier.StartsWith("skill", StringComparison.OrdinalIgnoreCase))
+        if (identifier.StartsWith("skill", StringComparison.OrdinalIgnoreCase))
         {
+            if (TryGetSkill(identifier, out var skill))
+            {
+                value = Item.GetValueToSkill(skill);
+                return true;
+            }
+
             return false;
         }
 
-        if (TryGetSkill(identifier, out var skill))
+        foreach (var (prefix, read) in SkillPropertyPrefixes)
         {
-            value = Item.GetValueToSkill(skill);
-            return true;
+            if (identifier.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && TryGetSkill("skill" + identifier[prefix.Length..], out var skill))
+            {
+                value = read(Item, skill);
+                return true;
+            }
         }
 
         return false;
+    }
+
+    private static readonly (string Prefix, Func<Item, Skill, int> Read)[] SkillPropertyPrefixes =
+    [
+        ("charges", (item, skill) => SkillProperties(item, [StatType.Charged], skill).Select(p => p.SkillLevel).DefaultIfEmpty().Max()),
+        ("ctc", (item, skill) => SkillProperties(item, OffensiveChanceToCast, skill).Select(p => p.SkillChance).DefaultIfEmpty().Max()),
+        ("whenstruck", (item, skill) => SkillProperties(item, WhenStruckChanceToCast, skill).Select(p => p.SkillChance).DefaultIfEmpty().Max()),
+    ];
+
+    private static IEnumerable<ItemProperty> SkillProperties(Item item, StatType[] statTypes, Skill skill)
+    {
+        return statTypes
+            .Select(item.Properties.GetValueOrDefault)
+            .Where(p => p != null && p.Skill == skill);
+    }
+
+    private static double SkillIdOf(Item item, StatType statType)
+    {
+        var property = item.Properties.GetValueOrDefault(statType);
+        return property == null ? 0 : (int)property.Skill;
     }
 
     private static bool TryGetSkill(string identifier, out Skill skill)
@@ -351,6 +424,14 @@ public readonly struct NipEvaluationContext
 
         return sb.ToString();
     }
+
+    // One "+x damage" affix sets the one-handed, two-handed and throwing stats together, and the
+    // server only sends the ones the base uses: a polearm carries just the two-handed pair.
+    private static double FlatMinimumDamage(Item item) => Math.Max(item.GetValueOfStatType(StatType.MinimumDamage),
+        Math.Max(item.GetValueOfStatType(StatType.SecondaryMinimumDamage), item.GetValueOfStatType(StatType.MinimumThrowingDamage)));
+
+    private static double FlatMaximumDamage(Item item) => Math.Max(item.GetValueOfStatType(StatType.MaximumDamage),
+        Math.Max(item.GetValueOfStatType(StatType.SecondaryMaximumDamage), item.GetValueOfStatType(StatType.MaximumThrowingDamage)));
 
     private static Dictionary<string, Func<Item, double>> BuildNumericResolvers()
     {
@@ -427,22 +508,25 @@ public readonly struct NipEvaluationContext
             { "itemreplenishquantity", item => item.GetValueOfStatType(StatType.ReplenishesQuantity) },
             { "itemreqpercent", item => item.GetValueOfStatType(StatType.ReducedRequirements) },
             { "itemreq", item => item.GetValueOfStatType(StatType.ReducedRequirements) },
-            { "mindamage", item => item.GetValueOfStatType(StatType.MinimumDamage) },
-            { "maxdamage", item => item.GetValueOfStatType(StatType.MaximumDamage) },
+            { "mindamage", FlatMinimumDamage },
+            { "maxdamage", FlatMaximumDamage },
             { "knockback", item => item.GetValueOfStatType(StatType.Knockback) },
-            { "mindmg", item => item.GetValueOfStatType(StatType.MinimumDamage) },
-            { "maxdmg", item => item.GetValueOfStatType(StatType.MaximumDamage) },
+            { "mindmg", FlatMinimumDamage },
+            { "maxdmg", FlatMaximumDamage },
             { "itemmaxdamageperlevel", item => item.GetValueOfStatType(StatType.MaximumDamagePerLevel) },
             { "itemtohitperlevel", item => item.GetValueOfStatType(StatType.AttackRatingPerLevel) },
             { "itemtohitpercentperlevel", item => item.GetValueOfStatType(StatType.BonusToAttackRatingPerLevel) },
             { "itemaddskilltab", item => item.TotalToSkillTabs() },
             { "itemaddclassskills", item => item.GetToClassSkills() },
-            { "itemskillonhit", item => item.GetValueOfStatType(StatType.SkillOnHit) },
-            { "itemskillonattack", item => item.GetValueOfStatType(StatType.SkillOnStriking) },
-            { "itemskillondeath", item => item.GetValueOfStatType(StatType.SkillOnDeath) },
-            { "itemskillonkill", item => item.GetValueOfStatType(StatType.SkillOnKill) },
-            { "itemskillonlevelup", item => item.GetValueOfStatType(StatType.SkillOnLevelUp) },
-            { "itemskillongethit", item => item.GetValueOfStatType(StatType.SkillWhenStruck1) },
+            // kolbot's skill-carrying stats compare the skill id ('[itemskillonhit] == 66'). The
+            // decoder keeps the skill, its level and chance apart and never fills the value.
+            { "itemskillonhit", item => SkillIdOf(item, StatType.SkillOnHit) },
+            { "itemskillonattack", item => SkillIdOf(item, StatType.SkillOnStriking) },
+            { "itemskillondeath", item => SkillIdOf(item, StatType.SkillOnDeath) },
+            { "itemskillonkill", item => SkillIdOf(item, StatType.SkillOnKill) },
+            { "itemskillonlevelup", item => SkillIdOf(item, StatType.SkillOnLevelUp) },
+            { "itemskillongethit", item => SkillIdOf(item, StatType.SkillWhenStruck1) },
+            { "itemchargedskill", item => SkillIdOf(item, StatType.Charged) },
             { "prefix", item => item.Prefix },
             { "suffix", item => item.Suffix },
             { "bowandcrossbowskilltab", item => item.GetValueToSkillTab(SkillTab.AmazonBowAndCrossbowSkills) },
@@ -782,18 +866,43 @@ internal static class NipFieldMaps
             return "normal";
         }
 
+        // Armor codes mark the tier with u/x (z for belts), weapons with 7/9 (6/8 for bows and crossbows):
+        // checking u/x alone made every elite weapon read normal, so [class] == elite never matched one.
         var code = item.Type.ToLowerInvariant();
-        if (code.StartsWith('u'))
+        switch (code)
         {
-            return "elite";
+            case "ci2":
+                return "exceptional";
+            case "ci3":
+                return "elite";
         }
 
-        if (code.StartsWith('x'))
+        // Class items keep a two letter family and put the tier in the last character: 1-5, 6-a, b-f.
+        if (code.Length == 3 && code[..2] is "am" or "ob" or "ba" or "pa" or "ne" or "dr")
         {
-            return "exceptional";
+            var tier = code[2];
+            if (tier is >= '1' and <= '5')
+            {
+                return "normal";
+            }
+
+            if (tier is >= '6' and <= '9' or '0' or 'a')
+            {
+                return "exceptional";
+            }
+
+            if (tier is >= 'b' and <= 'f')
+            {
+                return "elite";
+            }
         }
 
-        return "normal";
+        return code[0] switch
+        {
+            'u' or '7' or '6' => "elite",
+            'x' or 'z' or '9' or '8' => "exceptional",
+            _ => "normal"
+        };
     }
 }
 
@@ -808,6 +917,33 @@ internal sealed class NipTokenizer
         _text = text;
         _source = source;
         _line = line;
+    }
+
+    /// <summary>
+    /// Elite and exceptional weapon codes start with a digit (7gt, 9gt), so a digit run directly
+    /// followed by a letter, or by a '*' that ends the operand, is an item code. A '*' followed by
+    /// anything else is still multiplication.
+    /// </summary>
+    private bool IsDigitLedItemCode(int start)
+    {
+        var i = start;
+        while (i < _text.Length && char.IsDigit(_text[i]))
+        {
+            i++;
+        }
+
+        if (i < _text.Length && char.IsLetter(_text[i]))
+        {
+            return true;
+        }
+
+        if (i >= _text.Length || _text[i] != '*')
+        {
+            return false;
+        }
+
+        var next = i + 1;
+        return next >= _text.Length || char.IsWhiteSpace(_text[next]) || _text[next] == ')';
     }
 
     public IReadOnlyList<NipToken> Tokenize()
@@ -850,6 +986,22 @@ internal sealed class NipTokenizer
                 var ident = _text.Substring(i + 1, end - i - 1).Trim();
                 tokens.Add(new NipToken(NipTokenType.Identifier, ident));
                 i = end + 1;
+                continue;
+            }
+
+            if (char.IsDigit(c) && IsDigitLedItemCode(i))
+            {
+                var start = i;
+                while (i < _text.Length && char.IsLetterOrDigit(_text[i]))
+                {
+                    i++;
+                }
+                if (i < _text.Length && _text[i] == '*')
+                {
+                    i++;
+                }
+
+                tokens.Add(new NipToken(NipTokenType.Identifier, _text[start..i]));
                 continue;
             }
 

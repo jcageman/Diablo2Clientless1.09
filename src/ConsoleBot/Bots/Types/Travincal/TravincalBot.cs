@@ -77,9 +77,7 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
             throw new NotSupportedException("Only barbarian is supported on travincal");
         }
 
-        var townManagementOptions = new TownManagementOptions(_accountConfig, Act.Act4) { IdentifyWithTome = _travConfig.IdentifyWithTome };
-
-        var townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
+        var townTaskResult = await _townManagementService.PerformTownTasks(client, TownOptions(client));
         if (townTaskResult.ShouldMule)
         {
             NeedsMule = true;
@@ -151,7 +149,7 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
             return false;
         }
 
-        townTaskResult = await _townManagementService.PerformTownTasks(client, townManagementOptions);
+        townTaskResult = await _townManagementService.PerformTownTasks(client, TownOptions(client));
         if (townTaskResult.ShouldMule)
         {
             NeedsMule = true;
@@ -251,18 +249,46 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
     private async Task<bool> KillCouncilMembers(Client client)
     {
         var startTime = DateTime.Now;
+        var givenUp = new HashSet<uint>();
+        uint? trackedId = null;
+        var closest = double.MaxValue;
+        var lowestLife = double.MaxValue;
+        var lastProgress = DateTime.Now;
         List<WorldObject> aliveMembers;
         do
         {
+            var passStarted = DateTime.Now;
             List<WorldObject> councilMembers = GetCouncilMembers(client.Game);
             aliveMembers = councilMembers
-                .Where(n => n.State != EntityState.Dead && n.State != EntityState.Dieing)
+                .Where(n => n.State != EntityState.Dead && n.State != EntityState.Dieing && n.LifePercentage > 0 && !givenUp.Contains(n.Id))
                 .OrderBy(n => client.Game.Me.Location.Distance(n.Location))
                 .ToList();
 
             var nearest = aliveMembers.FirstOrDefault();
             if (nearest != null)
             {
+                var distance = client.Game.Me.Location.Distance(nearest.Location);
+                if (trackedId != nearest.Id || distance < closest - 1 || nearest.LifePercentage < lowestLife)
+                {
+                    if (trackedId != nearest.Id)
+                    {
+                        closest = double.MaxValue;
+                    }
+
+                    trackedId = nearest.Id;
+                    closest = Math.Min(closest, distance);
+                    lowestLife = nearest.LifePercentage;
+                    lastProgress = DateTime.Now;
+                }
+                else if (DateTime.Now - lastProgress > NoProgressLimit)
+                {
+                    Log.Warning("{Character} got no closer to {Code} {Id} at {Location} and did not hurt it in {Seconds:F0}s, {Distance:F0} away at {MyLocation}, its life {Life:F0}%, state {State}; leaving it",
+                        client.Game.Me.Name, nearest.NPCCode, nearest.Id, nearest.Location, NoProgressLimit.TotalSeconds, distance, client.Game.Me.Location, nearest.LifePercentage, nearest.State);
+                    givenUp.Add(nearest.Id);
+                    trackedId = null;
+                    continue;
+                }
+
                 if (!client.Game.IsInGame())
                 {
                     return false;
@@ -295,10 +321,29 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
 
                 await _attackService.AssistPlayer(client, client.Game.Me);
             }
+
+            var pass = DateTime.Now - passStarted;
+            if (pass < MinimumPass)
+            {
+                await Task.Delay(MinimumPass - pass);
+            }
         } while (aliveMembers.Count != 0);
 
         return true;
     }
+
+    /// <summary>Mana Burn council packs drained the belt in a fight and ended the game; these ride in the inventory.</summary>
+    private const int ManaSpares = 4;
+
+    private TownManagementOptions TownOptions(Client client) => new(_accountConfig, Act.Act4)
+    {
+        IdentifyWithTome = _travConfig.IdentifyWithTome,
+        ManaPotionsToBuy = Math.Max(0, _accountConfig.ManaPotionTarget(client.Game.Belt.Height) + ManaSpares - InventoryHelpers.GetTotalManaPotions(client.Game)),
+    };
+
+    private static readonly TimeSpan NoProgressLimit = TimeSpan.FromSeconds(15);
+
+    private static readonly TimeSpan MinimumPass = TimeSpan.FromMilliseconds(100);
 
     private static List<WorldObject> GetCouncilMembers(Game game)
     {

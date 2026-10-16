@@ -4,6 +4,7 @@ using D2NG.Core.MonsterData;
 using D2NG.Core;
 using D2NG.Core.ItemData;
 using D2NG.Core.ObjectData;
+using D2NG.Core.SkillData;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -21,7 +22,8 @@ if (options == null && ProbeArgs(args) == null)
         Usage: MpqData --gamedir <Diablo 2 install> --out <data directory> [--report <directory>]
 
           --gamedir  Folder holding patch_d2.mpq / d2exp.mpq / d2data.mpq.
-          --out      Folder to write monster-resists.json, shrines.json and item-affixes.json into.
+          --out      Folder to write monster-resists.json, shrines.json, item-affixes.json and
+                     skills.json into.
                      Created if missing.
           --report   Folder to write affixes-classic.md and affixes-expansion.md into: what can
                      spawn on each item type, for reviewing pickit rules.
@@ -160,6 +162,38 @@ foreach (var (expansion, quality) in new[] { (false, AffixQuality.Magic), (false
 {
     var count = affixTable.EligibleAffixes(ring, expansion, quality).Count();
     Console.WriteLine($"  {(expansion ? "expansion" : "classic"),-9} {quality,-5} {count}");
+}
+
+Console.WriteLine();
+Console.WriteLine($"Reading skill data from {gameDirectory}");
+SkillTable skillTable;
+try
+{
+    var (read, notes) = SkillReader.Read(gameDirectory);
+    skillTable = read;
+    foreach (var note in notes)
+    {
+        Console.WriteLine($"  {note}");
+    }
+}
+catch (Exception ex) when (ex is InvalidDataException or FileNotFoundException)
+{
+    Console.Error.WriteLine($"Extraction failed: {ex.Message}");
+    return 1;
+}
+
+var skillTarget = Path.Combine(outDirectory, GameDataLocation.SkillsFile);
+skillTable.Save(skillTarget);
+Console.WriteLine($"Wrote {skillTable.Skills.Count} skills to {skillTarget}");
+
+// Critical Strike is 5-80% on the diminishing curve (68% at level 20 is the known 1.09 figure) and
+// Natural Resistance 0-80; Might's radius is one the patch changed from the txt's 11 to 16.
+skillTable = SkillTable.Load(skillTarget);
+Console.WriteLine("Spot check (reloaded from disk):");
+foreach (var id in new[] { 9, 98, 153 })
+{
+    var skill = skillTable.Skills[id];
+    Console.WriteLine($"  {id} '{skill.Name}' {skill.Class} page {skill.Page}: params {string.Join(" ", skill.Params)}");
 }
 
 if (reportDirectory != null)

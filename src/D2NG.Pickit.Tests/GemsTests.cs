@@ -9,14 +9,25 @@ public class GemsTests
     {
         var item = TestItemFactory.Create(ClassificationType.Gem, ItemName.PerfectAmethyst, QualityType.Normal, identified: false);
 
-        Assert.True(Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: true, item));
+        Assert.True(Pickit.ShouldPickupItem(shouldPickupGoldItems: true, item));
+    }
+
+    // Flawed Amethyst and Flawed Ruby are the catalysts for 3 Lum -> Ko and 3 Fal -> Lem.
+    [Theory]
+    [InlineData(ItemName.FlawedAmethyst)]
+    [InlineData(ItemName.FlawedRuby)]
+    public void Keep_RuneUpgradeCatalyst(ItemName gem)
+    {
+        var item = TestItemFactory.Create(ClassificationType.Gem, gem, QualityType.Normal);
+
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
-    public void Reject_FlawedAmethyst()
+    public void Reject_FlawedTopaz()
     {
-        var item = TestItemFactory.Create(ClassificationType.Gem, ItemName.FlawedAmethyst, QualityType.Normal, identified: false);
+        var item = TestItemFactory.Create(ClassificationType.Gem, ItemName.FlawedTopaz, QualityType.Normal, identified: false);
 
-        Assert.False(Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: true, item));
+        Assert.False(Pickit.ShouldPickupItem(shouldPickupGoldItems: true, item));
     }
 }

@@ -18,7 +18,7 @@ public class AmuletsTests
         TestItemFactory.AddStat(item, StatType.Strength, 10);
         TestItemFactory.AddStat(item, StatType.Dexterity, 25);
 
-        Assert.True(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public class AmuletsTests
         TestItemFactory.AddStat(item, StatType.Strength, 10);
         TestItemFactory.AddStat(item, StatType.Dexterity, 25);
 
-        Assert.False(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 
     // Mara's Kaleidoscope carries +2 to ALL skills, not amazon skills - see unique_items.txt. The
@@ -50,7 +50,7 @@ public class AmuletsTests
         TestItemFactory.AddStat(item, StatType.ColdResistance, 20);
         TestItemFactory.AddStat(item, StatType.Life, 20);
 
-        Assert.True(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     // Highlord's Wrath: +1 all skills and 20 IAS. Same wrong-stat problem as Mara's above.
@@ -62,7 +62,7 @@ public class AmuletsTests
         TestItemFactory.AddStat(item, StatType.IncreasedAttackSpeed, 20);
         TestItemFactory.AddStat(item, StatType.LightningResistance, 35);
 
-        Assert.True(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     // No unique amulet in 1.09 has amazon skills, so that must not be what these rules key on.
@@ -76,6 +76,6 @@ public class AmuletsTests
         TestItemFactory.AddStat(item, StatType.ColdResistance, 20);
         TestItemFactory.AddStat(item, StatType.Life, 20);
 
-        Assert.False(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 }

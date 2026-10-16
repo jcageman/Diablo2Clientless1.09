@@ -12,7 +12,7 @@ public class GlovesTests
         TestItemFactory.AddStat(item, StatType.FireResistance, 20);
         TestItemFactory.AddStat(item, StatType.LightningResistance, 10);
 
-        Assert.True(Pickit.ShouldKeepItem(characterClass: CharacterClass.Amazon, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -23,6 +23,6 @@ public class GlovesTests
         TestItemFactory.AddStat(item, StatType.FireResistance, 10);
         TestItemFactory.AddStat(item, StatType.LightningResistance, 5);
 
-        Assert.False(Pickit.ShouldKeepItem(characterClass: CharacterClass.Amazon, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 }

@@ -33,6 +33,29 @@ public class RecipeRequirement
     public ClassificationType? Classification { get; set; }
 
     /// <summary>
+    /// How many matching items always stay on the mules, for example Ist kept for magic find gear or
+    /// spare runes for runewords. Only what is above the reserve is cubed. Defaults to 0.
+    /// </summary>
+    public int Reserve { get; set; }
+
+    /// <summary>
+    /// Lowest item level accepted, for example 91 for grand charms that can roll the best affixes.
+    /// Leave unset to accept any item level.
+    /// </summary>
+    public uint? MinLevel { get; set; }
+
+    /// <summary>
+    /// True when the item passes every filter that is set.
+    /// </summary>
+    public bool Matches(Item item)
+    {
+        return (ItemNames == null || ItemNames.Contains(item.Name))
+            && (Classification == null || Classification == item.Classification)
+            && (Quality == null || Quality == item.Quality)
+            && (MinLevel == null || item.Level >= MinLevel);
+    }
+
+    /// <summary>
     /// Validates that at least one of <see cref="Classification"/>, <see cref="ItemNames"/> or
     /// <see cref="Quality"/> is set, so the requirement cannot match every item in the stash.
     /// </summary>

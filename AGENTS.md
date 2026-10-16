@@ -37,8 +37,9 @@ dotnet publish src/ConsoleBot/ConsoleBot.csproj -c Release -o "<bot folder>/meph
 `--artifacts-path` is the part that matters: with `-o` alone the intermediates still go through
 `src/*/bin/Release` and the build fails with MSB3027 anyway. With both, nothing in the repo tree is
 written, so this builds while another bot is mid-run out of the shared folder. The stale-binary trap
-above still applies and is only avoided by launching the new folder's exe explicitly — see
-`start_meph_isolated.ps1`, which does that, rather than going through `start_classic.ps1`.
+above still applies and is only avoided by launching the new folder's exe explicitly: give the bot
+`-Dir '<bot folder>\<build folder>'` in `BotLauncher.ps1`'s `New-Bot` rather than the shared Release
+folder.
 
 The realm is still shared even when the binaries are not. Game creation is where that bites: four
 bots cycling ~30s runs create games far faster than a single-run bot, and a batch running alongside
@@ -104,6 +105,16 @@ Rounds are planned by `D2NG.Mule/Packing` (planner, server room check, stash pac
 `mule-fixtures/` next to the log; load one with `MuleFixture.Load` to replay a real situation in
 `D2NG.Mule.Tests`.
 
+`tools/ClassicToExpansion` moves items from the classic mules named in the classic mule config's
+`toExpansion` block to the expansion mules, through a temporary character it creates, fills, converts
+(MCP 0x18), mules out with the expansion mule config and deletes. Usage is at the top of its `Program.cs`.
+`tools/MuleConsolidate` gathers what a nip matches from every mule the mule database names onto a few
+target characters of the same game mode.
+
+`tools/AccountTool drop` destroys items. Before running it, run the same command with `--dry-run`,
+show the user the per-character list of what would be dropped, and run it for real only after they
+approve that exact list. An approval covers that one run, not the next.
+
 ## Game data
 
 The game data files live in a `data` folder beside the run configs (`<bot folder>\data`),
@@ -134,6 +145,10 @@ fixed health (84, 206) and mana (164-168) shrines. `areaMap.Shrines(table)` list
 of a level with their positions for the current seed; shrines from a level's random object groups
 (Travincal's) are not preset and only exist as world objects once seen. Without the file shrines are
 simply not recognised.
+
+The same run writes `skills.json` (`SkillTable`): every skill's class, tab, parameters and damage
+fields from the patch's `skills.bin`, which overrides the d2exp txt. The `mule-items` skill reads it,
+with the base damage, speed and requirements now in `item-affixes.json`, to compute damage.
 
 The same run writes `item-affixes.json` (`ItemAffixTable`): magic prefixes, suffixes and automagic,
 item types, bases and cube recipes, decoded from the patch bins. Add `--report <dir>` to also get

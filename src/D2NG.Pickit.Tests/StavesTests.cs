@@ -12,7 +12,7 @@ public class StavesTests
         TestItemFactory.AddSkillTab(item, SkillTab.SorceressLightningSpells, 5);
         TestItemFactory.AddSingleSkill(item, Skill.EnergyShield, 1);
 
-        Assert.True(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.True(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -22,6 +22,6 @@ public class StavesTests
         TestItemFactory.AddSkillTab(item, SkillTab.SorceressLightningSpells, 2);
         TestItemFactory.AddSingleSkill(item, Skill.EnergyShield, 1);
 
-        Assert.False(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 }

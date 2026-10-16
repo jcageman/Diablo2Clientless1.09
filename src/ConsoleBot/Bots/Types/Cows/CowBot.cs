@@ -13,6 +13,7 @@ using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Players;
+using D2NG.Core.MonsterData;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
@@ -55,6 +56,23 @@ public class CowBot : MultiClientBotBase
     private List<Client> _killingClients = [];
     private volatile bool _partyRetreating;
 
+    /// <summary>
+    /// The barbarian waits out a lightning enchanted pack in town, and the portal character owes him
+    /// a new portal somewhere clear of it. Ending the game instead threw away whole games, mostly
+    /// ones where the pack stood at the entrance seconds after arriving.
+    /// </summary>
+    private volatile bool _leadInTown;
+    private volatile bool _safePortalWanted;
+
+    /// <summary>How far a lightning enchanted monster may be from the barbarian before he leaves.</summary>
+    private const double LightningEnchantedLeadRange = 20;
+
+    /// <summary>How far the portal character keeps a new portal from any lightning enchanted monster.</summary>
+    private const double SafePortalRange = 100;
+
+    /// <summary>How long the barbarian waits in town for a portal back before the game is given up.</summary>
+    private static readonly TimeSpan SafePortalTimeout = TimeSpan.FromSeconds(45);
+
     private const double HuntingPartyPickupRadius = 25;
 
     /// <summary>
@@ -62,6 +80,25 @@ public class CowBot : MultiClientBotBase
     /// there is no cost to letting them sweep a wide area while the walkers stay tight.
     /// </summary>
     private const double TeleportPickupRadius = 100;
+
+    /// <summary>
+    /// How long the sorceresses may spend collecting what is still on the ground once nothing is
+    /// left to kill.
+    /// </summary>
+    private static readonly TimeSpan LootSweepBudget = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// A sorceress only picks up where she finishes a cluster and nobody comes back afterwards, so
+    /// three rounds left a small charm behind the five nearest drops it was lying among.
+    /// </summary>
+    protected override int MaxPickupRounds => 20;
+    private readonly Stopwatch _lootSweep = new();
+    private bool _runOver;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string Character, uint ItemId), byte> _sweepReported = new();
+
+    /// <summary>Leftovers no teleport path reaches from the level: in another area, or walled off.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<uint, byte> _unreachable = new();
+    private readonly Lock _lootSweepLock = new();
     /// <summary>
     /// Life the party has to be back to before it re-engages. Taken from the level at which the
     /// chicken service stops drinking: asking for more than that waits for life that potions will
@@ -329,13 +366,10 @@ public class CowBot : MultiClientBotBase
 
         if (isPortalCharacter)
         {
-            if (!await CreateCowLevel(client))
+            if (!await CreateCowLevel(client) || !await OpenPortalAtCata2(client))
             {
-                return false;
-            }
-
-            if (!await OpenPortalAtCata2(client))
-            {
+                Log.Warning("{Character} opens no portal to {Area} this game, ending it for the party", client.Game.Me.Name, Area.CatacombsLevel2);
+                NextGame.TrySetResult(true);
                 return false;
             }
 
@@ -422,10 +456,91 @@ public class CowBot : MultiClientBotBase
 
         _killingClients = killingClients;
         _partyRetreating = false;
+        _leadInTown = false;
+        _safePortalWanted = false;
+        _lootSweep.Reset();
+        _runOver = false;
+        _sweepReported.Clear();
+        _unreachable.Clear();
         _huntTrail.Clear();
         InCowLevel.Clear();
         _cowManager = new CowManager(killingClients, listeningClients, _mapApiService, _cowconfig.ActiveMode);
         return Task.CompletedTask;
+    }
+
+    /// <summary>The cow level is a few hundred units across; anything further off is in another area.</summary>
+    protected override bool IsRunArea(Item item) => _cowManager?.InLevel(item.Location) ?? true;
+
+    private bool InThisLevel(Client client, Item item)
+        => !_unreachable.ContainsKey(item.Id)
+            && (_cowManager?.InLevel(item.Location) ?? item.Location.Distance(client.Game.Me.Location) < 1000);
+
+    /// <summary>
+    /// Whether the game is done: nothing left to kill and nothing left to collect. The level being
+    /// cleared used to end it on the spot, so everything dropped by the last packs, and anything
+    /// killed beyond the reach of the sorceress that cleared it, stayed on the ground.
+    /// </summary>
+    private bool IsRunOver(CowManager cowManager)
+    {
+        if (!cowManager.IsFinished())
+        {
+            return false;
+        }
+
+        if (_killingClients.All(c => !c.Game.IsInGame()))
+        {
+            return true;
+        }
+
+        lock (_lootSweepLock)
+        {
+            // Every client's loop asks; the first one to see the end has said why.
+            if (_runOver)
+            {
+                return true;
+            }
+
+            // Only what somebody can carry. An item no killer has room for is put back on the list
+            // by every pickup without a word, and the game sat out the whole budget for one helm.
+            // In this level only. The list also keeps what was seen in town and the Catacombs on the
+            // way in, twenty thousand units off, and the sweep waited out its budget for those.
+            var onGround = PickitItemsLeft().Where(i => _killingClients.Any(c => c.Game.IsInGame() && InThisLevel(c, i))).ToList();
+            var left = onGround.Where(i => _killingClients.Any(c => c.Game.IsInGame() && InThisLevel(c, i) && c.Game.Inventory.FindFreeSpace(i) != null)).ToList();
+            if (!_lootSweep.IsRunning)
+            {
+                var noRoom = onGround.Except(left).ToList();
+                if (noRoom.Count > 0)
+                {
+                    Log.Information("Level cleared, nobody has room for {Count} items: {Items}", noRoom.Count, string.Join(", ", noRoom.Select(i => i.Name)));
+                }
+
+                if (left.Count == 0)
+                {
+                    _runOver = true;
+                    return true;
+                }
+
+                Log.Information("Level cleared, collecting {Count} items still on the ground: {Items}", left.Count, string.Join(", ", left.Select(i => i.Name)));
+                _lootSweep.Start();
+                return false;
+            }
+
+            if (left.Count == 0)
+            {
+                Log.Information("Collected everything left after {Seconds:F1}s", _lootSweep.Elapsed.TotalSeconds);
+                _runOver = true;
+                return true;
+            }
+
+            if (_lootSweep.Elapsed > LootSweepBudget)
+            {
+                Log.Warning("Leaving {Count} items on the ground after {Seconds:F0}s of collecting: {Items}", left.Count, _lootSweep.Elapsed.TotalSeconds, string.Join(", ", left.Select(i => i.Name)));
+                _runOver = true;
+                return true;
+            }
+
+            return false;
+        }
     }
 
     protected override async Task<bool> PerformRun(Client client, AccountConfig account)
@@ -491,8 +606,9 @@ public class CowBot : MultiClientBotBase
         if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
             await Task.Delay(TimeSpan.FromSeconds(0.5));
-            return await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.CatacombsLevel2);
-        }, TimeSpan.FromSeconds(70)))
+            return NextGame.Task.IsCompleted
+                || await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.CatacombsLevel2);
+        }, TimeSpan.FromSeconds(70)) || NextGame.Task.IsCompleted)
         {
             Log.Warning($"Client {client.Game.Me.Name} taking portal to cata2 failed");
             return false;
@@ -618,6 +734,14 @@ public class CowBot : MultiClientBotBase
 
         return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
+            // A transition slower than the half second below lands the character in town after the
+            // check gave up, and walking to a portal left behind in another area then fails until the
+            // caller casts a portal of its own - which town refuses, and the game was lost.
+            if (client.Game.Area == townArea)
+            {
+                return true;
+            }
+
             if (!await client.Game.MoveToAsync(portal))
             {
                 return false;
@@ -685,21 +809,27 @@ public class CowBot : MultiClientBotBase
         }
 
         var lowestQuantity = tomesOfTp.OrderBy(i => i.Amount).First();
-        var droppedItems = new List<Item>();
-        if (game.Cube.Items.Count != 0)
+        if (game.Cube.Items.Count != 0 && !InventoryHelpers.MoveCubeItemsToInventory(game))
         {
+            // Never dropped (user decision 2026-10-10). Make room in the inventory by stashing what
+            // is worth keeping, then empty the cube again; when even that fails, this game is given
+            // up rather than an item put on the floor.
+            Log.Warning("Client {ClientName}: cube items do not fit the inventory, stashing inventory items to make room", game.Me.Name);
+            var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, WayPointHelpers.MapTownArea(game.Act), game.Me.Location, EntityCode.Stash, movementMode);
+            await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode);
+            var toStash = game.Inventory.Items
+                .Where(i => i.IsIdentified && D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i))
+                .ToList();
+            InventoryHelpers.StashItemsAndGold(game, toStash, 0);
             if (!InventoryHelpers.MoveCubeItemsToInventory(game))
             {
-                Log.Warning($"Couldn't move all items out of cube, dropping cube items for now");
-                foreach (var item in game.Cube.Items)
-                {
-                    if (InventoryHelpers.DropItemFromCube(game, item) != MoveItemResult.Succes)
-                    {
-                        Log.Error($"Failed to drop item out of cube");
-                        return false;
-                    }
-                    droppedItems.Add(item);
-                }
+                // Only a failed stash during the town tasks used to ask for the mules, and this stash
+                // runs after them, so a full stash abandoned every game from here on without one.
+                Log.Error("Client {ClientName}: cube still not empty after stashing, abandoning the game and muling. Cube: {Cube}; inventory {InventoryFree} free cells: {Inventory}; stash {StashFree} free cells",
+                    game.Me.Name, string.Join(", ", game.Cube.Items.Select(i => i.Name)), game.Inventory.FreeCellCount(),
+                    string.Join(", ", game.Inventory.Items.Select(i => i.Name)), game.Stash.FreeCellCount());
+                ClientsNeedingMule.Add(client.LoggedInUserName());
+                return false;
             }
         }
 
@@ -750,33 +880,22 @@ public class CowBot : MultiClientBotBase
 
         Log.Information($"Client {game.Me.Name} opened the cow level");
 
-        foreach (var droppedItem in droppedItems)
-        {
-            if (!await GeneralHelpers.TryWithTimeout((async retryCount =>
-            {
-                await client.Game.MoveToAsync(droppedItem);
-                client.Game.PickupItem(droppedItem);
-                if (!GeneralHelpers.TryWithTimeout((retryCount =>
-                {
-                    if (client.Game.Inventory.FindItemById(droppedItem.Id) == null)
-                    {
-                        return false;
-                    }
-
-                    return true;
-                }), TimeSpan.FromSeconds(0.5)))
-                {
-                    return false;
-                }
-
-                return true;
-            }), TimeSpan.FromSeconds(3)))
-            {
-                Log.Warning($"Picking up item {droppedItem.GetFullDescription()} at location {droppedItem.Location} from location {client.Game.Me.Location} failed");
-            }
-        }
-
         return true;
+    }
+
+    private void LogTristramPortalAttempt(Client client, WorldObject portal, int attempt, TimeSpan elapsed)
+    {
+        var me = client.Game.Me;
+        var monsters = client.Game.WorldObjects.Values
+            .Where(o => o.Type == EntityType.NPC && o.State != EntityState.Dead && o.State != EntityState.Dieing
+                && o.Location.Distance(me.Location) <= 20)
+            .OrderBy(o => o.Location.Distance(me.Location))
+            .Select(o => $"{o.NPCCode} {o.Location.Distance(me.Location):F0} away {o.LifePercentage:F0}%"
+                + (_attackService.IsImmuneTo(client, o, ResistType.Lightning) ? " lightning immune" : "")
+                + (o.MonsterEnchantments.Count > 0 ? $" [{string.Join(",", o.MonsterEnchantments)}]" : ""));
+        Log.Information("{Character} not in Tristram 0.2s after portal click {Attempt} ({Seconds:F1}s): {Distance:F1} from the portal at {Location} in {Area}, life {Life}/{MaxLife}, mana {Mana}/{MaxMana}, cursor {Cursor}, monsters within 20: {Monsters}",
+            me.Name, attempt, elapsed.TotalSeconds, me.Location.Distance(portal.Location), me.Location, client.Game.Area,
+            me.Life, me.MaxLife, me.Mana, me.MaxMana, client.Game.CursorItem?.Name.ToString() ?? "empty", string.Join("; ", monsters));
     }
 
     private async Task<bool> GetWirtsLeg(Client client)
@@ -806,6 +925,9 @@ public class CowBot : MultiClientBotBase
             return false;
         }
 
+        var portalTimer = Stopwatch.StartNew();
+        var portalAttempts = 0;
+        var firstClick = DateTime.Now;
         if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
             if (client.Game.Area == Area.Tristram)
@@ -816,9 +938,34 @@ public class CowBot : MultiClientBotBase
             var tristamPortal = client.Game.GetEntityByCode(EntityCode.RedTownPortal).FirstOrDefault(t => t.TownPortalArea == Area.Tristram);
             if (tristamPortal == null)
             {
+                if (retryCount % 30 == 0)
+                {
+                    Log.Information("{Character} sees no Tristram portal at {Location} in {Area}, attempt {Attempt}",
+                        client.Game.Me.Name, client.Game.Me.Location, client.Game.Area, retryCount);
+                }
+
                 return false;
             }
-            await client.Game.MoveToAsync(tristamPortal);
+
+            // Being struck can cast a teleport from her gear and drop her 30 away, out of reach of
+            // both the click and MoveToAsync, which gives up past 20 without moving.
+            var distance = client.Game.Me.Location.Distance(tristamPortal.Location);
+            if (distance > 5)
+            {
+                Log.Information("{Character} is {Distance:F1} from the Tristram portal at {Location}, teleporting back",
+                    client.Game.Me.Name, distance, client.Game.Me.Location);
+                var pathBack = await _pathingService.GetPathToLocation(client.Game, tristamPortal.Location, MovementMode.Teleport);
+                await MovementHelpers.TakePathOfLocations(client.Game, pathBack.ToList(), MovementMode.Teleport);
+            }
+            else
+            {
+                await client.Game.MoveToAsync(tristamPortal);
+            }
+
+            if (portalAttempts++ == 0)
+            {
+                firstClick = DateTime.Now.AddSeconds(-1);
+            }
 
             client.Game.InteractWithEntity(tristamPortal);
             if (!GeneralHelpers.TryWithTimeout((retryCount) =>
@@ -826,7 +973,7 @@ public class CowBot : MultiClientBotBase
                 return client.Game.Area == Area.Tristram;
             }, TimeSpan.FromSeconds(0.2)))
             {
-                client.Game.UseRightHandSkillOnLocation(Skill.Nova, client.Game.Me.Location);
+                LogTristramPortalAttempt(client, tristamPortal, portalAttempts, portalTimer.Elapsed);
                 return false;
             }
 
@@ -835,8 +982,12 @@ public class CowBot : MultiClientBotBase
         }, TimeSpan.FromSeconds(15)))
         {
             Log.Error($"Moving to Tristam failed");
+            client.Game.LogPacketsSince($"{client.Game.Me.Name} could not enter the Tristram portal after {portalAttempts} clicks", firstClick);
             return false;
         }
+
+        Log.Information("{Character} entered Tristram after {Attempts} portal clicks in {Seconds:F1}s",
+            client.Game.Me.Name, portalAttempts, portalTimer.Elapsed.TotalSeconds);
 
         client.Game.RequestUpdate(client.Game.Me.Id);
 
@@ -1054,18 +1205,15 @@ public class CowBot : MultiClientBotBase
     {
         Log.Information($"Starting Sorc Client {client.Game.Me.Name}");
         await cowManager.EnsureSweep(client.Game, client.Game.Me.Location);
-        ElapsedEventHandler staticFieldAction = (sender, args) =>
-        {
-            client.Game.UseRightHandSkillOnLocation(Skill.StaticField, client.Game.Me.Location);
-        };
-        using var executeStaticField = new ExecuteAtInterval(staticFieldAction, TimeSpan.FromSeconds(0.2));
-
-        ElapsedEventHandler novaAction = (sender, args) =>
-        {
-            client.Game.UseRightHandSkillOnLocation(Skill.Nova, client.Game.Me.Location);
-        };
-
-        using var executeNova = new ExecuteAtInterval(novaAction, TimeSpan.FromSeconds(0.2));
+        var fasterCastRate = client.Game.Items.Values
+            .Where(i => i.Action == D2NG.Core.D2GS.Items.Action.Equip && i.EntityType == EntityType.Player && i.PlayerId == client.Game.Me.Id)
+            .Sum(i => i.GetValueOfStatType(StatType.FasterCastRate));
+        // A little over the animation, so a cast never lands while the last one is still going.
+        var castInterval = SorceressCastTiming.CastTime(fasterCastRate) + TimeSpan.FromMilliseconds(40);
+        Log.Information("{Character} casts every {Interval:F0}ms at {Fcr}% faster cast rate", client.Game.Me.Name, castInterval.TotalMilliseconds, fasterCastRate);
+        using var rotation = new CastRotation(castInterval, skill => client.Game.UseRightHandSkillOnLocation(skill, client.Game.Me.Location));
+        var executeStaticField = rotation.Add(Skill.StaticField);
+        var executeNova = rotation.Add(Skill.Nova);
 
         var clusterStopWatch = new Stopwatch();
         var missingBoStopWatch = new Stopwatch();
@@ -1075,20 +1223,63 @@ public class CowBot : MultiClientBotBase
         // In active mode the lead deliberately walks into monsters, so rescuing it would pull the
         // sorceresses off their clusters for the rest of the run.
         var rescueLead = !cowManager.ActiveMode;
+        var isPortalCharacter = _cowconfig.PortalCharacterName.Equals(client.Game.Me.Name, StringComparison.OrdinalIgnoreCase);
         var sweepProgress = 0;
         MonsterCluster currentCluster = null;
         Point currentTarget = null;
-        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !IsRunOver(cowManager))
         {
-            var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
-            var cowsNearLead = rescueLead && leadPlayer != null ? cowManager.GetNearbyAliveMonsters(leadPlayer.Location, 20.0, 10) : [];
-            if (rescueLead && leadPlayer != null && leadPlayer.Location != currentTarget && cowsNearLead.Count != 0 && leadPlayer.Location.Distance(client.Game.Me.Location) > 20)
+            // The level is cleared and the game only waits for the loot. Whatever still lives here
+            // is what nobody can or will kill, and fighting it first meant a lightning enchanted cow
+            // nearby had every sorceress give up a cluster three hundred times in thirty seconds
+            // while the last drops stayed on the ground.
+            if (cowManager.IsFinished())
             {
-                if (cowsNearLead.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)))
+                executeStaticField.Stop();
+                executeNova.Stop();
+                var here = client.Game.Me.Location;
+                var leftover = PickitItemsLeft()
+                    .Where(i => InThisLevel(client, i) && client.Game.Inventory.FindFreeSpace(i) != null)
+                    .OrderBy(i => i.Location.Distance(here))
+                    .FirstOrDefault();
+                if (leftover != null && here.Distance(leftover.Location) > TeleportPickupRadius)
                 {
-                    Log.Information($"{client.Game.Me.Name}, lightning enhanced cow nearby, next game");
-                    NextGame.SetResult(true);
+                    var leftoverPath = await _pathingService.GetPathToLocation(client.Game, leftover.Location, MovementMode.Teleport);
+                    if (leftoverPath.Count > 0)
+                    {
+                        await MovementHelpers.TakePathOfLocations(client.Game, leftoverPath, MovementMode.Teleport);
+                    }
+                    else if (_unreachable.TryAdd(leftover.Id, 0))
+                    {
+                        Log.Warning("{Character} found no teleport path from {From} to leftover {Item} at {Location}, {Distance:F0} away",
+                            client.Game.Me.Name, here, leftover.Name, leftover.Location, here.Distance(leftover.Location));
+                    }
                 }
+
+                await PickupItemsAndPotions(client, account, TeleportPickupRadius);
+                if (leftover != null && PickitItemsLeft().Any(i => i.Id == leftover.Id)
+                    && client.Game.Me.Location.Distance(leftover.Location) <= TeleportPickupRadius
+                    && _sweepReported.TryAdd((client.Game.Me.Name, leftover.Id), 0))
+                {
+                    Log.Warning("{Character} at {From} is within reach of leftover {Item} at {Location}, {Distance:F0} away, and did not pick it up",
+                        client.Game.Me.Name, client.Game.Me.Location, leftover.Name, leftover.Location, client.Game.Me.Location.Distance(leftover.Location));
+                }
+
+                continue;
+            }
+
+            if (_safePortalWanted && isPortalCharacter && await TryOpenSafePortal(client, cowManager, () => { executeStaticField.Stop(); executeNova.Stop(); }))
+            {
+                continue;
+            }
+
+            // In town his last known position is still the spot he fled, so rescuing or chasing him
+            // for battle orders would teleport straight into the pack he left.
+            var leadPlayer = _leadInTown ? null : client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
+            var cowsNearLead = rescueLead && leadPlayer != null ? cowManager.GetNearbyAliveMonsters(leadPlayer.Location, 20.0, 10) : [];
+            if (rescueLead && leadPlayer != null && leadPlayer.Location != currentTarget && cowsNearLead.Count != 0 && leadPlayer.Location.Distance(client.Game.Me.Location) > 20
+                && !cowsNearLead.Any(c => c.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)))
+            {
                 Log.Information($"{client.Game.Me.Name}, lead client in danger, moving to lead client");
                 if (currentCluster != null)
                 {
@@ -1108,7 +1299,8 @@ public class CowBot : MultiClientBotBase
                 }
             }
 
-            if (!client.Game.Me.Effects.ContainsKey(EntityEffect.BattleOrders))
+            // Without him there is nobody to go to, so fight on unbuffed until he is back.
+            if (!_leadInTown && !client.Game.Me.Effects.ContainsKey(EntityEffect.BattleOrders))
             {
                 Log.Information($"Lost bo on client {client.Game.Me.Name}, moving to barb for bo");
                 executeStaticField.Stop();
@@ -1266,7 +1458,13 @@ public class CowBot : MultiClientBotBase
 
             executeStaticField.Stop();
             executeNova.Stop();
-            await PickupItemsAndPotions(client, account, TeleportPickupRadius);
+            // Giving up a lightning-enchanted pack used to end here too, and the pickup teleported her
+            // onto its fresh drops while the others' novas set off its charged bolts: 2513 life to 0 in
+            // under 0.4s. The end of level sweep collects them once the pack is dead.
+            if (!lightningEnhancedCows)
+            {
+                await PickupItemsAndPotions(client, account, TeleportPickupRadius);
+            }
 
             SetShouldFollowLead(client, false);
 
@@ -1345,7 +1543,8 @@ public class CowBot : MultiClientBotBase
                 // party finishes wastes the fastest mover in the group: trailing them puts it where
                 // the next drops and the next strays will be, and keeps it close enough to collect
                 // the moment something falls.
-                if (partyAt != client.Game.Me.Location
+                if (NearestPickitLocation(client, client.Game.Me.Location) == null
+                    && partyAt != client.Game.Me.Location
                     && client.Game.Me.Location.Distance(partyAt) > KillerTrailDistance)
                 {
                     var followPath = await _pathingService.GetPathToLocation(client.Game, partyAt, MovementMode.Teleport);
@@ -1377,7 +1576,7 @@ public class CowBot : MultiClientBotBase
             }
         }
 
-        Log.Information($"Stopped Sorc Client {client.Game.Me.Name}, cowing manager is finished is: {cowManager.IsFinished()}");
+        Log.Information($"Stopped Sorc Client {client.Game.Me.Name}, {cowManager.DescribeProgress()}, finished is {cowManager.IsFinished()}, next game set {NextGame.Task.IsCompleted}, in game {client.Game.IsInGame()}");
         executeStaticField.Stop();
         executeNova.Stop();
         NextGame.TrySetResult(true);
@@ -1392,7 +1591,7 @@ public class CowBot : MultiClientBotBase
     private async Task BasicIdleClient(Client client, CowManager cowManager)
     {
         Log.Information($"Starting Basic idle Client {client.Game.Me.Name}");
-        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(2)), NextGame.Task) && client.Game.IsInGame() && !IsRunOver(cowManager))
         {
         }
 
@@ -1406,7 +1605,7 @@ public class CowBot : MultiClientBotBase
         var timer = new Stopwatch();
         timer.Start();
         var random = new Random();
-        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !IsRunOver(cowManager))
         {
             var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
 
@@ -1476,6 +1675,84 @@ public class CowBot : MultiClientBotBase
         }
     }
 
+    /// <summary>
+    /// Opens the barbarian's way back where no lightning enchanted monster is near and nothing is
+    /// close enough to be hitting her. Returns false while this spot is not that, so she keeps
+    /// fighting and asks again next tick.
+    /// </summary>
+    private async Task<bool> TryOpenSafePortal(Client client, CowManager cowManager, System.Action stopCasting)
+    {
+        var here = client.Game.Me.Location;
+        if (cowManager.GetNearbyAliveMonsters(here, SafePortalRange, 100).Any(m => m.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted))
+            || cowManager.GetNearbyAliveMonsters(here, SelfDefenceRange, 1).Count != 0)
+        {
+            return false;
+        }
+
+        stopCasting();
+        if (!await _townManagementService.CreateTownPortal(client))
+        {
+            Log.Warning("{Character} could not open a portal back for the barbarian at {Location}", client.Game.Me.Name, here);
+            return false;
+        }
+
+        Log.Information("{Character} opened a portal back for the barbarian at {Location}", client.Game.Me.Name, here);
+        _safePortalWanted = false;
+        return true;
+    }
+
+    /// <summary>
+    /// Takes the barbarian to town away from a lightning enchanted pack and back through the portal
+    /// character's next portal. False when either leg fails, which leaves the game to be ended.
+    /// </summary>
+    private async Task<bool> WaitOutLightningEnchanted(Client client, CowManager cowManager, AliveMonster enchanted)
+    {
+        var portalPlayer = client.Game.Players.FirstOrDefault(p => _cowconfig.PortalCharacterName.Equals(p.Name, StringComparison.OrdinalIgnoreCase));
+        Log.Information("{Character}: lightning enchanted {Monster} {Distance:F0} away, waiting in town for a portal clear of it",
+            client.Game.Me.Name, enchanted.NPCCode, enchanted.Location.Distance(client.Game.Me.Location));
+        _leadInTown = true;
+        // The party's portal is only seen within sight range, and the pack usually catches him away
+        // from it; without a portal of his own this ended the game.
+        if (portalPlayer == null
+            || !await TakeNearestPortalToTown(client) && !await _townManagementService.TakeTownPortalToTown(client))
+        {
+            Log.Warning("{Character} could not take a portal to town from {Location}", client.Game.Me.Name, client.Game.Me.Location);
+            return false;
+        }
+
+        InCowLevel[client.Game.Me.Name.ToLower()] = false;
+        _safePortalWanted = true;
+        var waited = Stopwatch.StartNew();
+        // On her word, not on a portal id this side has not seen: the town end of the old portal is a
+        // unit of its own with an id of its own, so that took him straight back into the pack.
+        await GeneralHelpers.TryWithTimeout(async (_) =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(0.2));
+            return NextGame.Task.IsCompleted || IsRunOver(cowManager) || !_safePortalWanted;
+        }, SafePortalTimeout);
+        if (NextGame.Task.IsCompleted || IsRunOver(cowManager))
+        {
+            return true;
+        }
+
+        if (_safePortalWanted)
+        {
+            Log.Warning("{Character} got no portal back within {Seconds:F0}s", client.Game.Me.Name, waited.Elapsed.TotalSeconds);
+            return false;
+        }
+
+        if (!await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.CowLevel))
+        {
+            Log.Warning("{Character} could not take the portal back to the cow level", client.Game.Me.Name);
+            return false;
+        }
+
+        await ConfirmInCowLevel(client);
+        _leadInTown = false;
+        Log.Information("{Character} back in the cow level at {Location} after {Seconds:F1}s in town", client.Game.Me.Name, client.Game.Me.Location, waited.Elapsed.TotalSeconds);
+        return true;
+    }
+
     private async Task BarbClient(Client client, AccountConfig account, CowManager cowManager, bool shouldBo)
     {
         Log.Information($"Starting BoBarb Client {client.Game.Me.Name}");
@@ -1484,11 +1761,26 @@ public class CowBot : MultiClientBotBase
             await ClassHelpers.CastAllShouts(client);
         }
 
-        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !IsRunOver(cowManager))
         {
             if (shouldBo)
             {
                 await ClassHelpers.CastAllShouts(client);
+            }
+
+            var enchanted = shouldBo
+                ? cowManager.GetNearbyAliveMonsters(client, LightningEnchantedLeadRange, 100)
+                    .FirstOrDefault(m => m.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted))
+                : null;
+            if (enchanted != null)
+            {
+                if (!await WaitOutLightningEnchanted(client, cowManager, enchanted))
+                {
+                    Log.Information($"{client.Game.Me.Name}, lightning enhanced cow nearby, next game");
+                    break;
+                }
+
+                continue;
             }
 
             var leadPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
@@ -1536,7 +1828,7 @@ public class CowBot : MultiClientBotBase
             NextGame.TrySetResult(true);
         }
 
-        Log.Information($"Stopped Barb Client {client.Game.Me?.Name}, cowing manager is finished is: {cowManager.IsFinished()}");
+        Log.Information($"Stopped Barb Client {client.Game.Me?.Name}, cowing manager is finished is: {cowManager.IsFinished()}, next game set {NextGame.Task.IsCompleted}, in game {client.Game.IsInGame()}");
     }
 
     /// <summary>
@@ -1566,7 +1858,7 @@ public class CowBot : MultiClientBotBase
         Point deathLocation = null;
         var sweepProgress = 0;
 
-        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !cowManager.IsFinished())
+        while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(0.2)), NextGame.Task) && client.Game.IsInGame() && !IsRunOver(cowManager))
         {
             if (shouldBo)
             {

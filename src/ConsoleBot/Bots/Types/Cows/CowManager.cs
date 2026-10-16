@@ -58,6 +58,10 @@ internal sealed class CowManager
     /// one monster is counted several times and, worse, is put back into its cluster as alive.
     /// </summary>
     private readonly ConcurrentDictionary<uint, byte> _confirmedDead = new();
+
+    /// <summary>How far from the Cow King a boss minion counts as one of his guards.</summary>
+    private const double KingGuardRadius = 20;
+    private Point _cowKingLocation;
     private int _killed;
 
     public CowManager(List<Client> killingclients, List<Client> listeningClients, IMapApiService mapApiService, bool activeMode)
@@ -95,6 +99,14 @@ internal sealed class CowManager
 
     private readonly Lock _sweepLock = new();
     private bool _sweepBuilt;
+    private AreaMap _levelMap;
+
+    /// <summary>
+    /// Whether a point lies inside the cow level, or null before its map is loaded. Tristram's drops
+    /// stay known for the whole game and lie some 700 units from the cows, close enough that a
+    /// distance test took them for leftovers here and sent the party looking for a path to them.
+    /// </summary>
+    public bool? InLevel(Point point) => _levelMap?.TryMapToPointInMap(point, out _);
 
     /// <summary>
     /// Lays a serpentine route over the level and orders all cluster work along it, so the killers
@@ -114,6 +126,7 @@ internal sealed class CowManager
         }
 
         var areaMap = await mapApiService.GetArea(game.MapId, Difficulty.Normal, D2NG.Core.D2GS.Act.Area.CowLevel);
+        _levelMap = areaMap;
         var walkable = new bool[areaMap.Map.Length][];
         for (var y = 0; y < areaMap.Map.Length; y++)
         {
@@ -252,12 +265,23 @@ internal sealed class CowManager
     /// superuniques.bin record 39, "The Cow King", gives his base class as 391 - Hell Bovine - and
     /// he is the only Hell Bovine super unique, so the class and the super unique marker identify
     /// him between them. The boss flag alone does not: the level is full of randomly uniqued cow
-    /// packs that carry it too. <see cref="NPCCode.CowKing"/> is no use here either - 773 is a DS1
+    /// packs that carry it too. <see cref="NPCCode.CowKing"/> is no use here either - 651 is a DS1
     /// preset id, which is the map API's key for a placed unit, and the server never sends it.
     /// </remarks>
     private static bool IsCowKing(AssignNpcPacket packet)
         => packet.UniqueCode == NPCCode.HellBovine
             && packet.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique);
+
+    /// <summary>
+    /// Whether this NPC is one of the party's mercenaries or a friendly summon.
+    /// </summary>
+    /// <remarks>
+    /// Mercenaries are recognised by owner rather than class: the 0x81 each client gets on joining
+    /// names its own merc, and NPCCode's hireling entries do not line up with 1.09's monstats.
+    /// </remarks>
+    private bool IsOnOurSide(AssignNpcPacket packet)
+        => NPCHelpers.IsFriendly(packet.UniqueCode)
+            || _listeners.Any(c => c.Game.Me?.MercId == packet.EntityId);
 
     private void HandleAssignNPC(AssignNpcPacket packet)
     {
@@ -273,15 +297,36 @@ internal sealed class CowManager
             if (!ActiveMode)
             {
                 // Nobody here can finish him when only the nova sorceresses are killing, so the
-                // party stays clear rather than walking over and stalling on him.
+                // party stays clear rather than walking over and stalling on him. His guards go
+                // with him: they share his lightning enchantment, and every sorceress kept
+                // claiming them, backing off and claiming them again until the game ran out -
+                // with the drops of the last packs still on the ground.
+                _cowKingLocation = packet.Location;
+                var guards = _aliveMonsters.Within(packet.Location, KingGuardRadius, int.MaxValue).Where(m => m.IsBossMinion).ToList();
+                foreach (var guard in guards)
+                {
+                    RemoveMonster(guard.Id, killed: false);
+                }
+
+                if (guards.Count > 0)
+                {
+                    Log.Information("Leaving the Cow King's {Count} guards alone", guards.Count);
+                }
+
                 return;
             }
+        }
+
+        if (!ActiveMode && packet.IsBossMinion && _cowKingLocation != null
+            && packet.Location.Distance(_cowKingLocation) <= KingGuardRadius)
+        {
+            return;
         }
 
         // Everything in the level counts. Which character can hurt a given monster is decided from
         // its resistances when the attack is chosen, so there is nothing to configure here and
         // nothing to leave out - a monster type nobody thought to list used to be invisible.
-        if (_confirmedDead.ContainsKey(packet.EntityId))
+        if (_confirmedDead.ContainsKey(packet.EntityId) || IsOnOurSide(packet))
         {
             return;
         }
@@ -298,6 +343,7 @@ internal sealed class CowManager
             Location = packet.Location,
             NPCCode = packet.UniqueCode,
             MonsterEnchantments = packet.MonsterEnchantments,
+            IsBossMinion = packet.IsBossMinion,
             ClusterId = cluster.Id
         });
 

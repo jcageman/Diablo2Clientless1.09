@@ -26,7 +26,7 @@ public class NipRuleTests
     {
         var item = CreateItem(ClassificationType.SmallCharm, ItemName.SmallCharm, QualityType.Magical, identified: true);
         AddStat(item, StatType.Life, 18);
-        var context = new NipEvaluationContext(item, CharacterClass.Sorceress);
+        var context = new NipEvaluationContext(item);
         var matchingRules = NipParser.ParseDirectory(NipDirectory)
             .Where(rule => rule.MatchesKeep(context))
             .Select(rule => rule.Raw)
@@ -40,7 +40,7 @@ public class NipRuleTests
     {
         var item = CreateTestRing(identified: false);
 
-        var result = Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: true, item);
+        var result = Pickit.ShouldPickupItem(shouldPickupGoldItems: true, item);
 
         Assert.True(result);
     }
@@ -50,7 +50,7 @@ public class NipRuleTests
     {
         var item = CreateItem(ClassificationType.Ring, ItemName.Ring, QualityType.Rare, identified: false);
 
-        var result = Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: false, item);
+        var result = Pickit.ShouldPickupItem(shouldPickupGoldItems: false, item);
 
         Assert.True(result);
     }
@@ -61,7 +61,7 @@ public class NipRuleTests
         var item = CreateItem(ClassificationType.Armor, ItemName.ArchonPlate, QualityType.Normal, identified: true);
         item.Type = "uap";
 
-        Assert.False(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class NipRuleTests
         item.IsGold = true;
         item.Amount = 5000;
 
-        Assert.False(Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: false, item));
+        Assert.False(Pickit.ShouldPickupItem(shouldPickupGoldItems: false, item));
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class NipRuleTests
         item.IsGold = true;
         item.Amount = 5000;
 
-        Assert.False(Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: true, item));
+        Assert.False(Pickit.ShouldPickupItem(shouldPickupGoldItems: true, item));
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class NipRuleTests
         item.IsGold = true;
         item.Amount = 5001;
 
-        Assert.True(Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: false, item));
+        Assert.True(Pickit.ShouldPickupItem(shouldPickupGoldItems: false, item));
     }
 
     // The game sends gold with the identified flag set, so these three are the cases that actually
@@ -103,8 +103,8 @@ public class NipRuleTests
         item.IsGold = true;
         item.Amount = 5001;
 
-        Assert.True(Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: false, item));
-        Assert.True(Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: true, item));
+        Assert.True(Pickit.ShouldPickupItem(shouldPickupGoldItems: false, item));
+        Assert.True(Pickit.ShouldPickupItem(shouldPickupGoldItems: true, item));
     }
 
     [Fact]
@@ -114,8 +114,8 @@ public class NipRuleTests
         item.IsGold = true;
         item.Amount = 5000;
 
-        Assert.False(Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: false, item));
-        Assert.False(Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: true, item));
+        Assert.False(Pickit.ShouldPickupItem(shouldPickupGoldItems: false, item));
+        Assert.False(Pickit.ShouldPickupItem(shouldPickupGoldItems: true, item));
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class NipRuleTests
         item.IsGold = true;
         item.Amount = 250000;
 
-        Assert.True(Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: false, item));
+        Assert.True(Pickit.ShouldPickupItem(shouldPickupGoldItems: false, item));
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class NipRuleTests
     {
         var item = CreateItem(ClassificationType.Ring, ItemName.Ring, QualityType.Rare, identified: true);
 
-        Assert.False(Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item));
+        Assert.False(Pickit.ShouldKeepItem(item));
     }
 
     [Fact]
@@ -141,7 +141,7 @@ public class NipRuleTests
     {
         var item = CreateTestRing(identified: true);
 
-        var result = Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item);
+        var result = Pickit.ShouldKeepItem(item);
 
         Assert.True(result);
     }
@@ -155,7 +155,7 @@ public class NipRuleTests
         AddStat(item, StatType.LightningResistance, 40);
         AddStat(item, StatType.Life, 60);
 
-        var result = Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item);
+        var result = Pickit.ShouldKeepItem(item);
 
         Assert.True(result);
     }
@@ -168,7 +168,7 @@ public class NipRuleTests
         AddStat(item, StatType.FireResistance, 20);
         AddStat(item, StatType.LightningResistance, 20);
 
-        var result = Pickit.ShouldKeepItem(characterClass: CharacterClass.Barbarian, item);
+        var result = Pickit.ShouldKeepItem(item);
 
         Assert.True(result);
     }
@@ -178,7 +178,7 @@ public class NipRuleTests
     {
         var item = CreateItem(ClassificationType.Helm, ItemName.Shako, QualityType.Unique, identified: true);
 
-        var result = Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item);
+        var result = Pickit.ShouldKeepItem(item);
 
         Assert.True(result);
     }
@@ -190,7 +190,7 @@ public class NipRuleTests
         item.Sockets = 4;
         AddStat(item, StatType.IncreasedBlocking, 10);
 
-        var result = Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item);
+        var result = Pickit.ShouldKeepItem(item);
 
         Assert.True(result);
     }
@@ -203,7 +203,7 @@ public class NipRuleTests
         AddStat(item, StatType.EnhancedDamage, 160);
         AddStat(item, StatType.RepairsDurability, 1);
 
-        var result = Pickit.ShouldKeepItem(characterClass: CharacterClass.Barbarian, item);
+        var result = Pickit.ShouldKeepItem(item);
 
         Assert.True(result);
     }
@@ -214,7 +214,7 @@ public class NipRuleTests
         var item = CreateItem(ClassificationType.SmallCharm, ItemName.SmallCharm, QualityType.Magical, identified: true);
         AddStat(item, StatType.Life, 20);
 
-        var result = Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item);
+        var result = Pickit.ShouldKeepItem(item);
 
         Assert.True(result);
     }
@@ -225,7 +225,7 @@ public class NipRuleTests
         var item = CreateItem(ClassificationType.GrandCharm, ItemName.GrandCharm, QualityType.Magical, identified: true);
         item.Level = 95;
 
-        var result = Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item);
+        var result = Pickit.ShouldKeepItem(item);
 
         Assert.True(result);
     }
@@ -236,7 +236,7 @@ public class NipRuleTests
         var item = CreateItem(ClassificationType.Jewel, ItemName.Jewel, QualityType.Magical, identified: true);
         AddStat(item, StatType.EnhancedDamage, 35);
 
-        var result = Pickit.ShouldKeepItem(characterClass: CharacterClass.Sorceress, item);
+        var result = Pickit.ShouldKeepItem(item);
 
         Assert.True(result);
     }
@@ -246,7 +246,7 @@ public class NipRuleTests
     {
         var item = CreateItem(ClassificationType.Gem, ItemName.PerfectAmethyst, QualityType.Normal, identified: false);
 
-        var result = Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: true, item);
+        var result = Pickit.ShouldPickupItem(shouldPickupGoldItems: true, item);
 
         Assert.True(result);
     }
@@ -256,7 +256,7 @@ public class NipRuleTests
     {
         var item = CreateItem(ClassificationType.Rune, ItemName.JahRune, QualityType.Normal, identified: false);
 
-        var result = Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: true, item);
+        var result = Pickit.ShouldPickupItem(shouldPickupGoldItems: true, item);
 
         Assert.True(result);
     }
@@ -266,7 +266,7 @@ public class NipRuleTests
     {
         var item = CreateItem(ClassificationType.Armor, ItemName.LacqueredPlate, QualityType.Set, identified: false);
 
-        var result = Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: true, item);
+        var result = Pickit.ShouldPickupItem(shouldPickupGoldItems: true, item);
 
         Assert.True(result);
     }
@@ -276,9 +276,24 @@ public class NipRuleTests
     {
         var item = CreateItem(ClassificationType.SorceressOrb, ItemName.SwirlingCrystal, QualityType.Rare, identified: false);
 
-        var result = Pickit.ShouldPickupItem(characterClass: CharacterClass.Sorceress, shouldPickupGoldItems: true, item);
+        var result = Pickit.ShouldPickupItem(shouldPickupGoldItems: true, item);
 
         Assert.True(result);
+    }
+
+    [Fact]
+    public void FlatDamage_ReadsTheTwoHandedStatsOfAPolearm()
+    {
+        var item = CreateItem(ClassificationType.Polearm, ItemName.GrimScythe, QualityType.Rare, identified: true);
+        AddStat(item, StatType.SecondaryMinimumDamage, 14);
+        AddStat(item, StatType.SecondaryMaximumDamage, 20);
+        var context = new NipEvaluationContext(item);
+
+        context.TryResolve("mindamage", out var min);
+        context.TryResolve("maxdamage", out var max);
+
+        Assert.Equal(14, min.Number);
+        Assert.Equal(20, max.Number);
     }
 
     private static Item CreateTestRing(bool identified)

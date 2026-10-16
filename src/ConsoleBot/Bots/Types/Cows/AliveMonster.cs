@@ -14,6 +14,8 @@ public class AliveMonster
     public NPCCode NPCCode { get; set; }
     public HashSet<MonsterEnchantment> MonsterEnchantments { get; set; } = [];
 
+    public bool IsBossMinion { get; set; }
+
     /// <summary>The cluster this monster was first seen in. It keeps that cluster open until it dies.</summary>
     public uint ClusterId { get; set; }
 }

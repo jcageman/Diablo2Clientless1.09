@@ -129,6 +129,38 @@ public class IncomingPacketTests
         Assert.Equal(16u, packet.SummonId);
     }
 
+    [Theory]
+    [InlineData(0xFB, 96)]
+    [InlineData(0x77, 93)]
+    [InlineData(0xA5, 29)]
+    public void NpcHitPacketLifeIgnoresTopBit(byte life, int percent)
+    {
+        var bytes = new byte[] { 0x0C, 0x01, 0x2D, 0x00, 0x00, 0x00, 0x13, 0x40, life };
+        var packet = new NpcHitPacket(new D2gsPacket(bytes));
+        Assert.Equal(0x2Du, packet.EntityId);
+        Assert.Equal(percent, (int)System.Math.Round(packet.LifePercentage));
+    }
+
+    [Theory]
+    [InlineData(0x06, 0xEB, 84)]
+    [InlineData(0x06, 0x6B, 84)]
+    [InlineData(0x01, 0x80, 100)]
+    public void NpcStatePacketLifeIgnoresTopBitOnlyWhenHit(byte state, byte life, int percent)
+    {
+        var bytes = new byte[] { 0x69, 0x2D, 0x00, 0x00, 0x00, state, 0x4A, 0x27, 0x9F, 0x33, life, 0x40 };
+        var packet = new NpcStatePacket(new D2gsPacket(bytes));
+        Assert.Equal(percent, (int)System.Math.Round(packet.LifePercentage));
+    }
+
+    [Fact]
+    public void BaseAttributeWordIsUnsigned()
+    {
+        // A level 99 sorceress's base maximum mana: 231 in 1/256ths.
+        var packet = new BaseAttributePacket(new D2gsPacket([0x1E, 0x09, 0x00, 0xE7]));
+        Assert.Equal(D2NG.Core.D2GS.Players.Attribute.MaxMana, packet.Attribute);
+        Assert.Equal(231, packet.Value >> 8);
+    }
+
     [Fact]
     public void UpdateItemStatsPacket()
     {
