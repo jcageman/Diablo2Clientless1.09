@@ -520,6 +520,8 @@ public static class NPCHelpers
         // never reached the merchant went on to chat and trade with her from wherever it had got
         // to: the shop then held nothing, and every purchase failed without saying so - the town
         // portal tomes included, which is what strands the portal character a few minutes later.
+        // The merchant answers one character at a time, so a party shopping together queues: a sorceress next to
+        // Malah went unanswered for the whole of another character's 6.5s visit and gave up a second after it.
         if (!GeneralHelpers.TryWithTimeout((retryCount) =>
         {
             if (game.Me.Location.Distance(npc.Location) >= 2)
@@ -533,7 +535,7 @@ public static class NPCHelpers
             }
 
             return false;
-        }, TimeSpan.FromSeconds(10)))
+        }, TimeSpan.FromSeconds(20)))
         {
             Log.Warning("{Character} never reached {NPCCode} to trade, {Distance:F0} away at {Location} - skipping the shop rather than buying from nowhere",
                 game.Me.Name, npc.NPCCode, game.Me.Location.Distance(npc.Location), game.Me.Location);

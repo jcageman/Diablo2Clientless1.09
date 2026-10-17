@@ -1,4 +1,4 @@
-using D2NG.Core;
+﻿using D2NG.Core;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
@@ -90,6 +90,8 @@ var bot = Property(JsonDocument.Parse(File.ReadAllText(configPath)).RootElement,
 var realm = Property(bot, "realm").GetString();
 var keyOwner = Property(bot, "keyOwner").GetString();
 var gameFolder = Property(bot, "gameFolder").GetString();
+var descriptions = Property(bot, "gameDescriptions");
+var configuredDescription = descriptions.ValueKind == JsonValueKind.Array ? descriptions.EnumerateArray().Select(d => d.GetString()).FirstOrDefault() : null;
 
 var muleConfig = Property(JsonDocument.Parse(File.ReadAllText(muleConfigPath)).RootElement, "mule");
 var passwordAccount = options.GetValueOrDefault("password-of", account);
@@ -133,7 +135,7 @@ if (rest[0] == "record")
             await Task.Delay(TimeSpan.FromSeconds(25));
         }
 
-        failedRecords += await Record(realm, keyOwner, gameFolder, account, password, name, rest.ElementAtOrDefault(2) ?? "gs1", recorder) ? 0 : 1;
+        failedRecords += await Record(realm, keyOwner, gameFolder, account, password, name, rest.ElementAtOrDefault(2) ?? configuredDescription, recorder) ? 0 : 1;
     }
 
     return failedRecords == 0 ? 0 : 1;
@@ -160,7 +162,7 @@ if (rest[0] == "drop")
         }
 
         var ok = await DropListed(realm, keyOwner, gameFolder, account, password, name, wanted.GetValueOrDefault(name) ?? [],
-            rest.ElementAtOrDefault(2) ?? "gs1", dryRun, repository);
+            rest.ElementAtOrDefault(2) ?? configuredDescription, dryRun, repository);
         failedCharacters += ok ? 0 : 1;
     }
 
@@ -200,7 +202,7 @@ if (rest[0] is "list" or "createaccount")
 
 if (rest[0] is "inspect" or "putaway")
 {
-    return await Inspect(client, characters, rest.ElementAtOrDefault(1), rest.ElementAtOrDefault(2) ?? "gs3", putAway: rest[0] == "putaway");
+    return await Inspect(client, characters, rest.ElementAtOrDefault(1), rest.ElementAtOrDefault(2) ?? configuredDescription, putAway: rest[0] == "putaway");
 }
 
 if (rest[0] != "create")

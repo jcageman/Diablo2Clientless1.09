@@ -1,6 +1,7 @@
 using ConsoleBot.Bots;
 using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Escape;
 using ConsoleBot.Helpers;
 using ConsoleBot.TownManagement;
 using D2NG.Core;
@@ -169,6 +170,11 @@ public class MuleService : IMuleService
 
             foreach (var character in accountCharacters)
             {
+                if (StrangerEscape.FleeRequested)
+                {
+                    return false;
+                }
+
                 InventoryHelpers.CleanupCursorItem(client.Game);
 
                 var candidates = remaining.ToList();
@@ -206,6 +212,7 @@ public class MuleService : IMuleService
                 }
 
                 var muleClient = new Client();
+                StrangerEscape.Watch(muleClient, shortLived: true);
                 var accountCharacter = new AccountConfig()
                 {
                     Username = account.Username,

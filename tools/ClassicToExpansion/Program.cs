@@ -1,4 +1,4 @@
-using ConsoleBot.Bots;
+﻿using ConsoleBot.Bots;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Enums;
 using ConsoleBot.Helpers;
@@ -566,7 +566,7 @@ internal sealed class Mover(
         await client.SelectCharacter(character);
         await PaceGameCreation();
         logger.LogInformation("{Role} creates game {Game} with password {Password}", role, gameName, password);
-        if (!await client.CreateGame(Difficulty.Normal, gameName, password, botConfig.GameDescriptions?.FirstOrDefault() ?? "gs1"))
+        if (!await client.CreateGame(Difficulty.Normal, gameName, password, botConfig.GameDescriptions.First()))
         {
             logger.LogError("{Role}: could not create a game", role);
             return false;

@@ -11,6 +11,15 @@ file name and the `Character` field) before committing them.
 The run configs, start scripts, logs, game data, analysis scripts and nips live in a folder outside
 the repo whose location differs per machine. This file calls it `<bot folder>`.
 
+## Strangers stop the bot
+
+`<bot folder>\known-accounts.json` lists every account that is ours - farmers, party members,
+mules - as `{ "knownAccounts": [ ... ] }`; `--knownaccounts` points elsewhere. A bot does not start
+without it. A whisper from any other account lets the bot finish its run and exit without muling; any
+other account joining a game (the join message carries the account) makes every client leave at once
+and the bot exit. Nothing restarts it. `ConsoleBot/Escape` holds the logic; a new mule or party
+account goes into the file before its first run, or the bots flee from it.
+
 ## Building
 
 The start scripts in `<bot folder>` run

@@ -1,6 +1,7 @@
 ﻿using ConsoleBot.Chicken;
 using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Escape;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using D2NG.Core;
@@ -147,6 +148,11 @@ public abstract class MultiClientBotBase : IBotInstance
                 RequestStop("stop file found");
             }
 
+            if (StrangerEscape.StopRequested)
+            {
+                RequestStop($"a stranger noticed the bot: {StrangerEscape.Reason}");
+            }
+
             if (StopBatch)
             {
                 Log.Fatal("Ending the batch: {Reason}", StopReason);
@@ -207,6 +213,11 @@ public abstract class MultiClientBotBase : IBotInstance
 
                 foreach (var client in ClientsNeedingMule)
                 {
+                    if (StrangerEscape.StopRequested)
+                    {
+                        break;
+                    }
+
                     var foundClient = clients.Single(c => c.LoggedInUserName() == client);
                     Log.Information("{Client}: needs mule, starting mule", client);
 
@@ -240,6 +251,11 @@ public abstract class MultiClientBotBase : IBotInstance
                         }
                     }
                 }
+                if (StrangerEscape.StopRequested)
+                {
+                    continue;
+                }
+
                 ClientsNeedingMule.Clear();
                 if(_multiClientConfig.ShouldCreateGames)
                 {
@@ -365,6 +381,11 @@ public abstract class MultiClientBotBase : IBotInstance
     /// </summary>
     protected async Task<bool> RejoinCurrentGame(Client client, AccountConfig account)
     {
+        if (StrangerEscape.FleeRequested)
+        {
+            return false;
+        }
+
         Log.Information("{Client} rejoining game {Prefix}{Count}", client.LoggedInUserName(), _config.GameNamePrefix, _currentGameCount);
         if (!await LeaveGameAndRejoinMCPWithRetry(client, account)
             || !await RealmConnectHelpers.JoinGameWithRetry(_currentGameCount, client, _config, account, () => NextGame.Task.IsCompleted))

@@ -2,6 +2,7 @@ using ConsoleBot.Attack;
 using ConsoleBot.Bots;
 using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Escape;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using D2NG.Core;
@@ -81,11 +82,13 @@ if (config.GetSection("externalMessaging").Exists())
     hostBuilder.Services.AddOptions<ExternalMessagingConfiguration>()
         .Bind(config.GetSection("externalMessaging"))
         .ValidateDataAnnotations();
-    hostBuilder.Services.AddSingleton<IExternalMessagingClient, ExternalMessagingClient>();
+    hostBuilder.Services.AddSingleton<ExternalMessagingClient>();
+    hostBuilder.Services.AddSingleton<IExternalMessagingClient>(s => new StrangerWatchingMessagingClient(s.GetRequiredService<ExternalMessagingClient>()));
 }
 else
 {
-    hostBuilder.Services.AddSingleton<IExternalMessagingClient, DummyMessagingClient>();
+    hostBuilder.Services.AddSingleton<DummyMessagingClient>();
+    hostBuilder.Services.AddSingleton<IExternalMessagingClient>(s => new StrangerWatchingMessagingClient(s.GetRequiredService<DummyMessagingClient>()));
 }
 var muleConnectionString = config.GetSection("mule")["connectionString"];
 if (!string.IsNullOrEmpty(muleConnectionString))
@@ -200,11 +203,25 @@ else
 
 hostBuilder.Services.AddSingleton(shrines);
 
+// Like the game data, the list of our own accounts sits beside the run configs; --knownaccounts
+// overrides it. Without it a bot cannot tell a stranger from a mule, so it does not start.
+var knownAccountsFile = config["knownaccounts"]
+    ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(config["config"])), KnownAccounts.FileName);
+if (!File.Exists(knownAccountsFile))
+{
+    Console.WriteLine($"Missing {knownAccountsFile}: the list of our own accounts, so a stranger whispering or joining can be told apart");
+    throw new InvalidProgramException("Missing known accounts file");
+}
+
+var knownAccounts = KnownAccounts.Load(knownAccountsFile);
+Log.Logger.Information("{Count} known accounts from {File}", knownAccounts.Count, knownAccountsFile);
+
 hostBuilder.Services.AddSingleton<IBotFactory, BotFactory>();
 
 var host = hostBuilder.Build();
 var botFactory = host.Services.GetRequiredService<IBotFactory>();
 D2NG.Pickit.Pickit.Configure(host.Services.GetRequiredService<IOptions<PickitConfiguration>>().Value);
+StrangerEscape.Configure(knownAccounts, host.Services.GetRequiredService<IExternalMessagingClient>());
 
 // Nip rules with a '[maxquantity]' count what is already on the mules, not just what the character holds.
 var muleRepository = host.Services.GetService<IMuleRepository>();
@@ -237,11 +254,21 @@ while (true)
         var botConfiguration = host.Services.GetRequiredService<IOptions<BotConfiguration>>();
         var botInstance = botFactory.CreateBot(botConfiguration.Value.BotType);
         await botInstance.Run();
+        if (StrangerEscape.StopRequested)
+        {
+            return await StopForStranger();
+        }
+
         if (botInstance.RunsOnce)
         {
             await Log.CloseAndFlushAsync();
             return 0;
         }
+    }
+    catch (Exception e) when (StrangerEscape.StopRequested)
+    {
+        Log.Logger.Warning(e, "Bot ended with an exception after a stranger noticed it");
+        return await StopForStranger();
     }
     catch (MapServerUnavailableException e)
     {
@@ -266,6 +293,15 @@ while (true)
         await externalClient.SendMessage($"Bot crashed with exception {e.Message}, restarting");
         await Task.Delay(TimeSpan.FromSeconds(30));
     }
+}
+
+// Nothing restarts a bot after this: starting it again is for whoever read the message.
+static async Task<int> StopForStranger()
+{
+    Log.Logger.Fatal("Stopped because a stranger noticed the bot: {Reason}", StrangerEscape.Reason);
+    await Task.WhenAny(StrangerEscape.Response, Task.Delay(TimeSpan.FromSeconds(30)));
+    await Log.CloseAndFlushAsync();
+    return 0;
 }
 
 static async Task StopWithFatalError(IHost host, string message, Exception exception)
