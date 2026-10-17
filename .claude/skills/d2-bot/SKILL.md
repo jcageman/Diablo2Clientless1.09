@@ -1,4 +1,4 @@
----
+﻿---
 name: d2-bot
 description: Build and debug clientless Diablo 2 1.09 bots in this repo. Use when writing or changing a bot or a step, when a character will not move, interact, travel or take quest credit, when a step times out, when adding an outgoing packet, when reading D2GS logs and captures, when a party bot's clients disagree or strand each other, or when tuning potions, chickens and retreats.
 ---
@@ -99,9 +99,9 @@ bytes are not in a capture, go find a capture — `DEBUGGING.md` covers where th
 - **Tests and builds**: follow `AGENTS.md` — it names the build that counts and the test command.
 - **Accounts cap at 18 characters**, and a full account fails as `RealmLogin failed`. The `cleanup`
   step deletes exactly the names in `characterNames`, and only for accounts in `deletableAccounts`.
-- **Always use `gs1` as the game description.** Other realms in the list are not reliable. A single-client
-  bot that throws mid-game (a scheduled server restart does it) moves to the next description and stays there
-  for the rest of the process; on gs3 town portals are refused. When one bot fails a step its siblings pass,
+- **Keep every config on the one game description that works.** The others in the list are not reliable. A
+  single-client bot that throws mid-game (a scheduled server restart does it) moves to the next description and
+  stays there for the rest of the process, where town portals can be refused. When one bot fails a step its siblings pass,
   grep its log for `game description is now:` first, and restart it.
 - Configs hold credentials. Reference them by path; keep them out of documents and commits, and
   name characters by role (the taxi, the amazon) — the repository is public.

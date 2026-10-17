@@ -1,4 +1,4 @@
----
+﻿---
 name: d2-109
 description: Game rules of Diablo 2 1.09 as this realm's server applies them - aura pulses and linger, Baal wave trigger, cast timing, sight range, join limits, state packets, deaths. Use when a game mechanic decides a bot's timing, positioning or survival, or when D2MOO, a wiki or a newer patch disagrees with what the realm did.
 ---
@@ -37,13 +37,12 @@ Measure from Debug packet logs (`d2-bot` skill, `DEBUGGING.md`) rather than from
 
 ## The realm's servers
 
-- **Every game server restarts every 3 hours at hh:15:15** (measured): gs1 at 02:15, 05:15, ... 23:15, gs2 and gs3
-  at 00:15, 03:15, ... 21:15. Every game on it is cut; clients see an `IOException` ("connection aborted")
-  and the bot carries on with the next game.
+- **Every game server restarts every 3 hours at hh:15:15** (measured), each server on its own hour. Every game on
+  it is cut; clients see an `IOException` ("connection aborted") and the bot carries on with the next game.
 - **A game name can stay taken for over an hour** (measured): create is refused with d2cs `NAME_EXIST` (result
   `0x1F`) until the next restart frees it. The bot moves on to the next name.
-- **gs3 refuses town portals** (measured): a bot that drifted onto gs3 after a restart lost 9 of 12 games to
-  refused portals, on an unshared account. Keep every config on `gs1` (see `d2-bot`, Environment).
+- **One of the game servers refuses town portals** (measured): a bot that drifted onto it after a restart lost 9
+  of 12 games to refused portals, on an unshared account. See `d2-bot`, Environment.
 
 - **A gambling refresh is bound by the round trip** (measured): the server answers ~90 ms after the refresh and
   the window arrives as one burst. Rings and amulets are in every window, a rare base such as a scepter in about
