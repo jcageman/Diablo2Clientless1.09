@@ -61,14 +61,11 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
 
     private static readonly TimeSpan GameDeadline = TimeSpan.FromMinutes(4);
 
+    private static readonly TimeSpan TownDeadline = TimeSpan.FromMinutes(20);
+
     private int _itemsPickedUp;
 
-    protected override Task<bool> RunSingleGame(Client client)
-    {
-        return GeneralHelpers.WithDeadline(() => RunTravincal(client), GameDeadline, "Travincal run");
-    }
-
-    private async Task<bool> RunTravincal(Client client)
+    protected override async Task<bool> RunSingleGame(Client client)
     {
         _itemsPickedUp = 0;
         client.Game.MovementSpeedFactor = _travConfig.MovementSpeedFactor;
@@ -77,6 +74,26 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
             throw new NotSupportedException("Only barbarian is supported on travincal");
         }
 
+        if (!await GeneralHelpers.WithDeadline(() => PerformTownTasks(client), TownDeadline, "Travincal town tasks"))
+        {
+            return false;
+        }
+
+        if (NeedsMule)
+        {
+            return true;
+        }
+
+        if (!await GeneralHelpers.WithDeadline(() => RunTravincal(client), GameDeadline, "Travincal run"))
+        {
+            return false;
+        }
+
+        return await GeneralHelpers.WithDeadline(() => FinishInTown(client), TownDeadline, "Travincal town tasks after the run");
+    }
+
+    private async Task<bool> PerformTownTasks(Client client)
+    {
         var townTaskResult = await _townManagementService.PerformTownTasks(client, TownOptions(client));
         if (townTaskResult.ShouldMule)
         {
@@ -90,6 +107,11 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
             return false;
         }
 
+        return true;
+    }
+
+    private async Task<bool> RunTravincal(Client client)
+    {
         Log.Information("Taking travincal wp");
         if (!await _townManagementService.TakeWaypoint(client, Waypoint.Travincal))
         {
@@ -149,7 +171,12 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
             return false;
         }
 
-        townTaskResult = await _townManagementService.PerformTownTasks(client, TownOptions(client));
+        return true;
+    }
+
+    private async Task<bool> FinishInTown(Client client)
+    {
+        var townTaskResult = await _townManagementService.PerformTownTasks(client, TownOptions(client));
         if (townTaskResult.ShouldMule)
         {
             NeedsMule = true;

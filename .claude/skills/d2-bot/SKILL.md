@@ -99,7 +99,10 @@ bytes are not in a capture, go find a capture — `DEBUGGING.md` covers where th
 - **Tests and builds**: follow `AGENTS.md` — it names the build that counts and the test command.
 - **Accounts cap at 18 characters**, and a full account fails as `RealmLogin failed`. The `cleanup`
   step deletes exactly the names in `characterNames`, and only for accounts in `deletableAccounts`.
-- **Always use `gs1` as the game description.** Other realms in the list are not reliable.
+- **Always use `gs1` as the game description.** Other realms in the list are not reliable. A single-client
+  bot that throws mid-game (a scheduled server restart does it) moves to the next description and stays there
+  for the rest of the process; on gs3 town portals are refused. When one bot fails a step its siblings pass,
+  grep its log for `game description is now:` first, and restart it.
 - Configs hold credentials. Reference them by path; keep them out of documents and commits, and
   name characters by role (the taxi, the amazon) — the repository is public.
 
@@ -113,5 +116,7 @@ bytes are not in a capture, go find a capture — `DEBUGGING.md` covers where th
 - **`PARTY.md`** — multi-client bots: state shared between clients, portals that close or strand,
   leaving mid-run, potion and chicken thresholds, drop reservations, and how to measure a change.
   Read it before changing a party bot or any survival setting.
+- **`d2-109` skill** - the game's own rules on this realm (auras, waves, cast timing, sight, deaths),
+  with provenance. Read it when a mechanic sets a timing or position.
 - **`%TEMP%\rush-bot-handoff.md`** — the rush bot's own history: solved chains, measured portal spots,
   what is still open. Project record, not technique.
