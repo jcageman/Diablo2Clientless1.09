@@ -174,7 +174,7 @@ public abstract class SingleClientBotBase
                         await Task.Delay(TimeSpan.FromSeconds(1));
                     }
                 }
-                catch (HttpRequestException e)
+                catch (HttpRequestException e) when (!StrangerEscape.FleeRequested)
                 {
                     var mapServerMessage = $"{client.LoggedInUserName()} Received http exception, map server is probably down";
                     Log.Fatal(e, mapServerMessage);

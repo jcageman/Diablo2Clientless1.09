@@ -20,8 +20,9 @@ namespace ConsoleBot.Escape;
 /// </summary>
 public static class StrangerEscape
 {
-    private static KnownAccounts _knownAccounts = new([]);
+    private static KnownAccounts _knownAccounts;
     private static IExternalMessagingClient _messaging;
+    private static Task _response = Task.CompletedTask;
     private static readonly List<Client> _clients = [];
     private static readonly HashSet<Client> _shortLived = [];
     private static readonly object _lock = new();
@@ -36,6 +37,12 @@ public static class StrangerEscape
 
     public static string Reason { get; private set; }
 
+    /// <summary>
+    /// The leave and the message, which run off the listener thread. Awaited before the process ends,
+    /// or it can end before the message is out.
+    /// </summary>
+    public static Task Response => _response;
+
     public static void Configure(KnownAccounts knownAccounts, IExternalMessagingClient messaging)
     {
         _knownAccounts = knownAccounts;
@@ -48,6 +55,12 @@ public static class StrangerEscape
     /// </summary>
     public static void Watch(Client client, bool shortLived = false)
     {
+        // Tools that reuse the mule service never configure it; with no list everyone would be a stranger.
+        if (_knownAccounts == null)
+        {
+            return;
+        }
+
         lock (_lock)
         {
             if (_clients.Contains(client))
@@ -117,7 +130,7 @@ public static class StrangerEscape
 
         Log.Fatal("Stranger: {What}. {Action}", what, action);
         // Packet handlers run on the listener thread, which the leave and the message both wait on.
-        _ = Task.Run(async () =>
+        var response = Task.Run(async () =>
         {
             if (firstFlee)
             {
@@ -136,6 +149,10 @@ public static class StrangerEscape
                 }
             }
         });
+        lock (_lock)
+        {
+            _response = Task.WhenAll(_response, response);
+        }
     }
 
     private static async Task LeaveAllGames()

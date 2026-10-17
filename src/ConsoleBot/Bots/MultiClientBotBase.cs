@@ -381,6 +381,11 @@ public abstract class MultiClientBotBase : IBotInstance
     /// </summary>
     protected async Task<bool> RejoinCurrentGame(Client client, AccountConfig account)
     {
+        if (StrangerEscape.FleeRequested)
+        {
+            return false;
+        }
+
         Log.Information("{Client} rejoining game {Prefix}{Count}", client.LoggedInUserName(), _config.GameNamePrefix, _currentGameCount);
         if (!await LeaveGameAndRejoinMCPWithRetry(client, account)
             || !await RealmConnectHelpers.JoinGameWithRetry(_currentGameCount, client, _config, account, () => NextGame.Task.IsCompleted))

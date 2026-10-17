@@ -254,16 +254,21 @@ while (true)
         var botConfiguration = host.Services.GetRequiredService<IOptions<BotConfiguration>>();
         var botInstance = botFactory.CreateBot(botConfiguration.Value.BotType);
         await botInstance.Run();
+        if (StrangerEscape.StopRequested)
+        {
+            return await StopForStranger();
+        }
+
         if (botInstance.RunsOnce)
         {
             await Log.CloseAndFlushAsync();
             return 0;
         }
-
-        if (StrangerEscape.StopRequested)
-        {
-            return await StopForStranger();
-        }
+    }
+    catch (Exception e) when (StrangerEscape.StopRequested)
+    {
+        Log.Logger.Warning(e, "Bot ended with an exception after a stranger noticed it");
+        return await StopForStranger();
     }
     catch (MapServerUnavailableException e)
     {
@@ -273,11 +278,6 @@ while (true)
             $"Map API at {mapApiUrl} went away while running. Start the map server (d2mapapi) and run the bot again. Stopping instead of restarting.",
             e);
         return 1;
-    }
-    catch (Exception e) when (StrangerEscape.StopRequested)
-    {
-        Log.Logger.Warning(e, "Bot ended with an exception after a stranger noticed it");
-        return await StopForStranger();
     }
     catch (Exception e)
     {
@@ -299,6 +299,7 @@ while (true)
 static async Task<int> StopForStranger()
 {
     Log.Logger.Fatal("Stopped because a stranger noticed the bot: {Reason}", StrangerEscape.Reason);
+    await Task.WhenAny(StrangerEscape.Response, Task.Delay(TimeSpan.FromSeconds(30)));
     await Log.CloseAndFlushAsync();
     return 0;
 }
