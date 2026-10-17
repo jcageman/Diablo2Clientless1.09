@@ -264,11 +264,7 @@ public class BaalBot : MultiClientBotBase
             }
 
             client.Game.InteractWithEntity(baalPortal);
-            return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                await Task.Delay(50);
-                return client.Game.Area == Area.TheWorldStoneChamber;
-            }, TimeSpan.FromSeconds(0.5));
+            return await ArrivedIn(client, Area.TheWorldStoneChamber);
         }, clickFor))
         {
             return false;
@@ -751,7 +747,10 @@ public class BaalBot : MultiClientBotBase
                 }
             }
 
-            await RefillPotionsIfOut(client, account);
+            if (baalThrone != null && await RefillPotionsIfOut(client, account))
+            {
+                runStopWatch.Restart();
+            }
 
             var nearbyMonsters = baalThrone == null
                 ? NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 10, 50).ToList()
@@ -854,10 +853,11 @@ public class BaalBot : MultiClientBotBase
     }
 
     /// <summary>
-    /// Refills an empty belt in town and comes back through the own portal. Leaving the game instead threw away
-    /// whole runs with the character at half life and nothing near.
+    /// Refills an empty belt in town during the waves and comes back through the own portal. Leaving the game instead
+    /// threw away whole runs with the character at half life and nothing near. The portal character never goes:
+    /// her own portal is the one the party comes through.
     /// </summary>
-    private async Task RefillPotionsIfOut(Client client, AccountConfig account)
+    private async Task<bool> RefillPotionsIfOut(Client client, AccountConfig account)
     {
         var game = client.Game;
         // Rejuvenations are kept for the emergency line, so an empty healing belt is what sends a character to town.
@@ -865,9 +865,10 @@ public class BaalBot : MultiClientBotBase
         if (game.IsInTown()
             || game.Belt.NumOfHealthPotions() > 0
             || game.Inventory.Items.Any(i => i.Classification == ClassificationType.HealthPotion)
+            || game.Me.Id == PortalClientPlayerId
             || !RefilledThisGame.TryAdd(game.Me.Name, true))
         {
-            return;
+            return false;
         }
 
         var timer = Stopwatch.StartNew();
@@ -875,7 +876,7 @@ public class BaalBot : MultiClientBotBase
         if (!await _townManagementService.TakeTownPortalToTown(client))
         {
             Log.Warning($"Client {game.Me.Name} could not get to town for potions");
-            return;
+            return true;
         }
 
         var townResult = await _townManagementService.PerformTownTasks(client, new TownManagementOptions(account, Act.Act5));
@@ -892,10 +893,11 @@ public class BaalBot : MultiClientBotBase
         }, TimeSpan.FromSeconds(10)))
         {
             Log.Warning($"Client {game.Me.Name} could not get back to the throne after refilling");
-            return;
+            return true;
         }
 
         Log.Information($"Client {game.Me.Name} back from refilling potions after {timer.Elapsed.TotalSeconds:0.0}s, belt {game.Belt.NumOfHealthPotions()} healing");
+        return true;
     }
 
     private async Task BasicIdleClient(Client client)
