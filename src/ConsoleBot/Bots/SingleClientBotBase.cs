@@ -1,6 +1,7 @@
 ﻿using ConsoleBot.Chicken;
 using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Escape;
 using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
@@ -53,6 +54,13 @@ public abstract class SingleClientBotBase
             int gameDescriptionIndex = 0;
             while (true)
             {
+                // Before the mule trip too: muling right after a stranger noticed us only shows more of us.
+                if (StrangerEscape.StopRequested)
+                {
+                    Log.Fatal("{Account}: stopping, a stranger noticed the bot", client.LoggedInUserName());
+                    return;
+                }
+
                 if (successiveFailures > 0 && successiveFailures % 10 == 0)
                 {
                     gameDescriptionIndex++;
@@ -83,6 +91,10 @@ public abstract class SingleClientBotBase
                         NeedsMule = false;
                         muleFailuresInARow = 0;
                         Log.Information("{Account}: finished mule", client.LoggedInUserName());
+                    }
+                    else if (StrangerEscape.StopRequested)
+                    {
+                        continue;
                     }
                     else
                     {
@@ -148,6 +160,11 @@ public abstract class SingleClientBotBase
                         await client.Game.LeaveGame();
                     }
 
+                    if (StrangerEscape.StopRequested)
+                    {
+                        continue;
+                    }
+
                     if (!await RealmConnectHelpers.RejoinRealm(client, _config, _accountConfig))
                     {
                         throw new Exception("Could not connect to realm");
@@ -163,6 +180,11 @@ public abstract class SingleClientBotBase
                     Log.Fatal(e, mapServerMessage);
                     await _externalMessagingClient.SendMessage(mapServerMessage);
                     throw new MapServerUnavailableException(mapServerMessage, e);
+                }
+                catch (Exception) when (StrangerEscape.FleeRequested)
+                {
+                    // Leaving under the run's feet makes whatever it was doing throw.
+                    continue;
                 }
                 catch (Exception e)
                 {

@@ -1,5 +1,6 @@
 using ConsoleBot.Enums;
 using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Escape;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using D2NG.Core;
@@ -77,6 +78,18 @@ public class CubeBot : IBotInstance
         var failuresInARow = 0;
         while (true)
         {
+            if (StrangerEscape.StopRequested)
+            {
+                _logger.LogCritical("{Account}: stopping, a stranger noticed the bot", client.LoggedInUserName());
+                if (client.Game.IsInGame())
+                {
+                    await client.Game.LeaveGame();
+                }
+
+                client.Disconnect();
+                return;
+            }
+
             var plan = await LoadPlan();
             if (plan == null || plan.IsEmpty)
             {
@@ -92,7 +105,7 @@ public class CubeBot : IBotInstance
             // After a good run go straight on: the mules may hold more than one run collects. A run
             // that made nothing waits, or a mule that cannot join would be asked again and again.
             var failure = await RunPlan(client, plan);
-            if (failure == null)
+            if (failure == null || StrangerEscape.StopRequested)
             {
                 failuresInARow = 0;
                 continue;
@@ -194,12 +207,22 @@ public class CubeBot : IBotInstance
         var emptyHanded = new List<string>();
         foreach (var giver in plan.Givers)
         {
+            if (StrangerEscape.FleeRequested)
+            {
+                return "a stranger joined the game";
+            }
+
             var handedOver = await CollectFrom(client, gameName, giver);
             received += handedOver;
             if (handedOver == 0)
             {
                 emptyHanded.Add($"{giver.Account}-{giver.Character}");
             }
+        }
+
+        if (StrangerEscape.FleeRequested)
+        {
+            return "a stranger joined the game";
         }
 
         var made = await Transmute(client, plan);
@@ -286,6 +309,7 @@ public class CubeBot : IBotInstance
         }
 
         var muleClient = new Client();
+        StrangerEscape.Watch(muleClient, shortLived: true);
         try
         {
             var accountCharacter = new AccountConfig { Username = account.Username, Password = account.Password, Character = giver.Character };
