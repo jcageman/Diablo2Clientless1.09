@@ -132,7 +132,7 @@ if (rest[0] == "record")
         // Games created from one machine within seconds of each other go unanswered.
         if (index > 0)
         {
-            await Task.Delay(TimeSpan.FromSeconds(25));
+            await Task.Delay(TimeSpan.FromSeconds(5));
         }
 
         failedRecords += await Record(realm, keyOwner, gameFolder, account, password, name, rest.ElementAtOrDefault(2) ?? configuredDescription, recorder) ? 0 : 1;
