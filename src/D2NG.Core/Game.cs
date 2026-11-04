@@ -339,6 +339,19 @@ public class Game
         _gameServer.SendPacket(new ActivateBufferItemPacket(Me, item));
     }
 
+    /// <summary>
+    /// Quest items an NPC may take when a quest message is said: the server deletes them with the same removal
+    /// a lift gets and nothing after it, so without this the client believes the item is on its cursor - and a
+    /// character that handed Charsi the malus could pick nothing up afterwards.
+    /// </summary>
+    public void ExpectItemsTaken(IEnumerable<Item> items)
+    {
+        foreach (var item in items)
+        {
+            Data.UseRequested[item.Id] = 0;
+        }
+    }
+
     public bool UsePotion(Item item)
     {
         if (item.Classification != ClassificationType.HealthPotion && item.Classification != ClassificationType.ManaPotion && item.Classification != ClassificationType.RejuvenationPotion)

@@ -30,7 +30,25 @@ public enum EntityCode : ushort
     /// </summary>
     PandemoniumFortressPortal = 342,
 
+    /// <summary>The Horadric Malus on its stand in the Barracks; operated, it drops the malus.</summary>
+    HoradricMalusStand = 108,
+
+    /// <summary>Lam Esen's tome on its stand in the Ruined Temple; operated, it drops the tome.</summary>
+    LamEsensTomeStand = 193,
+
     HoradricCubeChest = 354,
+
+    /// <summary>The Horadric scroll chest in the Sewers level 3, where Radament stands guard.</summary>
+    HoradricScrollChest = 355,
+
+    /// <summary>The preset spot in the Frozen River where frozen Anya is put once the quest is under way.</summary>
+    AnyaStartOutsideTown = 460,
+
+    /// <summary>Frozen Anya; operated by a player carrying Malah's potion, she is freed.</summary>
+    FrozenAnya = 558,
+
+    /// <summary>The altar on Arreat Summit that wakes the Ancients.</summary>
+    AncientsAltar = 546,
     StaffOfKingsChest = 356,
     Hratli = 379,
     RightSeal1 = 392,
