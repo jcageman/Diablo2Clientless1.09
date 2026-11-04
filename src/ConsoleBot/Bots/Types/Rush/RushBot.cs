@@ -33,7 +33,7 @@ using System.Threading.Tasks;
 
 namespace ConsoleBot.Bots.Types.Rush;
 
-public sealed class RushBot : IBotInstance
+public sealed partial class RushBot : IBotInstance
 {
     private const int AreaHopAttempts = 3;
     private const double TeleportNoOpRange = 10;
@@ -267,14 +267,15 @@ public sealed class RushBot : IBotInstance
 
             // A rushee already at the destination still gets the side work - waypoints - in a game of its
             // own: there is no rush left, but there is no reason to hand it nothing.
-            var sideWorkOnly = eligible.Count == 0 && _rushConfiguration.GivesWaypoints;
+            var sideWorkOnly = eligible.Count == 0
+                && (_rushConfiguration.GivesWaypoints || _rushConfiguration.SideQuests?.ToLowerInvariant() == "all");
             if (sideWorkOnly)
             {
                 eligible = roster
                     .Where(entry => !ReferenceEquals(entry.Account, _rushConfiguration.Rusher))
                     .OrderBy(entry => entry.Progression.CompletedActs)
                     .ToList();
-                Log.Information("Every rushee is at the destination already; only handing out waypoints");
+                Log.Information("Every rushee is at the destination already; only the side work is left");
             }
 
             if (eligible.Count == 0)
@@ -288,90 +289,28 @@ public sealed class RushBot : IBotInstance
 
             var hostEntry = eligible[0];
             _gameDifficulty = rehearsal ?? hostEntry.Progression.CurrentDifficulty;
-            await PrepareRusherWaypoints();
-            var host = await EnterHostGame(hostEntry, clients);
-            var rusher = await JoinParticipant(_rushConfiguration.Rusher, clients, attachChicken: true);
 
-            _crew.Clear();
-            foreach (var member in _rushConfiguration.Crew ?? [])
+            if (sideWorkOnly)
             {
-                _crew.Add(await JoinParticipant(member, clients, attachChicken: true));
-            }
-
-            var rushees = new List<ParticipantSession> { new ParticipantSession(hostEntry, host) };
-
-            foreach (var entry in eligible.Skip(1))
-            {
-                var client = await JoinParticipant(entry.Account, clients, attachChicken: false);
-                rushees.Add(new ParticipantSession(entry, client));
-            }
-
-            await VerifyParty(
-                host,
-                rusher,
-                rushees.Select(session => session.Client).Concat(_crew).ToList());
-
-            // Stock up before anything else. The rusher joins with whatever its belt held when it last
-            // left, and ChickenService pulls it straight back out if that is nothing - it left twenty
-            // seconds after joining, never drinking once and never reaching the per-phase restock.
-            // Recover bodies first. A character that died last game joins standing next to its corpse,
-            // and until it is picked up the character is without whatever it was wearing. Waiting for
-            // the phase pre-stage is too late - that can be minutes away behind the shopping.
-            foreach (var session in rushees)
-            {
-                // Log what the client believes about its body before trying. A corpse was visibly on
-                // the ground while PickupCorpseIfExists returned instantly and silently, which means
-                // Me.CorpseId was null even though CorpseAssign had arrived - so the state, not the
-                // walking, is what to look at.
-                Log.Information(
-                    "CORPSE {Rushee}: corpseId={CorpseId}, players={Players}, me={MeId} at {Location}",
-                    session.Client.Game.Me.Name,
-                    session.Client.Game.Me.CorpseId?.ToString() ?? "none",
-                    string.Join("/", session.Client.Game.Players.Select(player => $"{player.Id}:{player.Name}")),
-                    session.Client.Game.Me.Id,
-                    session.Client.Game.Me.Location);
-
-                await GeneralHelpers.PickupCorpseIfExists(session.Client, _pathingService);
-            }
-
-            foreach (var member in _crew.Where(candidate => candidate.Game.IsInGame()))
-            {
-                await GeneralHelpers.PickupCorpseIfExists(member, _pathingService);
-            }
-
-            await GeneralHelpers.PickupCorpseIfExists(rusher, _pathingService);
-
-            // Everyone works at once. The rushees have no shopping to do, so they start walking to the
-            // portal spot immediately; each crew member shops and then walks. By the time the rusher
-            // has travelled and put a portal up, the followers are already standing on the spot -
-            // doing this serially left them idle in town for the whole restock.
-            var gettingReady = new List<Task> { RestockRusher(rusher, rusher.Game.Act) };
-
-            gettingReady.AddRange(rushees.Select(session => StartRusheePreStage(session.Client)));
-
-            var startingAct = rusher.Game.Act;
-            gettingReady.AddRange(_crew
-                .Where(candidate => candidate.Game.IsInGame())
-                .Select(async member =>
+                foreach (var difficulty in SideWorkDifficulties(hostEntry))
                 {
-                    await RestockCrewMember(member);
-                    if (member.Game.Act == startingAct || await _townManagementService.SwitchAct(member, startingAct))
+                    _gameDifficulty = difficulty;
+                    if (_rushConfiguration.GivesWaypoints)
                     {
-                        await StartRusheePreStage(member);
+                        await PrepareRusherWaypoints();
                     }
-                }));
 
-            await Task.WhenAll(gettingReady);
+                    Log.Information("Side work for {Rushee} on {Difficulty}", hostEntry.Character.Name, difficulty);
+                    await PlayGame(hostEntry, eligible, clients, sideWorkOnly: true);
+                    await CloseClients(clients);
+                    await Task.Delay(TimeSpan.FromSeconds(2));
+                }
 
-            if (!sideWorkOnly && !await RunFromAuthoritativeState(rusher, rushees))
-            {
-                throw new InvalidOperationException("Rush stopped at the first unsupported or failed checkpoint; see preceding evidence");
+                return;
             }
 
-            if (_rushConfiguration.GivesWaypoints)
-            {
-                await Timed("give-waypoints", () => GiveWaypoints(rusher, rushees));
-            }
+            await PrepareRusherWaypoints();
+            var rushees = await PlayGame(hostEntry, eligible, clients, sideWorkOnly: false);
 
             if (RequiresDestinationGameProof())
             {
@@ -388,25 +327,151 @@ public sealed class RushBot : IBotInstance
         }
         finally
         {
-            foreach (var client in clients)
-            {
-                try
-                {
-                    if (client.Game.IsInGame())
-                    {
-                        await client.Game.LeaveGame();
-                        await Task.Delay(500);
-                    }
-
-                    client.Disconnect();
-                }
-                catch (Exception exception)
-                {
-                    Log.Warning(exception, "Failed to close a rush client cleanly");
-                }
-            }
+            await CloseClients(clients);
         }
     }
+
+    /// <summary>
+    /// Plays one game: the host creates it, the rusher, crew and other rushees join and party, everyone gets
+    /// ready, and then the rush - or, for rushees already at the destination, only the side work.
+    /// </summary>
+    private async Task<List<ParticipantSession>> PlayGame(
+        RosterEntry hostEntry,
+        List<RosterEntry> eligible,
+        List<Client> clients,
+        bool sideWorkOnly)
+    {
+        var host = await EnterHostGame(hostEntry, clients);
+        var rusher = await JoinParticipant(_rushConfiguration.Rusher, clients, attachChicken: true);
+
+        _crew.Clear();
+        foreach (var member in _rushConfiguration.Crew ?? [])
+        {
+            _crew.Add(await JoinParticipant(member, clients, attachChicken: true));
+        }
+
+        var rushees = new List<ParticipantSession> { new ParticipantSession(hostEntry, host) };
+
+        foreach (var entry in eligible.Skip(1))
+        {
+            var client = await JoinParticipant(entry.Account, clients, attachChicken: false);
+            rushees.Add(new ParticipantSession(entry, client));
+        }
+
+        await VerifyParty(
+            host,
+            rusher,
+            rushees.Select(session => session.Client).Concat(_crew).ToList());
+
+        // Stock up before anything else. The rusher joins with whatever its belt held when it last
+        // left, and ChickenService pulls it straight back out if that is nothing - it left twenty
+        // seconds after joining, never drinking once and never reaching the per-phase restock.
+        // Recover bodies first. A character that died last game joins standing next to its corpse,
+        // and until it is picked up the character is without whatever it was wearing. Waiting for
+        // the phase pre-stage is too late - that can be minutes away behind the shopping.
+        foreach (var session in rushees)
+        {
+            // Log what the client believes about its body before trying. A corpse was visibly on
+            // the ground while PickupCorpseIfExists returned instantly and silently, which means
+            // Me.CorpseId was null even though CorpseAssign had arrived - so the state, not the
+            // walking, is what to look at.
+            Log.Information(
+                "CORPSE {Rushee}: corpseId={CorpseId}, players={Players}, me={MeId} at {Location}",
+                session.Client.Game.Me.Name,
+                session.Client.Game.Me.CorpseId?.ToString() ?? "none",
+                string.Join("/", session.Client.Game.Players.Select(player => $"{player.Id}:{player.Name}")),
+                session.Client.Game.Me.Id,
+                session.Client.Game.Me.Location);
+
+            await GeneralHelpers.PickupCorpseIfExists(session.Client, _pathingService);
+        }
+
+        foreach (var member in _crew.Where(candidate => candidate.Game.IsInGame()))
+        {
+            await GeneralHelpers.PickupCorpseIfExists(member, _pathingService);
+        }
+
+        await GeneralHelpers.PickupCorpseIfExists(rusher, _pathingService);
+
+        // Everyone works at once. The rushees have no shopping to do, so they start walking to the
+        // portal spot immediately; each crew member shops and then walks. By the time the rusher
+        // has travelled and put a portal up, the followers are already standing on the spot -
+        // doing this serially left them idle in town for the whole restock.
+        var gettingReady = new List<Task> { RestockRusher(rusher, rusher.Game.Act) };
+
+        if (!sideWorkOnly)
+        {
+            gettingReady.AddRange(rushees.Select(session => StartRusheePreStage(session.Client)));
+        }
+
+        var startingAct = rusher.Game.Act;
+        gettingReady.AddRange(_crew
+            .Where(candidate => candidate.Game.IsInGame())
+            .Select(async member =>
+            {
+                await RestockCrewMember(member);
+                if (member.Game.Act == startingAct || await _townManagementService.SwitchAct(member, startingAct))
+                {
+                    await StartRusheePreStage(member);
+                }
+            }));
+
+        await Task.WhenAll(gettingReady);
+
+        if (!sideWorkOnly && !await RunFromAuthoritativeState(rusher, rushees))
+        {
+            throw new InvalidOperationException("Rush stopped at the first unsupported or failed checkpoint; see preceding evidence");
+        }
+
+        if (_rushConfiguration.SideQuests?.ToLowerInvariant() == "all")
+        {
+            await Timed("side-quests", () => RunSideQuests(rusher, rushees));
+        }
+
+        if (_rushConfiguration.GivesWaypoints)
+        {
+            await Timed("give-waypoints", () => GiveWaypoints(rusher, rushees));
+        }
+
+        return rushees;
+    }
+
+    private static async Task CloseClients(List<Client> clients)
+    {
+        foreach (var client in clients)
+        {
+            try
+            {
+                if (client.Game.IsInGame())
+                {
+                    await client.Game.LeaveGame();
+                    await Task.Delay(500);
+                }
+
+                client.Disconnect();
+            }
+            catch (Exception exception)
+            {
+                Log.Warning(exception, "Failed to close a rush client cleanly");
+            }
+        }
+
+        clients.Clear();
+    }
+
+    /// <summary>
+    /// The difficulties a rushee already at the destination gets its side work on: from Normal up to the
+    /// one it has reached, or only the configured ones. A difficulty with nothing left ends at once.
+    /// </summary>
+    private IEnumerable<Difficulty> SideWorkDifficulties(RosterEntry hostEntry)
+    {
+        var reached = hostEntry.Progression.CurrentDifficulty;
+        var wanted = _rushConfiguration.QuestDifficulties;
+        return Enum.GetValues<Difficulty>()
+            .Where(difficulty => difficulty <= reached)
+            .Where(difficulty => wanted == null || wanted.Count == 0 || wanted.Contains(difficulty));
+    }
+
 
     private async Task<List<RosterEntry>> ReadRoster()
     {
@@ -5120,9 +5185,15 @@ public sealed class RushBot : IBotInstance
         return InventoryHelpers.GetTotalHealthPotions(client.Game) < RestockPotionFloor;
     }
 
-    private async Task RestockRusher(Client rusher, Act act)
+    private Task RestockRusher(Client rusher, Act act) => RestockFighter(rusher, _rushConfiguration.Rusher, act);
+
+    /// <summary>
+    /// Potions and a full portal tome for anyone about to fight - the rusher, or a rushee that does its own
+    /// killing. A strong character that has played on its own walked into Hell with neither, and the
+    /// attack loop rightly refused to fight without a potion.
+    /// </summary>
+    private async Task RestockFighter(Client rusher, AccountConfig account, Act act)
     {
-        var account = _rushConfiguration.Rusher;
         var options = new TownManagementOptions(account, act)
         {
             HealthPotionsToBuy = PotionsToBuy(
@@ -5142,7 +5213,7 @@ public sealed class RushBot : IBotInstance
         var result = await _townManagementService.PerformTownTasks(rusher, options);
         if (!result.Succes)
         {
-            Log.Warning("The rusher could not restock in act {Act}; continuing on what it carries", act);
+            Log.Warning("{Client} could not restock in act {Act}; continuing on what it carries", rusher.Game.Me.Name, act);
         }
 
         Log.Information(

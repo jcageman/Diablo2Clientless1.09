@@ -83,6 +83,12 @@ internal class GameData
     /// </summary>
     internal ConcurrentDictionary<uint, byte> SellRequested { get; } = new();
 
+    /// <summary>
+    /// Items the client right-clicked to use - a potion of life, a book, a scroll. The server takes them out
+    /// of their container (item action 5) and nothing follows, so like a sold item they are gone, not lifted.
+    /// </summary>
+    internal ConcurrentDictionary<uint, byte> UseRequested { get; } = new();
+
     public List<Player> Players { get; internal set; } = [];
 
     public ConcurrentDictionary<uint, Item> Items { get; private set; } = new ConcurrentDictionary<uint, Item>();
@@ -569,7 +575,7 @@ internal class GameData
 
     private void RemoveFromContainer(Item item)
     {
-        var lifted = !SellRequested.TryRemove(item.Id, out _);
+        var lifted = !SellRequested.TryRemove(item.Id, out _) & !UseRequested.TryRemove(item.Id, out _);
         switch (item.Container)
         {
             case ContainerType.Stash:

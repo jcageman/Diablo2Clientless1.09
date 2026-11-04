@@ -329,6 +329,16 @@ public class Game
         return WaitForPacket(stackableItem, 2000, "UseStackableItem");
     }
 
+    /// <summary>
+    /// Right-clicks an inventory item - a quest reward that only counts once used, such as the potion of
+    /// life, a book of skill or a scroll of resistance.
+    /// </summary>
+    public void ActivateInventoryItem(Item item)
+    {
+        Data.UseRequested[item.Id] = 0;
+        _gameServer.SendPacket(new ActivateBufferItemPacket(Me, item));
+    }
+
     public bool UsePotion(Item item)
     {
         if (item.Classification != ClassificationType.HealthPotion && item.Classification != ClassificationType.ManaPotion && item.Classification != ClassificationType.RejuvenationPotion)

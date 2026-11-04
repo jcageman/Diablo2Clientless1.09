@@ -22,6 +22,13 @@ public class WorldObject : Entity
 
     public HashSet<MonsterEnchantment> MonsterEnchantments { get; internal set; } = [];
 
+    /// <summary>A unique monster (the boss flag of the NPC assignment), super uniques included.</summary>
+    public bool IsBoss { get; internal set; }
+
+    public bool IsChampion { get; internal set; }
+
+    public bool IsBossMinion { get; internal set; }
+
     public WorldObject(EntityType objectType, uint objectId, EntityCode objectCode, Point location, EntityState state, byte interactionType)
     {
         Type = objectType;

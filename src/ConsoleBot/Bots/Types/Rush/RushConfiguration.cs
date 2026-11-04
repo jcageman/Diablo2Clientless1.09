@@ -25,6 +25,19 @@ public class RushDestination
     public D2NG.Core.D2GS.Act.Act ActValue => (D2NG.Core.D2GS.Act.Act)(Act - 1);
 }
 
+public enum RushSideQuest
+{
+    DenOfEvil,
+    CharsiImbue,
+    Radament,
+    GoldenBird,
+    LamEsen,
+    Izual,
+    Shenk,
+    Anya,
+    Ancients
+}
+
 public class RushConfiguration
 {
     [Range(1, int.MaxValue)]
@@ -67,6 +80,34 @@ public class RushConfiguration
 
     public bool GivesWaypoints => GiveWaypoints?.ToLowerInvariant() == "all";
 
+    /// <summary>
+    /// "all" does the rushees' open side quests - skill, stat, socket and the rest - along with the rush,
+    /// or on their own for a rushee already at the destination; "none" (the default) leaves them.
+    /// </summary>
+    public string SideQuests { get; set; } = "none";
+
+    /// <summary>
+    /// The difficulties the side work is done on. A rushee already at the destination is otherwise played on
+    /// the difficulty it has reached; for now one game per run, on the first listed difficulty reached.
+    /// </summary>
+    public List<Difficulty> QuestDifficulties { get; set; } = [];
+
+    /// <summary>Side quests left out of <see cref="SideQuests"/>.</summary>
+    public List<RushSideQuest> SkipQuests { get; set; } = [];
+
+    /// <summary>
+    /// Lets the rushee fight. Needed for the Golden Bird, whose figurine only drops for a killer that has
+    /// not finished the quest, and for a rushee strong enough to do its own killing.
+    /// </summary>
+    public bool RusheeFights { get; set; }
+
+    /// <summary>How long a rushee gets to land a kill a quest needs from it before the quest is skipped.</summary>
+    [Range(5, 3600)]
+    public int RusheeKillLimitSeconds { get; set; } = 60;
+
+    public bool DoesSideQuest(RushSideQuest quest) =>
+        SideQuests?.ToLowerInvariant() == "all" && !(SkipQuests ?? []).Contains(quest);
+
     public void Validate()
     {
         if (Rusher == null)
@@ -89,6 +130,11 @@ public class RushConfiguration
         if (Destination == null)
         {
             throw new ValidationException($"{nameof(Destination)} is required");
+        }
+
+        if (SideQuests?.ToLowerInvariant() is not ("none" or "all"))
+        {
+            throw new ValidationException($"{nameof(SideQuests)} must be \"none\" or \"all\", not \"{SideQuests}\"");
         }
 
         if (GiveWaypoints?.ToLowerInvariant() is not ("none" or "all"))

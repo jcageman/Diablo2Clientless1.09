@@ -64,8 +64,10 @@ public class MapApiService : IMapApiService
     {
         if (hintArea != null && hintArea != Area.None)
         {
+            // Walkable ground first: the outdoor levels' rectangles overlap, so a point in the Spider Forest
+            // also lies inside the Great Marsh's rectangle, and taking the rectangle alone kept a wrong hint.
             var area = await GetArea(mapId, difficulty, hintArea.Value);
-            if (area.TryMapToPointInMap(point, out var _))
+            if (area.IsNavigable(point))
             {
                 return hintArea;
             }
@@ -73,14 +75,21 @@ public class MapApiService : IMapApiService
             // A wrong hint is almost always the level next door: the client's own area comes from revealed
             // tiles whose sizes are estimated, so near a border it names the neighbour. Those maps are
             // usually cached already, unlike the whole act below.
-            foreach (var neighbour in area.AdjacentLevels?.Keys ?? Enumerable.Empty<Area>())
+            var neighbours = area.AdjacentLevels?.Keys.ToList() ?? [];
+            foreach (var neighbour in neighbours)
             {
                 var neighbourMap = await GetArea(mapId, difficulty, neighbour);
-                if (neighbourMap.TryMapToPointInMap(point, out var _))
+                if (neighbourMap.IsNavigable(point))
                 {
                     Log.Debug("Position {Point} is in {Area}, not in the reported {Hint}", point, neighbour, hintArea);
                     return neighbour;
                 }
+            }
+
+            // Standing on an unwalkable cell, a waypoint for one: then the rectangle is all there is to go by.
+            if (area.TryMapToPointInMap(point, out var _))
+            {
+                return hintArea;
             }
         }
 
