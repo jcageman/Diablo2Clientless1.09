@@ -407,8 +407,13 @@ public sealed partial class RushBot
             return false;
         }
 
-        var credited = await SweepDen([rusher, killer], killer, sweep, map);
-        await RusheeHome(rusher, killer, arrival);
+        // After the first kill everyone may help, through the rusher's portal from the start. The Den is in act 1,
+        // so whoever sweeps still counts for the party share.
+        var helpers = _gameRushees.Select(session => session.Client).Where(client => client != killer && client.Game.IsInGame()).ToList();
+        var came = await Task.WhenAll(helpers.Select(helper => FerryRushee(rusher, helper, Area.DenOfEvil)));
+        helpers = helpers.Where((_, index) => came[index]).ToList();
+        var credited = await SweepDen([rusher, killer, .. helpers], killer, sweep, map);
+        await Task.WhenAll(helpers.Append(killer).Select(sweeper => RusheeHome(rusher, sweeper, arrival)));
         Log.Information("Den of Evil cleared after {Killer}'s first kill: credit {Outcome} ({States})", name,
             credited ? "received" : "NOT received",
             string.Join(", ", needers.Select(session => $"{session.Client.Game.Me.Name} 0x{session.Client.Game.Quests.GetCharacterFlags(QuestId.DenOfEvil):X4}")));
@@ -587,7 +592,21 @@ public sealed partial class RushBot
 
         await sweeping;
         creator.Game.RequestQuestDataAndWait(TimeSpan.FromSeconds(1));
-        return HasKillCredit(creator, QuestId.DenOfEvil);
+        var done = HasKillCredit(creator, QuestId.DenOfEvil);
+        if (!done)
+        {
+            var left = sweepers.SelectMany(sweeper => sweeper.Game.WorldObjects
+                    .Where(entry => entry.Key.Item2 == EntityType.NPC).Select(entry => entry.Value))
+                .Where(npc => !NPCHelpers.IsFriendly(npc.NPCCode) && InDen(npc.Location)
+                    && npc.State is not EntityState.Dead and not EntityState.Dieing)
+                .GroupBy(npc => npc.Id).Select(group => group.First())
+                .Select(npc => $"{npc.NPCCode} {npc.Id} at {npc.Location} ({npc.State})")
+                .ToList();
+            Log.Information("Den sweep ended without credit; still alive as far as the sweepers know: {Left}",
+                left.Count == 0 ? "nothing" : string.Join("; ", left));
+        }
+
+        return done;
     }
 
     /// <summary>Like ClearAround, but anyone who is not a sorceress closes in on each target first.</summary>

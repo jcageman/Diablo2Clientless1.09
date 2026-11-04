@@ -312,6 +312,7 @@ public sealed partial class RushBot
         // Out of the way, so neither it nor its hireling lands the kill.
         await ReturnToTown(rusher);
         var deadline = DateTime.Now + SideBossKillLimit;
+        _bossDiedAt = null;
         var needersPresent = present.Where(needing.Contains).ToList();
         var kills = await Task.WhenAll(present.Select(fighter =>
             FightBoss(fighter, boss, spot, deadline, needing.Contains(fighter) ? null : needersPresent)));
@@ -345,6 +346,7 @@ public sealed partial class RushBot
         {
             if (seen != null && seen.State is EntityState.Dead or EntityState.Dieing)
             {
+                _bossDiedAt = seen.Location;
                 return true;
             }
 
@@ -384,6 +386,9 @@ public sealed partial class RushBot
     }
 
     private const double NeederReach = 20;
+
+    /// <summary>Where the last quest boss died, as one of the fighters saw it.</summary>
+    private Point _bossDiedAt;
 
     /// <summary>A walkable point the given distance from the target, on the side the client comes from.</summary>
     private async Task<Point> StandoffPoint(Client client, Area area, Point target, double distance)
@@ -469,6 +474,14 @@ public sealed partial class RushBot
     private async Task ReadBookOfSkill(Client fighter)
     {
         var name = fighter.Game.Me.Name;
+
+        // The books lie where Radament fell; a fighter further off never even sees them.
+        var noBookInSight = !fighter.Game.Items.Values.Any(item => item.Ground && item.Name == ItemName.BookofSkill);
+        if (noBookInSight && _bossDiedAt != null && fighter.Game.Me.Location.Distance(_bossDiedAt) > 5)
+        {
+            await MoveTo(fighter, _bossDiedAt, GetMovementMode(fighter));
+        }
+
         var read = await GeneralHelpers.TryWithTimeout(async _ =>
         {
             var carried = fighter.Game.Inventory.FindItemByName(ItemName.BookofSkill);
