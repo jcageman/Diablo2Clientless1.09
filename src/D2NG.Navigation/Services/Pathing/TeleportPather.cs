@@ -17,6 +17,7 @@ public class TeleportPather
     private static readonly short RangeInvalid = 10000;
     private static readonly short TpRange = 30;
     private static readonly short BlockRange = 2;
+    private const int MinimumWalkableAroundLanding = 6;
     private readonly short[,] m_distanceMatrix;
     private readonly int m_rows;
     private readonly int m_columns;
@@ -38,11 +39,20 @@ public class TeleportPather
 
     public void MakeDistanceTable(Point toLocation)
     {
+        var walkable = new bool[m_columns, m_rows];
         for (int x = 0; x < m_columns; x++)
         {
             for (int y = 0; y < m_rows; y++)
             {
-                if ((m_distanceMatrix[x, y] % 2) == 0)
+                walkable[x, y] = (m_distanceMatrix[x, y] % 2) == 0;
+            }
+        }
+
+        for (int x = 0; x < m_columns; x++)
+        {
+            for (int y = 0; y < m_rows; y++)
+            {
+                if (walkable[x, y] && WalkableAround(walkable, x, y) >= MinimumWalkableAroundLanding)
                     m_distanceMatrix[x, y] = (short)CalculateDistance(x, y, toLocation.X, toLocation.Y);
                 else
                     m_distanceMatrix[x, y] = RangeInvalid;
@@ -52,6 +62,26 @@ public class TeleportPather
         m_distanceMatrix[toLocation.X, toLocation.Y] = 1;
     }
 
+
+    // A walkable cell with blocked ground all round is not somewhere a character fits: the Great Marsh
+    // grid has lone walkable specks in its water, the planner hopped onto one and the server refused that
+    // teleport on every attempt.
+    private int WalkableAround(bool[,] walkable, int x, int y)
+    {
+        var count = 0;
+        for (var dx = -1; dx <= 1; dx++)
+        {
+            for (var dy = -1; dy <= 1; dy++)
+            {
+                if (IsValidIndex(x + dx, y + dy) && walkable[x + dx, y + dy])
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
 
     private static void AddToListAtIndex(List<Point> list, Point point, int index)
     {

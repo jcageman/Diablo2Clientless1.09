@@ -21,6 +21,8 @@ public enum EntityCode : ushort
     Stash = 267,
     WirtsBody = 268,
     ArcanePortal = 298,
+    /// <summary>Horazon's journal in the Arcane Sanctuary; reading it opens the red portal to the Canyon of the Magi.</summary>
+    HorazonsJournal = 357,
 
     /// <summary>
     /// Portal from the durance of hate to the pandemonium fortress, the act 3 to 4 transition. Taken
@@ -41,6 +43,7 @@ public enum EntityCode : ushort
     WaypointAct5 = 429,
     WaypointAct5Glacial = 511,
     WaypointAct5Baal = 494,
-    BaalPortal = 563
+    BaalPortal = 563,
+    LastLastPortal = 566
 
 }

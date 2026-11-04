@@ -57,6 +57,9 @@ public class Game
         );
         _gameServer.OnReceivedPacketEvent(InComingPacket.GameFlags, p => Initialize(new GameFlags(p)));
         _gameServer.OnReceivedPacketEvent(InComingPacket.LoadAct, p => Data.Act.LoadActData(new ActDataPacket(p)));
+        // 0x61 plays an act's closing cinematic and leaves the character busy until the client says it
+        // has finished; without the answer every later portal in the game was refused.
+        _gameServer.OnReceivedPacketEvent(InComingPacket.Recv61, _ => _gameServer.SendPacket(new TurnOffBusyPacket()));
         _gameServer.OnReceivedPacketEvent(InComingPacket.MapReveal, p => Data.MapReveal(new MapRevealPacket(p)));
         _gameServer.OnReceivedPacketEvent(InComingPacket.AssignLevelWarp, p => Data.Act.AddWarp(new AssignLevelWarpPacket(p)));
 #pragma warning disable CA1806 // Do not ignore method results
@@ -166,6 +169,23 @@ public class Game
         }
     }
 
+    /// <summary>
+    /// Opens the waypoint menu, which also activates a waypoint the character did not have yet, and closes
+    /// it again without travelling. Null when the menu never opened.
+    /// </summary>
+    public IReadOnlyCollection<Waypoint> ReadWaypoints(WorldObject worldObject)
+    {
+        var waypointMenuEvent = _gameServer.GetResetEventOfType(InComingPacket.WaypointMenu);
+        _gameServer.SendPacket(new InteractWithEntityPacket(worldObject));
+        if (!waypointMenuEvent.WaitOne(2000))
+        {
+            return null;
+        }
+
+        _gameServer.SendPacket(new TakeWaypointPacket(worldObject.Id, 0u));
+        return [.. Data.Me.AllowedWaypoints];
+    }
+
     public bool TakeWaypoint(WorldObject worldObject, Waypoint waypoint)
     {
         if (!EntityConstants.WayPointEntityCodes.Contains(worldObject.Code))
@@ -181,13 +201,18 @@ public class Game
             return false;
         }
 
+        // An open waypoint menu makes the server treat the character as busy, and a busy character is
+        // refused by every portal and waypoint for the rest of the game. Level 0 closes it without
+        // travelling (D2MOO PlrMsg.cpp, Rcv0x49_TakeOrCloseWp).
         if (!Data.Me.AllowedWaypoints.Contains(waypoint))
         {
+            _gameServer.SendPacket(new TakeWaypointPacket(worldObject.Id, 0u));
             throw new InvalidOperationException($"cannot take waypoint {waypoint}, since character does not have it yet. List of available waypoints: {string.Join(", ", Data.Me.AllowedWaypoints)}");
         }
 
         if (Data.Me.LastSelectedWaypointId == 0)
         {
+            _gameServer.SendPacket(new TakeWaypointPacket(worldObject.Id, 0u));
             return false;
         }
 
@@ -861,6 +886,11 @@ public class Game
                 $"There is no NPC driven travel out of {Act}, it has to be taken as a portal");
         }
 
+        // Close the conversation first. The server moves the character to the next act without ending
+        // its interaction with the NPC, and a character still interacting is busy, so every portal in
+        // the new act was refused. The travel itself does not need the conversation open, and a
+        // terminate sent after the act change names an NPC in another act and is ignored.
+        TerminateEntityChat(travelNpc);
         TownFolkAction(travelNpc, TownFolkActionType.Quest, travelAction);
     }
 
@@ -879,6 +909,18 @@ public class Game
     public void RequestQuestData()
     {
         _gameServer.SendPacket(new RequestQuestDataPacket());
+    }
+
+    /// <summary>
+    /// Requests the quest state and waits for the reply, which ends with the game quest packet 0x29 and
+    /// arrives within a few tens of milliseconds. Handlers run before the event is set, so the quest state
+    /// is current on return. False when no reply came within <paramref name="timeout"/>.
+    /// </summary>
+    public bool RequestQuestDataAndWait(TimeSpan timeout)
+    {
+        var reply = _gameServer.GetResetEventOfType(InComingPacket.GameQuestInfo);
+        _gameServer.SendPacket(new RequestQuestDataPacket());
+        return reply.WaitOne(timeout);
     }
 
     /// <summary>
