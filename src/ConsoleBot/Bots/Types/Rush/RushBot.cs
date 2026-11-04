@@ -264,6 +264,18 @@ public sealed class RushBot : IBotInstance
                 .OrderBy(entry => entry.Progression.CompletedActs)
                 .ToList();
 
+            // A rushee already at the destination still gets the side work - waypoints - in a game of its
+            // own: there is no rush left, but there is no reason to hand it nothing.
+            var sideWorkOnly = eligible.Count == 0 && _rushConfiguration.GivesWaypoints;
+            if (sideWorkOnly)
+            {
+                eligible = roster
+                    .Where(entry => !ReferenceEquals(entry.Account, _rushConfiguration.Rusher))
+                    .OrderBy(entry => entry.Progression.CompletedActs)
+                    .ToList();
+                Log.Information("Every rushee is at the destination already; only handing out waypoints");
+            }
+
             if (eligible.Count == 0)
             {
                 await VerifyDestinationGame(
@@ -350,7 +362,7 @@ public sealed class RushBot : IBotInstance
 
             await Task.WhenAll(gettingReady);
 
-            if (!await RunFromAuthoritativeState(rusher, rushees))
+            if (!sideWorkOnly && !await RunFromAuthoritativeState(rusher, rushees))
             {
                 throw new InvalidOperationException("Rush stopped at the first unsupported or failed checkpoint; see preceding evidence");
             }
@@ -655,7 +667,16 @@ public sealed class RushBot : IBotInstance
                 missing.Count == 0 ? "none" : string.Join(", ", missing));
             foreach (var waypoint in missing)
             {
-                await Timed($"rusher-waypoint-{waypoint}", () => CollectWaypoint(client, waypoint));
+                try
+                {
+                    await Timed($"rusher-waypoint-{waypoint}", () => CollectWaypoint(client, waypoint));
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    // Collecting is best effort: a waypoint that cannot be fetched costs a walk later.
+                    Log.Warning(exception, "Collecting {Waypoint} failed", waypoint);
+                }
+
                 if (!client.Game.IsInGame())
                 {
                     break;
@@ -709,6 +730,10 @@ public sealed class RushBot : IBotInstance
             Log.Warning("The rusher could not reach the {Waypoint} waypoint", waypoint);
             return false;
         }
+
+        // Some waypoints have a boss standing on them (the Inner Cloister's), and an interact made under
+        // attack may never open the menu.
+        await ClearAround(client, WaypointClearRadius, WaypointClearLimit);
 
         var target = client.Game.GetEntityByCode(waypoint.ToEntityCode())
             .OrderBy(candidate => candidate.Location.Distance(client.Game.Me.Location))
@@ -765,7 +790,13 @@ public sealed class RushBot : IBotInstance
                 continue;
             }
 
+            // Known only once a waypoint menu has opened in this game; a game with no rush in it has not.
             var rusherHolds = rusher.Game.Me.AllowedWaypoints.ToHashSet();
+            if (rusherHolds.Count == 0 && (rusher.Game.IsInTown() || await ReturnToTown(rusher)))
+            {
+                rusherHolds = (await ReadTownWaypoints(rusher))?.ToHashSet() ?? [];
+            }
+
             var toGive = WaypointsToGive()
                 .Where(waypoint => !held.Contains(waypoint))
                 .Where(waypoint => held.Contains(TownWaypoints[waypoint.ToArea().MapToAct()]))
@@ -823,6 +854,15 @@ public sealed class RushBot : IBotInstance
         // A rushee steps out of the portal beside the waypoint, so whatever stands there gets it first.
         await ClearAround(rusher, WaypointClearRadius, WaypointClearLimit);
         await MoveToObject(rusher, waypoint.ToEntityCode(), area);
+        var survivors = NearbyHostiles(rusher, WaypointClearRadius);
+        if (survivors.Count > 0)
+        {
+            // Better a waypoint missing than a rushee dropped next to whatever the rusher could not kill -
+            // a boss on the waypoint, or one immune to the rusher's element.
+            Log.Warning("Not handing {Waypoint} to {Rushee}: {Count} hostiles still beside it, nearest {Npc}",
+                waypoint, rushee.Game.Me.Name, survivors.Count, survivors[0].NPCCode);
+            return false;
+        }
         if (!await _townManagementService.CreateTownPortal(rusher)
             || (rushee.Game.Act != act && !await _townManagementService.SwitchAct(rushee, act))
             || !await FerryRushee(rusher, rushee, area))
@@ -6261,9 +6301,17 @@ public sealed class RushBot : IBotInstance
             .Select(entry => entry.Value)
             .Where(entity => entity.State is not EntityState.Dead and not EntityState.Dieing
                 && !NPCHelpers.IsFriendly(entity.NPCCode)
+                && !CatapultSpotters.Contains(entity.NPCCode)
                 && entity.Location.Distance(client.Game.Me.Location) < radius)
             .OrderBy(entity => entity.Location.Distance(client.Game.Me.Location))];
     }
+
+    /// <summary>
+    /// The invisible units that aim act 5's siege catapults. They cannot be killed and do not attack, and
+    /// counted as hostiles they kept the Frozen Tundra waypoint from ever being handed over.
+    /// </summary>
+    private static readonly HashSet<NPCCode> CatapultSpotters =
+        [NPCCode.CatapultSpotterS, NPCCode.CatapultSpotterE, NPCCode.CatapultSpotterSiege, NPCCode.CatapultSpotterW];
 
     private static bool HasFinished(Client client, QuestId quest)
     {

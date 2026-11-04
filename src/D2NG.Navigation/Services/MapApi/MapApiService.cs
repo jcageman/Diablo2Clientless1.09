@@ -109,7 +109,7 @@ public class MapApiService : IMapApiService
     private async Task<AreaMap> GetAreaFromApi(uint mapId, Difficulty difficulty, Area area)
     {
         var client = _httpClientFactory.CreateClient();
-        var areaDto = await client.GetFromJsonAsync<AreaMapDto>($"{_mapConfiguration.ApiUrl}/maps?mapid={mapId}&area={area}&difficulty={difficulty}");
+        var areaDto = await client.GetFromJsonAsync<AreaMapDto>($"{_mapConfiguration.ApiUrl}/maps?mapid={mapId}&area={(int)area}&difficulty={difficulty}");
         return areaDto.MapFromDto();
     }
 }

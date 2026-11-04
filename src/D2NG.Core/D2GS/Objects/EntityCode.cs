@@ -43,7 +43,7 @@ public enum EntityCode : ushort
     WaypointAct5 = 429,
     WaypointAct5Glacial = 511,
     WaypointAct5Baal = 494,
-    /// <summary>The waypoint of act 5's outdoor levels: Frigid Highlands, Arreat Plateau, Glacial Trail.</summary>
+    /// <summary>The waypoint of act 5's outdoor levels: Frigid Highlands, Arreat Plateau, Frozen Tundra, Halls of Pain.</summary>
     WaypointAct5Wilderness = 496,
     BaalPortal = 563,
     LastLastPortal = 566

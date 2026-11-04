@@ -175,9 +175,9 @@ public static class WaypointExtensions
             Waypoint.FrigidHighlands => EntityCode.WaypointAct5Wilderness,
             Waypoint.ArreatPlateau => EntityCode.WaypointAct5Wilderness,
             Waypoint.CrystallinePassage => EntityCode.WaypointAct5Glacial,
-            Waypoint.GlacialTrail => EntityCode.WaypointAct5Wilderness,
-            Waypoint.HallsOfPain => EntityCode.WaypointAct5Glacial,
-            Waypoint.FrozenTundra => EntityCode.WaypointAct5Glacial,
+            Waypoint.GlacialTrail => EntityCode.WaypointAct5Glacial,
+            Waypoint.HallsOfPain => EntityCode.WaypointAct5Wilderness,
+            Waypoint.FrozenTundra => EntityCode.WaypointAct5Wilderness,
             Waypoint.TheAncientsWay => EntityCode.WaypointAct5Glacial,
             Waypoint.TheWorldStoneKeepLevel2 => EntityCode.WaypointAct5Baal,
             _ => throw new ArgumentOutOfRangeException(nameof(waypoint), waypoint, null)
