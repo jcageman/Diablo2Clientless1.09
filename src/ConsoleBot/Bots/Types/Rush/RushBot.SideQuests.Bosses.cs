@@ -81,6 +81,7 @@ public sealed partial class RushBot
             }
 
             var arrival = creator.Game.Me.Location;
+            await MakeRoom(creator, 2, 3);
             var taken = await RusheeTakesFromContainer(rusher, creator, stand, item);
             Log.Information("{Creator} {Outcome} {Item}", name, taken ? "took" : "did NOT take", item);
             await RusheeHome(rusher, creator, arrival);
@@ -328,6 +329,57 @@ public sealed partial class RushBot
         return null;
     }
 
+    /// <summary>
+    /// Frees a space of the given size by drinking inventory potions. A fighter restocks its inventory full of
+    /// them, and the server answers a pickup without room by dropping the item straight back: every Book of
+    /// Skill stayed on the floor beside Radament.
+    /// </summary>
+    private static async Task<bool> MakeRoom(Client client, ushort width, ushort height)
+    {
+        for (var drunk = 0; drunk < 16; drunk++)
+        {
+            if (HasRoom(client, width, height))
+            {
+                return true;
+            }
+
+            var potion = client.Game.Inventory.Items.FirstOrDefault(item => item.Classification
+                is ClassificationType.HealthPotion or ClassificationType.ManaPotion or ClassificationType.RejuvenationPotion);
+            if (potion == null)
+            {
+                break;
+            }
+
+            client.Game.ActivateInventoryItem(potion);
+            await Task.Delay(250);
+        }
+
+        var room = HasRoom(client, width, height);
+        if (!room)
+        {
+            Log.Warning("{Client} has no {Width}x{Height} space free in its inventory", client.Game.Me.Name, width, height);
+        }
+
+        return room;
+    }
+
+    private static bool HasRoom(Client client, ushort width, ushort height)
+    {
+        var inventory = client.Game.Inventory;
+        for (ushort y = 0; y < inventory.Height; y++)
+        {
+            for (ushort x = 0; x < inventory.Width; x++)
+            {
+                if (inventory.SpaceIsFree(new Point(x, y), width, height))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Radament drops a Book of Skill for each player credited; each picks one up and reads it at once.</summary>
     private async Task ReadBookOfSkill(Client fighter)
     {
@@ -358,11 +410,16 @@ public sealed partial class RushBot
                 return false;
             }
 
+            await MakeRoom(fighter, book.Width, book.Height);
             fighter.Game.PickupItem(book);
             await Task.Delay(300);
             fighter.Game.CleanupCursorItem();
             return false;
         }, TimeSpan.FromSeconds(15));
         Log.Information("{Fighter} {Outcome} a Book of Skill", name, read ? "read" : "did NOT read");
+        if (read)
+        {
+            _booksRead.Add(name);
+        }
     }
 }

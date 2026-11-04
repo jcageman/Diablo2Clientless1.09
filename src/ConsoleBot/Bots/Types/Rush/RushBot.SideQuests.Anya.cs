@@ -39,6 +39,7 @@ public sealed partial class RushBot
 
         if (!Holds(creator, ItemName.MalahsPotion))
         {
+            await MakeRoom(creator, 1, 1);
             await SayToNpc(creator, NPCCode.Malah, MalahIntroducesAnya);
             await SayToNpc(creator, NPCCode.Malah, MalahGivesPotion);
             GeneralHelpers.TryWithTimeout(_ => Holds(creator, ItemName.MalahsPotion), TimeSpan.FromSeconds(3));
@@ -111,6 +112,7 @@ public sealed partial class RushBot
             return;
         }
 
+        await MakeRoom(client, 2, 4);
         await SayToNpc(client, NPCCode.Malah, MalahGivesScroll);
         GeneralHelpers.TryWithTimeout(_ => Holds(client, ItemName.ScrollofResistance), TimeSpan.FromSeconds(3));
         var scroll = client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance);

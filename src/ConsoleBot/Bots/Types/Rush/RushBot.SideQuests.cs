@@ -199,9 +199,29 @@ public sealed partial class RushBot
     private void CountSideQuestTry(string name, RushSideQuest quest) =>
         _sideQuestTries[(name, _gameDifficulty, quest)] = _sideQuestTries.GetValueOrDefault((name, _gameDifficulty, quest)) + 1;
 
-    /// <summary>A quest is needed until its kill part is done; a reward waiting at the NPC is only collected.</summary>
+    /// <summary>
+    /// A quest is needed until its kill part is done; a reward waiting at the NPC is only collected. Radament is
+    /// the exception: his skill point is the Book of Skill, which drops at his death for every credited player
+    /// not carrying one, so a character with the reward pending but no book read still has to be at the kill.
+    /// </summary>
     private bool NeedsSideQuest(Client client, RushSideQuest quest, QuestId id) =>
+        _rushConfiguration.DoesSideQuest(quest)
+        && (quest == RushSideQuest.Radament
+            ? !HasFinished(client, id) && !_booksRead.Contains(client.Game.Me.Name)
+            : !HasKillCredit(client, id));
+
+    /// <summary>
+    /// Whether a character can create the game a quest is done in: its own quest state decides whether the
+    /// quest runs at all, and one with the reward already pending switches it off.
+    /// </summary>
+    private bool CanCreateSideQuest(Client client, RushSideQuest quest, QuestId id) =>
         _rushConfiguration.DoesSideQuest(quest) && !HasKillCredit(client, id);
+
+    /// <summary>
+    /// Who read a Book of Skill this game. Atma completes Radament's quest whether or not the book was read,
+    /// and a completed quest drops no book again, so he is only told once the skill point is had.
+    /// </summary>
+    private readonly HashSet<string> _booksRead = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Collects the rewards already earned, then does every quest the game's creator - the first rushee -
@@ -210,6 +230,7 @@ public sealed partial class RushBot
     private async Task<bool> RunSideQuests(Client rusher, List<ParticipantSession> rushees)
     {
         _anyaFreedThisGame = false;
+        _booksRead.Clear();
         await RefreshQuestData(rushees);
         await CollectSideQuestRewards(rushees);
 
@@ -217,7 +238,7 @@ public sealed partial class RushBot
         var hostName = host.Client.Game.Me.Name;
         foreach (var (quest, id) in SideQuestOrder)
         {
-            if (!NeedsSideQuest(host.Client, quest, id) || GivenUp(hostName, quest))
+            if (!CanCreateSideQuest(host.Client, quest, id) || GivenUp(hostName, quest))
             {
                 continue;
             }
@@ -266,7 +287,7 @@ public sealed partial class RushBot
         foreach (var session in rushees)
         {
             _openSideQuests[session.Client.Game.Me.Name] = SideQuestOrder
-                .Where(entry => NeedsSideQuest(session.Client, entry.Quest, entry.Id))
+                .Where(entry => CanCreateSideQuest(session.Client, entry.Quest, entry.Id))
                 .Select(entry => entry.Quest)
                 .ToHashSet();
         }
@@ -302,7 +323,7 @@ public sealed partial class RushBot
                     await TurnInGoldenBird(client);
                 }
 
-                if (_rushConfiguration.DoesSideQuest(RushSideQuest.Radament)
+                if (_rushConfiguration.DoesSideQuest(RushSideQuest.Radament) && _booksRead.Contains(client.Game.Me.Name)
                     && !HasFinished(client, QuestId.RadamentsLair) && client.Game.Quests.IsAwaitingReward(QuestId.RadamentsLair))
                 {
                     await CollectReward(client, Act.Act2, NPCCode.Atma, AtmaRewardsRadament, QuestId.RadamentsLair);
@@ -691,6 +712,7 @@ public sealed partial class RushBot
                 return false;
             }
 
+            await MakeRoom(killer, figurine.Width, figurine.Height);
             killer.Game.PickupItem(figurine);
             await Task.Delay(300);
             killer.Game.CleanupCursorItem();
@@ -741,6 +763,7 @@ public sealed partial class RushBot
 
         if (rushee.Game.Quests.IsAwaitingReward(QuestId.TheGoldenBird))
         {
+            await MakeRoom(rushee, 1, 1);
             await SayToNpc(rushee, NPCCode.Alkor, AlkorGivesPotion);
             GeneralHelpers.TryWithTimeout(_ => Holds(rushee, ItemName.PotionofLife), TimeSpan.FromSeconds(5));
         }
