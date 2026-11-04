@@ -312,7 +312,9 @@ public sealed partial class RushBot
         // Out of the way, so neither it nor its hireling lands the kill.
         await ReturnToTown(rusher);
         var deadline = DateTime.Now + SideBossKillLimit;
-        var kills = await Task.WhenAll(present.Select(fighter => FightBoss(fighter, boss, spot, deadline)));
+        var needersPresent = present.Where(needing.Contains).ToList();
+        var kills = await Task.WhenAll(present.Select(fighter =>
+            FightBoss(fighter, boss, spot, deadline, needing.Contains(fighter) ? null : needersPresent)));
         var killed = kills.Any(dead => dead);
         Log.Information("{Boss} {Outcome} by {Fighters}", boss, killed ? "killed" : "NOT killed",
             string.Join(", ", present.Select(fighter => fighter.Game.Me.Name)));
@@ -330,7 +332,12 @@ public sealed partial class RushBot
         return killed;
     }
 
-    private async Task<bool> FightBoss(Client fighter, NPCCode boss, Point spot, DateTime deadline)
+    /// <summary>
+    /// One fighter's part. A helper - <paramref name="waitFor"/> set to those who need the quest - only hits the
+    /// boss while one of them is near it: helpers that teleport got Radament killed while the walking character
+    /// who needed him was still on the way, and the credit only reaches those standing close.
+    /// </summary>
+    private async Task<bool> FightBoss(Client fighter, NPCCode boss, Point spot, DateTime deadline, List<Client> waitFor)
     {
         var mode = GetMovementMode(fighter);
         WorldObject seen = null;
@@ -348,13 +355,15 @@ public sealed partial class RushBot
             }
 
             seen = VisibleBoss(fighter, boss) ?? seen;
-            if (seen != null && seen.State is not EntityState.Dead and not EntityState.Dieing)
+            var neederClose = waitFor == null || (seen != null
+                && waitFor.Any(needer => needer.Game.IsInGame() && needer.Game.Me.Location.Distance(seen.Location) <= NeederReach));
+            if (seen != null && neederClose && seen.State is not EntityState.Dead and not EntityState.Dieing)
             {
                 await AttackUpClose(fighter, seen);
                 continue;
             }
 
-            var hostile = NearbyHostiles(fighter, 20).FirstOrDefault();
+            var hostile = NearbyHostiles(fighter, 20).FirstOrDefault(npc => seen == null || npc.Id != seen.Id);
             if (hostile != null)
             {
                 await AttackUpClose(fighter, hostile);
@@ -373,6 +382,8 @@ public sealed partial class RushBot
 
         return seen != null && seen.State is EntityState.Dead or EntityState.Dieing;
     }
+
+    private const double NeederReach = 20;
 
     /// <summary>A walkable point the given distance from the target, on the side the client comes from.</summary>
     private async Task<Point> StandoffPoint(Client client, Area area, Point target, double distance)
