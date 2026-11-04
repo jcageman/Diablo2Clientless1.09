@@ -82,7 +82,7 @@ public sealed partial class RushBot
 
             var arrival = creator.Game.Me.Location;
             await MakeRoom(creator, 2, 3);
-            var taken = await RusheeTakesFromContainer(rusher, creator, stand, item);
+            var taken = await OperateAndTake(creator, stand, item, area);
             Log.Information("{Creator} {Outcome} {Item}", name, taken ? "took" : "did NOT take", item);
             await RusheeHome(rusher, creator, arrival);
             await ReturnToTown(rusher);
@@ -103,6 +103,74 @@ public sealed partial class RushBot
         Log.Information("{Item} handed to {Npc} by {Creator}: {States}", item, npc, name,
             string.Join(", ", needers.Select(session => $"{session.Client.Game.Me.Name} 0x{session.Client.Game.Quests.GetCharacterFlags(id):X4}")));
         return HasKillCredit(creator, id);
+    }
+
+    /// <summary>
+    /// Operates a quest object and picks up what it drops, fighting whatever stands next to it first. Not the
+    /// rush's container helper: that runs a rusher clearing tick before every attempt, and with the Smith on
+    /// the rusher the creator stood on the Malus stand for forty seconds without touching it once.
+    /// </summary>
+    private async Task<bool> OperateAndTake(Client client, EntityCode code, ItemName itemName, Area area)
+    {
+        Item onGround = null;
+        Item Dropped() => client.Game.Items.Values
+            .Where(candidate => candidate.Ground && candidate.Name == itemName)
+            .OrderBy(candidate => candidate.Location.Distance(client.Game.Me.Location))
+            .FirstOrDefault();
+
+        var opened = await GeneralHelpers.TryWithTimeout(async _ =>
+        {
+            onGround = Dropped();
+            if (onGround != null)
+            {
+                return true;
+            }
+
+            await ClearUpClose(client, 12, TimeSpan.FromSeconds(10));
+            var target = client.Game.GetEntityByCode(code)
+                .OrderBy(candidate => candidate.Location.Distance(client.Game.Me.Location))
+                .FirstOrDefault();
+            if (target == null)
+            {
+                await MoveToObject(client, code, area);
+                return false;
+            }
+
+            if (client.Game.Me.Location.Distance(target.Location) > 3)
+            {
+                await client.Game.MoveToAsync(target);
+            }
+
+            client.Game.InteractWithEntity(target);
+            await Task.Delay(600);
+            onGround = Dropped();
+            return onGround != null;
+        }, TimeSpan.FromSeconds(40));
+        if (!opened)
+        {
+            Log.Warning("{Client} got no {Item} out of {Object}", client.Game.Me.Name, itemName, code);
+            return false;
+        }
+
+        return await GeneralHelpers.TryWithTimeout(async _ =>
+        {
+            if (Holds(client, itemName))
+            {
+                return true;
+            }
+
+            if (client.Game.Me.Location.Distance(onGround.Location) > 2)
+            {
+                await client.Game.MoveToAsync(onGround.Location);
+                return false;
+            }
+
+            await MakeRoom(client, onGround.Width, onGround.Height);
+            client.Game.PickupItem(onGround);
+            await Task.Delay(300);
+            client.Game.CleanupCursorItem();
+            return Holds(client, itemName);
+        }, TimeSpan.FromSeconds(15));
     }
 
     private Task<bool> HoradricMalus(Client rusher, Client creator, List<ParticipantSession> needers) =>

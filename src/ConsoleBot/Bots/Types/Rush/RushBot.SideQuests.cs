@@ -339,6 +339,13 @@ public sealed partial class RushBot
                     await CollectReward(client, Act.Act4, NPCCode.TyraelAct4, TyraelRewardsIzual, QuestId.TheFallenAngel);
                 }
 
+                // A Scroll of Resistance from an earlier game was never read: its resistances come with reading it,
+                // in any game.
+                if (_expansion && _rushConfiguration.DoesSideQuest(RushSideQuest.Anya))
+                {
+                    await ReadScrollOfResistance(client);
+                }
+
                 if (_expansion && _anyaFreedThisGame && _rushConfiguration.DoesSideQuest(RushSideQuest.Anya)
                     && !HasFinished(client, QuestId.PrisonOfIce) && client.Game.Quests.IsAwaitingReward(QuestId.PrisonOfIce))
                 {

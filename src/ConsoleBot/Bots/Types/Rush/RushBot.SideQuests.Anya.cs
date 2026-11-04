@@ -88,11 +88,18 @@ public sealed partial class RushBot
 
             if (attempt % 3 == 0)
             {
+                // Freeing her deletes the potion with the removal a lift gets; marked, it is not taken for a lift.
+                creator.Game.ExpectItemsTaken(creator.Game.Inventory.Items.Where(item => item.Name == ItemName.MalahsPotion));
                 creator.Game.InteractWithEntity(anya);
             }
 
             await Task.Delay(400);
-            return !Holds(creator, ItemName.MalahsPotion);
+            if (attempt % 3 == 2)
+            {
+                creator.Game.RequestQuestDataAndWait(TimeSpan.FromSeconds(1));
+            }
+
+            return !Holds(creator, ItemName.MalahsPotion) || HasKillCredit(creator, QuestId.PrisonOfIce);
         }, TimeSpan.FromSeconds(40));
         Log.Information("{Creator} {Outcome} Anya", name, freed ? "freed" : "did NOT free");
         _anyaFreedThisGame |= freed;
@@ -100,6 +107,24 @@ public sealed partial class RushBot
         await ReturnToTown(rusher);
         await RefreshQuestData(needers);
         return freed && HasKillCredit(creator, QuestId.PrisonOfIce);
+    }
+
+    private static async Task ReadScrollOfResistance(Client client)
+    {
+        var scroll = client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance);
+        if (scroll == null)
+        {
+            return;
+        }
+
+        client.Game.ActivateInventoryItem(scroll);
+        var read = await GeneralHelpers.TryWithTimeout(async _ =>
+        {
+            await Task.Delay(100);
+            return client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance) == null;
+        }, TimeSpan.FromSeconds(3));
+        Log.Information("{Client} {Outcome} its Scroll of Resistance (item {Id} at {Location})", client.Game.Me.Name,
+            read ? "read" : "could NOT read", scroll.Id, scroll.Location);
     }
 
     /// <summary>The scroll from Malah, read at once, then Anya's item.</summary>
@@ -116,11 +141,7 @@ public sealed partial class RushBot
         await SayToNpc(client, NPCCode.Malah, MalahGivesScroll);
         GeneralHelpers.TryWithTimeout(_ => Holds(client, ItemName.ScrollofResistance), TimeSpan.FromSeconds(3));
         var scroll = client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance);
-        if (scroll != null)
-        {
-            client.Game.ActivateInventoryItem(scroll);
-            GeneralHelpers.TryWithTimeout(_ => client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance) == null, TimeSpan.FromSeconds(3));
-        }
+        await ReadScrollOfResistance(client);
 
         await SayToNpc(client, NPCCode.Anya, AnyaGivesItem);
         client.Game.RequestQuestDataAndWait(TimeSpan.FromSeconds(2));
