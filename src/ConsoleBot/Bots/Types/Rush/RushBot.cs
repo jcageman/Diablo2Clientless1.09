@@ -3433,6 +3433,16 @@ public sealed partial class RushBot : IBotInstance
         var ferried = false;
         try
         {
+            // The portal stands in the town of the area's act. A rushee in another town swept it for eight
+            // minutes looking for a portal that could not be there.
+            var act = area.MapToAct();
+            if (rushee.Game.Act != act && !await MoveRusheeToAct(rushee, act))
+            {
+                Log.Warning("{Rushee} is in act {Current} and could not get to act {Act} for the portal to {Area}",
+                    rushee.Game.Me?.Name, rushee.Game.Act, act, area);
+                return false;
+            }
+
             ferried = await FerryRusheeCore(rusher, rushee, area);
             return ferried;
         }

@@ -223,6 +223,9 @@ public sealed partial class RushBot
     /// </summary>
     private readonly HashSet<string> _booksRead = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Every rushee in the current game, needing the quest at hand or not.</summary>
+    private List<ParticipantSession> _gameRushees = [];
+
     /// <summary>
     /// Collects the rewards already earned, then does every quest the game's creator - the first rushee -
     /// still needs, for everyone who needs it, and records what each character still needs afterwards.
@@ -231,6 +234,7 @@ public sealed partial class RushBot
     {
         _anyaFreedThisGame = false;
         _booksRead.Clear();
+        _gameRushees = rushees;
         await RefreshQuestData(rushees);
         await CollectSideQuestRewards(rushees);
 
@@ -857,9 +861,14 @@ public sealed partial class RushBot
         }
 
         await _attackService.AssistPlayer(client, client.Game.Me, [target.NPCCode], target.Location);
+
+        // An attack can come back at once - a paladin's hammer hold is one packet - and called in a loop that
+        // sent the same packet ten times in a millisecond until the server cut the connection.
+        await Task.Delay(AttackPacing);
     }
 
     private const double CloseInRange = 4;
+    private static readonly TimeSpan AttackPacing = TimeSpan.FromMilliseconds(150);
 
     /// <summary>Keeps the helpers within reach of the leader, fighting whatever comes at them on the way.</summary>
     private async Task FollowLeader(Client leader, List<Client> helpers, System.Threading.CancellationToken token)

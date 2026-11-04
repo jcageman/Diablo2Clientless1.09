@@ -32,7 +32,14 @@ public sealed partial class RushBot
             fighters.Insert(0, creator);
         }
 
-        await Task.WhenAll(fighters.Select(fighter => MoveRusheeToAct(fighter, Act.Act5)));
+        var inActFive = await Task.WhenAll(fighters.Select(fighter => MoveRusheeToAct(fighter, Act.Act5)));
+        if (!inActFive[fighters.IndexOf(creator)])
+        {
+            Log.Warning("{Creator} could not reach Harrogath for the Ancients", name);
+            return false;
+        }
+
+        fighters = fighters.Where((_, index) => inActFive[index]).ToList();
         if (!await ReachArea(rusher, Area.ArreatSummit) || !await MoveToObject(rusher, EntityCode.AncientsAltar, Area.ArreatSummit))
         {
             Log.Warning("The rusher could not reach the Ancients' altar");

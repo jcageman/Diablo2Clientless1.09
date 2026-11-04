@@ -190,6 +190,12 @@ public sealed partial class RushBot
             fighters.Insert(0, creator);
         }
 
+        // Everyone else in the game helps. These bosses credit whoever who still needs the quest stands in the
+        // kill room or next to it, whoever lands the blow, so a weak character no longer fights them alone.
+        var needing = fighters.ToHashSet();
+        fighters.AddRange(_gameRushees.Select(session => session.Client)
+            .Where(client => !needing.Contains(client) && client.Game.IsInGame()));
+
         if (boss == NPCCode.OverSeer)
         {
             if (!await ReturnToTown(rusher) || (rusher.Game.Act != Act.Act5 && !await _townManagementService.SwitchAct(rusher, Act.Act5)))
@@ -245,7 +251,7 @@ public sealed partial class RushBot
 
         if (killed && afterKill != null)
         {
-            foreach (var fighter in present)
+            foreach (var fighter in present.Where(needing.Contains))
             {
                 await afterKill(fighter);
             }
