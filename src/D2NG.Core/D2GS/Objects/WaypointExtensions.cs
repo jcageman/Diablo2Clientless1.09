@@ -65,8 +65,11 @@ public static class WaypointExtensions
         Waypoint.FrigidHighlands,
         Waypoint.ArreatPlateau,
         Waypoint.CrystallinePassage,
-        Waypoint.HallsOfPain,
+        // Glacial Trail before Halls of Pain, whatever the panel shows: a rusher that had just touched the
+        // Glacial Trail waypoint, and could not reach the Halls of Pain at all, read back bit 34 set and 35
+        // clear.
         Waypoint.GlacialTrail,
+        Waypoint.HallsOfPain,
         Waypoint.FrozenTundra,
         Waypoint.TheAncientsWay,
         Waypoint.TheWorldStoneKeepLevel2,

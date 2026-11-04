@@ -60,6 +60,7 @@ public sealed class RushBot : IBotInstance
     private const double DiabloCreditSpotFromStar = 20;
     private static readonly TimeSpan RecentShouts = TimeSpan.FromSeconds(90);
     private const double ShoutReach = 10;
+    private const double LiveObjectReach = 150;
     private const double WaypointClearRadius = 25;
     private static readonly TimeSpan WaypointClearLimit = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ShoutsMustOutlastAnAct = TimeSpan.FromMinutes(4);
@@ -739,8 +740,18 @@ public sealed class RushBot : IBotInstance
             .OrderBy(candidate => candidate.Location.Distance(client.Game.Me.Location))
             .FirstOrDefault();
         var collected = false;
-        for (var attempt = 0; target != null && attempt < 3 && !collected; attempt++)
+        for (var attempt = 0; attempt < 3 && !collected; attempt++)
         {
+            // Again by MoveToObject: once the server has sent the real waypoint, that is where it goes.
+            await MoveToObject(client, waypoint.ToEntityCode(), area);
+            target = client.Game.GetEntityByCode(waypoint.ToEntityCode())
+                .OrderBy(candidate => candidate.Location.Distance(client.Game.Me.Location))
+                .FirstOrDefault();
+            if (target == null)
+            {
+                continue;
+            }
+
             await client.Game.MoveToAsync(target);
             collected = client.Game.ReadWaypoints(target)?.Contains(waypoint) == true;
         }
@@ -6789,6 +6800,20 @@ public sealed class RushBot : IBotInstance
     private async Task<bool> MoveToObject(Client client, EntityCode code, Area? area = null)
     {
         var mode = GetMovementMode(client);
+
+        // Where the server says the object is beats where the map data says it is. The map service put the
+        // Glacial Trail waypoint at the level entrance, 325 units from the one the server sent, and every
+        // path to the wrong spot failed while the real waypoint was in view.
+        var live = client.Game.GetEntityByCode(code)
+            .Where(candidate => candidate.Location.Distance(client.Game.Me.Location) < LiveObjectReach)
+            .OrderBy(candidate => candidate.Location.Distance(client.Game.Me.Location))
+            .FirstOrDefault();
+        if (live != null
+            && await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, live, mode))
+        {
+            return true;
+        }
+
         for (var attempt = 0; attempt < AreaHopAttempts; attempt++)
         {
             var path = area == null
