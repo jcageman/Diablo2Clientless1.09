@@ -1,5 +1,6 @@
 ﻿using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Objects;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
@@ -54,6 +55,18 @@ public class RushConfiguration
     /// </summary>
     public Difficulty? RehearsalDifficulty { get; set; }
 
+    /// <summary>
+    /// "all" has the rusher hand every rushee the field waypoints of the acts it can reach, once the
+    /// rush itself is done; "none" (the default) hands out nothing. The rusher collects any it lacks
+    /// first, in a game of its own.
+    /// </summary>
+    public string GiveWaypoints { get; set; } = "none";
+
+    /// <summary>Waypoints left out of <see cref="GiveWaypoints"/>.</summary>
+    public List<Waypoint> SkipWaypoints { get; set; } = [];
+
+    public bool GivesWaypoints => GiveWaypoints?.ToLowerInvariant() == "all";
+
     public void Validate()
     {
         if (Rusher == null)
@@ -76,6 +89,11 @@ public class RushConfiguration
         if (Destination == null)
         {
             throw new ValidationException($"{nameof(Destination)} is required");
+        }
+
+        if (GiveWaypoints?.ToLowerInvariant() is not ("none" or "all"))
+        {
+            throw new ValidationException($"{nameof(GiveWaypoints)} must be \"none\" or \"all\", not \"{GiveWaypoints}\"");
         }
 
         Validator.ValidateObject(Destination, new ValidationContext(Destination), validateAllProperties: true);

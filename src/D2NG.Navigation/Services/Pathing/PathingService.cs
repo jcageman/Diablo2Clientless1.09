@@ -360,6 +360,16 @@ public class PathingService : IPathingService
         return [];
     }
 
+    public async Task<Area> ResolveArea(uint mapId, Difficulty difficulty, Area reported, Act act, Point location)
+    {
+        if (location == null)
+        {
+            return reported;
+        }
+
+        return await _mapApiService.GetAreaFromLocation(mapId, difficulty, location, act, reported) ?? reported;
+    }
+
     public async Task<bool> IsNavigatablePointInArea(uint mapId, Difficulty difficulty, Area area, Point currentLocation)
     {
         var map = await _mapApiService.GetArea(mapId, difficulty, area);
