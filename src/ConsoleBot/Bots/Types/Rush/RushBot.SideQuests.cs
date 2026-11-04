@@ -235,6 +235,15 @@ public sealed partial class RushBot
         _anyaFreedThisGame = false;
         _booksRead.Clear();
         _gameRushees = rushees;
+
+        // Everyone fights now, not only the creator: a helper that joined on an empty belt left the game out of
+        // potions half way through a fight.
+        if (_rushConfiguration.RusheeFights)
+        {
+            await Task.WhenAll(rushees.Where(session => session.Client.Game.IsInTown())
+                .Select(session => RestockFighter(session.Client, session.Entry.Account, session.Client.Game.Act)));
+        }
+
         await RefreshQuestData(rushees);
         await CollectSideQuestRewards(rushees);
 

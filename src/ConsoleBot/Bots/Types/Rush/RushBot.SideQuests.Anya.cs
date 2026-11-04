@@ -26,6 +26,7 @@ public sealed partial class RushBot
     private const uint MalahGivesPotion = 0x4E9F;
     private const uint MalahGivesScroll = 0x4EA4;
     private const uint AnyaGivesItem = 0x4EA8;
+    private static readonly TimeSpan AnyaArrivesWithin = TimeSpan.FromSeconds(40);
 
     private async Task<bool> Anya(Client rusher, Client creator, List<ParticipantSession> needers)
     {
@@ -137,13 +138,31 @@ public sealed partial class RushBot
             return;
         }
 
+        // Malah hands a fresh scroll on every ask while the reward is pending; one carried already is enough.
         await MakeRoom(client, 2, 4);
-        await SayToNpc(client, NPCCode.Malah, MalahGivesScroll);
-        GeneralHelpers.TryWithTimeout(_ => Holds(client, ItemName.ScrollofResistance), TimeSpan.FromSeconds(3));
+        if (!Holds(client, ItemName.ScrollofResistance))
+        {
+            await SayToNpc(client, NPCCode.Malah, MalahGivesScroll);
+            GeneralHelpers.TryWithTimeout(_ => Holds(client, ItemName.ScrollofResistance), TimeSpan.FromSeconds(3));
+        }
+
         var scroll = client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance);
         await ReadScrollOfResistance(client);
 
+        // Anya only comes to town some seconds after Malah's first handout; asked too early, nobody was there.
+        await GeneralHelpers.TryWithTimeout(async attempt =>
+        {
+            if (attempt > 0)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(4));
+            }
+
+            return client.Game.GetNPCsByCode(NPCCode.Anya).Count > 0;
+        }, AnyaArrivesWithin);
         await SayToNpc(client, NPCCode.Anya, AnyaGivesItem);
+
+        // With Anya's item had, Malah closes the quest.
+        await SayToNpc(client, NPCCode.Malah, MalahGivesScroll);
         client.Game.RequestQuestDataAndWait(TimeSpan.FromSeconds(2));
         Log.Information("{Client} {Outcome} Prison of Ice: 0x{Flags:X4}, scroll {Scroll}", name,
             HasFinished(client, QuestId.PrisonOfIce) ? "finished" : "did not finish", client.Game.Quests.GetCharacterFlags(QuestId.PrisonOfIce),
