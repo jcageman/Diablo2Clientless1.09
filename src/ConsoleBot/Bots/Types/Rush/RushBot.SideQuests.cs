@@ -914,7 +914,10 @@ public sealed partial class RushBot
     /// </summary>
     private async Task AttackUpClose(Client client, WorldObject target)
     {
-        if (client.Game.Me.Class != CharacterClass.Sorceress && target.Location.Distance(client.Game.Me.Location) > CloseInRange)
+        // Sorceresses cast from where they stand and amazons shoot: walking a bow amazon up to the Hell Ancients
+        // put her in their melee. The rest close in.
+        if (client.Game.Me.Class is not CharacterClass.Sorceress and not CharacterClass.Amazon
+            && target.Location.Distance(client.Game.Me.Location) > CloseInRange)
         {
             await client.Game.MoveToAsync(client.Game.Me.Location.GetPointBeforePointInSameDirection(target.Location, 2));
         }
