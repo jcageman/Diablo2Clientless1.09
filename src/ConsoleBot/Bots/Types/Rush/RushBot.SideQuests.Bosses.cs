@@ -602,6 +602,41 @@ public sealed partial class RushBot
         return room;
     }
 
+    private static async Task DropUnreadableScrolls(Client client)
+    {
+        var dropped = 0;
+        for (var tries = 0; tries < 12 && client.Game.IsInGame(); tries++)
+        {
+            var scroll = client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance);
+            if (scroll == null)
+            {
+                break;
+            }
+
+            await ReadScrollOfResistance(client);
+            if (client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance)?.Id != scroll.Id)
+            {
+                continue;
+            }
+
+            if (InventoryHelpers.DropItemFromInventory(client.Game, scroll) == MoveItemResult.Succes)
+            {
+                dropped++;
+                continue;
+            }
+
+            client.Game.DropItem(scroll);
+            await Task.Delay(300);
+            client.Game.CleanupCursorItem(force: true);
+            break;
+        }
+
+        if (dropped > 0)
+        {
+            Log.Information("{Client} dropped {Count} Scrolls of Resistance that would not read", client.Game.Me.Name, dropped);
+        }
+    }
+
     private static bool HasRoom(Client client, ushort width, ushort height)
     {
         var inventory = client.Game.Inventory;

@@ -253,6 +253,10 @@ public sealed partial class RushBot
                 .Select(session => RestockFighter(session.Client, session.Entry.Account, session.Client.Game.Act)));
         }
 
+        // Scrolls of Resistance that will not read are junk at 2x2 each - the server hands one out on every ask
+        // while Anya's reward is pending, and one character carried eight. Read what reads, drop the rest.
+        await Task.WhenAll(rushees.Select(session => DropUnreadableScrolls(session.Client)));
+
         await RefreshQuestData(rushees);
         await CollectSideQuestRewards(rushees);
 
