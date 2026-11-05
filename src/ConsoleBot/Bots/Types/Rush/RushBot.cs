@@ -416,7 +416,8 @@ public sealed partial class RushBot : IBotInstance
             await Timed("side-quests", () => RunSideQuests(rusher, rushees));
         }
 
-        if (_rushConfiguration.GivesWaypoints && !_waypointsHandedOut)
+        // Again in any game where Anya was freed: only there does her portal lead to the Halls of Pain.
+        if (_rushConfiguration.GivesWaypoints && (!_waypointsHandedOut || _anyaFreedThisGame))
         {
             _waypointsHandedOut = true;
             await Timed("give-waypoints", () => GiveWaypoints(rusher, rushees));
