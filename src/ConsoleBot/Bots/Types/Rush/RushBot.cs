@@ -775,6 +775,7 @@ public sealed partial class RushBot : IBotInstance
         {
             Waypoint.CanyonOfTheMagi => await ReachCanyonThroughArcane(client),
             Waypoint.ArcaneSanctuary => await ReachArcaneSanctuary(client),
+            Waypoint.HallsOfPain => await ReachHallsOfPain(client),
             _ => await TraverseTo(client, area)
         };
         if (!reached || !await MoveToObject(client, waypoint.ToEntityCode(), area))
@@ -906,6 +907,14 @@ public sealed partial class RushBot : IBotInstance
             if (lacking.Count == 0)
             {
                 continue;
+            }
+
+            // The Halls of Pain can only be collected in a game where Anya is free, which the rusher's own game
+            // rarely is and this one may be.
+            if (waypoint == Waypoint.HallsOfPain && rusherHolds.Count > 0 && !rusherHolds.Contains(waypoint)
+                && await CollectWaypoint(rusher, waypoint))
+            {
+                rusherHolds.Add(waypoint);
             }
 
             if (rusherHolds.Count > 0 && !rusherHolds.Contains(waypoint))
@@ -5817,6 +5826,41 @@ public sealed partial class RushBot : IBotInstance
             client.Game.Me.Name,
             held?.Contains(Waypoint.CanyonOfTheMagi) == true ? "activated" : "not confirmed");
         return true;
+    }
+
+    /// <summary>
+    /// The Halls of Pain lie behind Nihlathak's Temple, which no level leads to: the way in is the red portal
+    /// Anya opens in Harrogath (D2MOO A5Q4) once she is free in the game. Without it there is no way at all.
+    /// </summary>
+    private async Task<bool> ReachHallsOfPain(Client client)
+    {
+        if (client.Game.Act != Act.Act5 && !await _townManagementService.SwitchAct(client, Act.Act5))
+        {
+            return false;
+        }
+
+        var path = await _pathingService.GetPathToNPC(client.Game, NPCCode.Anya, MovementMode.Walking);
+        if (path.Count > 0)
+        {
+            await MovementHelpers.TakePathOfLocations(client.Game, path, MovementMode.Walking);
+        }
+
+        var portal = client.Game.GetEntityByCode(EntityCode.RedTownPortal)
+            .Concat(client.Game.GetEntityByCode(EntityCode.TownPortal))
+            .FirstOrDefault(candidate => candidate.TownPortalArea == Area.NihlathaksTemple);
+        if (portal == null)
+        {
+            Log.Information("No portal to Nihlathak's Temple in Harrogath on {Difficulty}: Anya is not free in this game", _gameDifficulty);
+            return false;
+        }
+
+        for (var attempt = 0; attempt < 5 && !await ConfirmInArea(client, Area.NihlathaksTemple, attempts: 2); attempt++)
+        {
+            await client.Game.MoveToAsync(portal.Location);
+            client.Game.InteractWithEntity(portal);
+        }
+
+        return await ConfirmInArea(client, Area.NihlathaksTemple, attempts: 2) && await TraverseTo(client, Area.HallsOfPain);
     }
 
     private async Task<bool> StepThroughObject(Client client, EntityCode code, Area destination)
