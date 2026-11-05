@@ -914,12 +914,21 @@ public sealed partial class RushBot
     /// </summary>
     private async Task AttackUpClose(Client client, WorldObject target)
     {
-        // Sorceresses cast from where they stand and amazons shoot: walking a bow amazon up to the Hell Ancients
-        // put her in their melee. The rest close in.
-        if (client.Game.Me.Class is not CharacterClass.Sorceress and not CharacterClass.Amazon
-            && target.Location.Distance(client.Game.Me.Location) > CloseInRange)
+        // Only the paladin and the barbarian go in close; everyone else keeps their distance and shoots or casts.
+        // Walking the others up to the Hell Ancients put them in melee that took a third of their life a blow.
+        var distance = target.Location.Distance(client.Game.Me.Location);
+        var melee = client.Game.Me.Class is CharacterClass.Paladin or CharacterClass.Barbarian;
+        if (melee && distance > CloseInRange)
         {
             await client.Game.MoveToAsync(client.Game.Me.Location.GetPointBeforePointInSameDirection(target.Location, 2));
+        }
+        else if (!melee && distance < KeepAwayRange && distance > 0)
+        {
+            var me = client.Game.Me.Location;
+            var dx = (me.X - target.Location.X) / distance;
+            var dy = (me.Y - target.Location.Y) / distance;
+            var backOff = new Point((ushort)(target.Location.X + dx * RangedStandoff), (ushort)(target.Location.Y + dy * RangedStandoff));
+            await client.Game.MoveToAsync(backOff);
         }
 
         await _attackService.AssistPlayer(client, client.Game.Me, [target.NPCCode], target.Location);
@@ -930,6 +939,8 @@ public sealed partial class RushBot
     }
 
     private const double CloseInRange = 4;
+    private const double KeepAwayRange = 12;
+    private const double RangedStandoff = 18;
     private static readonly TimeSpan AttackPacing = TimeSpan.FromMilliseconds(150);
 
     /// <summary>Keeps the helpers within reach of the leader, fighting whatever comes at them on the way.</summary>
