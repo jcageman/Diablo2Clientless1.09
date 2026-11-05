@@ -169,11 +169,15 @@ public sealed partial class RushBot
 
             return client.Game.GetNPCsByCode(NPCCode.Anya).Count > 0;
         }, AnyaArrivesWithin);
-        // Her item is made straight into the inventory and, without room, simply not made: a class weapon up to 2x4.
-        await MakeRoom(client, 2, 4);
+        // Her item is made straight into the inventory and, without room, simply not made. Its size goes by class:
+        // the amazon's bows and spears and some paladin shields are 2x4, the orbs, helms and heads 2x2.
+        var tall = client.Game.Me.Class is CharacterClass.Amazon or CharacterClass.Paladin;
+        await MakeRoom(client, 2, (ushort)(tall ? 4 : 2));
         await SayToNpc(client, NPCCode.Anya, AnyaGivesItem);
 
-        // With Anya's item had, Malah closes the quest.
+        // With Anya's item had, Malah closes the quest - but only by way of yet another scroll, and without room
+        // for that she does nothing at all.
+        await MakeRoom(client, 2, 2);
         await SayToNpc(client, NPCCode.Malah, MalahGivesScroll);
         client.Game.RequestQuestDataAndWait(TimeSpan.FromSeconds(2));
         Log.Information("{Client} {Outcome} Prison of Ice: 0x{Flags:X4}, scroll {Scroll}", name,
