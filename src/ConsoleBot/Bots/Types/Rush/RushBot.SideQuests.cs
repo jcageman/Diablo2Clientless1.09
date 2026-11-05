@@ -73,6 +73,9 @@ public sealed partial class RushBot
     /// </summary>
     private bool _anyaFreedThisGame;
 
+    /// <summary>Who has been through Anya's reward once this game; once is all it takes when it works at all.</summary>
+    private readonly HashSet<string> _anyaRewardTried = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>What each character still needed when its last game ended, by name.</summary>
     private readonly Dictionary<string, HashSet<RushSideQuest>> _openSideQuests = new(StringComparer.OrdinalIgnoreCase);
 
@@ -236,6 +239,7 @@ public sealed partial class RushBot
     private async Task<bool> RunSideQuests(Client rusher, List<ParticipantSession> rushees)
     {
         _anyaFreedThisGame = false;
+        _anyaRewardTried.Clear();
         _booksRead.Clear();
         _gameRushees = rushees;
 
@@ -359,7 +363,8 @@ public sealed partial class RushBot
                     await ReadScrollOfResistance(client);
                 }
 
-                if (_expansion && _anyaFreedThisGame && _rushConfiguration.DoesSideQuest(RushSideQuest.Anya)
+                if (_expansion && _anyaFreedThisGame && _anyaRewardTried.Add(client.Game.Me.Name)
+                    && _rushConfiguration.DoesSideQuest(RushSideQuest.Anya)
                     && !HasFinished(client, QuestId.PrisonOfIce) && client.Game.Quests.IsAwaitingReward(QuestId.PrisonOfIce))
                 {
                     await CollectAnyaReward(client);
