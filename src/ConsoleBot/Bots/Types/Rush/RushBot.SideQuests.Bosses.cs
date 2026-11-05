@@ -366,6 +366,7 @@ public sealed partial class RushBot
         await ReturnToTown(rusher);
         var deadline = DateTime.Now + SideBossKillLimit;
         _bossDiedAt = null;
+        _bossSpot = spot;
         // Only those who can still earn the credit hold the helpers back: one whose reward has been pending since an
         // earlier game counted as close, and Radament died before the character who needed him arrived.
         var questId = boss switch
@@ -453,6 +454,9 @@ public sealed partial class RushBot
 
     /// <summary>Where the last quest boss died, as one of the fighters saw it.</summary>
     private Point _bossDiedAt;
+
+    /// <summary>Where the quest boss was looked for, for a fighter that never saw it die.</summary>
+    private Point _bossSpot;
 
     /// <summary>A walkable point the given distance from the target, on the side the client comes from.</summary>
     private async Task<Point> StandoffPoint(Client client, Area area, Point target, double distance)
@@ -553,9 +557,10 @@ public sealed partial class RushBot
 
         // The books lie where Radament fell; a fighter further off never even sees them.
         var noBookInSight = !fighter.Game.Items.Values.Any(item => item.Ground && item.Name == ItemName.BookofSkill);
-        if (noBookInSight && _bossDiedAt != null && fighter.Game.Me.Location.Distance(_bossDiedAt) > 5)
+        var fallen = _bossDiedAt ?? _bossSpot;
+        if (noBookInSight && fallen != null && fighter.Game.Me.Location.Distance(fallen) > 5)
         {
-            await MoveTo(fighter, _bossDiedAt, GetMovementMode(fighter));
+            await MoveTo(fighter, fallen, GetMovementMode(fighter));
         }
 
         var read = await GeneralHelpers.TryWithTimeout(async _ =>
