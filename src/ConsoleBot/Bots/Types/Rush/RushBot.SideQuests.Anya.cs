@@ -6,6 +6,8 @@ using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Quest;
+using D2NG.Navigation.Extensions;
+using D2NG.Navigation.Services.Pathing;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -27,6 +29,7 @@ public sealed partial class RushBot
     private const uint MalahGivesScroll = 0x4EA4;
     private const uint AnyaGivesItem = 0x4EA8;
     private static readonly TimeSpan AnyaArrivesWithin = TimeSpan.FromSeconds(40);
+    private static readonly (int X, int Y) AnyaTownOffset = (106, 115);
 
     private async Task<bool> Anya(Client rusher, Client creator, List<ParticipantSession> needers)
     {
@@ -149,7 +152,13 @@ public sealed partial class RushBot
         var scroll = client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance);
         await ReadScrollOfResistance(client);
 
-        // Anya only comes to town some seconds after Malah's first handout; asked too early, nobody was there.
+        // Anya only comes to town some seconds after Malah's first handout, and a client sees her only near her
+        // own spot: waiting by Malah, nobody ever saw her arrive.
+        // She is no preset of the town map; seen live at (106, 115) from Harrogath's origin, which never moves.
+        var town = await _mapApiService.GetArea(client.Game.MapId, MapDifficulty, Area.Harrogath);
+        var anyaSpot = new Point((ushort)(town.LevelOrigin.X + AnyaTownOffset.X), (ushort)(town.LevelOrigin.Y + AnyaTownOffset.Y));
+        await MoveTo(client, anyaSpot, MovementMode.Walking);
+
         await GeneralHelpers.TryWithTimeout(async attempt =>
         {
             if (attempt > 0)
