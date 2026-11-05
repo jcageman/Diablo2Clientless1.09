@@ -137,7 +137,7 @@ public sealed partial class RushBot
             .OrderBy(candidate => candidate.Location.Distance(client.Game.Me.Location))
             .FirstOrDefault();
 
-        var opened = await GeneralHelpers.TryWithTimeout(async _ =>
+        var opened = await GeneralHelpers.TryWithTimeout(async attempt =>
         {
             onGround = Dropped();
             if (onGround != null)
@@ -155,9 +155,21 @@ public sealed partial class RushBot
                 return false;
             }
 
+            // A straight line stops at the first wall; every third try walks a path there instead. With straight
+            // lines alone the creator clicked Lam Esen's stand sixty times from the wrong side of the temple.
+            client.Game.RequestUpdate(client.Game.Me.Id);
             if (client.Game.Me.Location.Distance(target.Location) > 3)
             {
-                await client.Game.MoveToAsync(target);
+                if (attempt % 3 == 2)
+                {
+                    await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, target, MovementMode.Walking);
+                }
+                else
+                {
+                    await client.Game.MoveToAsync(target);
+                }
+
+                return false;
             }
 
             client.Game.InteractWithEntity(target);
