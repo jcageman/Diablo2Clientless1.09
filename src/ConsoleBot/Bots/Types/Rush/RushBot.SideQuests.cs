@@ -34,7 +34,8 @@ public sealed partial class RushBot
     private const int DenSweepSpacing = 25;
     private const double DenSweepClearRadius = 30;
     private static readonly TimeSpan DenClearLimit = TimeSpan.FromMinutes(4);
-    private static readonly TimeSpan DenFirstKillLimit = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan DenFirstKillLimit = TimeSpan.FromSeconds(90);
+    private const double FirstKillSearchRadius = 120;
     private const uint AlkorTakesBird = 0x216;
     private const uint AlkorGivesPotion = 0x21A;
     private static readonly TimeSpan UniqueSearchLimit = TimeSpan.FromMinutes(3);
@@ -503,9 +504,17 @@ public sealed partial class RushBot
                 return true;
             }
 
-            var target = NearbyHostiles(killer, 40).FirstOrDefault();
+            // Any monster the client knows of, not just one in reach: a walking amazon wandered the sweep points for
+            // a minute without ever coming within 40 of one.
+            var target = NearbyHostiles(killer, FirstKillSearchRadius).FirstOrDefault();
             if (target != null)
             {
+                if (target.Location.Distance(killer.Game.Me.Location) > 25)
+                {
+                    await MoveTo(killer, killer.Game.Me.Location.GetPointBeforePointInSameDirection(target.Location, 15), mode);
+                    continue;
+                }
+
                 await AttackUpClose(killer, target);
                 await Task.Delay(100);
                 continue;
