@@ -243,6 +243,7 @@ public sealed partial class RushBot
         _anyaRewardTried.Clear();
         _booksRead.Clear();
         _gameRushees = rushees;
+        _sideShoutsUntil = DateTime.MinValue;
 
         // Everyone fights now, not only the creator: a helper that joined on an empty belt left the game out of
         // potions half way through a fight.
@@ -393,6 +394,7 @@ public sealed partial class RushBot
             return false;
         }
 
+        await BuffBeforeFight(rusher, Act.Act1, _gameRushees.Select(session => session.Client));
         var inActOne = await Task.WhenAll(needers.Select(session => MoveRusheeToAct(session.Client, Act.Act1)));
         if (!inActOne.All(moved => moved)
             || (rusher.Game.Act != Act.Act1 && !await _townManagementService.SwitchAct(rusher, Act.Act1))

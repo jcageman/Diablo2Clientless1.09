@@ -32,6 +32,7 @@ public sealed partial class RushBot
             fighters.Insert(0, creator);
         }
 
+        await BuffBeforeFight(rusher, Act.Act5, fighters);
         var inActFive = await Task.WhenAll(fighters.Select(fighter => MoveRusheeToAct(fighter, Act.Act5)));
         if (!inActFive[fighters.IndexOf(creator)])
         {

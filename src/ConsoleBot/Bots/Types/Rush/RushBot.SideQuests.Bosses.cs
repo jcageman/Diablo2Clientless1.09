@@ -1,6 +1,7 @@
 ﻿using ConsoleBot.Enums;
 using ConsoleBot.Helpers;
 using D2NG.Core;
+using D2NG.Core.D2GS.Players;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
@@ -33,6 +34,45 @@ public sealed partial class RushBot
     private const double BossStandoff = 40;
     private static readonly TimeSpan SideBossKillLimit = TimeSpan.FromMinutes(2);
 
+    /// <summary>When the shouts cast in this game wear off; side work has no crew, so a barbarian rushee shouts.</summary>
+    private DateTime _sideShoutsUntil = DateTime.MinValue;
+
+    /// <summary>
+    /// A barbarian among the rushees shouts for everyone who is about to fight, in the town of the act the fight
+    /// is in. Side work runs without a crew, and the rusher went into Hell on its bare life and chickened at the
+    /// first pack. Skipped while the last shouts still have a few minutes left.
+    /// </summary>
+    private async Task BuffBeforeFight(Client rusher, Act act, IEnumerable<Client> fighters)
+    {
+        var barbarian = _gameRushees.Select(session => session.Client)
+            .FirstOrDefault(client => client.Game.IsInGame() && client.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0) > 0);
+        if (barbarian == null || _sideShoutsUntil - DateTime.Now > TimeSpan.FromMinutes(3))
+        {
+            return;
+        }
+
+        var everyone = fighters.Append(rusher).Append(barbarian).Distinct().Where(client => client.Game.IsInGame()).ToList();
+        await Task.WhenAll(everyone.Select(async client =>
+        {
+            if (!client.Game.IsInTown())
+            {
+                await ReturnToTown(client);
+            }
+
+            if (client.Game.Act != act)
+            {
+                await MoveRusheeToAct(client, act);
+            }
+        }));
+
+        var spot = barbarian.Game.Me.Location;
+        await Task.WhenAll(everyone.Where(client => client != barbarian && client.Game.Act == act)
+            .Select(client => MoveTo(client, spot, MovementMode.Walking)));
+        await ClassHelpers.CastAllShouts(barbarian);
+        _sideShoutsUntil = ShoutsExpireAt(barbarian) ?? DateTime.Now + TimeSpan.FromMinutes(2);
+        Log.Information("{Barbarian} shouted for {Count} before the fight in act {Act}", barbarian.Game.Me.Name, everyone.Count - 1, act);
+    }
+
     /// <summary>To an area the way a player goes: the closest waypoint held, then on foot.</summary>
     private async Task<bool> ReachArea(Client client, Area area)
     {
@@ -64,6 +104,7 @@ public sealed partial class RushBot
         var act = npc == NPCCode.Charsi ? Act.Act1 : area.MapToAct();
         if (!Holds(creator, item))
         {
+            await BuffBeforeFight(rusher, area.MapToAct(), _gameRushees.Select(session => session.Client));
             if (!await ReachArea(rusher, area) || !await MoveToObject(rusher, stand, area))
             {
                 Log.Warning("The rusher could not reach {Stand} in {Area}", stand, area);
@@ -337,6 +378,7 @@ public sealed partial class RushBot
         fighters.AddRange(_gameRushees.Select(session => session.Client)
             .Where(client => !needing.Contains(client) && client.Game.IsInGame()));
 
+        await BuffBeforeFight(rusher, area.MapToAct(), fighters);
         if (boss == NPCCode.OverSeer)
         {
             if (!await ReturnToTown(rusher) || (rusher.Game.Act != Act.Act5 && !await _townManagementService.SwitchAct(rusher, Act.Act5)))
