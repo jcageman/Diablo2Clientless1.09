@@ -273,6 +273,12 @@ public sealed partial class RushBot
     private Task<bool> Shenk(Client rusher, Client creator, List<ParticipantSession> needers) =>
         BossQuest(rusher, creator, needers, Area.BloodyFoothills, NPCCode.OverSeer, () => FindShenk(rusher), null);
 
+    /// <summary>
+    /// Shenk's class as the server sends it (seen live as 479, which the NPC table names otherwise). Matching any
+    /// superunique of the level got Dac Farren killed instead, who stands in the Bloody Foothills too.
+    /// </summary>
+    private const NPCCode ShenkClass = (NPCCode)479;
+
     private async Task<Point> FindShenk(Client rusher)
     {
         if (!await TakeWaypointFromTown(rusher, Waypoint.FrigidHighlands)
@@ -304,7 +310,7 @@ public sealed partial class RushBot
         return client.Game.WorldObjects
             .Where(entry => entry.Key.Item2 == EntityType.NPC)
             .Select(entry => entry.Value)
-            .Where(npc => (code == NPCCode.OverSeer ? npc.IsBoss : npc.NPCCode == code)
+            .Where(npc => (code == NPCCode.OverSeer ? npc.IsBoss && npc.NPCCode == ShenkClass : npc.NPCCode == code)
                 && npc.State is not EntityState.Dead and not EntityState.Dieing)
             .OrderBy(npc => npc.Location.Distance(client.Game.Me.Location))
             .FirstOrDefault();
