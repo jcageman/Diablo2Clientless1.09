@@ -6503,8 +6503,13 @@ public sealed partial class RushBot : IBotInstance
     /// The invisible units that aim act 5's siege catapults. They cannot be killed and do not attack, and
     /// counted as hostiles they kept the Frozen Tundra waypoint from ever being handed over.
     /// </summary>
+    /// <remarks>
+    /// The trapped souls of the City of the Damned belong here too: the rusher stood beside them for its whole
+    /// clearing time and still counted them, so that waypoint was never handed over.
+    /// </remarks>
     private static readonly HashSet<NPCCode> CatapultSpotters =
-        [NPCCode.CatapultSpotterS, NPCCode.CatapultSpotterE, NPCCode.CatapultSpotterSiege, NPCCode.CatapultSpotterW];
+        [NPCCode.CatapultSpotterS, NPCCode.CatapultSpotterE, NPCCode.CatapultSpotterSiege, NPCCode.CatapultSpotterW,
+            NPCCode.TrapedSoul1, NPCCode.TrapedSoul2];
 
     private static bool HasFinished(Client client, QuestId quest)
     {
