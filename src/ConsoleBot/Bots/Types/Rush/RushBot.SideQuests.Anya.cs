@@ -168,6 +168,8 @@ public sealed partial class RushBot
 
             return client.Game.GetNPCsByCode(NPCCode.Anya).Count > 0;
         }, AnyaArrivesWithin);
+        // Her item is made straight into the inventory and, without room, simply not made: a class weapon up to 2x4.
+        await MakeRoom(client, 2, 4);
         await SayToNpc(client, NPCCode.Anya, AnyaGivesItem);
 
         // With Anya's item had, Malah closes the quest.
