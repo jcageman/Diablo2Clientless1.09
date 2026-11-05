@@ -1,4 +1,5 @@
-﻿using ConsoleBot.Helpers;
+﻿using ConsoleBot.Enums;
+using ConsoleBot.Helpers;
 using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
@@ -481,6 +482,18 @@ public sealed partial class RushBot
     /// </summary>
     private static async Task<bool> MakeRoom(Client client, ushort width, ushort height)
     {
+        // Scrolls of Resistance Malah handed out again to characters that took the resistance long ago cannot
+        // be read, and at 2x2 each they filled inventories until no Book of Skill fitted. A readable one is read.
+        while (!HasRoom(client, width, height) && client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance) is { } scroll)
+        {
+            await ReadScrollOfResistance(client);
+            if (client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance)?.Id == scroll.Id
+                && InventoryHelpers.DropItemFromInventory(client.Game, scroll) != MoveItemResult.Succes)
+            {
+                break;
+            }
+        }
+
         for (var drunk = 0; drunk < 16; drunk++)
         {
             if (HasRoom(client, width, height))
