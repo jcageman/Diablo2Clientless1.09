@@ -901,6 +901,14 @@ public sealed partial class RushBot : IBotInstance
         var startedWith = heldBy.ToDictionary(entry => entry.Key, entry => entry.Value.Count);
         foreach (var waypoint in WaypointsToGive())
         {
+            // A rusher that chickened beside a waypoint (the Hell Inner Cloister's) left every handover after it
+            // failing; it comes back first.
+            if (!rusher.Game.IsInGame() && !await RejoinIfChickened(rusher))
+            {
+                Log.Warning("The rusher is out of the game and could not come back; no more waypoints handed over");
+                break;
+            }
+
             var town = TownWaypoints[waypoint.ToArea().MapToAct()];
             var lacking = heldBy.Where(entry => !entry.Value.Contains(waypoint) && entry.Value.Contains(town))
                 .Select(entry => entry.Key).ToList();

@@ -70,22 +70,40 @@ public sealed partial class RushBot
                 return false;
             }
 
-            await ClearAround(rusher, WaypointClearRadius, WaypointClearLimit);
-            if (!await _townManagementService.CreateTownPortal(rusher)
-                || (creator.Game.Act != area.MapToAct() && !await _townManagementService.SwitchAct(creator, area.MapToAct()))
-                || !await FerryRushee(rusher, creator, area))
+            // The rusher only opens the way: clearing a Hell stand alone chickened it every time. Everyone in
+            // the game comes through and the others clear while the creator works the stand.
+            if (!await _townManagementService.CreateTownPortal(rusher))
             {
-                Log.Warning("{Creator} could not be brought to {Stand}", name, stand);
                 await ReturnToTown(rusher);
                 return false;
             }
 
-            var arrival = creator.Game.Me.Location;
+            var arrival = rusher.Game.Me.Location;
+            var party = _gameRushees.Select(session => session.Client).Where(client => client.Game.IsInGame()).ToList();
+            if (!party.Contains(creator))
+            {
+                party.Insert(0, creator);
+            }
+
+            var came = await Task.WhenAll(party.Select(member => FerryRushee(rusher, member, area)));
+            await ReturnToTown(rusher);
+            var present = party.Where((_, index) => came[index]).ToList();
+            if (!present.Contains(creator))
+            {
+                Log.Warning("{Creator} could not be brought to {Stand}", name, stand);
+                await Task.WhenAll(present.Select(member => RusheeHome(rusher, member, arrival)));
+                return false;
+            }
+
+            using var guarding = new System.Threading.CancellationTokenSource();
+            var guards = present.Where(member => member != creator)
+                .Select(member => GuardSpot(member, arrival, guarding.Token)).ToList();
             await MakeRoom(creator, 2, 3);
             var taken = await OperateAndTake(creator, stand, item, area);
             Log.Information("{Creator} {Outcome} {Item}", name, taken ? "took" : "did NOT take", item);
-            await RusheeHome(rusher, creator, arrival);
-            await ReturnToTown(rusher);
+            await guarding.CancelAsync();
+            await Task.WhenAll(guards);
+            await Task.WhenAll(present.Select(member => RusheeHome(rusher, member, arrival)));
             if (!taken)
             {
                 return false;
@@ -173,6 +191,34 @@ public sealed partial class RushBot
         }, TimeSpan.FromSeconds(15));
     }
 
+    /// <summary>Fights whatever comes near the spot until told to stop.</summary>
+    private async Task GuardSpot(Client client, Point spot, System.Threading.CancellationToken token)
+    {
+        while (!token.IsCancellationRequested && client.Game.IsInGame())
+        {
+            var target = NearbyHostiles(client, 25).FirstOrDefault();
+            if (target != null)
+            {
+                await AttackUpClose(client, target);
+                continue;
+            }
+
+            if (client.Game.Me.Location.Distance(spot) > 15)
+            {
+                await MoveTo(client, spot, GetMovementMode(client));
+            }
+
+            try
+            {
+                await Task.Delay(300, token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+    }
+
     private Task<bool> HoradricMalus(Client rusher, Client creator, List<ParticipantSession> needers) =>
         FetchQuestItem(rusher, creator, needers, Area.Barracks, EntityCode.HoradricMalusStand, ItemName.HoradricMalus,
             NPCCode.Charsi, CharsiTakesMalus, QuestId.ToolsOfTheTrade);
@@ -183,6 +229,12 @@ public sealed partial class RushBot
 
     private async Task<bool> Radament(Client rusher, Client creator, List<ParticipantSession> needers)
     {
+        _radamentPendingBefore.Clear();
+        foreach (var session in needers.Where(session => session.Client.Game.Quests.IsAwaitingReward(QuestId.RadamentsLair)))
+        {
+            _radamentPendingBefore.Add(session.Client.Game.Me.Name);
+        }
+
         var killed = await BossQuest(rusher, creator, needers, Area.SewersLevel3, NPCCode.Radament,
             async () => MapPointOf(await _mapApiService.GetArea(rusher.Game.MapId, MapDifficulty, Area.SewersLevel3), EntityCode.HoradricScrollChest),
             ReadBookOfSkill);
@@ -387,6 +439,9 @@ public sealed partial class RushBot
 
     private const double NeederReach = 20;
 
+    /// <summary>Who had Radament's reward pending already when the current kill started.</summary>
+    private readonly HashSet<string> _radamentPendingBefore = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Where the last quest boss died, as one of the fighters saw it.</summary>
     private Point _bossDiedAt;
 
@@ -517,6 +572,13 @@ public sealed partial class RushBot
         Log.Information("{Fighter} {Outcome} a Book of Skill", name, read ? "read" : "did NOT read");
         if (read)
         {
+            _booksRead.Add(name);
+        }
+        else if (_radamentPendingBefore.Contains(name))
+        {
+            // Pending since an earlier game, it gets no book at a new kill either: that skill point went long
+            // ago. Atma may as well close the quest.
+            Log.Information("{Fighter} had Radament's reward pending from an earlier game and no book drops for it; Atma closes the quest", name);
             _booksRead.Add(name);
         }
     }

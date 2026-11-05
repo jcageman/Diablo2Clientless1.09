@@ -104,6 +104,9 @@ public sealed partial class RushBot
                 _openSideQuests.Clear();
                 if (_rushConfiguration.GivesWaypoints)
                 {
+                    // A second game for whatever the first could not collect: every game has its own map, and a
+                    // crossing the rusher could not get past in one is usually open in the next.
+                    await PrepareRusherWaypoints();
                     await PrepareRusherWaypoints();
                 }
 
@@ -256,6 +259,7 @@ public sealed partial class RushBot
                 continue;
             }
 
+            await RejoinIfChickened(rusher);
             foreach (var session in rushees)
             {
                 await RejoinIfChickened(session.Client);
