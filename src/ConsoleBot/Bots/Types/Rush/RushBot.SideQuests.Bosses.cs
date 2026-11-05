@@ -398,7 +398,9 @@ public sealed partial class RushBot
 
         if (killed && afterKill != null)
         {
-            foreach (var fighter in present.Where(needing.Contains))
+            // Those credited at this kill first: a book lies there for each of them, and one whose reward had been
+            // pending since an earlier game picked up a book that had dropped for someone else.
+            foreach (var fighter in present.Where(needing.Contains).OrderBy(fighter => _radamentPendingBefore.Contains(fighter.Game.Me.Name)))
             {
                 await afterKill(fighter);
             }
