@@ -172,6 +172,8 @@ public sealed partial class RushBot
                 return false;
             }
 
+            // An item left on the cursor - a scroll whose drop went wrong - makes the server ignore interactions.
+            client.Game.CleanupCursorItem(force: attempt > 0);
             client.Game.InteractWithEntity(target);
             await Task.Delay(600);
             onGround = Dropped();
@@ -514,6 +516,7 @@ public sealed partial class RushBot
             if (client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance)?.Id == scroll.Id
                 && InventoryHelpers.DropItemFromInventory(client.Game, scroll) != MoveItemResult.Succes)
             {
+                client.Game.CleanupCursorItem(force: true);
                 break;
             }
         }
