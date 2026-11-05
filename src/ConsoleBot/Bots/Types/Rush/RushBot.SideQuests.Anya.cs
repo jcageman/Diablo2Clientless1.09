@@ -28,6 +28,7 @@ public sealed partial class RushBot
     private const uint MalahGivesPotion = 0x4E9F;
     private const uint MalahGivesScroll = 0x4EA4;
     private const uint AnyaGivesItem = 0x4EA8;
+    private const uint AnyaOpensNihlathaksPortal = 0x4EA9;
     private static readonly TimeSpan AnyaArrivesWithin = TimeSpan.FromSeconds(40);
     private static readonly (int X, int Y) AnyaTownOffset = (106, 115);
 

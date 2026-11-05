@@ -5848,18 +5848,27 @@ public sealed partial class RushBot : IBotInstance
             return false;
         }
 
-        var path = await _pathingService.GetPathToNPC(client.Game, NPCCode.Anya, MovementMode.Walking);
-        if (path.Count > 0)
-        {
-            await MovementHelpers.TakePathOfLocations(client.Game, path, MovementMode.Walking);
-        }
+        // Anya is no preset of the town map; the portal opens beside her.
+        var townMap = await _mapApiService.GetArea(client.Game.MapId, MapDifficulty, Area.Harrogath);
+        await MoveTo(client, new Point((ushort)(townMap.LevelOrigin.X + AnyaTownOffset.X), (ushort)(townMap.LevelOrigin.Y + AnyaTownOffset.Y)),
+            MovementMode.Walking);
 
-        var portal = client.Game.GetEntityByCode(EntityCode.RedTownPortal)
+        WorldObject NihlathakPortal() => client.Game.GetEntityByCode(EntityCode.RedTownPortal)
             .Concat(client.Game.GetEntityByCode(EntityCode.TownPortal))
             .FirstOrDefault(candidate => candidate.TownPortalArea == Area.NihlathaksTemple);
+
+        // Asked about Nihlathak (message 20137), Anya opens it (D2MOO A5Q4.cpp), unless the game's creator has
+        // finished that quest; a creator that has only started it finds it open already.
+        if (NihlathakPortal() == null && client.Game.GetNPCsByCode(NPCCode.Anya).Count > 0)
+        {
+            await SayToNpc(client, NPCCode.Anya, AnyaOpensNihlathaksPortal);
+            GeneralHelpers.TryWithTimeout(_ => NihlathakPortal() != null, TimeSpan.FromSeconds(6));
+        }
+
+        var portal = NihlathakPortal();
         if (portal == null)
         {
-            Log.Information("No portal to Nihlathak's Temple in Harrogath on {Difficulty}: Anya is not free in this game", _gameDifficulty);
+            Log.Information("No portal to Nihlathak's Temple in Harrogath on {Difficulty}", _gameDifficulty);
             return false;
         }
 
