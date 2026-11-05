@@ -293,6 +293,11 @@ public class Game
     {
         Data.LiftRequested = item.Id;
         Data.SellRequested.TryRemove(item.Id, out _);
+
+        // A use the server ignored - an unreadable scroll - leaves its mark behind, and the lift's removal then
+        // read as the item used up: the client believed its cursor empty while the server held the scroll there,
+        // and ignored every interaction after it.
+        Data.UseRequested.TryRemove(item.Id, out _);
         _gameServer.SendPacket(new RemoveItemFromContainerPacket(item));
     }
 

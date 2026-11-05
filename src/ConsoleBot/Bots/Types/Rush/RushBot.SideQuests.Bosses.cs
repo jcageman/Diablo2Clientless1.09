@@ -516,6 +516,10 @@ public sealed partial class RushBot
             if (client.Game.Inventory.FindItemByName(ItemName.ScrollofResistance)?.Id == scroll.Id
                 && InventoryHelpers.DropItemFromInventory(client.Game, scroll) != MoveItemResult.Succes)
             {
+                // The lift reached the server even when the client never saw it: the scroll sat on a cursor the
+                // client believed empty, and every interaction after it was ignored. Drop it all the same.
+                client.Game.DropItem(scroll);
+                await Task.Delay(300);
                 client.Game.CleanupCursorItem(force: true);
                 break;
             }
