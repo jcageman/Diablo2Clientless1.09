@@ -32,6 +32,12 @@ public sealed partial class RushBot
             fighters.Insert(0, creator);
         }
 
+        // Everyone in the game helps: the credit goes to whoever stands on the summit, whoever lands the blow, and
+        // three Hell Ancients with their immunities outlasted the two who needed them and the rusher for five
+        // minutes.
+        fighters.AddRange(_gameRushees.Select(session => session.Client)
+            .Where(client => !fighters.Contains(client) && client.Game.IsInGame()));
+
         await BuffBeforeFight(rusher, Act.Act5, fighters);
         var inActFive = await Task.WhenAll(fighters.Select(fighter => MoveRusheeToAct(fighter, Act.Act5)));
         if (!inActFive[fighters.IndexOf(creator)])
