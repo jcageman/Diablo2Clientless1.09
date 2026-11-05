@@ -366,7 +366,15 @@ public sealed partial class RushBot
         await ReturnToTown(rusher);
         var deadline = DateTime.Now + SideBossKillLimit;
         _bossDiedAt = null;
-        var needersPresent = present.Where(needing.Contains).ToList();
+        // Only those who can still earn the credit hold the helpers back: one whose reward has been pending since an
+        // earlier game counted as close, and Radament died before the character who needed him arrived.
+        var questId = boss switch
+        {
+            NPCCode.Radament => QuestId.RadamentsLair,
+            NPCCode.Izual => QuestId.TheFallenAngel,
+            _ => QuestId.SiegeOnHarrogath,
+        };
+        var needersPresent = present.Where(needing.Contains).Where(client => !HasKillCredit(client, questId)).ToList();
         var kills = await Task.WhenAll(present.Select(fighter =>
             FightBoss(fighter, boss, spot, deadline, needing.Contains(fighter) ? null : needersPresent)));
         var killed = kills.Any(dead => dead);
