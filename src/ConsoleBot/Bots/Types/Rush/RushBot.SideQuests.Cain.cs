@@ -120,9 +120,13 @@ public sealed partial class RushBot
             // so five rounds at most go through any order.
             foreach (var stone in stones.Where(stone => stone.State == EntityState.Alive))
             {
+                // Game.MoveToAsync sets the position it aims for without walking there: after the first stone the
+                // creator believed it stood at every stone and clicked all five from out of reach for a minute.
+                creator.Game.RequestUpdate(creator.Game.Me.Id);
+                await Task.Delay(150);
                 if (creator.Game.Me.Location.Distance(stone.Location) > 3)
                 {
-                    await creator.Game.MoveToAsync(stone);
+                    await MovementHelpers.MoveToWorldObject(creator.Game, _pathingService, _mapApiService, stone, MovementMode.Walking);
                 }
 
                 creator.Game.InteractWithEntity(stone);
