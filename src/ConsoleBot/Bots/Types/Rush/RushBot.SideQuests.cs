@@ -51,6 +51,7 @@ public sealed partial class RushBot
     private static readonly (RushSideQuest Quest, QuestId Id)[] AllSideQuests =
     [
         (RushSideQuest.DenOfEvil, QuestId.DenOfEvil),
+        (RushSideQuest.Cain, QuestId.TheSearchForCain),
         (RushSideQuest.CharsiImbue, QuestId.ToolsOfTheTrade),
         (RushSideQuest.Radament, QuestId.RadamentsLair),
         (RushSideQuest.GoldenBird, QuestId.TheGoldenBird),
@@ -66,7 +67,7 @@ public sealed partial class RushBot
 
     /// <summary>The quest items an NPC takes from the player when a quest message is said.</summary>
     private static readonly HashSet<ItemName> HandedInQuestItems =
-        [ItemName.HoradricMalus, ItemName.AJadeFigurine, ItemName.TheGoldenBird, ItemName.LamEsensTome, ItemName.MalahsPotion];
+        [ItemName.HoradricMalus, ItemName.ScrollofInifuss, ItemName.KeytotheCairnStones, ItemName.AJadeFigurine, ItemName.TheGoldenBird, ItemName.LamEsensTome, ItemName.MalahsPotion];
 
     /// <summary>
     /// Malah only offers the Scroll of Resistance in a game where Anya has been freed, so a reward pending from
@@ -301,6 +302,7 @@ public sealed partial class RushBot
                 RushSideQuest.Shenk => Shenk(rusher, host.Client, needers),
                 RushSideQuest.Anya => Anya(rusher, host.Client, needers),
                 RushSideQuest.Ancients => Ancients(rusher, host.Client, needers),
+                RushSideQuest.Cain => Cain(rusher, host.Client, needers),
                 _ => Task.FromResult(false),
             });
 
@@ -340,6 +342,14 @@ public sealed partial class RushBot
                     && !HasFinished(client, QuestId.DenOfEvil) && client.Game.Quests.IsAwaitingReward(QuestId.DenOfEvil))
                 {
                     await CollectDenReward(client);
+                }
+
+                if (_rushConfiguration.DoesSideQuest(RushSideQuest.Cain)
+                    && !HasFinished(client, QuestId.TheSearchForCain) && client.Game.Quests.IsAwaitingReward(QuestId.TheSearchForCain))
+                {
+                    // Akara's reward is a ring made straight into the inventory.
+                    await MakeRoom(client, 1, 1);
+                    await CollectReward(client, Act.Act1, NPCCode.Akara, AkaraRewardsCain, QuestId.TheSearchForCain);
                 }
 
                 if (_rushConfiguration.DoesSideQuest(RushSideQuest.GoldenBird)

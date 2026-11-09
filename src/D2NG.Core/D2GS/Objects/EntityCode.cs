@@ -49,6 +49,19 @@ public enum EntityCode : ushort
 
     /// <summary>The altar on Arreat Summit that wakes the Ancients.</summary>
     AncientsAltar = 546,
+
+    /// <summary>The five Cairn Stones in the Stony Field; operated in the right order with the key, they open Tristram.</summary>
+    CairnStoneAlpha = 17,
+    CairnStoneBeta = 18,
+    CairnStoneGamma = 19,
+    CairnStoneDelta = 20,
+    CairnStoneLambda = 21,
+
+    /// <summary>The cage Cain hangs in, in Tristram; operating it frees him.</summary>
+    CainGibbet = 26,
+
+    /// <summary>The tree in the Dark Wood; operated, it drops the Scroll of Inifuss.</summary>
+    InifussTree = 30,
     StaffOfKingsChest = 356,
     Hratli = 379,
     RightSeal1 = 392,

@@ -35,7 +35,8 @@ public enum RushSideQuest
     Izual,
     Shenk,
     Anya,
-    Ancients
+    Ancients,
+    Cain
 }
 
 public class RushConfiguration
