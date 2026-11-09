@@ -281,7 +281,7 @@ internal class BattleNetChatServer : IDisposable
         // The listener of the previous connection may still be unwinding; the generation stops it from
         // reading the new stream.
         var generation = Interlocked.Increment(ref _connectionGeneration);
-        var listener = new Thread(() => Listen(generation));
+        var listener = new Thread(() => Listen(generation)) { IsBackground = true };
         listener.Start();
     }
 
