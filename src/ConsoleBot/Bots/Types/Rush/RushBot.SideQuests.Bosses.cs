@@ -178,6 +178,7 @@ public sealed partial class RushBot
             .OrderBy(candidate => candidate.Location.Distance(client.Game.Me.Location))
             .FirstOrDefault();
 
+        var approach = new OperateApproach();
         var opened = await GeneralHelpers.TryWithTimeout(async attempt =>
         {
             onGround = Dropped();
@@ -199,7 +200,7 @@ public sealed partial class RushBot
             // A straight line stops at the first wall; every third try walks a path there instead. With straight
             // lines alone the creator clicked Lam Esen's stand sixty times from the wrong side of the temple.
             client.Game.RequestUpdate(client.Game.Me.Id);
-            if (client.Game.Me.Location.Distance(target.Location) > 3)
+            if (!approach.CloseEnough(client.Game.Me.Location.Distance(target.Location)))
             {
                 if (attempt % 3 == 2)
                 {
@@ -245,6 +246,23 @@ public sealed partial class RushBot
             client.Game.CleanupCursorItem();
             return Holds(client, itemName);
         }, TimeSpan.FromSeconds(15));
+    }
+
+    /// <summary>
+    /// Whether a character walking up to an object is near enough to operate it. A big one - the Inifuss tree,
+    /// Cain's gibbet - has no spot within 3 of its centre to stand on: the creator walked at the tree for forty
+    /// seconds without clicking it once. So once walking stops bringing it closer, near is near enough.
+    /// </summary>
+    private sealed class OperateApproach
+    {
+        private double _closest = double.MaxValue;
+
+        public bool CloseEnough(double distance)
+        {
+            var stalled = distance >= _closest - 0.5;
+            _closest = Math.Min(_closest, distance);
+            return distance <= 3 || (distance <= 8 && stalled);
+        }
     }
 
     /// <summary>Fights whatever comes near the spot until told to stop.</summary>

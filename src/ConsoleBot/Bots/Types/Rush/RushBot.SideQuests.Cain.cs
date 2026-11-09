@@ -178,6 +178,7 @@ public sealed partial class RushBot
         using var guarding = new System.Threading.CancellationTokenSource();
         var guards = present.Where(member => member != creator)
             .Select(member => GuardSpot(member, arrival, guarding.Token)).ToList();
+        var approach = new OperateApproach();
         var freed = await GeneralHelpers.TryWithTimeout(async attempt =>
         {
             await ClearUpClose(creator, 12, TimeSpan.FromSeconds(10));
@@ -190,7 +191,8 @@ public sealed partial class RushBot
                 return false;
             }
 
-            if (creator.Game.Me.Location.Distance(gibbet.Location) > 3)
+            creator.Game.RequestUpdate(creator.Game.Me.Id);
+            if (!approach.CloseEnough(creator.Game.Me.Location.Distance(gibbet.Location)))
             {
                 if (attempt % 3 == 2)
                 {
