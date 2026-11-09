@@ -27,6 +27,14 @@ public sealed partial class RushBot
     private const uint AkaraDeciphersScroll = 0x70;
     private const uint AkaraRewardsCain = 0x76;
     private static readonly TimeSpan CairnStonesLimit = TimeSpan.FromSeconds(60);
+    private const double TristramClearRadius = 35;
+    private static readonly TimeSpan TristramClearLimit = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// QFLAG_ENTERAREA: the stones were opened once. Every later game this player starts has them open and the
+    /// portal standing, and the tree no longer drops a scroll (A1Q4 PlayerStartedGame) - forty clicks proved it.
+    /// </summary>
+    private const ushort CairnStonesOpenedBit = 0x10;
 
     private static readonly EntityCode[] CairnStones =
     [
@@ -37,6 +45,12 @@ public sealed partial class RushBot
     private async Task<bool> Cain(Client rusher, Client creator, List<ParticipantSession> needers)
     {
         var name = creator.Game.Me.Name;
+        if ((creator.Game.Quests.GetCharacterFlags(QuestId.TheSearchForCain) & CairnStonesOpenedBit) != 0)
+        {
+            Log.Information("{Creator} opened the Cairn Stones before; this game has the portal to Tristram standing", name);
+            return await FreeCain(rusher, creator, needers);
+        }
+
         if (!Holds(creator, ItemName.KeytotheCairnStones))
         {
             await FetchQuestItem(rusher, creator, needers, Area.DarkWood, EntityCode.InifussTree, ItemName.ScrollofInifuss,
@@ -154,6 +168,7 @@ public sealed partial class RushBot
         await Task.WhenAll(needers.Select(session => MoveRusheeToAct(session.Client, Act.Act1)));
         if (!await ReachArea(rusher, Area.StonyFields)
             || !await MoveToObject(rusher, EntityCode.CairnStoneAlpha, Area.StonyFields)
+            || !GeneralHelpers.TryWithTimeout(_ => TristramPortal(rusher) != null, TimeSpan.FromSeconds(8))
             || !await StepThroughObject(rusher, EntityCode.RedTownPortal, Area.Tristram)
             || !await MoveToObject(rusher, EntityCode.CainGibbet, Area.Tristram))
         {
@@ -162,7 +177,9 @@ public sealed partial class RushBot
             return false;
         }
 
-        await ClearAround(rusher, WaypointClearRadius, WaypointClearLimit);
+        // Tristram's square is full: with the usual waypoint clear Griswold and the Returned were still at the
+        // gibbet, and the creator chickened from one 1412 hit a second after coming through.
+        await ClearAround(rusher, TristramClearRadius, TristramClearLimit);
         if (!await _townManagementService.CreateTownPortal(rusher))
         {
             await ReturnToTown(rusher);
