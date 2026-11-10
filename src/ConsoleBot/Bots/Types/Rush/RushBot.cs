@@ -873,6 +873,7 @@ public sealed partial class RushBot : IBotInstance
     /// </summary>
     private async Task<bool> GiveWaypoints(Client rusher, List<ParticipantSession> rushees)
     {
+        _gameRushees = rushees;
         var reads = await Task.WhenAll(rushees.Select(async session =>
         {
             var rushee = session.Client;
@@ -935,6 +936,9 @@ public sealed partial class RushBot : IBotInstance
 
             try
             {
+                // The rusher clears every waypoint alone before anyone comes through: without shouts a Hell sorceress
+                // chickened at three handovers in one game, the last shouts having worn off ten minutes before.
+                await BuffBeforeFight(rusher, waypoint.ToArea().MapToAct(), []);
                 await TopUpTome(rusher);
                 foreach (var rushee in await GiveWaypoint(rusher, lacking, waypoint))
                 {
