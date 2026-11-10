@@ -1018,8 +1018,19 @@ public sealed partial class RushBot
             // data lists without exits.
             var here = GoldenBirdSearchRoute[hunt.Leg];
             var next = GoldenBirdSearchRoute[hunt.Leg + 1];
-            var path = await _pathingService.GetPathToAdjacentArea(
-                client.Game.MapId, Difficulty.Normal, here, client.Game.Me.Location, next, mode);
+            List<Point> path;
+            try
+            {
+                path = await _pathingService.GetPathToAdjacentArea(
+                    client.Game.MapId, Difficulty.Normal, here, client.Game.Me.Location, next, mode);
+            }
+            catch (InvalidOperationException exception)
+            {
+                // Not every map strings the jungles in a row: in one the Flayer Jungle opened off the Spider
+                // Forest and the Great Marsh was a dead end, and asking for the border failed the whole quest.
+                Log.Information("{Client} finds no border from {Here} to {Next} ({Reason}); going round", client.Game.Me.Name, here, next, exception.Message);
+                path = [];
+            }
             foreach (var point in path)
             {
                 unique = VisibleUnique(client, hunt.Tried);
