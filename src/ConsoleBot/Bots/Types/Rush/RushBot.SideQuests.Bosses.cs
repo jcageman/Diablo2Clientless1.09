@@ -112,8 +112,9 @@ public sealed partial class RushBot
                 return false;
             }
 
-            // The rusher only opens the way: clearing a Hell stand alone chickened it every time. Everyone in
-            // the game comes through and the others clear while the creator works the stand.
+            // The rusher clears the stand and stays to fight beside it. Opening the portal without fighting is how
+            // a Hell rusher chickened at the Barracks and at the tome with not one attack made.
+            await ClearAround(rusher, WaypointClearRadius, WaypointClearLimit);
             if (!await _townManagementService.CreateTownPortal(rusher))
             {
                 await ReturnToTown(rusher);
@@ -128,24 +129,26 @@ public sealed partial class RushBot
             }
 
             var came = await Task.WhenAll(party.Select(member => FerryRushee(rusher, member, area)));
-            await ReturnToTown(rusher);
             var present = party.Where((_, index) => came[index]).ToList();
             if (!present.Contains(creator))
             {
                 Log.Warning("{Creator} could not be brought to {Stand}", name, stand);
                 await Task.WhenAll(present.Select(member => RusheeHome(rusher, member, arrival)));
+                await ReturnToTown(rusher);
                 return false;
             }
 
             using var guarding = new System.Threading.CancellationTokenSource();
             var guards = present.Where(member => member != creator)
-                .Select(member => GuardSpot(member, arrival, guarding.Token)).ToList();
+                .Select(member => GuardSpot(member, arrival, guarding.Token))
+                .Append(RusherGuard(rusher, guarding.Token)).ToList();
             await MakeRoom(creator, 2, 3);
             var taken = await OperateAndTake(creator, stand, item, area);
             Log.Information("{Creator} {Outcome} {Item}", name, taken ? "took" : "did NOT take", item);
             await guarding.CancelAsync();
             await Task.WhenAll(guards);
             await Task.WhenAll(present.Select(member => RusheeHome(rusher, member, arrival)));
+            await ReturnToTown(rusher);
             if (!taken)
             {
                 return false;
@@ -262,6 +265,23 @@ public sealed partial class RushBot
             var stalled = distance >= _closest - 0.5;
             _closest = Math.Min(_closest, distance);
             return distance <= 3 || (distance <= 8 && stalled);
+        }
+    }
+
+    /// <summary>The rusher's own clearing, in short rounds, until told to stop.</summary>
+    private async Task RusherGuard(Client rusher, System.Threading.CancellationToken token)
+    {
+        while (!token.IsCancellationRequested && rusher.Game.IsInGame())
+        {
+            await ClearAround(rusher, WaypointClearRadius, TimeSpan.FromSeconds(3));
+            try
+            {
+                await Task.Delay(200, token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
         }
     }
 
