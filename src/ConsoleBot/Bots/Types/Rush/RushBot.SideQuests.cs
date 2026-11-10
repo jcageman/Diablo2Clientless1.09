@@ -512,6 +512,10 @@ public sealed partial class RushBot
         var mode = GetMovementMode(killer);
         var remaining = sweep.ToList();
         var started = DateTime.Now;
+
+        // Monsters the killer walked at without getting closer. One stood where no path led, and the creator
+        // walked at it for ninety seconds without a single attack.
+        var unreachable = new Dictionary<uint, int>();
         while (DateTime.Now - started < limit)
         {
             if (killer.Game.WorldObjects.Where(entry => entry.Key.Item2 == EntityType.NPC).Select(entry => entry.Value).Any(npc => !NPCHelpers.IsFriendly(npc.NPCCode)
@@ -522,12 +526,19 @@ public sealed partial class RushBot
 
             // Any monster the client knows of, not just one in reach: a walking amazon wandered the sweep points for
             // a minute without ever coming within 40 of one.
-            var target = NearbyHostiles(killer, FirstKillSearchRadius).FirstOrDefault();
+            var target = NearbyHostiles(killer, FirstKillSearchRadius)
+                .FirstOrDefault(npc => unreachable.GetValueOrDefault(npc.Id) < 3);
             if (target != null)
             {
-                if (target.Location.Distance(killer.Game.Me.Location) > 25)
+                var distance = target.Location.Distance(killer.Game.Me.Location);
+                if (distance > 25)
                 {
                     await MoveTo(killer, killer.Game.Me.Location.GetPointBeforePointInSameDirection(target.Location, 15), mode);
+                    if (target.Location.Distance(killer.Game.Me.Location) > distance - 2)
+                    {
+                        unreachable[target.Id] = unreachable.GetValueOrDefault(target.Id) + 1;
+                    }
+
                     continue;
                 }
 
