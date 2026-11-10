@@ -6046,10 +6046,19 @@ public sealed partial class RushBot : IBotInstance
     /// bots all keep it up - and the rusher was the only one fighting without it: she carries Shiver
     /// Armor at level five and had never cast it in a single run.
     /// </summary>
+    /// <summary>
+    /// When an armor was last cast, per client. The server drops a cast made during the hit animation, so under
+    /// attack the armor never lands: recast every 150ms, the rusher stood casting it through a pack in Hell
+    /// instead of fighting or leaving, and chickened.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Client, DateTime> _armorCastAt = new();
+    private static readonly TimeSpan ArmorRecastWait = TimeSpan.FromSeconds(1.5);
+
     private static async Task<bool> KeepArmorUp(Client client)
     {
         var me = client.Game.Me;
-        if (me == null || me.Mana < 20)
+        if (me == null || me.Mana < 20
+            || DateTime.Now - _armorCastAt.GetValueOrDefault(client, DateTime.MinValue) < ArmorRecastWait)
         {
             return false;
         }
@@ -6074,6 +6083,7 @@ public sealed partial class RushBot : IBotInstance
             return false;
         }
 
+        _armorCastAt[client] = DateTime.Now;
         await Task.Delay(150);
         return true;
     }
