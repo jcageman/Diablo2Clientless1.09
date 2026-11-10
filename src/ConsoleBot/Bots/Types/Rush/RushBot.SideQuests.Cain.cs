@@ -78,7 +78,7 @@ public sealed partial class RushBot
     private async Task<bool> OpenTristram(Client rusher, Client creator)
     {
         var name = creator.Game.Me.Name;
-        await BuffBeforeFight(rusher, Act.Act1, _gameRushees.Select(session => session.Client));
+        await BuffBeforeFight(rusher, Area.StonyFields, _gameRushees.Select(session => session.Client));
         if (!await ReachArea(rusher, Area.StonyFields) || !await MoveToObject(rusher, EntityCode.CairnStoneAlpha, Area.StonyFields))
         {
             Log.Warning("The rusher could not reach the Cairn Stones");

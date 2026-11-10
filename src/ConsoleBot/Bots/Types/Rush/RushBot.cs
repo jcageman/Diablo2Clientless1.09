@@ -938,7 +938,7 @@ public sealed partial class RushBot : IBotInstance
             {
                 // The rusher clears every waypoint alone before anyone comes through: without shouts a Hell sorceress
                 // chickened at three handovers in one game, the last shouts having worn off ten minutes before.
-                await BuffBeforeFight(rusher, waypoint.ToArea().MapToAct(), []);
+                await BuffBeforeFight(rusher, waypoint.ToArea(), []);
                 await TopUpTome(rusher);
                 foreach (var rushee in await GiveWaypoint(rusher, lacking, waypoint))
                 {

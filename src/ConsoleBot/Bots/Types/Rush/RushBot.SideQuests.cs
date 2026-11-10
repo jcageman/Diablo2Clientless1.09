@@ -408,7 +408,7 @@ public sealed partial class RushBot
             return false;
         }
 
-        await BuffBeforeFight(rusher, Act.Act1, _gameRushees.Select(session => session.Client));
+        await BuffBeforeFight(rusher, Area.DenOfEvil, _gameRushees.Select(session => session.Client));
         var inActOne = await Task.WhenAll(needers.Select(session => MoveRusheeToAct(session.Client, Act.Act1)));
         if (!inActOne.All(moved => moved)
             || (rusher.Game.Act != Act.Act1 && !await _townManagementService.SwitchAct(rusher, Act.Act1))

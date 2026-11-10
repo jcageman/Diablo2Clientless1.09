@@ -41,11 +41,12 @@ public sealed partial class RushBot
     private TimeSpan _sideShoutsLength = TimeSpan.FromMinutes(2);
 
     /// <summary>
-    /// A barbarian among the rushees shouts for everyone who is about to fight, in the town of the act the fight
-    /// is in. Side work runs without a crew, and the rusher went into Hell on its bare life and chickened at the
-    /// first pack. Skipped while the last shouts still have a few minutes left.
+    /// A barbarian among the rushees shouts for everyone who is about to fight, at a waypoint of the fight's act:
+    /// skills do not work in town, and every shout cast there landed on nobody while the log said shouted. All of
+    /// them take the waypoint nearest the fight, gather on the barbarian until the shouts land, and go back to
+    /// town the same way. Skipped while the last shouts still have half their length left.
     /// </summary>
-    private async Task BuffBeforeFight(Client rusher, Act act, IEnumerable<Client> fighters)
+    private async Task BuffBeforeFight(Client rusher, Area area, IEnumerable<Client> fighters)
     {
         var barbarian = _gameRushees.Select(session => session.Client)
             .FirstOrDefault(client => client.Game.IsInGame() && client.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0) > 0);
@@ -56,39 +57,58 @@ public sealed partial class RushBot
             return;
         }
 
+        var act = area.MapToAct();
+        var waypoint = await ClosestHeldWaypoint(rusher, area)
+            ?? rusher.Game.Me.AllowedWaypoints.Cast<Waypoint?>()
+                .FirstOrDefault(held => held.Value.ToArea().MapToAct() == act && !TownWaypoints.ContainsValue(held.Value));
+        if (waypoint == null)
+        {
+            Log.Warning("No field waypoint in act {Act} to shout at; {Barbarian} does not shout", act, barbarian.Game.Me.Name);
+            return;
+        }
+
         var everyone = fighters.Append(rusher).Append(barbarian).Distinct().Where(client => client.Game.IsInGame()).ToList();
-        await Task.WhenAll(everyone.Select(async client =>
+        var arrived = await Task.WhenAll(everyone.Select(async client =>
         {
-            if (!client.Game.IsInTown())
+            if (client.Game.Act != act && !await MoveRusheeToAct(client, act))
             {
-                await ReturnToTown(client);
+                return false;
             }
 
-            if (client.Game.Act != act)
-            {
-                await MoveRusheeToAct(client, act);
-            }
+            return await TakeWaypointFromTown(client, waypoint.Value) && await ConfirmInArea(client, waypoint.Value.ToArea());
         }));
+        var present = everyone.Where((_, index) => arrived[index]).ToList();
 
-        // One cast of each shout, unchecked, landed on nobody: a barbarian just off the waypoint has its casts
-        // dropped like any other, and a Hell rusher went out without Battle Orders after a logged shout.
+        // A barbarian just off the waypoint has its casts dropped like any other: the shouts are cast again until
+        // nobody in reach is missing them.
         var landed = false;
-        for (var attempt = 0; attempt < 4 && !landed; attempt++)
+        if (present.Contains(barbarian))
         {
-            var spot = barbarian.Game.Me.Location;
-            await Task.WhenAll(everyone.Where(client => client != barbarian && client.Game.Act == act)
-                .Select(client => MoveTo(client, spot, MovementMode.Walking)));
-            landed = !await ClassHelpers.CastAllShouts(barbarian);
-            if (!landed)
+            for (var attempt = 0; attempt < 4 && !landed; attempt++)
             {
-                await Task.Delay(300);
+                var spot = barbarian.Game.Me.Location;
+                await Task.WhenAll(present.Where(client => client != barbarian).Select(client => MoveTo(client, spot, MovementMode.Walking)));
+                landed = !await ClassHelpers.CastAllShouts(barbarian);
+                if (!landed)
+                {
+                    await Task.Delay(300);
+                }
             }
         }
 
+        var town = TownWaypoints[act];
+        await Task.WhenAll(present.Select(async client =>
+        {
+            if (!await _townManagementService.TakeWaypoint(client, town) || !await ConfirmInArea(client, act.MapTownArea()))
+            {
+                await ReturnToTown(client);
+            }
+        }));
+
         _sideShoutsUntil = ShoutsExpireAt(barbarian) ?? DateTime.Now + TimeSpan.FromMinutes(2);
         _sideShoutsLength = _sideShoutsUntil - DateTime.Now;
-        Log.Information("{Barbarian} shouted for {Count} before the fight in act {Act}: {Outcome}", barbarian.Game.Me.Name,
-            everyone.Count - 1, act, landed ? "landed on everyone" : "did NOT land on everyone");
+        Log.Information("{Barbarian} shouted for {Count} at the {Waypoint} waypoint before the fight in {Area}: {Outcome}",
+            barbarian.Game.Me.Name, present.Count - 1, waypoint.Value, area, landed ? "landed on everyone" : "did NOT land on everyone");
     }
 
     /// <summary>To an area the way a player goes: the closest waypoint held, then on foot.</summary>
@@ -122,7 +142,7 @@ public sealed partial class RushBot
         var act = npc == NPCCode.Charsi ? Act.Act1 : area.MapToAct();
         if (!Holds(creator, item))
         {
-            await BuffBeforeFight(rusher, area.MapToAct(), _gameRushees.Select(session => session.Client));
+            await BuffBeforeFight(rusher, area, _gameRushees.Select(session => session.Client));
             if (!await ReachArea(rusher, area) || !await MoveToObject(rusher, stand, area))
             {
                 Log.Warning("The rusher could not reach {Stand} in {Area}", stand, area);
@@ -434,7 +454,7 @@ public sealed partial class RushBot
         fighters.AddRange(_gameRushees.Select(session => session.Client)
             .Where(client => !needing.Contains(client) && client.Game.IsInGame()));
 
-        await BuffBeforeFight(rusher, area.MapToAct(), fighters);
+        await BuffBeforeFight(rusher, area, fighters);
         if (boss == NPCCode.OverSeer)
         {
             if (!await ReturnToTown(rusher) || (rusher.Game.Act != Act.Act5 && !await _townManagementService.SwitchAct(rusher, Act.Act5)))

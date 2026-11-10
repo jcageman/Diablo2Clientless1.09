@@ -38,7 +38,7 @@ public sealed partial class RushBot
         fighters.AddRange(_gameRushees.Select(session => session.Client)
             .Where(client => !fighters.Contains(client) && client.Game.IsInGame()));
 
-        await BuffBeforeFight(rusher, Act.Act5, fighters);
+        await BuffBeforeFight(rusher, Area.ArreatSummit, fighters);
         var inActFive = await Task.WhenAll(fighters.Select(fighter => MoveRusheeToAct(fighter, Act.Act5)));
         if (!inActFive[fighters.IndexOf(creator)])
         {
