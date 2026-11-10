@@ -58,6 +58,14 @@ public sealed partial class RushBot
         }
 
         var act = area.MapToAct();
+
+        // The held waypoints are known only once a menu has opened in this game.
+        if (rusher.Game.Me.AllowedWaypoints.IsEmpty && (rusher.Game.Act == act || await MoveRusheeToAct(rusher, act))
+            && (rusher.Game.IsInTown() || await ReturnToTown(rusher)))
+        {
+            await ReadTownWaypoints(rusher);
+        }
+
         var waypoint = await ClosestHeldWaypoint(rusher, area)
             ?? rusher.Game.Me.AllowedWaypoints.Cast<Waypoint?>()
                 .FirstOrDefault(held => held.Value.ToArea().MapToAct() == act && !TownWaypoints.ContainsValue(held.Value));
