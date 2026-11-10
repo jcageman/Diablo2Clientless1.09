@@ -1080,8 +1080,29 @@ public sealed partial class RushBot : IBotInstance
             return null;
         }
 
-        await client.Game.MoveToAsync(townWaypoint);
-        return client.Game.ReadWaypoints(townWaypoint);
+        // Seven rushees crowd the one waypoint at once, and MoveToAsync does nothing past 20 units: on one try two
+        // of them never opened the menu and were left out of a whole difficulty's handout.
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            if (attempt == 0)
+            {
+                await client.Game.MoveToAsync(townWaypoint);
+            }
+            else
+            {
+                client.Game.RequestUpdate(client.Game.Me.Id);
+                await Task.Delay(200);
+                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, townWaypoint, MovementMode.Walking);
+            }
+
+            var held = client.Game.ReadWaypoints(townWaypoint);
+            if (held != null)
+            {
+                return held;
+            }
+        }
+
+        return null;
     }
 
     private async Task<Client> LoginAndSelect(AccountConfig account)
