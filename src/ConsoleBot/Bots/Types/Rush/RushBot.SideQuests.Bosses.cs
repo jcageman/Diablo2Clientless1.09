@@ -37,6 +37,9 @@ public sealed partial class RushBot
     /// <summary>When the shouts cast in this game wear off; side work has no crew, so a barbarian rushee shouts.</summary>
     private DateTime _sideShoutsUntil = DateTime.MinValue;
 
+    /// <summary>How long the last shouts lasted when cast.</summary>
+    private TimeSpan _sideShoutsLength = TimeSpan.FromMinutes(2);
+
     /// <summary>
     /// A barbarian among the rushees shouts for everyone who is about to fight, in the town of the act the fight
     /// is in. Side work runs without a crew, and the rusher went into Hell on its bare life and chickened at the
@@ -46,7 +49,9 @@ public sealed partial class RushBot
     {
         var barbarian = _gameRushees.Select(session => session.Client)
             .FirstOrDefault(client => client.Game.IsInGame() && client.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0) > 0);
-        if (barbarian == null || _sideShoutsUntil - DateTime.Now > TimeSpan.FromMinutes(3))
+        // Shouts lasting 160s were renewed before every waypoint against a fixed three minute margin.
+        var margin = TimeSpan.FromTicks(Math.Min(TimeSpan.FromMinutes(3).Ticks, _sideShoutsLength.Ticks / 2));
+        if (barbarian == null || _sideShoutsUntil - DateTime.Now > margin)
         {
             return;
         }
@@ -65,12 +70,25 @@ public sealed partial class RushBot
             }
         }));
 
-        var spot = barbarian.Game.Me.Location;
-        await Task.WhenAll(everyone.Where(client => client != barbarian && client.Game.Act == act)
-            .Select(client => MoveTo(client, spot, MovementMode.Walking)));
-        await ClassHelpers.CastAllShouts(barbarian);
+        // One cast of each shout, unchecked, landed on nobody: a barbarian just off the waypoint has its casts
+        // dropped like any other, and a Hell rusher went out without Battle Orders after a logged shout.
+        var landed = false;
+        for (var attempt = 0; attempt < 4 && !landed; attempt++)
+        {
+            var spot = barbarian.Game.Me.Location;
+            await Task.WhenAll(everyone.Where(client => client != barbarian && client.Game.Act == act)
+                .Select(client => MoveTo(client, spot, MovementMode.Walking)));
+            landed = !await ClassHelpers.CastAllShouts(barbarian);
+            if (!landed)
+            {
+                await Task.Delay(300);
+            }
+        }
+
         _sideShoutsUntil = ShoutsExpireAt(barbarian) ?? DateTime.Now + TimeSpan.FromMinutes(2);
-        Log.Information("{Barbarian} shouted for {Count} before the fight in act {Act}", barbarian.Game.Me.Name, everyone.Count - 1, act);
+        _sideShoutsLength = _sideShoutsUntil - DateTime.Now;
+        Log.Information("{Barbarian} shouted for {Count} before the fight in act {Act}: {Outcome}", barbarian.Game.Me.Name,
+            everyone.Count - 1, act, landed ? "landed on everyone" : "did NOT land on everyone");
     }
 
     /// <summary>To an area the way a player goes: the closest waypoint held, then on foot.</summary>
