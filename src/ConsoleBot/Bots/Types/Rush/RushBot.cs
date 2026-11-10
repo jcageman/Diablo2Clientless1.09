@@ -6272,6 +6272,7 @@ public sealed partial class RushBot : IBotInstance
     {
         var timer = Stopwatch.StartNew();
         var kiteTimer = Stopwatch.StartNew();
+        var killingElements = KillingElements(rusher);
         while (timer.Elapsed < limit && rusher.Game.IsInGame())
         {
             if (await KeepArmorUp(rusher))
@@ -6286,6 +6287,13 @@ public sealed partial class RushBot : IBotInstance
             foreach (var hostile in NearbyHostiles(rusher, radius))
             {
                 if (hostile.Location.Distance(centre) > radius)
+                {
+                    continue;
+                }
+
+                // A monster immune to what kills is left for whoever fights next: a cold immune ate a whole clear
+                // while the killable ones went on hitting.
+                if (killingElements.Count > 0 && killingElements.All(element => _attackService.IsImmuneTo(rusher, hostile, element)))
                 {
                     continue;
                 }
@@ -6329,6 +6337,27 @@ public sealed partial class RushBot : IBotInstance
 
             await AlternateOrbAndStatic(rusher, target);
         }
+    }
+
+    /// <summary>
+    /// The elements the rusher's attack kills with: the orb or Blizzard for cold, Nova for lightning. Static Field
+    /// only takes a share of life and kills nothing.
+    /// </summary>
+    private static List<ResistType> KillingElements(Client client)
+    {
+        var me = client.Game.Me;
+        var elements = new List<ResistType>();
+        if (me.HasSkill(Skill.FrozenOrb) || me.HasSkill(Skill.Blizzard))
+        {
+            elements.Add(ResistType.Cold);
+        }
+
+        if (me.HasSkill(Skill.Nova))
+        {
+            elements.Add(ResistType.Lightning);
+        }
+
+        return elements;
     }
 
     /// <summary>Healing potions worth carrying before the floor is left alone.</summary>
