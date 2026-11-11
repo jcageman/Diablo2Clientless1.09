@@ -70,7 +70,10 @@ internal class ActData
         var npc = new WorldObject(EntityType.NPC, packet.EntityId, 0, packet.Location, EntityState.Alive, 0)
         {
             NPCCode = packet.UniqueCode,
-            MonsterEnchantments = packet.MonsterEnchantments
+            MonsterEnchantments = packet.MonsterEnchantments,
+            IsBoss = packet.IsBoss,
+            IsChampion = packet.IsChampion,
+            IsBossMinion = packet.IsBossMinion
         };
         AddWorldObject(npc);
     }

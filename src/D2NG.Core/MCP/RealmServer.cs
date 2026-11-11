@@ -47,7 +47,7 @@ public sealed class RealmServer : IDisposable
     internal void Connect(IPAddress ip, short port)
     {
         Connection.Connect(ip, port);
-        _listener = new Thread(Listen);
+        _listener = new Thread(Listen) { IsBackground = true };
         _listener.Start();
     }
 

@@ -65,8 +65,11 @@ public static class WaypointExtensions
         Waypoint.FrigidHighlands,
         Waypoint.ArreatPlateau,
         Waypoint.CrystallinePassage,
-        Waypoint.HallsOfPain,
+        // Glacial Trail before Halls of Pain, whatever the panel shows: a rusher that had just touched the
+        // Glacial Trail waypoint, and could not reach the Halls of Pain at all, read back bit 34 set and 35
+        // clear.
         Waypoint.GlacialTrail,
+        Waypoint.HallsOfPain,
         Waypoint.FrozenTundra,
         Waypoint.TheAncientsWay,
         Waypoint.TheWorldStoneKeepLevel2,
@@ -148,7 +151,7 @@ public static class WaypointExtensions
             Waypoint.BlackMarsh => EntityCode.WaypointAct1,
             Waypoint.OuterCloister => EntityCode.WaypointAct1,
             Waypoint.JailLevel1 => EntityCode.WaypointAct1JailAndUp,
-            Waypoint.InnerCloister => EntityCode.WaypointAct1JailAndUp,
+            Waypoint.InnerCloister => EntityCode.WaypointAct1,
             Waypoint.CatacombsLevel2 => EntityCode.WaypointAct1JailAndUp,
             Waypoint.LutGholein => EntityCode.WaypointAct2,
             Waypoint.SewersLevel2 => EntityCode.WaypointAct2Sewer,
@@ -172,12 +175,12 @@ public static class WaypointExtensions
             Waypoint.CityOfTheDamned => EntityCode.WaypointAct4Levels,
             Waypoint.RiverOfFlame => EntityCode.WaypointAct4Levels,
             Waypoint.Harrogath => EntityCode.WaypointAct5,
-            Waypoint.FrigidHighlands => EntityCode.WaypointAct5,
-            Waypoint.ArreatPlateau => EntityCode.WaypointAct5,
+            Waypoint.FrigidHighlands => EntityCode.WaypointAct5Wilderness,
+            Waypoint.ArreatPlateau => EntityCode.WaypointAct5Wilderness,
             Waypoint.CrystallinePassage => EntityCode.WaypointAct5Glacial,
             Waypoint.GlacialTrail => EntityCode.WaypointAct5Glacial,
-            Waypoint.HallsOfPain => EntityCode.WaypointAct5Glacial,
-            Waypoint.FrozenTundra => EntityCode.WaypointAct5Glacial,
+            Waypoint.HallsOfPain => EntityCode.WaypointAct5Wilderness,
+            Waypoint.FrozenTundra => EntityCode.WaypointAct5Wilderness,
             Waypoint.TheAncientsWay => EntityCode.WaypointAct5Glacial,
             Waypoint.TheWorldStoneKeepLevel2 => EntityCode.WaypointAct5Baal,
             _ => throw new ArgumentOutOfRangeException(nameof(waypoint), waypoint, null)

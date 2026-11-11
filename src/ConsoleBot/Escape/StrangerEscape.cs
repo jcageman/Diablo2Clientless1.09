@@ -1,4 +1,4 @@
-using ConsoleBot.Clients.ExternalMessagingClient;
+﻿using ConsoleBot.Clients.ExternalMessagingClient;
 using D2NG.Core;
 using D2NG.Core.BNCS.Packet;
 using D2NG.Core.D2GS.Enums;
@@ -36,6 +36,12 @@ public static class StrangerEscape
     public static bool FleeRequested => Volatile.Read(ref _fleeRequested) == 1;
 
     public static string Reason { get; private set; }
+
+    /// <summary>
+    /// Makes a whisper leave the game at once, like a stranger joining. For a bot whose run is one long
+    /// chain - the rush - "finish the run" would keep it in the game for half an hour after being noticed.
+    /// </summary>
+    public static bool FleeOnWhisper { get; set; }
 
     /// <summary>
     /// The leave and the message, which run off the listener thread. Awaited before the process ends,
@@ -96,8 +102,8 @@ public static class StrangerEscape
 
         RequestStop(
             $"{client.LoggedInUserName()} was whispered by {packet.Username}: \"{packet.Text}\"",
-            "Finishing the run, then stopping the bot without muling.",
-            flee: false);
+            FleeOnWhisper ? "Left the game, stopping the bot." : "Finishing the run, then stopping the bot without muling.",
+            flee: FleeOnWhisper);
     }
 
     private static void OnEventMessage(Client client, EventNotifyPacket packet)

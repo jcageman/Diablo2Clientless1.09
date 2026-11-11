@@ -764,7 +764,11 @@ public class AttackService : IAttackService
         }
         else if (me.HasSkill(Skill.Might) || me.HasSkill(Skill.Concentration) || me.HasSkill(Skill.Fanaticism))
         {
-            var damageSkill = me.HasSkill(Skill.Fanaticism) ? Skill.Fanaticism : me.HasSkill(Skill.Concentration) ? Skill.Concentration : Skill.Might;
+            // Fanaticism speeds up the party's melee; a hammer paladin fighting for himself is better off with
+            // Concentration, which adds to Blessed Hammer itself.
+            var fightsAlone = player.Id == me.Id && me.Skills.GetValueOrDefault(Skill.BlessedHammer) >= 20 && me.HasSkill(Skill.Concentration);
+            var damageSkill = fightsAlone ? Skill.Concentration
+                : me.HasSkill(Skill.Fanaticism) ? Skill.Fanaticism : me.HasSkill(Skill.Concentration) ? Skill.Concentration : Skill.Might;
             if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != damageSkill)
             {
                 _logger.LogInformation("Changing from {CurrentSkill} to {DamageSkill}", currentSkill, damageSkill);

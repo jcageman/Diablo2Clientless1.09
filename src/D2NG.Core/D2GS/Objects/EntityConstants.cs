@@ -32,9 +32,18 @@ public static class EntityConstants
     public static readonly HashSet<EntityCode> WayPointEntityCodes =
     [
         EntityCode.WaypointAct1,
+        EntityCode.WaypointAct1JailAndUp,
         EntityCode.WaypointAct2,
+        EntityCode.WaypointAct2Sewer,
+        EntityCode.WaypointAct2Cellar,
+        EntityCode.WaypointAct2Arcane,
         EntityCode.WaypointAct3,
+        EntityCode.WaypointAct3Durance,
         EntityCode.WaypointAct4,
+        EntityCode.WaypointAct4Levels,
         EntityCode.WaypointAct5,
+        EntityCode.WaypointAct5Glacial,
+        EntityCode.WaypointAct5Baal,
+        EntityCode.WaypointAct5Wilderness,
     ];
 }

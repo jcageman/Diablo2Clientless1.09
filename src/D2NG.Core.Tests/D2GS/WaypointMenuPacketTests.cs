@@ -96,6 +96,30 @@ public class WaypointMenuPacketTests
         Assert.Empty(allowed.Intersect(expansion));
     }
 
+    /// <summary>
+    /// Captured from an expansion rusher holding every waypoint but the Halls of Pain, which only Anya's
+    /// portal reaches: bit 34 set, bit 35 clear. Read in the panel's order this claimed the Halls of Pain
+    /// and denied the Glacial Trail it had just touched.
+    /// </summary>
+    [Fact]
+    public void ReadsGlacialTrailBeforeHallsOfPain()
+    {
+        byte[] menu =
+        [
+            0x63,
+            0x6B, 0x00, 0x00, 0x00,
+            0x02, 0x01,
+            0xFF, 0xFF, 0xFF, 0xFF, 0x77, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        ];
+
+        var allowed = new WaypointMenuPacket(new D2gsPacket(menu)).AllowedWaypoints;
+
+        Assert.Contains(Waypoint.GlacialTrail, allowed);
+        Assert.DoesNotContain(Waypoint.HallsOfPain, allowed);
+        Assert.Contains(Waypoint.FrozenTundra, allowed);
+        Assert.Contains(Waypoint.TheWorldStoneKeepLevel2, allowed);
+    }
+
     [Fact]
     public void CoversEveryWaypointExactlyOnce()
     {

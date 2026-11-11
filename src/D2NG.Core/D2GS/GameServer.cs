@@ -144,7 +144,7 @@ internal class GameServer : IDisposable
     public void Connect(IPAddress ip)
     {
         Connection.Connect(ip, Port);
-        _listener = new Thread(Listen);
+        _listener = new Thread(Listen) { IsBackground = true };
         _listener.Start();
     }
 

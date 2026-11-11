@@ -21,6 +21,8 @@ public enum EntityCode : ushort
     Stash = 267,
     WirtsBody = 268,
     ArcanePortal = 298,
+    /// <summary>Horazon's journal in the Arcane Sanctuary; reading it opens the red portal to the Canyon of the Magi.</summary>
+    HorazonsJournal = 357,
 
     /// <summary>
     /// Portal from the durance of hate to the pandemonium fortress, the act 3 to 4 transition. Taken
@@ -28,7 +30,38 @@ public enum EntityCode : ushort
     /// </summary>
     PandemoniumFortressPortal = 342,
 
+    /// <summary>The Horadric Malus on its stand in the Barracks; operated, it drops the malus.</summary>
+    HoradricMalusStand = 108,
+
+    /// <summary>Lam Esen's tome on its stand in the Ruined Temple; operated, it drops the tome.</summary>
+    LamEsensTomeStand = 193,
+
     HoradricCubeChest = 354,
+
+    /// <summary>The Horadric scroll chest in the Sewers level 3, where Radament stands guard.</summary>
+    HoradricScrollChest = 355,
+
+    /// <summary>The preset spot in the Frozen River where frozen Anya is put once the quest is under way.</summary>
+    AnyaStartOutsideTown = 460,
+
+    /// <summary>Frozen Anya; operated by a player carrying Malah's potion, she is freed.</summary>
+    FrozenAnya = 558,
+
+    /// <summary>The altar on Arreat Summit that wakes the Ancients.</summary>
+    AncientsAltar = 546,
+
+    /// <summary>The five Cairn Stones in the Stony Field; operated in the right order with the key, they open Tristram.</summary>
+    CairnStoneAlpha = 17,
+    CairnStoneBeta = 18,
+    CairnStoneGamma = 19,
+    CairnStoneDelta = 20,
+    CairnStoneLambda = 21,
+
+    /// <summary>The cage Cain hangs in, in Tristram; operating it frees him.</summary>
+    CainGibbet = 26,
+
+    /// <summary>The tree in the Dark Wood; operated, it drops the Scroll of Inifuss.</summary>
+    InifussTree = 30,
     StaffOfKingsChest = 356,
     Hratli = 379,
     RightSeal1 = 392,
@@ -41,6 +74,9 @@ public enum EntityCode : ushort
     WaypointAct5 = 429,
     WaypointAct5Glacial = 511,
     WaypointAct5Baal = 494,
-    BaalPortal = 563
+    /// <summary>The waypoint of act 5's outdoor levels: Frigid Highlands, Arreat Plateau, Frozen Tundra, Halls of Pain.</summary>
+    WaypointAct5Wilderness = 496,
+    BaalPortal = 563,
+    LastLastPortal = 566
 
 }

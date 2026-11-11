@@ -1,9 +1,11 @@
 ﻿using ConsoleBot.Attack;
 using ConsoleBot.Chicken;
 using ConsoleBot.Enums;
+using ConsoleBot.Escape;
 using ConsoleBot.Helpers;
 using ConsoleBot.TownManagement;
 using D2NG.Core;
+using D2NG.Core.SkillData;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
@@ -31,7 +33,7 @@ using System.Threading.Tasks;
 
 namespace ConsoleBot.Bots.Types.Rush;
 
-public sealed class RushBot : IBotInstance
+public sealed partial class RushBot : IBotInstance
 {
     private const int AreaHopAttempts = 3;
     private const double TeleportNoOpRange = 10;
@@ -55,7 +57,16 @@ public sealed class RushBot : IBotInstance
     private const int MephistoStagingOffsetFromRedPortalY = 17;
     private const double MephistoStagingClearance = 45;
     private const ushort DurielDefeatedBit = 0x0020;
-    private const ushort DiabloDefeatedBit = 0x4000;
+    private const double DiabloCreditSpotFromStar = 20;
+    private static readonly TimeSpan RecentShouts = TimeSpan.FromSeconds(90);
+    private const double ShoutReach = 10;
+    private const double LiveObjectReach = 150;
+    private const double WaypointClearRadius = 25;
+    private static readonly TimeSpan WaypointClearLimit = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ShoutsMustOutlastAnAct = TimeSpan.FromMinutes(4);
+    private DateTime _lastShoutsAt = DateTime.MinValue;
+    private DateTime? _shoutsExpireAt;
+    private SkillTable _skillTable;
     private const double RusheeHealBelowFraction = 0.70;
     private const uint WarrivsAndarielMessage = 0xB7;
     private const uint TyraelsSevenTombsMessage = 0x012E;
@@ -64,6 +75,10 @@ public sealed class RushBot : IBotInstance
     // A real 1.09 client completing act 4 sends Tyrael exactly one message and nothing else.
     // Captured 2026-08-30 from a client that took Brisara from progression 3 to Nightmare.
     private static readonly uint[] ActFourTyraelMessages = [0x02AC];
+    // In an expansion game Tyrael's closing line is scroll message 20000, and answering it is what makes
+    // him open the red portal to Harrogath beside him (D2MOO A4Q2.cpp, ACT4Q2_Callback11_ScrollMessage).
+    private const uint ActFourTyraelHarrogathMessage = 0x4E20;
+    private const uint HorazonsJournalMessage = 396;
     private static readonly Point JerhynCourtyard = new Point(5096, 5141);
     private static readonly TimeSpan SealKillLimit = TimeSpan.FromSeconds(75);
     /// <summary>Act bosses take far longer above Normal, so one limit covers them all.</summary>
@@ -86,6 +101,13 @@ public sealed class RushBot : IBotInstance
     /// <summary>Below this many healing potions the rusher shops rather than fighting on.</summary>
     private const int RestockPotionFloor = 8;
     private static readonly TimeSpan DiabloKillLimit = TimeSpan.FromSeconds(300);
+    private static readonly TimeSpan WaveClearLimit = TimeSpan.FromMinutes(8);
+    private static readonly TimeSpan ThroneClearLimit = TimeSpan.FromMinutes(3);
+    private const double HoldSpotTolerance = 15;
+    /// <summary>How far in front of Baal's throne the waves are held, so they arrive in reach.</summary>
+    private const short ThroneStandOff = 25;
+    /// <summary>Ranged wave monsters never close on their own, so anything this near is gone after.</summary>
+    private const double WaveEngageRange = 40;
     private static readonly TimeSpan OrbCooldown = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan StaleBlockerProbeAfter = TimeSpan.FromSeconds(6);
     private static readonly TimeSpan StaleBlockerIgnoreAfter = TimeSpan.FromSeconds(12);
@@ -124,7 +146,8 @@ public sealed class RushBot : IBotInstance
         {
             [Act.Act2] = (109, -31),
             [Act.Act3] = (-1, 19),
-            [Act.Act4] = (2, 24)
+            [Act.Act4] = (2, 24),
+            [Act.Act5] = (-14, -44)
         };
     private static readonly Dictionary<Act, EntityCode> TownWaypointByAct =
         new Dictionary<Act, EntityCode>
@@ -132,7 +155,8 @@ public sealed class RushBot : IBotInstance
             [Act.Act1] = EntityCode.WaypointAct1,
             [Act.Act2] = EntityCode.WaypointAct2,
             [Act.Act3] = EntityCode.WaypointAct3,
-            [Act.Act4] = EntityCode.WaypointAct4
+            [Act.Act4] = EntityCode.WaypointAct4,
+            [Act.Act5] = EntityCode.WaypointAct5
         };
 
     private readonly BotConfiguration _botConfiguration;
@@ -162,6 +186,7 @@ public sealed class RushBot : IBotInstance
     private const Difficulty MapDifficulty = Difficulty.Normal;
 
     private Difficulty _gameDifficulty;
+    private bool _expansion;
 
     /// <summary>Account behind each joined client, so a chickened client can be put back in the game.</summary>
     private readonly Dictionary<Client, AccountConfig> _accountOf = [];
@@ -208,6 +233,7 @@ public sealed class RushBot : IBotInstance
         }
 
         _hasRun = true;
+        StrangerEscape.FleeOnWhisper = true;
         _accountOf.Clear();
         _partyClients.Clear();
         _rejoinsUsed.Clear();
@@ -239,6 +265,19 @@ public sealed class RushBot : IBotInstance
                 .OrderBy(entry => entry.Progression.CompletedActs)
                 .ToList();
 
+            // A rushee already at the destination still gets the side work - waypoints - in a game of its
+            // own: there is no rush left, but there is no reason to hand it nothing.
+            var sideWorkOnly = eligible.Count == 0
+                && (_rushConfiguration.GivesWaypoints || _rushConfiguration.SideQuests?.ToLowerInvariant() == "all");
+            if (sideWorkOnly)
+            {
+                eligible = roster
+                    .Where(entry => !ReferenceEquals(entry.Account, _rushConfiguration.Rusher))
+                    .OrderBy(entry => entry.Progression.CompletedActs)
+                    .ToList();
+                Log.Information("Every rushee is at the destination already; only the side work is left");
+            }
+
             if (eligible.Count == 0)
             {
                 await VerifyDestinationGame(
@@ -250,90 +289,15 @@ public sealed class RushBot : IBotInstance
 
             var hostEntry = eligible[0];
             _gameDifficulty = rehearsal ?? hostEntry.Progression.CurrentDifficulty;
-            var host = await EnterHostGame(hostEntry, clients);
-            var rusher = await JoinParticipant(_rushConfiguration.Rusher, clients, attachChicken: true);
 
-            _crew.Clear();
-            foreach (var member in _rushConfiguration.Crew ?? [])
+            if (sideWorkOnly)
             {
-                _crew.Add(await JoinParticipant(member, clients, attachChicken: true));
+                await RunSideWork(eligible, clients);
+                return;
             }
 
-            var rushees = new List<ParticipantSession> { new ParticipantSession(hostEntry, host) };
-
-            foreach (var entry in eligible.Skip(1))
-            {
-                var client = await JoinParticipant(entry.Account, clients, attachChicken: false);
-                rushees.Add(new ParticipantSession(entry, client));
-            }
-
-            await VerifyParty(
-                host,
-                rusher,
-                rushees.Select(session => session.Client).Concat(_crew).ToList());
-
-            // Stock up before anything else. The rusher joins with whatever its belt held when it last
-            // left, and ChickenService pulls it straight back out if that is nothing - it left twenty
-            // seconds after joining, never drinking once and never reaching the per-phase restock.
-            // Recover bodies first. A character that died last game joins standing next to its corpse,
-            // and until it is picked up the character is without whatever it was wearing. Waiting for
-            // the phase pre-stage is too late - that can be minutes away behind the shopping.
-            foreach (var session in rushees)
-            {
-                // Log what the client believes about its body before trying. A corpse was visibly on
-                // the ground while PickupCorpseIfExists returned instantly and silently, which means
-                // Me.CorpseId was null even though CorpseAssign had arrived - so the state, not the
-                // walking, is what to look at.
-                Log.Information(
-                    "CORPSE {Rushee}: corpseId={CorpseId}, players={Players}, me={MeId} at {Location}",
-                    session.Client.Game.Me.Name,
-                    session.Client.Game.Me.CorpseId?.ToString() ?? "none",
-                    string.Join("/", session.Client.Game.Players.Select(player => $"{player.Id}:{player.Name}")),
-                    session.Client.Game.Me.Id,
-                    session.Client.Game.Me.Location);
-
-                await GeneralHelpers.PickupCorpseIfExists(session.Client, _pathingService);
-            }
-
-            foreach (var member in _crew.Where(candidate => candidate.Game.IsInGame()))
-            {
-                await GeneralHelpers.PickupCorpseIfExists(member, _pathingService);
-            }
-
-            await GeneralHelpers.PickupCorpseIfExists(rusher, _pathingService);
-
-            // Everyone works at once. The rushees have no shopping to do, so they start walking to the
-            // portal spot immediately; each crew member shops and then walks. By the time the rusher
-            // has travelled and put a portal up, the followers are already standing on the spot -
-            // doing this serially left them idle in town for the whole restock.
-            var gettingReady = new List<Task> { RestockRusher(rusher, rusher.Game.Act) };
-
-            gettingReady.AddRange(rushees.Select(session => StartRusheePreStage(session.Client)));
-
-            var startingAct = rusher.Game.Act;
-            gettingReady.AddRange(_crew
-                .Where(candidate => candidate.Game.IsInGame())
-                .Select(async member =>
-                {
-                    await RestockCrewMember(member);
-                    if (member.Game.Act == startingAct || await _townManagementService.SwitchAct(member, startingAct))
-                    {
-                        await StartRusheePreStage(member);
-                    }
-                }));
-
-            await Task.WhenAll(gettingReady);
-
-            // Waypoint collection is off until ActivateWaypointHere actually registers a waypoint.
-            // It detects missing ones correctly but the interact never lands, so it walks there,
-            // fails, and the rush walks the same route again - pure overhead. TakeWaypointFromTown
-            // already falls back to walking, so nothing is lost by skipping it.
-            // await CollectMissingWaypoints(rusher);
-
-            if (!await RunFromAuthoritativeState(rusher, rushees))
-            {
-                throw new InvalidOperationException("Rush stopped at the first unsupported or failed checkpoint; see preceding evidence");
-            }
+            await PrepareRusherWaypoints();
+            var rushees = await PlayGame(hostEntry, eligible, clients, sideWorkOnly: false);
 
             if (RequiresDestinationGameProof())
             {
@@ -350,24 +314,139 @@ public sealed class RushBot : IBotInstance
         }
         finally
         {
-            foreach (var client in clients)
-            {
-                try
-                {
-                    if (client.Game.IsInGame())
-                    {
-                        await client.Game.LeaveGame();
-                        await Task.Delay(500);
-                    }
+            await CloseClients(clients);
+        }
+    }
 
-                    client.Disconnect();
-                }
-                catch (Exception exception)
+    /// <summary>
+    /// Plays one game: the host creates it, the rusher, crew and other rushees join and party, everyone gets
+    /// ready, and then the rush - or, for rushees already at the destination, only the side work.
+    /// </summary>
+    private async Task<List<ParticipantSession>> PlayGame(
+        RosterEntry hostEntry,
+        List<RosterEntry> eligible,
+        List<Client> clients,
+        bool sideWorkOnly)
+    {
+        var host = await EnterHostGame(hostEntry, clients);
+        var rusher = await JoinParticipant(_rushConfiguration.Rusher, clients, attachChicken: true);
+
+        _crew.Clear();
+        foreach (var member in _rushConfiguration.Crew ?? [])
+        {
+            _crew.Add(await JoinParticipant(member, clients, attachChicken: true));
+        }
+
+        var rushees = new List<ParticipantSession> { new ParticipantSession(hostEntry, host) };
+
+        foreach (var entry in eligible.Skip(1))
+        {
+            // A rushee that fights can die, and at the levels side work is done on that costs far more than a chicken.
+            var client = await JoinParticipant(entry.Account, clients, attachChicken: _rushConfiguration.RusheeFights);
+            rushees.Add(new ParticipantSession(entry, client));
+        }
+
+        await VerifyParty(
+            host,
+            rusher,
+            rushees.Select(session => session.Client).Concat(_crew).ToList());
+
+        // Stock up before anything else. The rusher joins with whatever its belt held when it last
+        // left, and ChickenService pulls it straight back out if that is nothing - it left twenty
+        // seconds after joining, never drinking once and never reaching the per-phase restock.
+        // Recover bodies first. A character that died last game joins standing next to its corpse,
+        // and until it is picked up the character is without whatever it was wearing. Waiting for
+        // the phase pre-stage is too late - that can be minutes away behind the shopping.
+        foreach (var session in rushees)
+        {
+            // Log what the client believes about its body before trying. A corpse was visibly on
+            // the ground while PickupCorpseIfExists returned instantly and silently, which means
+            // Me.CorpseId was null even though CorpseAssign had arrived - so the state, not the
+            // walking, is what to look at.
+            Log.Information(
+                "CORPSE {Rushee}: corpseId={CorpseId}, players={Players}, me={MeId} at {Location}",
+                session.Client.Game.Me.Name,
+                session.Client.Game.Me.CorpseId?.ToString() ?? "none",
+                string.Join("/", session.Client.Game.Players.Select(player => $"{player.Id}:{player.Name}")),
+                session.Client.Game.Me.Id,
+                session.Client.Game.Me.Location);
+
+            await GeneralHelpers.PickupCorpseIfExists(session.Client, _pathingService);
+        }
+
+        foreach (var member in _crew.Where(candidate => candidate.Game.IsInGame()))
+        {
+            await GeneralHelpers.PickupCorpseIfExists(member, _pathingService);
+        }
+
+        await GeneralHelpers.PickupCorpseIfExists(rusher, _pathingService);
+
+        // Everyone works at once. The rushees have no shopping to do, so they start walking to the
+        // portal spot immediately; each crew member shops and then walks. By the time the rusher
+        // has travelled and put a portal up, the followers are already standing on the spot -
+        // doing this serially left them idle in town for the whole restock.
+        var gettingReady = new List<Task> { RestockRusher(rusher, rusher.Game.Act) };
+
+        if (!sideWorkOnly)
+        {
+            gettingReady.AddRange(rushees.Select(session => StartRusheePreStage(session.Client)));
+        }
+
+        var startingAct = rusher.Game.Act;
+        gettingReady.AddRange(_crew
+            .Where(candidate => candidate.Game.IsInGame())
+            .Select(async member =>
+            {
+                await RestockCrewMember(member);
+                if (member.Game.Act == startingAct || await _townManagementService.SwitchAct(member, startingAct))
                 {
-                    Log.Warning(exception, "Failed to close a rush client cleanly");
+                    await StartRusheePreStage(member);
                 }
+            }));
+
+        await Task.WhenAll(gettingReady);
+
+        if (!sideWorkOnly && !await RunFromAuthoritativeState(rusher, rushees))
+        {
+            throw new InvalidOperationException("Rush stopped at the first unsupported or failed checkpoint; see preceding evidence");
+        }
+
+        if (_rushConfiguration.SideQuests?.ToLowerInvariant() == "all")
+        {
+            await Timed("side-quests", () => RunSideQuests(rusher, rushees));
+        }
+
+        // Again in any game where Anya was freed: only there does her portal lead to the Halls of Pain.
+        if (_rushConfiguration.GivesWaypoints && (!_waypointsHandedOut || _anyaFreedThisGame))
+        {
+            _waypointsHandedOut = true;
+            await Timed("give-waypoints", () => GiveWaypoints(rusher, rushees));
+        }
+
+        return rushees;
+    }
+
+    private static async Task CloseClients(List<Client> clients)
+    {
+        foreach (var client in clients)
+        {
+            try
+            {
+                if (client.Game.IsInGame())
+                {
+                    await client.Game.LeaveGame();
+                    await Task.Delay(500);
+                }
+
+                client.Disconnect();
+            }
+            catch (Exception exception)
+            {
+                Log.Warning(exception, "Failed to close a rush client cleanly");
             }
         }
+
+        clients.Clear();
     }
 
     private async Task<List<RosterEntry>> ReadRoster()
@@ -452,15 +531,18 @@ public sealed class RushBot : IBotInstance
             && destination.Milestone == RushMilestone.Enter
             && destination.Difficulty > Difficulty.Normal;
 
+        _expansion = !classic;
+        var throughActFive = destination.Act >= 3 && destination.Difficulty <= Difficulty.Nightmare;
         var supported = classic
             ? (destination.Difficulty <= Difficulty.Nightmare && throughTheActs) || startOfADifficulty
-            : destination.Difficulty == Difficulty.Normal && throughTheActs;
+            : throughActFive || startOfADifficulty;
         if (!supported)
         {
             throw new ValidationException(
                 "Production rush supports the Classic Act 1 through Hell Act 1 path: Act 3 Enter or "
                 + "Act 4 Enter/Complete on Normal or Nightmare, and Act 1 Enter on Nightmare or Hell. "
-                + "Expansion is limited to Normal, and Act 5 is not implemented.");
+                + "Expansion supports Act 3 Enter through Act 5 Complete on Normal or Nightmare, and Act 1 Enter on "
+                + "Nightmare or Hell.");
         }
     }
 
@@ -503,6 +585,15 @@ public sealed class RushBot : IBotInstance
         }
 
         host.Game.CleanupCursorItem();
+        if (_rushConfiguration.RusheeFights)
+        {
+            ChickenService.Attach(host, hostEntry.Account.Chicken ?? _botConfiguration.Chicken);
+        }
+
+        // So a creator that chickens can come back into its own game, which lives on while the others are in it.
+        _accountOf[host] = hostEntry.Account;
+        _partyClients.Add(host);
+
         await Task.Delay(500);
         CurrentGameName = gameName;
         Log.Information(
@@ -567,6 +658,457 @@ public sealed class RushBot : IBotInstance
         return client;
     }
 
+    /// <summary>
+    /// Collects the field waypoints the rush route depends on, in a game the rusher creates itself. In the
+    /// rushee's game the way to some of them is shut: the Travincal stairs open only when the game's creator
+    /// has finished Khalim's Will (D2MOO A3Q5.cpp, PlayerStartedGame), and the Ancients' gate likewise. A rusher
+    /// that has finished the difficulty finds every gate open in its own game, and keeps the waypoints.
+    /// </summary>
+    private async Task PrepareRusherWaypoints()
+    {
+        List<Waypoint> needed = [Waypoint.CanyonOfTheMagi, Waypoint.DuranceOfHateLevel2, Waypoint.RiverOfFlame];
+        if (_expansion)
+        {
+            needed.Add(Waypoint.TheWorldStoneKeepLevel2);
+        }
+
+        if (_rushConfiguration.GivesWaypoints)
+        {
+            needed = WaypointExtensions.BitOrder
+                .Where(waypoint => needed.Contains(waypoint) || WaypointsToGive().Contains(waypoint))
+                .ToList();
+        }
+
+        var account = _rushConfiguration.Rusher;
+        var client = await LoginAndSelect(account);
+        try
+        {
+            // Roll on past a name the realm still holds open, as the rush game itself does.
+            string gameName = null;
+            var created = false;
+            for (var attempt = 0; attempt < 5 && !created; attempt++)
+            {
+                gameName = $"{_botConfiguration.GameNamePrefix}{_gameNumber++}";
+                created = await client.CreateGame(_gameDifficulty, gameName, _botConfiguration.GamePassword, _botConfiguration.GameDescriptions[0]);
+                if (!created)
+                {
+                    await Task.Delay(1000);
+                }
+            }
+
+            if (!created || !GeneralHelpers.TryWithTimeout(_ => client.Game.Me != null, TimeSpan.FromSeconds(10)))
+            {
+                Log.Warning("The rusher could not create a game up to {Game} to collect waypoints; rushing without them", gameName);
+                return;
+            }
+
+            ChickenService.Attach(client, account.Chicken ?? _botConfiguration.Chicken);
+            await Task.Delay(1000);
+            await RestockRusher(client, client.Game.Act);
+            var held = await ReadTownWaypoints(client);
+            if (held == null)
+            {
+                Log.Warning("The rusher's waypoint menu did not open; rushing without collecting waypoints");
+                return;
+            }
+
+            var missing = needed.Where(waypoint => !held.Contains(waypoint)).ToList();
+            Log.Information(
+                "Rusher waypoints on {Difficulty}: missing {Missing}",
+                _gameDifficulty,
+                missing.Count == 0 ? "none" : string.Join(", ", missing));
+            foreach (var waypoint in missing)
+            {
+                try
+                {
+                    await TopUpTome(client);
+                    await Timed($"rusher-waypoint-{waypoint}", () => CollectWaypoint(client, waypoint));
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    // Collecting is best effort: a waypoint that cannot be fetched costs a walk later.
+                    Log.Warning(exception, "Collecting {Waypoint} failed", waypoint);
+                }
+
+                if (!client.Game.IsInGame())
+                {
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            if (client.Game?.IsInGame() == true)
+            {
+                await client.Game.LeaveGame();
+            }
+
+            await Task.Delay(750);
+            client.Disconnect();
+            await Task.Delay(1000);
+        }
+    }
+
+    private async Task<bool> CollectWaypoint(Client client, Waypoint waypoint)
+    {
+        var area = waypoint.ToArea();
+
+        // Walk from the closest waypoint already held rather than from town every time: collecting the
+        // act 1 waypoints from the Rogue Encampment each time took 14, 23, 41 and 45s, growing with the
+        // distance from town.
+        var start = await ClosestHeldWaypoint(client, area);
+        if (start == null || !await TakeWaypointFromTown(client, start.Value))
+        {
+            if (!client.Game.IsInTown()
+                && (!await _townManagementService.CreateTownPortal(client)
+                    || !await _townManagementService.TakeTownPortalToTown(client)))
+            {
+                return false;
+            }
+
+            if (!await _townManagementService.SwitchAct(client, area.MapToAct()))
+            {
+                return false;
+            }
+        }
+
+        var reached = waypoint switch
+        {
+            Waypoint.CanyonOfTheMagi => await ReachCanyonThroughArcane(client),
+            Waypoint.ArcaneSanctuary => await ReachArcaneSanctuary(client),
+            Waypoint.HallsOfPain => await ReachHallsOfPain(client),
+            _ => await TraverseTo(client, area)
+        };
+        if (!reached || !await MoveToObject(client, waypoint.ToEntityCode(), area))
+        {
+            Log.Warning("The rusher could not reach the {Waypoint} waypoint", waypoint);
+            return false;
+        }
+
+        // Some waypoints have a boss standing on them (the Inner Cloister's), and an interact made under
+        // attack may never open the menu.
+        await ClearAround(client, WaypointClearRadius, WaypointClearLimit);
+
+        var target = client.Game.GetEntityByCode(waypoint.ToEntityCode())
+            .OrderBy(candidate => candidate.Location.Distance(client.Game.Me.Location))
+            .FirstOrDefault();
+        var collected = false;
+        for (var attempt = 0; attempt < 3 && !collected; attempt++)
+        {
+            // Again by MoveToObject: once the server has sent the real waypoint, that is where it goes.
+            await MoveToObject(client, waypoint.ToEntityCode(), area);
+            target = client.Game.GetEntityByCode(waypoint.ToEntityCode())
+                .OrderBy(candidate => candidate.Location.Distance(client.Game.Me.Location))
+                .FirstOrDefault();
+            if (target == null)
+            {
+                continue;
+            }
+
+            await client.Game.MoveToAsync(target);
+            collected = client.Game.ReadWaypoints(target)?.Contains(waypoint) == true;
+        }
+
+        Log.Information("The rusher {Outcome} the {Waypoint} waypoint", collected ? "now holds" : "did not collect", waypoint);
+        if (collected)
+        {
+            await HomeByWaypoint(client, waypoint);
+        }
+
+        return collected;
+    }
+
+    /// <summary>
+    /// Back to town by the waypoint the client stands beside, which costs no scroll. Handing out a batch's
+    /// worth of waypoints by portal emptied the rusher's tome half way through the next difficulty.
+    /// </summary>
+    private async Task<bool> HomeByWaypoint(Client client, Waypoint waypoint)
+    {
+        var act = waypoint.ToArea().MapToAct();
+        var target = client.Game.GetEntityByCode(waypoint.ToEntityCode())
+            .OrderBy(candidate => candidate.Location.Distance(client.Game.Me.Location))
+            .FirstOrDefault();
+        if (target == null)
+        {
+            return false;
+        }
+
+        await client.Game.MoveToAsync(target);
+        return client.Game.TakeWaypoint(target, TownWaypoints[act]) && await ConfirmInArea(client, act.MapTownArea());
+    }
+
+    /// <summary>Refills a tome that is running low while the client is in town anyway.</summary>
+    private async Task TopUpTome(Client client)
+    {
+        var scrolls = client.Game.Inventory.Items.FirstOrDefault(item => item.Name == ItemName.TomeOfTownPortal)?.Amount ?? 0;
+        if (client.Game.IsInTown() && scrolls < 5)
+        {
+            await RestockRusher(client, client.Game.Act);
+        }
+    }
+
+    private static readonly Dictionary<Act, Waypoint> TownWaypoints = new()
+    {
+        [Act.Act1] = Waypoint.RogueEncampment,
+        [Act.Act2] = Waypoint.LutGholein,
+        [Act.Act3] = Waypoint.KurastDocks,
+        [Act.Act4] = Waypoint.ThePandemoniumFortress,
+        [Act.Act5] = Waypoint.Harrogath
+    };
+
+    private List<Waypoint> WaypointsToGive()
+    {
+        var skipped = _rushConfiguration.SkipWaypoints ?? [];
+        return WaypointExtensions.BitOrder
+            .Where(waypoint => !TownWaypoints.ContainsValue(waypoint))
+            .Where(waypoint => _expansion || waypoint.ToArea().MapToAct() != Act.Act5)
+            .Where(waypoint => !skipped.Contains(waypoint))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Hands every rushee the field waypoints it lacks in the acts it can reach. Per waypoint, everyone who
+    /// lacks it goes through the same portal together. Best effort: a waypoint that does not land is logged
+    /// and the next one is tried, since nothing in the rush depends on it.
+    /// </summary>
+    private async Task<bool> GiveWaypoints(Client rusher, List<ParticipantSession> rushees)
+    {
+        _gameRushees = rushees;
+        var reads = await Task.WhenAll(rushees.Select(async session =>
+        {
+            var rushee = session.Client;
+            if (!await BringRusheeToTown(rusher, rushee))
+            {
+                Log.Warning("{Rushee} could not get to town; no waypoints handed over", rushee.Game.Me.Name);
+                return (Rushee: rushee, Held: (HashSet<Waypoint>)null);
+            }
+
+            var held = (await ReadTownWaypoints(rushee))?.ToHashSet();
+            if (held == null)
+            {
+                Log.Warning("{Rushee}'s waypoint menu did not open; no waypoints handed over", rushee.Game.Me.Name);
+            }
+
+            return (Rushee: rushee, Held: held);
+        }));
+        var heldBy = reads.Where(read => read.Held != null).ToDictionary(read => read.Rushee, read => read.Held);
+
+        // Known only once a waypoint menu has opened in this game; a game with no rush in it has not.
+        var rusherHolds = rusher.Game.Me.AllowedWaypoints.ToHashSet();
+        if (rusherHolds.Count == 0 && (rusher.Game.IsInTown() || await ReturnToTown(rusher)))
+        {
+            rusherHolds = (await ReadTownWaypoints(rusher))?.ToHashSet() ?? [];
+        }
+
+        var startedWith = heldBy.ToDictionary(entry => entry.Key, entry => entry.Value.Count);
+        foreach (var waypoint in WaypointsToGive())
+        {
+            // A rusher that chickened beside a waypoint (the Hell Inner Cloister's) left every handover after it
+            // failing; it comes back first.
+            if (!rusher.Game.IsInGame() && !await RejoinIfChickened(rusher))
+            {
+                Log.Warning("The rusher is out of the game and could not come back; no more waypoints handed over");
+                break;
+            }
+
+            var town = TownWaypoints[waypoint.ToArea().MapToAct()];
+            var lacking = heldBy.Where(entry => !entry.Value.Contains(waypoint) && entry.Value.Contains(town))
+                .Select(entry => entry.Key).ToList();
+            if (lacking.Count == 0)
+            {
+                continue;
+            }
+
+            // The Halls of Pain can only be collected in a game where Anya is free, which the rusher's own game
+            // rarely is and this one may be.
+            if (waypoint == Waypoint.HallsOfPain && rusherHolds.Count > 0 && !rusherHolds.Contains(waypoint)
+                && await CollectWaypoint(rusher, waypoint))
+            {
+                rusherHolds.Add(waypoint);
+            }
+
+            if (rusherHolds.Count > 0 && !rusherHolds.Contains(waypoint))
+            {
+                Log.Information("The rusher does not hold {Waypoint}; not handed to {Rushees}", waypoint,
+                    string.Join(", ", lacking.Select(rushee => rushee.Game.Me.Name)));
+                continue;
+            }
+
+            try
+            {
+                // The rusher clears every waypoint alone before anyone comes through: without shouts a Hell sorceress
+                // chickened at three handovers in one game, the last shouts having worn off ten minutes before.
+                await BuffBeforeFight(rusher, waypoint.ToArea(), []);
+                await TopUpTome(rusher);
+                foreach (var rushee in await GiveWaypoint(rusher, lacking, waypoint))
+                {
+                    heldBy[rushee].Add(waypoint);
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // One waypoint that goes wrong is not worth the rest, which is already done by now.
+                Log.Warning(exception, "Handing {Waypoint} over failed", waypoint);
+                await Task.WhenAll(lacking.Select(rushee => BringRusheeToTown(rusher, rushee)));
+            }
+        }
+
+        await Task.WhenAll(heldBy.Select(async entry =>
+        {
+            var (rushee, held) = (entry.Key, entry.Value);
+            var missing = WaypointsToGive().Where(waypoint => !held.Contains(waypoint)).ToList();
+            Log.Information("{Rushee} was handed {Given} waypoints on {Difficulty}; still without {Missing}",
+                rushee.Game.Me.Name, held.Count - startedWith[rushee], _gameDifficulty,
+                missing.Count == 0 ? "none" : string.Join(", ", missing));
+
+            // A game starts in the act the character was last in. Leave the rushee in the furthest town it
+            // holds, or the next rush begins in the Rogue Encampment with three acts behind it.
+            var furthest = TownWaypoints.Where(town => held.Contains(town.Value)).Select(town => town.Key).DefaultIfEmpty(rushee.Game.Act).Max();
+            if (furthest > rushee.Game.Act && !await MoveRusheeToAct(rushee, furthest))
+            {
+                Log.Warning("{Rushee} could not return to act {Act} after the handover", rushee.Game.Me.Name, furthest);
+            }
+        }));
+
+        return true;
+    }
+
+    /// <summary>Takes everyone who lacks the waypoint there through one portal; returns those that now hold it.</summary>
+    private async Task<List<Client>> GiveWaypoint(Client rusher, List<Client> rushees, Waypoint waypoint)
+    {
+        var area = waypoint.ToArea();
+        var act = area.MapToAct();
+        var town = act.MapTownArea();
+        var names = string.Join(", ", rushees.Select(rushee => rushee.Game.Me.Name));
+        if (!await TakeWaypointFromTown(rusher, waypoint) || !await ConfirmInArea(rusher, area))
+        {
+            Log.Warning("The rusher could not take {Waypoint} to hand it over", waypoint);
+            return [];
+        }
+
+        // A rushee steps out of the portal beside the waypoint, so whatever stands there gets it first.
+        await ClearAround(rusher, WaypointClearRadius, WaypointClearLimit);
+        await MoveToObject(rusher, waypoint.ToEntityCode(), area);
+        var survivors = NearbyHostiles(rusher, WaypointClearRadius);
+        if (survivors.Count > 0)
+        {
+            // Better a waypoint missing than a rushee dropped next to whatever the rusher could not kill -
+            // a boss on the waypoint, or one immune to the rusher's element.
+            Log.Warning("Not handing {Waypoint} to {Rushees}: {Count} hostiles still beside it, nearest {Npc}",
+                waypoint, names, survivors.Count, survivors[0].NPCCode);
+            return [];
+        }
+
+        if (!await _townManagementService.CreateTownPortal(rusher))
+        {
+            Log.Warning("The rusher could not open a portal at {Waypoint}", waypoint);
+            return [];
+        }
+
+        var outcomes = await Task.WhenAll(rushees.Select(async rushee =>
+        {
+            if ((rushee.Game.Act != act && !await _townManagementService.SwitchAct(rushee, act))
+                || !await FerryRushee(rusher, rushee, area))
+            {
+                Log.Warning("{Rushee} could not reach the {Waypoint} waypoint through the rusher's portal", rushee.Game.Me.Name, waypoint);
+                await BringRusheeToTown(rusher, rushee);
+                return (Rushee: rushee, Touched: false);
+            }
+
+            var touched = false;
+            WorldObject target = null;
+            for (var attempt = 0; attempt < 3 && !touched; attempt++)
+            {
+                await MoveToObject(rushee, waypoint.ToEntityCode(), area);
+                target = rushee.Game.GetEntityByCode(waypoint.ToEntityCode())
+                    .OrderBy(candidate => candidate.Location.Distance(rushee.Game.Me.Location))
+                    .FirstOrDefault();
+                if (target != null)
+                {
+                    await rushee.Game.MoveToAsync(target);
+                    touched = rushee.Game.ReadWaypoints(target)?.Contains(waypoint) == true;
+                }
+            }
+
+            Log.Information("{Rushee} {Outcome} the {Waypoint} waypoint", rushee.Game.Me.Name, touched ? "now holds" : "did not get", waypoint);
+
+            // Back the way a player goes: the waypoint just activated leads straight to town.
+            var home = touched && target != null && rushee.Game.TakeWaypoint(target, TownWaypoints[act])
+                && await ConfirmInArea(rushee, town);
+            if (!home)
+            {
+                await BringRusheeToTown(rusher, rushee);
+            }
+
+            return (Rushee: rushee, Touched: touched);
+        }));
+
+        await HomeByWaypoint(rusher, waypoint);
+        return outcomes.Where(outcome => outcome.Touched).Select(outcome => outcome.Rushee).ToList();
+    }
+
+    /// <summary>
+    /// Gets a rushee out of the field through a portal the rusher casts beside it. A rushee carries no
+    /// tome of its own, and after a boss it stands wherever the fight left it.
+    /// </summary>
+    private async Task<bool> BringRusheeToTown(Client rusher, Client rushee)
+    {
+        if (rushee.Game.IsInTown())
+        {
+            return true;
+        }
+
+        var town = rushee.Game.Act.MapTownArea();
+        var rusherAsSeen = rushee.Game.Players.FirstOrDefault(player =>
+            player.Name.Equals(rusher.Game.Me.Name, StringComparison.OrdinalIgnoreCase));
+        if (rusherAsSeen != null
+            && !rusher.Game.IsInTown()
+            && rusher.Game.Me.Location.Distance(rushee.Game.Me.Location) < 40
+            && await _townManagementService.CreateTownPortal(rusher)
+            && await _townManagementService.TakeTownPortalToArea(rushee, rusherAsSeen, town))
+        {
+            return true;
+        }
+
+        return await ReturnToTown(rushee) && rushee.Game.IsInTown();
+    }
+
+    private async Task<IReadOnlyCollection<Waypoint>> ReadTownWaypoints(Client client)
+    {
+        var mode = GetMovementMode(client);
+        var path = await _pathingService.ToTownWayPoint(client.Game, mode);
+        await MovementHelpers.TakePathOfLocations(client.Game, path, mode);
+        var townWaypoint = client.Game.GetEntityByCode(client.Game.Act.MapTownWayPointCode()).FirstOrDefault();
+        if (townWaypoint == null)
+        {
+            return null;
+        }
+
+        // Seven rushees crowd the one waypoint at once, and MoveToAsync does nothing past 20 units: on one try two
+        // of them never opened the menu and were left out of a whole difficulty's handout.
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            if (attempt == 0)
+            {
+                await client.Game.MoveToAsync(townWaypoint);
+            }
+            else
+            {
+                client.Game.RequestUpdate(client.Game.Me.Id);
+                await Task.Delay(200);
+                await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, townWaypoint, MovementMode.Walking);
+            }
+
+            var held = client.Game.ReadWaypoints(townWaypoint);
+            if (held != null)
+            {
+                return held;
+            }
+        }
+
+        return null;
+    }
+
     private async Task<Client> LoginAndSelect(AccountConfig account)
     {
         var client = new Client();
@@ -575,6 +1117,7 @@ public sealed class RushBot : IBotInstance
             throw new InvalidOperationException($"Could not connect {account.Username} to the realm");
         }
 
+        StrangerEscape.Watch(client);
         var characters = await client.Login(account.Username, account.Password);
         var character = characters?.FirstOrDefault(candidate =>
             candidate.Name.Equals(account.Character, StringComparison.OrdinalIgnoreCase));
@@ -765,6 +1308,8 @@ public sealed class RushBot : IBotInstance
             return false;
         }
 
+        // The crew rides the same portal at the same time as the rushee rather than after it.
+        var crewArriving = BringCrewTo(rusher, Area.CatacombsLevel4, portalAlreadyOpen: true);
         foreach (var session in rushees)
         {
             if (!await preStages[session])
@@ -786,13 +1331,15 @@ public sealed class RushBot : IBotInstance
             .ToList();
         if (needKill.Count > 0)
         {
-            await BringCrewTo(rusher, Area.CatacombsLevel4);
-            if (!await MoveToNamedNpc(rusher, NPCCode.Andarial)
-                || !await VerifyCreditBarrier(
+            // The barrier goes before the approach: the mercenaries arrive with the rusher and can kill
+            // Andariel before the rusher casts anything.
+            await crewArriving;
+            if (!await VerifyCreditBarrier(
                     rusher,
                     needKill,
                     Area.CatacombsLevel4,
                     QuestId.SistersToTheSlaughter)
+                || !await MoveToNamedNpc(rusher, NPCCode.Andarial)
                 || !await KillNamedBoss(rusher, NPCCode.Andarial, BossKillLimit))
             {
                 return false;
@@ -808,7 +1355,7 @@ public sealed class RushBot : IBotInstance
             }
         }
 
-        if (!await ConfirmInArea(rusher, Area.RogueEncampment) && !await ReturnToTown(rusher))
+        if (!await ConfirmInArea(rusher, Area.RogueEncampment, attempts: 1) && !await ReturnToTown(rusher))
         {
             Log.Error("Rusher could not return to the Rogue Encampment after Andariel");
             return false;
@@ -890,7 +1437,7 @@ public sealed class RushBot : IBotInstance
     {
         var died = rushee.Game.Me.Life == 0;
         rushee.Game.RequestQuestData();
-        await Task.Delay(TimeSpan.FromSeconds(2));
+        GeneralHelpers.TryWithTimeout(_ => HasKillCredit(rushee, QuestId.SistersToTheSlaughter), TimeSpan.FromSeconds(2));
 
         var creditedBeforeResurrection = HasKillCredit(rushee, QuestId.SistersToTheSlaughter);
         Log.Information(
@@ -935,7 +1482,9 @@ public sealed class RushBot : IBotInstance
             return false;
         }
 
-        if (!await ConfirmInArea(rushee, Area.RogueEncampment))
+        // One look, not eight: straight after the kill the rushee is in the Catacombs, and eight
+        // half-second checks for a town it is not in cost eight seconds before it moved.
+        if (!await ConfirmInArea(rushee, Area.RogueEncampment, attempts: 1))
         {
             var rusherAsSeen = rushee.Game.Players.FirstOrDefault(player =>
                 player.Name.Equals(rusher.Game.Me.Name, StringComparison.OrdinalIgnoreCase));
@@ -1517,30 +2066,41 @@ public sealed class RushBot : IBotInstance
         // range to buff, so doing it afterwards achieves nothing.
         await BuffFromCrew();
 
+        // The level 99 mercenaries follow the rusher and the crew into the lair and killed a Normal
+        // Duriel within four seconds, twice with the rushee still in the tomb, which loses the credit
+        // for the whole game. So the rushees wait on the lair portal, follow the rusher straight in,
+        // and the rusher keeps moving until they are there so its mercenary chases it instead.
+        foreach (var session in rushees)
+        {
+            if (!await StageAtLairPortal(session.Client))
+            {
+                return false;
+            }
+        }
+
         if (!await EnterDurielsLair(rusher))
         {
             return false;
         }
 
-        // Into the lair on the rusher's heels, the same moment it opens.
+        var rusheesEntering = rushees.Select(session => EnterDurielsLair(session.Client)).ToList();
+        await KiteUntil(rusher, Task.WhenAll(rusheesEntering), TimeSpan.FromSeconds(30));
+        await Task.WhenAll(rusheesEntering);
+        if (rusheesEntering.Any(entry => !entry.Result))
+        {
+            Log.Error("A rushee could not enter Duriel's lair; refusing to consume the protected kill");
+            return false;
+        }
+
+        // Head on, no pull: the pull measured from wherever the kite left the rusher, which could be
+        // back at the entrance, and going straight at Duriel keeps him on the rusher anyway.
+        await MoveToNamedNpc(rusher, NPCCode.Duriel);
+
         foreach (var member in _crew.Where(candidate => candidate.Game.IsInGame()))
         {
             if (!await EnterDurielsLair(member))
             {
                 Log.Warning("{Member} could not follow into Duriel's lair", member.Game.Me.Name);
-            }
-        }
-
-        await DrawDurielAwayFromPortal(rusher);
-
-        foreach (var session in rushees)
-        {
-            if (!await EnterDurielsLair(session.Client))
-            {
-                Log.Error(
-                    "{Rushee} could not enter Duriel's lair; refusing to consume the protected kill",
-                    session.Client.Game.Me.Name);
-                return false;
             }
         }
 
@@ -1819,7 +2379,7 @@ public sealed class RushBot : IBotInstance
         }
 
         await RefreshQuestData(rushees);
-        if (_rushConfiguration.Destination.Difficulty == Difficulty.Normal
+        if (_rushConfiguration.Destination.Difficulty == _gameDifficulty
             && _rushConfiguration.Destination.Act == 3
             && _rushConfiguration.Destination.Milestone == RushMilestone.Enter)
         {
@@ -1836,7 +2396,7 @@ public sealed class RushBot : IBotInstance
         }
 
         await RefreshQuestData(rushees);
-        if (_rushConfiguration.Destination.Difficulty == Difficulty.Normal
+        if (_rushConfiguration.Destination.Difficulty == _gameDifficulty
             && _rushConfiguration.Destination.Act == 4
             && _rushConfiguration.Destination.Milestone == RushMilestone.Enter)
         {
@@ -1849,6 +2409,38 @@ public sealed class RushBot : IBotInstance
         // substitute, so the kill happens every run.
         // A rehearsing rushee spawns in whatever act it last saved in; the production path arrives in
         // act 4 through Mephisto's portal and needs no help.
+        // An expansion rushee that went through Tyrael's portal in an earlier game is in act 5 already,
+        // with act 4 settled, so it skips the Chaos Sanctuary.
+        var needActFour = _expansion
+            ? rushees.Where(session => session.Client.Game.Act <= Act.Act4).ToList()
+            : rushees;
+        if (needActFour.Count > 0 && !await RushActFour(rusher, needActFour))
+        {
+            return false;
+        }
+
+        if (!_expansion)
+        {
+            return true;
+        }
+
+        await RefreshQuestData(rushees);
+        var destination = _rushConfiguration.Destination;
+        if (destination.Difficulty == _gameDifficulty
+            && ((destination.Act == 4 && destination.Milestone == RushMilestone.Complete)
+                || (destination.Act == 5 && destination.Milestone == RushMilestone.Enter)))
+        {
+            return rushees.All(session => session.Client.Game.Act >= Act.Act5);
+        }
+
+        var needBaal = rushees
+            .Where(session => !HasKillCredit(session.Client, QuestId.EveOfDestruction))
+            .ToList();
+        return needBaal.Count == 0 || await Timed("act5-baal", () => RushBaal(rusher, needBaal));
+    }
+
+    private async Task<bool> RushActFour(Client rusher, List<ParticipantSession> rushees)
+    {
         if (_rushConfiguration.RehearsalDifficulty != null)
         {
             foreach (var session in rushees.Where(session => session.Client.Game.Act != Act.Act4))
@@ -1889,6 +2481,294 @@ public sealed class RushBot : IBotInstance
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Act 5: the rusher clears the throne room and holds it through the five waves, follows Baal into
+    /// the Worldstone Chamber and only then brings the rushees across. Credit goes to every player
+    /// standing in the chamber when Baal dies (D2MOO A5Q6.cpp, SetRewardGranted), so the rushees wait in
+    /// Harrogath for all of the waves. They need neither a waypoint nor the Ancients: the portal out of
+    /// Harrogath puts them straight into the chamber.
+    /// </summary>
+    private async Task<bool> RushBaal(Client rusher, List<ParticipantSession> rushees)
+    {
+        if (!rusher.Game.Me.HasSkill(Skill.Teleport))
+        {
+            Log.Error("The Worldstone Keep path requires a teleporting rusher");
+            return false;
+        }
+
+        foreach (var session in rushees)
+        {
+            if (session.Client.Game.Me.Life == 0)
+            {
+                session.Client.Game.Resurrect();
+                await Task.Delay(1000);
+                await GeneralHelpers.PickupCorpseIfExists(session.Client, _pathingService);
+            }
+
+            if (session.Client.Game.Act != Act.Act5 && !await MoveRusheeToAct(session.Client, Act.Act5))
+            {
+                Log.Error("{Rushee} must be in act 5 before Baal: {Evidence}",
+                    session.Client.Game.Me.Name, DescribeQuestState(session));
+                return false;
+            }
+        }
+
+        var preStages = StartRusheePreStages(rushees);
+        StartCrewPreStages(Act.Act5);
+        if (!await _townManagementService.SwitchAct(rusher, Act.Act5))
+        {
+            Log.Error("The rusher could not reach Harrogath");
+            return false;
+        }
+
+        await BuffPartyInTown(rusher, Act.Act5);
+        await RestockRusher(rusher, Act.Act5);
+
+        if (!await TakeWaypointFromTown(rusher, Waypoint.TheWorldStoneKeepLevel2)
+            || !await TraverseTo(rusher, Area.ThroneOfDestruction))
+        {
+            Log.Error("The rusher could not reach the Throne of Destruction. Without the Worldstone Keep "
+                + "waypoint the route crosses the Arreat Summit, which needs Rite of Passage on {Difficulty}",
+                _gameDifficulty);
+            return false;
+        }
+
+        // The level is entered a long way from the throne, out of sight of it. Cross to the far end
+        // first, at the offset from Baal's portal that BaalBot uses; the portal is in the map data.
+        var staging = await _pathingService.GetPathToObjectWithOffset(rusher.Game,
+            EntityCode.BaalPortal, 27, 65, MovementMode.Teleport);
+        if (staging.Count > 0)
+        {
+            await MovementHelpers.TakePathOfLocations(rusher.Game, staging, MovementMode.Teleport);
+        }
+        else
+        {
+            Log.Warning("No path to the throne end of the Throne of Destruction from {Location}", rusher.Game.Me.Location);
+        }
+
+        var killSpot = await ThroneKillSpot(rusher);
+        if (killSpot == null)
+        {
+            Log.Error("Baal's throne is not in sight from {Location}; cannot hold the waves", rusher.Game.Me.Location);
+            return false;
+        }
+        await MoveTo(rusher, killSpot, MovementMode.Teleport);
+        if (!await ClearAround(rusher, 50, ThroneClearLimit))
+        {
+            Log.Warning("The throne room was still busy after {Seconds:0}s; holding for the waves anyway",
+                ThroneClearLimit.TotalSeconds);
+        }
+
+        await MoveTo(rusher, killSpot, MovementMode.Teleport);
+
+        if (!await HoldThroneUntilBaal(rusher, killSpot))
+        {
+            return false;
+        }
+
+        await SweepLoot(rusher, 30);
+        if (!await EnterWorldstoneChamber(rusher))
+        {
+            return false;
+        }
+
+        // Cast at the chamber entrance, before the rusher closes on Baal. A nova rusher stands on top of
+        // what it kills, so a portal at the fight lands a level one next to Baal at full life.
+        if (!await _townManagementService.CreateTownPortal(rusher))
+        {
+            Log.Error("Could not open a portal in the Worldstone Chamber");
+            return false;
+        }
+
+        foreach (var session in rushees)
+        {
+            if (!await preStages[session])
+            {
+                Log.Warning("{Rushee} could not complete act 5 pre-staging; retrying at the portal",
+                    session.Client.Game.Me.Name);
+            }
+        }
+
+        var crewArriving = BringCrewTo(rusher, Area.TheWorldStoneChamber, portalAlreadyOpen: true);
+        var rusheesArriving = rushees
+            .Select(session => FerryRushee(rusher, session.Client, Area.TheWorldStoneChamber))
+            .ToList();
+        await Task.WhenAll(rusheesArriving);
+        await crewArriving;
+        if (rusheesArriving.Any(arrival => !arrival.Result))
+        {
+            Log.Error("Refusing to kill Baal without every rushee in the Worldstone Chamber");
+            return false;
+        }
+
+        if (!await VerifyCreditBarrier(rusher, rushees, Area.TheWorldStoneChamber, QuestId.EveOfDestruction))
+        {
+            return false;
+        }
+
+        if (!await KillNamedBoss(rusher, NPCCode.Baal, BossKillLimit))
+        {
+            return false;
+        }
+
+        await SweepLoot(rusher, 30);
+        foreach (var session in rushees.Where(session => session.Client.Game.Me.Life == 0))
+        {
+            session.Client.Game.Resurrect();
+            await Task.Delay(1500);
+        }
+
+        await RefreshQuestData(rushees);
+        foreach (var session in rushees)
+        {
+            if (!HasKillCredit(session.Client, QuestId.EveOfDestruction))
+            {
+                Log.Error("{Rushee} was in the chamber for Baal but received no Eve of Destruction credit: {Evidence}",
+                    session.Client.Game.Me.Name, DescribeQuestState(session));
+                return false;
+            }
+
+            Log.Information("{Rushee} has Baal credit: eve of destruction 0x{Word:X4}",
+                session.Client.Game.Me.Name,
+                session.Client.Game.Quests.GetCharacterFlags(QuestId.EveOfDestruction));
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Where to hold the waves: in front of Baal's throne, where they arrive. Holding the entrance
+    /// meant they never came within reach.
+    /// </summary>
+    private async Task<Point> ThroneKillSpot(Client rusher)
+    {
+        if (!GeneralHelpers.TryWithTimeout(
+                _ => rusher.Game.GetNPCsByCode(NPCCode.BaalThrone).Count > 0,
+                TimeSpan.FromSeconds(5)))
+        {
+            Log.Warning("Baal's throne is not in sight; holding the waves where the rusher stands");
+            return null;
+        }
+
+        var throne = rusher.Game.GetNPCsByCode(NPCCode.BaalThrone).First().Location;
+        var spot = OffsetOrNull(throne, 0, ThroneStandOff);
+        if (spot != null && await _pathingService.IsNavigatablePointInArea(
+                rusher.Game.MapId, MapDifficulty, Area.ThroneOfDestruction, spot))
+        {
+            return spot;
+        }
+
+        return throne;
+    }
+
+    /// <summary>
+    /// Fights the waves until Baal leaves his throne. The waves walk to the rusher, so it only chases
+    /// what is in reach and returns to the spot when nothing is: leashing while also closing on
+    /// everything out of nova range made the probe teleport back and forth casting nothing.
+    /// </summary>
+    private async Task<bool> HoldThroneUntilBaal(Client rusher, Point killSpot)
+    {
+        var timer = Stopwatch.StartNew();
+        var lastReport = TimeSpan.Zero;
+        while (timer.Elapsed < WaveClearLimit)
+        {
+            if (!rusher.Game.IsInGame())
+            {
+                Log.Error("The rusher left the game during the Baal waves");
+                return false;
+            }
+
+            // BaalThrone disappears when Baal gets up. The portal behind the throne is no signal: it is
+            // streamed from the start of the level and only becomes usable later. Out of sight looks the
+            // same as gone, so it only counts at the spot: a Nightmare clear chased the rusher 130 units
+            // off, the throne dropped out of view and "Baal left" after no waves at all.
+            if (rusher.Game.GetNPCsByCode(NPCCode.BaalThrone).Count == 0
+                && rusher.Game.Me.Location.Distance(killSpot) > HoldSpotTolerance)
+            {
+                await MoveTo(rusher, killSpot, MovementMode.Teleport);
+                await Task.Delay(500);
+                continue;
+            }
+
+            if (rusher.Game.GetNPCsByCode(NPCCode.BaalThrone).Count == 0)
+            {
+                Log.Information("Baal left his throne after {Seconds:0}s of waves", timer.Elapsed.TotalSeconds);
+                return true;
+            }
+
+            var nearby = NearbyHostiles(rusher, WaveEngageRange);
+            if (timer.Elapsed - lastReport > TimeSpan.FromSeconds(20))
+            {
+                lastReport = timer.Elapsed;
+                Log.Information("Waves: {Count} within {Range}, {Seconds:0}s elapsed",
+                    nearby.Count, WaveEngageRange, timer.Elapsed.TotalSeconds);
+            }
+
+            if (nearby.Count == 0)
+            {
+                if (rusher.Game.Me.Location.Distance(killSpot) > HoldSpotTolerance)
+                {
+                    await MoveTo(rusher, killSpot, MovementMode.Teleport);
+                }
+
+                await Task.Delay(200);
+                continue;
+            }
+
+            await AttackTarget(rusher, nearby[0]);
+        }
+
+        Log.Error("Baal never left his throne after {Minutes} minutes of waves", WaveClearLimit.TotalMinutes);
+        return false;
+    }
+
+    /// <summary>
+    /// Follows Baal through the portal the last wave opens. It is created during play, so it is reached
+    /// as a streamed object, and arrival is confirmed by position rather than by Game.Area.
+    /// </summary>
+    private async Task<bool> EnterWorldstoneChamber(Client rusher)
+    {
+        var portal = rusher.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
+        if (portal == null)
+        {
+            Log.Error("Baal's portal is not in sight from {Location}", rusher.Game.Me.Location);
+            return false;
+        }
+
+        var entered = await GeneralHelpers.TryWithTimeout(async attempt =>
+        {
+            if (await ConfirmInArea(rusher, Area.TheWorldStoneChamber, attempts: 1))
+            {
+                return true;
+            }
+
+            if (attempt % 3 == 0)
+            {
+                await MovementHelpers.MoveToWorldObject(rusher.Game, _pathingService, _mapApiService,
+                    portal, GetMovementMode(rusher));
+            }
+            else if (rusher.Game.Me.Location.Distance(portal.Location) > PortalInteractRange)
+            {
+                await rusher.Game.MoveToAsync(portal.Location);
+            }
+            else
+            {
+                rusher.Game.InteractWithEntity(portal);
+            }
+
+            await Task.Delay(400);
+            return false;
+        }, TimeSpan.FromSeconds(40));
+
+        if (!entered)
+        {
+            Log.Error("Could not follow Baal into the Worldstone Chamber, stopped at {Location}",
+                rusher.Game.Me.Location);
+        }
+
+        return entered;
     }
 
     private async Task<bool> RepairPostDurielTransition(Client rusher, List<ParticipantSession> rushees)
@@ -2022,7 +2902,7 @@ public sealed class RushBot : IBotInstance
                     session.Client.Game.Me.Name);
             }
 
-            if (session.Client.Game.Act != Act.Act3)
+            if (session.Client.Game.Act != Act.Act3 && !await MoveRusheeToAct(session.Client, Act.Act3))
             {
                 Log.Error("{Rushee} must be in act 3 before the Mephisto checkpoint: {Evidence}",
                     session.Client.Game.Me.Name, DescribeQuestState(session));
@@ -2121,7 +3001,7 @@ public sealed class RushBot : IBotInstance
                 await GeneralHelpers.PickupCorpseIfExists(session.Client, _pathingService);
             }
 
-            if (session.Client.Game.Act != Act.Act4)
+            if (session.Client.Game.Act != Act.Act4 && !await MoveRusheeToAct(session.Client, Act.Act4))
             {
                 Log.Error("{Rushee} must be in act 4 before Diablo: {Evidence}",
                     session.Client.Game.Me.Name, DescribeQuestState(session));
@@ -2256,15 +3136,22 @@ public sealed class RushBot : IBotInstance
         // A fresh portal, never a remembered one. Every seal casts a portal for the crew and each cast
         // replaces the last, so the one recorded on the first pass was long gone by the time the rushee
         // went looking: it swept sixteen town points for ninety seconds and the kill was refused.
-        if (!await MoveTo(rusher, lastAnchor, MovementMode.Teleport)
+        // The portal goes beside the star rather than at the anchor: Diablo only credits players in his
+        // room or the next one (D2MOO A4Q2.cpp, UpdatePlayerState), and a rushee walking the hundred
+        // and forty units in from the anchor met him halfway and died out of range.
+        var star = rusher.Game.GetEntityByCode(EntityCode.DiabloStar).FirstOrDefault()?.Location
+            ?? rusher.Game.Me.Location;
+        var creditSpot = DiabloCreditSpot(star, lastAnchor);
+        if (!await MoveTo(rusher, creditSpot, MovementMode.Teleport)
             || !await _townManagementService.CreateTownPortal(rusher))
         {
-            Log.Error("Could not open the Chaos Sanctuary portal at the cleared anchor");
+            Log.Error("Could not open the Chaos Sanctuary portal beside the star at {Spot}", creditSpot);
             return false;
         }
 
-        Log.Information("Chaos Sanctuary portal is open at the cleared anchor {Anchor}", lastAnchor);
+        Log.Information("Chaos Sanctuary portal is open beside the star at {Spot}", creditSpot);
 
+        var crewArriving = BringCrewTo(rusher, Area.ChaosSanctuary, portalAlreadyOpen: true);
         foreach (var session in rushees)
         {
             if (!await preStages[session])
@@ -2293,7 +3180,7 @@ public sealed class RushBot : IBotInstance
             }
         }
 
-        await BringCrewTo(rusher, Area.ChaosSanctuary);
+        await crewArriving;
 
         if (!await VerifyCreditBarrier(rusher, rushees, Area.ChaosSanctuary, QuestId.TerrorsEnd))
         {
@@ -2301,22 +3188,11 @@ public sealed class RushBot : IBotInstance
             return false;
         }
 
-        // Bring the rushee to the star as well, rather than leaving it at the anchor a hundred units
-        // away while Diablo dies. Being in the area is enough for the kill credit, but every character
-        // seen to actually collect the act 4 reward from Tyrael was standing at the fight.
+        // The rushee stays on the portal beside the star: that is already within credit range, and
+        // walking on only takes a level one closer to Diablo.
         if (!await MoveToObject(rusher, EntityCode.DiabloStar))
         {
             return false;
-        }
-
-        foreach (var session in rushees)
-        {
-            if (!await MoveTo(session.Client, rusher.Game.Me.Location, GetMovementMode(session.Client)))
-            {
-                Log.Warning(
-                    "{Rushee} could not close on the star; killing Diablo with it at range",
-                    session.Client.Game.Me.Name);
-            }
         }
 
         if (!await KillDiablo(rusher))
@@ -2350,6 +3226,20 @@ public sealed class RushBot : IBotInstance
 
         await Task.Delay(1000);
         return true;
+    }
+
+    private static Point DiabloCreditSpot(Point star, Point anchor)
+    {
+        var dx = anchor.X - star.X;
+        var dy = anchor.Y - star.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length <= DiabloCreditSpotFromStar)
+        {
+            return anchor;
+        }
+
+        var scale = DiabloCreditSpotFromStar / length;
+        return new Point((ushort)Math.Round(star.X + dx * scale), (ushort)Math.Round(star.Y + dy * scale));
     }
 
     private async Task<bool> CompleteActFourWithTyrael(Client rusher, Client rushee)
@@ -2419,7 +3309,8 @@ public sealed class RushBot : IBotInstance
         // Say only what the reference client says. Following the ids Tyrael advertises is what broke
         // this before: 0x0298 and 0x029E walk him into a different branch that answers with 0x029F,
         // and 0x02AC is then ignored, so act 4 never closes.
-        foreach (var message in ActFourTyraelMessages)
+        uint[] messages = _expansion ? [ActFourTyraelHarrogathMessage] : ActFourTyraelMessages;
+        foreach (var message in messages)
         {
             rushee.Game.SendQuestMessage(tyrael, message);
             await Task.Delay(400);
@@ -2428,7 +3319,14 @@ public sealed class RushBot : IBotInstance
         Log.Information(
             "{Rushee} said {Messages} to Act 4 Tyrael",
             rushee.Game.Me.Name,
-            string.Join(", ", ActFourTyraelMessages.Select(message => $"0x{message:X4}")));
+            string.Join(", ", messages.Select(message => $"0x{message:X4}")));
+
+        if (_expansion)
+        {
+            rushee.Game.TerminateEntityChat(tyrael);
+            await Task.Delay(300);
+            return await TakePortalToHarrogath(rushee);
+        }
 
         // The captured client closes with a second conversation: terminate twice, interact again,
         // open and close the chat once more, and only then leave.
@@ -2462,6 +3360,52 @@ public sealed class RushBot : IBotInstance
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Steps through the red portal Tyrael opens five units east of himself. Using it is what finishes
+    /// act 4 in an expansion game: the server sets the act 4 completion, moves the character to
+    /// Harrogath and activates the Harrogath waypoint (D2MOO A4Q2.cpp, OperateFunction73_LastLastPortal).
+    /// </summary>
+    private async Task<bool> TakePortalToHarrogath(Client rushee)
+    {
+        if (!GeneralHelpers.TryWithTimeout(
+                _ => rushee.Game.GetEntityByCode(EntityCode.LastLastPortal).Count > 0,
+                TimeSpan.FromSeconds(5)))
+        {
+            Log.Error("Tyrael opened no portal to Harrogath for {Rushee}: {Evidence}",
+                rushee.Game.Me.Name, rushee.Game.Quests.Describe());
+            return false;
+        }
+
+        var portal = rushee.Game.GetEntityByCode(EntityCode.LastLastPortal).First();
+        var entered = await GeneralHelpers.TryWithTimeout(async attempt =>
+        {
+            if (await ConfirmInArea(rushee, Area.Harrogath, attempts: 1))
+            {
+                return true;
+            }
+
+            if (rushee.Game.Me.Location.Distance(portal.Location) > PortalInteractRange)
+            {
+                await rushee.Game.MoveToAsync(portal.Location);
+            }
+            else
+            {
+                rushee.Game.InteractWithEntity(portal);
+            }
+
+            await Task.Delay(400);
+            return false;
+        }, TimeSpan.FromSeconds(20));
+
+        rushee.Game.RequestQuestData();
+        await Task.Delay(1000);
+        Log.Information("{Rushee} {Outcome} through Tyrael's portal; act 4 outro 0x{Outro:X4}",
+            rushee.Game.Me.Name,
+            entered ? "reached Harrogath" : "could not get",
+            rushee.Game.Quests.GetCharacterFlags(QuestId.Act4Outro));
+        return entered;
     }
 
     private async Task<bool> VerifyCreditBarrier(
@@ -2532,6 +3476,16 @@ public sealed class RushBot : IBotInstance
         var ferried = false;
         try
         {
+            // The portal stands in the town of the area's act. A rushee in another town swept it for eight
+            // minutes looking for a portal that could not be there.
+            var act = area.MapToAct();
+            if (rushee.Game.Act != act && !await MoveRusheeToAct(rushee, act))
+            {
+                Log.Warning("{Rushee} is in act {Current} and could not get to act {Act} for the portal to {Area}",
+                    rushee.Game.Me?.Name, rushee.Game.Act, act, area);
+                return false;
+            }
+
             ferried = await FerryRusheeCore(rusher, rushee, area);
             return ferried;
         }
@@ -2554,6 +3508,15 @@ public sealed class RushBot : IBotInstance
         {
             Log.Error("{Rushee} cannot see rusher {Rusher}", rushee.Game.Me.Name, rusher.Game.Me.Name);
             return false;
+        }
+
+        // The shared portal trip clicks at once and notices the arrival from the position packet the
+        // server sends 0.05s later. The rush's own loop below waited 2.5s before the click and 2.1s after
+        // it on every trip, and stays as the fallback for a portal that is not in view.
+        if ((CanSeePortal(rushee, rusherAsSeen, area) || await MoveRusheeToPortalSpot(rushee, rusherAsSeen, area))
+            && await _townManagementService.TakeTownPortalToArea(rushee, rusherAsSeen, area))
+        {
+            return true;
         }
 
         if (!await MoveRusheeToPortalSpot(rushee, rusherAsSeen, area))
@@ -2718,6 +3681,27 @@ public sealed class RushBot : IBotInstance
         {
             return;
         }
+
+        // Still shouted from the last act: fetching the crew to town, across acts and over to the rusher
+        // only to shout again held the rusher in town 8-40s at the start of every act. The expiry is
+        // known from the barbarian's levels and skills.bin, so only shout when an act's worth is not left.
+        var stillShouted = _shoutsExpireAt != null
+            ? _shoutsExpireAt.Value - DateTime.Now > ShoutsMustOutlastAnAct
+            : DateTime.Now - _lastShoutsAt < RecentShouts;
+        // Read as another client sees the rusher: a client's own Me.Effects never carries its states.
+        var rusherAsSeen = _crew
+            .Select(member => member.Game.Players.FirstOrDefault(player =>
+                player.Name.Equals(rusher.Game.Me.Name, StringComparison.OrdinalIgnoreCase)))
+            .FirstOrDefault(player => player != null);
+        if (rusherAsSeen != null && !ClassHelpers.IsMissingShouts(rusherAsSeen) && stillShouted)
+        {
+            return;
+        }
+
+        // The crew's pre-stage is already moving it. Driving the same client from here at the same time
+        // sent every command twice - two waypoint trips at once, and a second waypoint click that left the
+        // menu open, after which the server refused the barbarian's every portal and cast.
+        await AwaitCrewPreStages();
 
         foreach (var member in _crew.Where(candidate => candidate.Game.IsInGame()))
         {
@@ -2969,8 +3953,15 @@ public sealed class RushBot : IBotInstance
 
         var portalSpot = rusher.Game.GetEntityByCode(EntityCode.PandemoniumFortressPortal)
             .First().Location;
-        var travellers = rushees.Select(session => session.Client).Append(rusher);
-        foreach (var client in travellers)
+        // Everyone at once: one after another, each with its own wait after the click, the trip took
+        // longer than the Mephisto fight before it.
+        var travellers = rushees.Select(session => session.Client).Append(rusher).ToList();
+        var trips = await Task.WhenAll(travellers.Select(client => TakeRedPortal(client, portalSpot)));
+        return trips.All(entered => entered);
+    }
+
+    private async Task<bool> TakeRedPortal(Client client, Point portalSpot)
+    {
         {
             var portal = client.Game.GetEntityByCode(EntityCode.PandemoniumFortressPortal).FirstOrDefault();
             if (portal == null)
@@ -3007,8 +3998,14 @@ public sealed class RushBot : IBotInstance
                 }
 
                 client.Game.InteractWithEntity(portal);
-                await Task.Delay(1500);
-                return await ConfirmInArea(client, Area.ThePandemoniumFortress);
+                // The server's position packet lands on the far side within a tenth of a second.
+                return await GeneralHelpers.TryWithTimeout(async _ =>
+                    {
+                        await Task.Delay(20);
+                        return await _pathingService.IsNavigatablePointInArea(
+                            client.Game.MapId, MapDifficulty, Area.ThePandemoniumFortress, client.Game.Me.Location);
+                    }, TimeSpan.FromSeconds(1.5))
+                    || await ConfirmInArea(client, Area.ThePandemoniumFortress, attempts: 2);
             }, TimeSpan.FromSeconds(30));
             if (!entered)
             {
@@ -3044,10 +4041,13 @@ public sealed class RushBot : IBotInstance
         }
 
         var boss = rusher.Game.GetNPCsByCode(npcCode).First();
+        // The rushers' level 99 mercenaries follow them in and can finish a Normal boss in seconds,
+        // before the kill even starts. Every caller checks the rushees' credit afterwards, and that
+        // check, not who landed the last hit, is what decides.
         if (boss.State is EntityState.Dead or EntityState.Dieing)
         {
-            Log.Error("{Npc} was already dead before the protected kill", npcCode);
-            return false;
+            Log.Warning("{Npc} was already dead when the protected kill began; the credit check decides", npcCode);
+            return true;
         }
 
         // Duriel is cold immune above Normal, so a frozen orb sorceress does literally nothing to him.
@@ -3092,6 +4092,7 @@ public sealed class RushBot : IBotInstance
         var retreats = 0;
         var withdrawn = false;
         var lifeMoved = false;
+        var lifeReference = rusher.Game.Me.Life;
         while (timer.Elapsed < limit && rusher.Game.IsInGame())
         {
             // Give up early on a boss that is taking no damage at all. A frozen orb sorceress against
@@ -3114,8 +4115,14 @@ public sealed class RushBot : IBotInstance
             // ChickenService took it out of the game - twice against Nightmare Duriel, at 205 and 266
             // of 974 life. Backing off to where the fight started lets potions and regeneration catch
             // up, and the kill limit is generous enough to absorb the pause.
+            // Measured against the most life the rusher has actually had this fight, not its maximum.
+            // A battle orders shout raises the maximum and leaves life where it was: the rusher stood at full
+            // 942 life against a 3605 maximum, read that as 26%, and retreated from Baal fourteen times
+            // without casting until the no-damage limit ended the rush.
             var self = rusher.Game.Me;
-            if (self.MaxLife > 0 && (double)self.Life / self.MaxLife < RetreatBelowLifeFraction)
+            lifeReference = Math.Max(lifeReference, self.Life);
+            var lifeScale = Math.Min(self.MaxLife, lifeReference);
+            if (lifeScale > 0 && (double)self.Life / lifeScale < RetreatBelowLifeFraction)
             {
                 retreats++;
 
@@ -4132,181 +5139,17 @@ public sealed class RushBot : IBotInstance
     }
 
     /// <summary>
-    /// Gets a client back to town, recasting a portal when its own is out of reach. A rusher ends a
-    /// fight wherever the fight ended, which is regularly nowhere near the portal it opened, and
-    /// TakeTownPortalToTown needs one nearby. Casting another costs a moment; failing loses the run.
-    /// </summary>
-    /// <summary>
-    /// The field waypoints a Classic rush needs, with the act whose town they are reached from.
-    /// Waypoints are held per difficulty, so a rusher that has finished Hell can still arrive on
-    /// Nightmare holding only the four town ones.
-    /// </summary>
-    private static readonly (Waypoint Waypoint, Act Act, Area Area)[] RushFieldWaypoints =
-    [
-        (Waypoint.CatacombsLevel2, Act.Act1, Area.CatacombsLevel2),
-        (Waypoint.FarOasis, Act.Act2, Area.FarOasis),
-        (Waypoint.LostCity, Act.Act2, Area.LostCity),
-        (Waypoint.DuranceOfHateLevel2, Act.Act3, Area.DuranceOfHateLevel2),
-        (Waypoint.RiverOfFlame, Act.Act4, Area.RiverOfFlame)
-    ];
-
-    private static readonly Dictionary<Act, Waypoint> TownWaypointOfAct = new()
-    {
-        [Act.Act1] = Waypoint.RogueEncampment,
-        [Act.Act2] = Waypoint.LutGholein,
-        [Act.Act3] = Waypoint.KurastDocks,
-        [Act.Act4] = Waypoint.ThePandemoniumFortress
-    };
-
-    /// <summary>Every waypoint object code, since which one a level uses varies by area.</summary>
-    private static readonly EntityCode[] WaypointCodes =
-    [
-        EntityCode.WaypointAct1, EntityCode.WaypointAct1JailAndUp,
-        EntityCode.WaypointAct2, EntityCode.WaypointAct2Sewer, EntityCode.WaypointAct2Cellar,
-        EntityCode.WaypointAct3, EntityCode.WaypointAct3Durance,
-        EntityCode.WaypointAct4Levels
-    ];
-
-    /// <summary>
-    /// Walks the rusher to any field waypoint it does not yet hold on this difficulty and activates
-    /// it, so later runs teleport instead of walking. Deliberately best effort: a waypoint that
-    /// cannot be collected costs the walk it was going to cost anyway.
-    /// </summary>
-    /// <remarks>
-    /// The Canyon of the Magi is absent on purpose and cannot be collected this way. Its only
-    /// adjacent levels are the seven tombs, and the Arcane Sanctuary - the route a player uses -
-    /// has no adjacency in the map data at all, so there is nothing to route along. That one has to
-    /// be taken by hand before a Nightmare or Hell rush will get past act 2.
-    /// </remarks>
-    private async Task CollectMissingWaypoints(Client rusher)
-    {
-        foreach (var (waypoint, act, area) in RushFieldWaypoints)
-        {
-            if (!await RefreshAllowedWaypoints(rusher, act))
-            {
-                continue;
-            }
-
-            // An empty list means the waypoint menu never opened, not that the rusher holds nothing.
-            // Guessing "missing" there sends it walking to waypoints it already owns, which is worse
-            // than doing nothing: the rush can take them itself through TakeWaypointFromTown.
-            if (rusher.Game.Me.AllowedWaypoints.IsEmpty)
-            {
-                Log.Warning(
-                    "Could not read {Client}'s waypoint list; skipping collection and letting the rush take them",
-                    rusher.Game.Me.Name);
-                return;
-            }
-
-            if (rusher.Game.Me.AllowedWaypoints.Contains(waypoint))
-            {
-                continue;
-            }
-
-            Log.Information(
-                "Collecting the {Waypoint} waypoint on {Difficulty} so later runs do not walk it",
-                waypoint,
-                _gameDifficulty);
-
-            if (!await TraverseTo(rusher, area) || !await ActivateWaypointHere(rusher, waypoint))
-            {
-                Log.Warning("Could not collect {Waypoint}; the rush will walk to it instead", waypoint);
-                await ReturnToTown(rusher);
-                continue;
-            }
-
-            // Ride the waypoint just activated back to town. The rusher walked in here, so it has no
-            // portal of its own to go home by, and a town waypoint is always held.
-            if (!TownWaypointOfAct.TryGetValue(act, out var townWaypoint)
-                || !await _townManagementService.TakeWaypoint(rusher, townWaypoint))
-            {
-                await ReturnToTown(rusher);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Opens the town waypoint so the server sends a waypoint menu, which is the only thing that
-    /// fills <see cref="Self.AllowedWaypoints"/>. Without this the set is empty and every waypoint
-    /// looks missing.
-    /// </summary>
-    private async Task<bool> RefreshAllowedWaypoints(Client rusher, Act act)
-    {
-        if (!await _townManagementService.SwitchAct(rusher, act))
-        {
-            return false;
-        }
-
-        if (!TownWaypointByAct.TryGetValue(act, out var townWaypoint)
-            || !await MoveToObject(rusher, townWaypoint))
-        {
-            return false;
-        }
-
-        var waypoint = rusher.Game.GetEntityByCode(townWaypoint).FirstOrDefault();
-        if (waypoint == null)
-        {
-            return false;
-        }
-
-        rusher.Game.InteractWithEntity(waypoint);
-        await Task.Delay(700);
-        return true;
-    }
-
-    /// <summary>
-    /// Activates whichever waypoint object this level uses. Interacting is not proof it registered,
-    /// so the outcome is confirmed against the waypoint menu the server sends back - an unverified
-    /// interact reported success once and the waypoint was still missing on the next run.
-    /// </summary>
-    private async Task<bool> ActivateWaypointHere(Client rusher, Waypoint expected)
-    {
-        foreach (var code in WaypointCodes)
-        {
-            if (!await MoveToObject(rusher, code))
-            {
-                continue;
-            }
-
-            var waypoint = rusher.Game.GetEntityByCode(code).FirstOrDefault();
-            if (waypoint == null)
-            {
-                continue;
-            }
-
-            for (var attempt = 0; attempt < 3; attempt++)
-            {
-                rusher.Game.RequestUpdate(rusher.Game.Me.Id);
-                await Task.Delay(300);
-                Log.Debug(
-                    "Activating {Code} for {Waypoint}: me={Me}, object {Id} at {Location}, distance {Distance:0.0}",
-                    code,
-                    expected,
-                    rusher.Game.Me.Location,
-                    waypoint.Id,
-                    waypoint.Location,
-                    rusher.Game.Me.Location.Distance(waypoint.Location));
-
-                rusher.Game.InteractWithEntity(waypoint);
-                if (GeneralHelpers.TryWithTimeout(
-                    _ => rusher.Game.Me.AllowedWaypoints.Contains(expected),
-                    TimeSpan.FromSeconds(2)))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Times a step and logs it in one greppable shape, so a change to routing or attack rotation can
     /// be judged on how long the step actually took rather than on proxies like attack counts.
     /// Grep the log for "TIMING" to get the whole run as a table.
     /// </summary>
     private async Task<bool> Timed(string step, Func<Task<bool>> action)
     {
+        if (StrangerEscape.FleeRequested)
+        {
+            throw new OperationCanceledException($"Not starting {step}: {StrangerEscape.Reason}");
+        }
+
         var timer = Stopwatch.StartNew();
         var succeeded = false;
         try
@@ -4444,9 +5287,15 @@ public sealed class RushBot : IBotInstance
         return InventoryHelpers.GetTotalHealthPotions(client.Game) < RestockPotionFloor;
     }
 
-    private async Task RestockRusher(Client rusher, Act act)
+    private Task RestockRusher(Client rusher, Act act) => RestockFighter(rusher, _rushConfiguration.Rusher, act);
+
+    /// <summary>
+    /// Potions and a full portal tome for anyone about to fight - the rusher, or a rushee that does its own
+    /// killing. A strong character that has played on its own walked into Hell with neither, and the
+    /// attack loop rightly refused to fight without a potion.
+    /// </summary>
+    private async Task RestockFighter(Client rusher, AccountConfig account, Act act)
     {
-        var account = _rushConfiguration.Rusher;
         var options = new TownManagementOptions(account, act)
         {
             HealthPotionsToBuy = PotionsToBuy(
@@ -4466,7 +5315,7 @@ public sealed class RushBot : IBotInstance
         var result = await _townManagementService.PerformTownTasks(rusher, options);
         if (!result.Succes)
         {
-            Log.Warning("The rusher could not restock in act {Act}; continuing on what it carries", act);
+            Log.Warning("{Client} could not restock in act {Act}; continuing on what it carries", rusher.Game.Me.Name, act);
         }
 
         Log.Information(
@@ -4507,19 +5356,7 @@ public sealed class RushBot : IBotInstance
             Log.Warning("Could not open a fresh portal for the crew in {Area}", area);
         }
 
-        foreach (var pre in _crewPreStages)
-        {
-            try
-            {
-                await pre;
-            }
-            catch (Exception exception)
-            {
-                Log.Warning(exception, "A crew pre-stage failed");
-            }
-        }
-
-        _crewPreStages = [];
+        await AwaitCrewPreStages();
 
         await Task.WhenAll(_crew.Select(async member =>
         {
@@ -4619,13 +5456,66 @@ public sealed class RushBot : IBotInstance
     /// Worth doing before every fight: the buff is what keeps a level one rushee and a squishy
     /// sorceress alive, and it expires.
     /// </summary>
+    /// <summary>When the first of the member's shouts runs out, or null without skills.json.</summary>
+    private DateTime? ShoutsExpireAt(Client member)
+    {
+        if (_skillTable == null && GameDataLocation.TryResolve("skills.json", out var path))
+        {
+            _skillTable = SkillTable.Load(path);
+        }
+
+        var me = member.Game.Me;
+        var durations = new[] { Skill.Shout, Skill.BattleOrders, Skill.BattleCommand }
+            .Select(skill => (Skill: skill, Level: me.Skills.GetValueOrDefault(skill) + me.ItemSkills.GetValueOrDefault(skill),
+                Entry: _skillTable?.Skills.FirstOrDefault(entry => entry.Id == (int)skill)))
+            .Where(shout => shout.Level > 0 && shout.Entry != null)
+            .Select(shout => ShoutDurations.For(shout.Entry, shout.Skill, shout.Level))
+            .ToList();
+        if (durations.Count == 0)
+        {
+            return null;
+        }
+
+        var shortest = durations.Min();
+        Log.Information("{Member}'s shouts last {Seconds:0}s", me.Name, shortest.TotalSeconds);
+        return DateTime.Now + shortest;
+    }
+
+    private async Task AwaitCrewPreStages()
+    {
+        foreach (var pre in _crewPreStages)
+        {
+            try
+            {
+                await pre;
+            }
+            catch (Exception exception)
+            {
+                Log.Warning(exception, "A crew pre-stage failed");
+            }
+        }
+
+        _crewPreStages = [];
+    }
+
     private async Task BuffFromCrew()
     {
         foreach (var member in _crew.Where(candidate => candidate.Game.IsInGame()))
         {
-            if (ClassHelpers.AnyPlayerIsMissingShouts(member))
+            // Only players within shout reach count. The rushee is never within ten units of the crew, so
+            // "anyone in the game is missing a shout" stayed true and the barbarian shouted at every call,
+            // five times in six minutes, without reaching anyone new.
+            // Not the barbarian itself: a client never sees its own states in Me.Effects, so counting it
+            // read as "missing" every time and kept the shouting going all the same.
+            var inReach = member.Game.Players
+                .Where(player => player.Id != member.Game.Me.Id
+                    && player.Location != null
+                    && player.Location.Distance(member.Game.Me.Location) <= ShoutReach);
+            if (inReach.Any(ClassHelpers.IsMissingShouts))
             {
                 await ClassHelpers.CastAllShouts(member);
+                _lastShoutsAt = DateTime.Now;
+                _shoutsExpireAt = ShoutsExpireAt(member);
             }
         }
     }
@@ -4801,6 +5691,11 @@ public sealed class RushBot : IBotInstance
         return ColdImmuneAboveNormal.Contains(target.NPCCode);
     }
 
+    /// <summary>
+    /// Gets a client back to town, recasting a portal when its own is out of reach. A rusher ends a
+    /// fight wherever the fight ended, which is regularly nowhere near the portal it opened, and
+    /// TakeTownPortalToTown needs one nearby. Casting another costs a moment; failing loses the run.
+    /// </summary>
     private async Task<bool> ReturnToTown(Client client)
     {
         if (client.Game.IsInTown())
@@ -4876,8 +5771,167 @@ public sealed class RushBot : IBotInstance
                 waypoint,
                 _gameDifficulty,
                 area);
-            return await TraverseTo(client, area);
+            return waypoint == Waypoint.CanyonOfTheMagi
+                ? await ReachCanyonThroughArcane(client)
+                : await TraverseTo(client, area);
         }
+    }
+
+    /// <summary>
+    /// The Canyon of the Magi has no walkable way in: it is reached by its waypoint or by the red portal
+    /// Horazon's journal opens in the Arcane Sanctuary (D2MOO A2Q4.cpp, message 396). The client touches the
+    /// Canyon waypoint on arrival, so this is paid once per character and difficulty.
+    /// </summary>
+    /// <summary>
+    /// The held waypoint in the destination's act with the shortest level route to it, or null when
+    /// starting from town is as short. Only the act's own waypoints count: the route never leaves an act.
+    /// </summary>
+    private async Task<Waypoint?> ClosestHeldWaypoint(Client client, Area destination)
+    {
+        var act = destination.MapToAct();
+        var town = act.MapTownArea();
+        var best = (await _pathingService.GetAreaRoute(client.Game.MapId, MapDifficulty, town, destination)).Count;
+        Waypoint? start = null;
+        foreach (var held in client.Game.Me.AllowedWaypoints.Where(w => w.ToArea().MapToAct() == act && !TownWaypoints.ContainsValue(w)))
+        {
+            var route = await _pathingService.GetAreaRoute(client.Game.MapId, MapDifficulty, held.ToArea(), destination);
+            if (route.Count > 0 && (best == 0 || route.Count < best))
+            {
+                best = route.Count;
+                start = held;
+            }
+        }
+
+        return start;
+    }
+
+    /// <summary>The Arcane Sanctuary has no level link in the map data: it is reached by the portal in Palace Cellar 3.</summary>
+    private async Task<bool> ReachArcaneSanctuary(Client client)
+    {
+        return await TraverseTo(client, Area.PalaceCellarLevel3)
+            && await MoveToObject(client, EntityCode.ArcanePortal)
+            && await StepThroughObject(client, EntityCode.ArcanePortal, Area.ArcaneSanctuary);
+    }
+
+    private async Task<bool> ReachCanyonThroughArcane(Client client)
+    {
+        if (!await ReachArcaneSanctuary(client)
+            || !await MoveToObject(client, EntityCode.HorazonsJournal))
+        {
+            Log.Error("{Client} could not reach Horazon's journal", client.Game.Me.Name);
+            return false;
+        }
+
+        if (client.Game.GetNPCsByCode(NPCCode.Summoner).Count > 0)
+        {
+            await KillNamedBoss(client, NPCCode.Summoner, TimeSpan.FromSeconds(60));
+            await MoveToObject(client, EntityCode.HorazonsJournal);
+        }
+
+        var journal = client.Game.GetEntityByCode(EntityCode.HorazonsJournal).FirstOrDefault();
+        if (journal == null)
+        {
+            Log.Error("{Client} stands at Horazon's journal but does not see it", client.Game.Me.Name);
+            return false;
+        }
+
+        client.Game.InteractWithEntity(journal);
+        await Task.Delay(500);
+        client.Game.SendQuestMessage(journal, HorazonsJournalMessage);
+        if (!GeneralHelpers.TryWithTimeout(
+                _ => client.Game.GetEntityByCode(EntityCode.RedTownPortal).Count > 0,
+                TimeSpan.FromSeconds(5)))
+        {
+            Log.Error("Reading Horazon's journal opened no portal for {Client}", client.Game.Me.Name);
+            return false;
+        }
+
+        if (!await StepThroughObject(client, EntityCode.RedTownPortal, Area.CanyonOfTheMagi)
+            || !await MoveToObject(client, EntityCode.WaypointAct2Arcane))
+        {
+            Log.Error("{Client} could not reach the Canyon waypoint through the journal's portal", client.Game.Me.Name);
+            return false;
+        }
+
+        var canyonWaypoint = client.Game.GetEntityByCode(EntityCode.WaypointAct2Arcane).FirstOrDefault();
+        var held = canyonWaypoint == null ? null : client.Game.ReadWaypoints(canyonWaypoint);
+        Log.Information(
+            "{Client} reached the Canyon of the Magi through the Arcane Sanctuary; waypoint {Outcome}",
+            client.Game.Me.Name,
+            held?.Contains(Waypoint.CanyonOfTheMagi) == true ? "activated" : "not confirmed");
+        return true;
+    }
+
+    /// <summary>
+    /// The Halls of Pain lie behind Nihlathak's Temple, which no level leads to: the way in is the red portal
+    /// Anya opens in Harrogath (D2MOO A5Q4) once she is free in the game. Without it there is no way at all.
+    /// </summary>
+    private async Task<bool> ReachHallsOfPain(Client client)
+    {
+        if (client.Game.Act != Act.Act5 && !await _townManagementService.SwitchAct(client, Act.Act5))
+        {
+            return false;
+        }
+
+        // Anya is no preset of the town map; the portal opens beside her.
+        var townMap = await _mapApiService.GetArea(client.Game.MapId, MapDifficulty, Area.Harrogath);
+        await MoveTo(client, new Point((ushort)(townMap.LevelOrigin.X + AnyaTownOffset.X), (ushort)(townMap.LevelOrigin.Y + AnyaTownOffset.Y)),
+            MovementMode.Walking);
+
+        WorldObject NihlathakPortal() => client.Game.GetEntityByCode(EntityCode.RedTownPortal)
+            .Concat(client.Game.GetEntityByCode(EntityCode.TownPortal))
+            .FirstOrDefault(candidate => candidate.TownPortalArea == Area.NihlathaksTemple);
+
+        // Asked about Nihlathak (message 20137), Anya opens it (D2MOO A5Q4.cpp), unless the game's creator has
+        // finished that quest; a creator that has only started it finds it open already.
+        if (NihlathakPortal() == null && client.Game.GetNPCsByCode(NPCCode.Anya).Count > 0)
+        {
+            await SayToNpc(client, NPCCode.Anya, AnyaOpensNihlathaksPortal);
+            GeneralHelpers.TryWithTimeout(_ => NihlathakPortal() != null, TimeSpan.FromSeconds(6));
+        }
+
+        var portal = NihlathakPortal();
+        if (portal == null)
+        {
+            Log.Information("No portal to Nihlathak's Temple in Harrogath on {Difficulty}", _gameDifficulty);
+            return false;
+        }
+
+        for (var attempt = 0; attempt < 5 && !await ConfirmInArea(client, Area.NihlathaksTemple, attempts: 2); attempt++)
+        {
+            await client.Game.MoveToAsync(portal.Location);
+            client.Game.InteractWithEntity(portal);
+        }
+
+        return await ConfirmInArea(client, Area.NihlathaksTemple, attempts: 2) && await TraverseTo(client, Area.HallsOfPain);
+    }
+
+    private async Task<bool> StepThroughObject(Client client, EntityCode code, Area destination)
+    {
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            var portal = client.Game.GetEntityByCode(code)
+                .OrderBy(o => o.Location.Distance(client.Game.Me.Location))
+                .FirstOrDefault();
+            if (portal == null)
+            {
+                return false;
+            }
+
+            if (portal.Location.Distance(client.Game.Me.Location) > PortalInteractRange)
+            {
+                await client.Game.MoveToAsync(portal.Location);
+            }
+
+            client.Game.InteractWithEntity(portal);
+            if (await ConfirmInArea(client, destination, attempts: 3))
+            {
+                return true;
+            }
+        }
+
+        Log.Error("{Client} could not step through {Portal} into {Area}", client.Game.Me.Name, code, destination);
+        return false;
     }
 
     private static Point MapPointOf(AreaMap map, EntityCode entityCode)
@@ -5017,10 +6071,19 @@ public sealed class RushBot : IBotInstance
     /// bots all keep it up - and the rusher was the only one fighting without it: she carries Shiver
     /// Armor at level five and had never cast it in a single run.
     /// </summary>
+    /// <summary>
+    /// When an armor was last cast, per client. The server drops a cast made during the hit animation, so under
+    /// attack the armor never lands: recast every 150ms, the rusher stood casting it through a pack in Hell
+    /// instead of fighting or leaving, and chickened.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Client, DateTime> _armorCastAt = new();
+    private static readonly TimeSpan ArmorRecastWait = TimeSpan.FromSeconds(1.5);
+
     private static async Task<bool> KeepArmorUp(Client client)
     {
         var me = client.Game.Me;
-        if (me == null || me.Mana < 20)
+        if (me == null || me.Mana < 20
+            || DateTime.Now - _armorCastAt.GetValueOrDefault(client, DateTime.MinValue) < ArmorRecastWait)
         {
             return false;
         }
@@ -5045,6 +6108,7 @@ public sealed class RushBot : IBotInstance
             return false;
         }
 
+        _armorCastAt[client] = DateTime.Now;
         await Task.Delay(150);
         return true;
     }
@@ -5208,6 +6272,7 @@ public sealed class RushBot : IBotInstance
     {
         var timer = Stopwatch.StartNew();
         var kiteTimer = Stopwatch.StartNew();
+        var killingElements = KillingElements(rusher);
         while (timer.Elapsed < limit && rusher.Game.IsInGame())
         {
             if (await KeepArmorUp(rusher))
@@ -5222,6 +6287,13 @@ public sealed class RushBot : IBotInstance
             foreach (var hostile in NearbyHostiles(rusher, radius))
             {
                 if (hostile.Location.Distance(centre) > radius)
+                {
+                    continue;
+                }
+
+                // A monster immune to what kills is left for whoever fights next: a cold immune ate a whole clear
+                // while the killable ones went on hitting.
+                if (killingElements.Count > 0 && killingElements.All(element => _attackService.IsImmuneTo(rusher, hostile, element)))
                 {
                     continue;
                 }
@@ -5265,6 +6337,27 @@ public sealed class RushBot : IBotInstance
 
             await AlternateOrbAndStatic(rusher, target);
         }
+    }
+
+    /// <summary>
+    /// The elements the rusher's attack kills with: the orb or Blizzard for cold, Nova for lightning. Static Field
+    /// only takes a share of life and kills nothing.
+    /// </summary>
+    private static List<ResistType> KillingElements(Client client)
+    {
+        var me = client.Game.Me;
+        var elements = new List<ResistType>();
+        if (me.HasSkill(Skill.FrozenOrb) || me.HasSkill(Skill.Blizzard))
+        {
+            elements.Add(ResistType.Cold);
+        }
+
+        if (me.HasSkill(Skill.Nova))
+        {
+            elements.Add(ResistType.Lightning);
+        }
+
+        return elements;
     }
 
     /// <summary>Healing potions worth carrying before the floor is left alone.</summary>
@@ -5475,9 +6568,22 @@ public sealed class RushBot : IBotInstance
             .Select(entry => entry.Value)
             .Where(entity => entity.State is not EntityState.Dead and not EntityState.Dieing
                 && !NPCHelpers.IsFriendly(entity.NPCCode)
+                && !CatapultSpotters.Contains(entity.NPCCode)
                 && entity.Location.Distance(client.Game.Me.Location) < radius)
             .OrderBy(entity => entity.Location.Distance(client.Game.Me.Location))];
     }
+
+    /// <summary>
+    /// The invisible units that aim act 5's siege catapults. They cannot be killed and do not attack, and
+    /// counted as hostiles they kept the Frozen Tundra waypoint from ever being handed over.
+    /// </summary>
+    /// <remarks>
+    /// The trapped souls of the City of the Damned belong here too: the rusher stood beside them for its whole
+    /// clearing time and still counted them, so that waypoint was never handed over.
+    /// </remarks>
+    private static readonly HashSet<NPCCode> CatapultSpotters =
+        [NPCCode.CatapultSpotterS, NPCCode.CatapultSpotterE, NPCCode.CatapultSpotterSiege, NPCCode.CatapultSpotterW,
+            NPCCode.TrapedSoul1, NPCCode.TrapedSoul2];
 
     private static bool HasFinished(Client client, QuestId quest)
     {
@@ -5500,18 +6606,16 @@ public sealed class RushBot : IBotInstance
 
     private static bool HasDiabloCredit(Client client)
     {
-        return HasKillCredit(client, QuestId.TerrorsEnd)
-            || (client.Game.Quests.GetCharacterFlags(QuestId.TerrorsEnd) & DiabloDefeatedBit) != 0;
+        // Not bit 14: Diablo's death sets it on every player in the game wherever they stand, and the
+        // act 4 to 5 portal refuses a player that has only that (D2MOO A4Q2.cpp, SetCompletionFlag).
+        return HasKillCredit(client, QuestId.TerrorsEnd);
     }
 
     private static async Task RefreshQuestData(IEnumerable<ParticipantSession> sessions)
     {
-        foreach (var session in sessions)
-        {
-            session.Client.Game.RequestQuestData();
-        }
-
-        await Task.Delay(1500);
+        // The reply comes back in 30-50ms; a flat 1.5s wait was paid on every one of these calls.
+        await Task.WhenAll(sessions.Select(session =>
+            Task.Run(() => session.Client.Game.RequestQuestDataAndWait(TimeSpan.FromSeconds(1.5)))));
     }
 
     private bool RequiresDestinationGameProof()
@@ -5523,11 +6627,11 @@ public sealed class RushBot : IBotInstance
 
     private Difficulty DestinationProofDifficulty()
     {
-        if (_rushConfiguration.Destination.Difficulty == Difficulty.Normal
-            && _rushConfiguration.Destination.Act == 4
+        if (_rushConfiguration.Destination.Difficulty < Difficulty.Hell
+            && _rushConfiguration.Destination.Act == (_expansion ? 5 : 4)
             && _rushConfiguration.Destination.Milestone == RushMilestone.Complete)
         {
-            return Difficulty.Nightmare;
+            return _rushConfiguration.Destination.Difficulty + 1;
         }
 
         return _rushConfiguration.Destination.Difficulty;
@@ -5916,6 +7020,23 @@ public sealed class RushBot : IBotInstance
     /// </param>
     private async Task<bool> ConfirmInArea(Client client, Area area, int attempts = 8)
     {
+        // The server sends the new position by itself within a tenth of a second of a portal, warp or
+        // waypoint. Look at it before asking: every check used to start with a blocking update request
+        // and half a second of sleep, even when the character was plainly already there.
+        if (await GeneralHelpers.TryWithTimeout(async _ =>
+            {
+                if (await _pathingService.IsNavigatablePointInArea(client.Game.MapId, MapDifficulty, area, client.Game.Me.Location))
+                {
+                    return true;
+                }
+
+                await Task.Delay(50);
+                return false;
+            }, TimeSpan.FromMilliseconds(300)))
+        {
+            return true;
+        }
+
         for (var attempt = 0; attempt < attempts; attempt++)
         {
             client.Game.RequestUpdate(client.Game.Me.Id);
@@ -5933,12 +7054,32 @@ public sealed class RushBot : IBotInstance
         return false;
     }
 
-    private async Task<bool> MoveToObject(Client client, EntityCode code)
+    /// <param name="area">
+    /// The level to look in, when the caller knows it. Game.Area lags: arriving in the Inner Cloister it
+    /// still read the Cathedral next door, and the waypoint was looked for in the wrong map.
+    /// </param>
+    private async Task<bool> MoveToObject(Client client, EntityCode code, Area? area = null)
     {
         var mode = GetMovementMode(client);
+
+        // Where the server says the object is beats where the map data says it is. The map service put the
+        // Glacial Trail waypoint at the level entrance, 325 units from the one the server sent, and every
+        // path to the wrong spot failed while the real waypoint was in view.
+        var live = client.Game.GetEntityByCode(code)
+            .Where(candidate => candidate.Location.Distance(client.Game.Me.Location) < LiveObjectReach)
+            .OrderBy(candidate => candidate.Location.Distance(client.Game.Me.Location))
+            .FirstOrDefault();
+        if (live != null
+            && await MovementHelpers.MoveToWorldObject(client.Game, _pathingService, _mapApiService, live, mode))
+        {
+            return true;
+        }
+
         for (var attempt = 0; attempt < AreaHopAttempts; attempt++)
         {
-            var path = await _pathingService.GetPathToObject(client.Game, code, mode);
+            var path = area == null
+                ? await _pathingService.GetPathToObject(client.Game, code, mode)
+                : await _pathingService.GetPathToObject(client.Game.MapId, MapDifficulty, area.Value, client.Game.Me.Location, code, mode);
             if (path.Count > 0 && await MovementHelpers.TakePathOfLocations(client.Game, path, mode))
             {
                 return true;
@@ -6053,9 +7194,70 @@ public sealed class RushBot : IBotInstance
             }
 
             rusher.Game.InteractWithEntity(portal);
-            await Task.Delay(1500);
-            return await ConfirmInArea(rusher, Area.DurielsLair);
+            return await ConfirmInArea(rusher, Area.DurielsLair, attempts: 3);
         }, TimeSpan.FromSeconds(30));
+    }
+
+    /// <summary>
+    /// Puts a rushee on the lair portal before the rusher goes in, so it can follow the moment the
+    /// rusher is inside. Entering from across the tomb took five seconds, and the rusher's mercenary
+    /// killed a Normal Duriel in three and a half.
+    /// </summary>
+    private async Task<bool> StageAtLairPortal(Client rushee)
+    {
+        WorldObject portal = null;
+        if (!GeneralHelpers.TryWithTimeout(
+                _ => (portal = rushee.Game.GetEntityByCode(EntityCode.DurielsLairPortal).FirstOrDefault()) != null,
+                TimeSpan.FromSeconds(12)))
+        {
+            Log.Error("{Rushee} cannot see Duriel's lair portal", rushee.Game.Me.Name);
+            return false;
+        }
+
+        return await GeneralHelpers.TryWithTimeout(async attempt =>
+        {
+            rushee.Game.RequestUpdate(rushee.Game.Me.Id);
+            await Task.Delay(200);
+            if (rushee.Game.Me.Location.Distance(portal.Location) <= 3)
+            {
+                return true;
+            }
+
+            if (attempt % 3 == 0)
+            {
+                await MovementHelpers.MoveToWorldObject(rushee.Game, _pathingService, _mapApiService,
+                    portal, GetMovementMode(rushee));
+            }
+            else
+            {
+                await rushee.Game.MoveToAsync(portal);
+            }
+
+            return false;
+        }, TimeSpan.FromSeconds(15));
+    }
+
+    /// <summary>
+    /// Teleports the rusher around the lair, casting nothing, until <paramref name="until"/> finishes.
+    /// A mercenary follows its owner rather than fighting while the owner keeps moving, so this keeps
+    /// it off Duriel until the rushees are in.
+    /// </summary>
+    private async Task KiteUntil(Client rusher, Task until, TimeSpan limit)
+    {
+        var centre = rusher.Game.Me.Location;
+        (int Dx, int Dy)[] circuit = [(0, 25), (18, 18), (25, 0), (18, -18), (0, -25), (-18, -18), (-25, 0), (-18, 18)];
+        var timer = Stopwatch.StartNew();
+        for (var step = 0; !until.IsCompleted && timer.Elapsed < limit && rusher.Game.IsInGame(); step++)
+        {
+            var (dx, dy) = circuit[step % circuit.Length];
+            var spot = OffsetOrNull(centre, dx, dy);
+            if (spot != null)
+            {
+                await MoveTo(rusher, spot, MovementMode.Teleport);
+            }
+
+            await Task.WhenAny(until, Task.Delay(300));
+        }
     }
 
     private async Task<bool> MoveToActTwoPortalSpot(Client rushee, Player rusher, Area destination)
@@ -6254,6 +7456,32 @@ public sealed class RushBot : IBotInstance
         rushee.Game.RequestQuestData();
         await Task.Delay(1000);
         return true;
+    }
+
+    /// <summary>
+    /// Brings a rushee that was saved in an earlier act to the act a step needs. A game starts in the act
+    /// the character last stood in, so a run that ended its waypoint handover in the Rogue Encampment
+    /// began the next one there, with act 2 long finished, and the Mephisto step refused it.
+    /// </summary>
+    private async Task<bool> MoveRusheeToAct(Client rushee, Act act)
+    {
+        try
+        {
+            if (await _townManagementService.SwitchAct(rushee, act))
+            {
+                return true;
+            }
+        }
+        catch (InvalidOperationException exception)
+        {
+            Log.Information("{Rushee} cannot take the waypoint to act {Act}: {Reason}", rushee.Game.Me.Name, act, exception.Message);
+        }
+
+        // Without the Kurast Docks waypoint, Meshif still sails a rushee that has finished act 2.
+        return act == Act.Act3
+            && HasFinished(rushee, QuestId.Act2Outro)
+            && (rushee.Game.Act == Act.Act2 || await _townManagementService.SwitchAct(rushee, Act.Act2))
+            && await TravelWithMeshif(rushee);
     }
 
     private async Task<bool> TravelWithMeshif(Client rushee)

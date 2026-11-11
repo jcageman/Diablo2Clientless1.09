@@ -80,6 +80,20 @@ public class GameDataTests
         Assert.Equal(0x23U, data.CursorItem?.Id);
     }
 
+    // Right-clicking a potion of life (seen live, 4 Nov 2026): the server answers with a removal from the
+    // inventory and nothing after it. A used item is gone, where a lifted one would be on the cursor.
+    [Fact]
+    public void UsedItemRemoval_LeavesTheCursorEmpty()
+    {
+        var data = CreateGameWithAssignedPlayer();
+        data.ItemUpdate(Gem(0x15C, D2NG.Core.D2GS.Items.ContainerType.Inventory, 3, 1, D2NG.Core.D2GS.Items.Action.PutInContainer));
+        data.UseRequested[0x15C] = 0;
+        data.ItemUpdate(Gem(0x15C, D2NG.Core.D2GS.Items.ContainerType.Inventory, 3, 1, D2NG.Core.D2GS.Items.Action.RemoveFromContainer));
+
+        Assert.Null(data.Inventory.FindItemById(0x15C));
+        Assert.Null(data.CursorItem);
+    }
+
     private static D2NG.Core.D2GS.Items.Item Gem(uint id, D2NG.Core.D2GS.Items.ContainerType container, ushort x, ushort y, D2NG.Core.D2GS.Items.Action action)
     {
         return new D2NG.Core.D2GS.Items.Item
