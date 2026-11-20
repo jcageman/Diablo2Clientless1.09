@@ -55,7 +55,7 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
         [Skill.IceBlast] = new(Delivery.Missile, 6, 13),
         [Skill.GlacialSpike] = new(Delivery.Missile, 10, 13),
         [Skill.MagicArrow] = new(Delivery.Missile, 1.5, 15),
-        [Skill.MultipleShot] = new(Delivery.Missile, 4, 13),
+        [Skill.MultipleShot] = new(Delivery.Missile, 4, 16),
         [Skill.GuidedArrow] = new(Delivery.Missile, 8, 18),
         [Skill.LightningFury] = new(Delivery.Missile, 10, 15),
         [Skill.Teeth] = new(Delivery.Missile, 3, 11),
@@ -136,8 +136,11 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
     {
         var game = member.Game;
         var me = game.Me;
+        // A ranged member counts monsters as far as it shoots: kept 20 from Diablo and stepped back to 27, the amazon left him
+        // out at 25 and stood the fight without an arrow.
+        var counted = member.Role == PartyRole.Ranged ? Math.Max(radius + 10, GuidedArrowBossReach) : radius + 10;
         var enemies = NPCHelpers.GetNearbyNPCs(member.Client, anchor, 12, (int)radius)
-            .Where(npc => npc.Location.Distance(me.Location) < radius + 10 && !Ignored(member, npc) && !Untargetable.Contains(npc.NPCCode))
+            .Where(npc => npc.Location.Distance(me.Location) < counted && !Ignored(member, npc) && !Untargetable.Contains(npc.NPCCode))
             .OrderBy(npc => npc.Location.Distance(me.Location))
             .ToList();
         // A shaman behind its pack is not among the twelve nearest, and while rushing it can stand outside the small
@@ -267,6 +270,15 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
         {
             wantedAura = Skill.Concentration;
         }
+
+        // Fanaticism for the barbarian's and the amazon's attacks and Concentration for his own hammers, taking turns: on 1.09
+        // an aura lands at once and lingers about 8 s after the switch, so 6 s turns keep both on the party (the user's pick,
+        // as the Baal bot's paladin turns Conviction and Fanaticism).
+        if (wantedAura is Skill.Fanaticism or Skill.Concentration
+            && member.SkillLevel(Skill.Fanaticism) >= FanaticismFrom && member.SkillLevel(Skill.Concentration) >= FanaticismFrom)
+        {
+            wantedAura = DateTime.UtcNow.Ticks / AuraTurn.Ticks % 2 == 0 ? Skill.Fanaticism : Skill.Concentration;
+        }
         // The paladin ran dry crossing the River of Flame, drinking a mana potion every ten seconds with 61 mana: one
         // point of Meditation quadruples his recovery and the sorceress's beside him.
         if (wantedAura != null && member.SkillLevel(Skill.Meditation) > 0)
@@ -295,11 +307,15 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
 
         // Shamans bring their dead back and greater mummies raise theirs: hitting the nearest monster first, the
         // party fought the same DarkOnes at Andariel's door until it ran out of potions.
-        var target = enemies.FirstOrDefault(npc => FocusFirst.Contains(npc.NPCCode))
-            ?? enemies.FirstOrDefault(npc => Revivers.Contains(npc.NPCCode))
+        // A cold caster aims at what its cold can hurt: on 1.09 immunity is absolute, and an orb at a cold immune does nothing.
+        var hurt = ColdSkills.Contains(stage.Attack)
+            ? enemies.Where(npc => !attackService.IsImmuneTo(member.Client, npc, D2NG.Core.MonsterData.ResistType.Cold)).ToList() is { Count: > 0 } hurtable ? hurtable : enemies
+            : enemies;
+        var target = hurt.FirstOrDefault(npc => FocusFirst.Contains(npc.NPCCode))
+            ?? hurt.FirstOrDefault(npc => Revivers.Contains(npc.NPCCode))
             // The boss drawn back to a cleared room is faced alone: its minions die first, then it.
-            ?? enemies.FirstOrDefault(npc => npc.NPCCode != FacedLast)
-            ?? enemies[0];
+            ?? hurt.FirstOrDefault(npc => npc.NPCCode != FacedLast)
+            ?? hurt[0];
         if (_lastTarget.GetValueOrDefault(member.Name) != target.Id)
         {
             _lastTarget[member.Name] = target.Id;
@@ -308,7 +324,7 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
             D2NG.Core.Tracing.TraceEvents.Target(game, target.Id, target.NPCCode.ToString(), why);
         }
         Track(member, target);
-        var skill = Choose(member, stage, target);
+        var skill = Choose(member, stage, target, enemies);
         if (skill == Skill.Attack && NoMeleeFallback(member))
         {
             return await HoldBack(member, enemies);
@@ -361,7 +377,12 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
 
                 // Guided Arrow finds its target: from 30 on the amazon shoots a boss from well back and draws it to the party.
                 var reach = LongGuidedArrow(member, skill, target) ? GuidedArrowBossReach : use.Reach;
-                if (target.Location.Distance(me.Location) > reach || !await attackService.IsInLineOfSight(member.Client, target.Location))
+                var inSight = await attackService.IsInLineOfSight(member.Client, target.Location);
+                if (!inSight && member.Role == PartyRole.Ranged && await ShootingSpotFor(member, target, enemies, reach) is { } spot)
+                {
+                    await WalkToSpot(member, spot);
+                }
+                else if (target.Location.Distance(me.Location) > reach || !inSight)
                 {
                     await Close(member, target, reach - 3);
                 }
@@ -383,6 +404,11 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
                 await Task.Delay(250);
                 break;
             case Delivery.AtLocation:
+                if (skill == Skill.FrozenOrb && StaticBoss(member, enemies) is { } staticBoss && await StaticOnBoss(member, staticBoss))
+                {
+                    break;
+                }
+
                 var castReach = KeepFromBoss(member, target) is { } keep ? Math.Max(use.Reach, keep + BossCastMargin) : use.Reach;
                 if (target.Location.Distance(me.Location) > castReach)
                 {
@@ -399,7 +425,7 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
                 // Frozen Orb waits a second between casts: Static Field fits in that second, a quarter of the target's
                 // life each time - the sorceress cast it in 2% of a five-minute Diablo fight.
                 await Task.Delay(OrbCast);
-                if (StaticWorthIt(member, target))
+                if (StaticWorthIt(member, enemies))
                 {
                     game.UseRightHandSkillOnLocation(Skill.StaticField, me.Location);
                 }
@@ -619,8 +645,13 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
     private static double ReachedDistance(PartyMember member) => member.Role == PartyRole.Ranged ? 20 : MeleeReach + 2;
 
     /// <summary>The plan's attack, its secondary against what the attack cannot hurt, Attack when mana or gear is missing.</summary>
-    private static Skill Choose(PartyMember member, CombatStage stage, WorldObject target)
+    private Skill Choose(PartyMember member, CombatStage stage, WorldObject target, List<WorldObject> enemies)
     {
+        if (PackShot(member, stage, target, enemies))
+        {
+            return Skill.MultipleShot;
+        }
+
         foreach (var skill in new[] { stage.Attack, stage.Secondary }.OfType<Skill>())
         {
             if (skill == Skill.Attack)
@@ -638,7 +669,13 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
                 continue;
             }
 
-            if (skill == Skill.StaticField && target.LifePercentage < 40)
+            // Not walked up to for: left with a cold immune, the orb sorceress would have closed in on it to cast.
+            if (skill == Skill.StaticField && (target.LifePercentage < 40 || target.Location.Distance(member.Game.Me.Location) > StaticRadius(member)))
+            {
+                continue;
+            }
+
+            if (ColdSkills.Contains(skill) && attackService.IsImmuneTo(member.Client, target, D2NG.Core.MonsterData.ResistType.Cold))
             {
                 continue;
             }
@@ -707,6 +744,28 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
         return true;
     }
 
+    private static readonly HashSet<Skill> ColdSkills = [Skill.FrozenOrb, Skill.Blizzard, Skill.IceBolt, Skill.IceBlast, Skill.GlacialSpike, Skill.FrostNova];
+
+    private const double MultipleShotMana = 20;
+
+    /// <summary>
+    /// Multiple Shot for a pack, as the cow amazon shoots: its fan of arrows, each piercing on, against Guided Arrow's one. A boss
+    /// keeps Guided Arrow.
+    /// </summary>
+    private bool PackShot(PartyMember member, CombatStage stage, WorldObject target, List<WorldObject> enemies)
+        => (stage.Attack == Skill.MultipleShot || stage.Secondary == Skill.MultipleShot)
+            && member.SkillLevel(Skill.MultipleShot) > 0 && HoldsBow(member) && member.Game.Me.Mana >= MultipleShotMana
+            && !target.IsBoss && target.NPCCode != FacedLast
+            && IsPack(target.Location, enemies.Select(npc => npc.Location).ToList());
+
+    private const double PackRadius = 8;
+
+    private const int PackSize = 4;
+
+    /// <summary>Whether at least <see cref="PackSize"/> monsters, the target among them, stand within <see cref="PackRadius"/> of it.</summary>
+    public static bool IsPack(Point target, IReadOnlyList<Point> monsters)
+        => monsters.Count(monster => monster.Distance(target) <= PackRadius) >= PackSize;
+
     private static bool NeedsBow(Skill skill) => skill is Skill.MagicArrow or Skill.MultipleShot or Skill.GuidedArrow;
 
     private static bool HoldsBow(PartyMember member)
@@ -722,19 +781,89 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
 
     private const int FanaticismFrom = 10;
 
+    private static readonly TimeSpan AuraTurn = TimeSpan.FromSeconds(6);
+
     private const int OrbCast = 500;
 
     /// <summary>Static Field's reach grows with its level; kept on the short side of what the skill reaches.</summary>
     private static double StaticRadius(PartyMember member) => Math.Min(15, 4 + 0.6 * member.SkillLevel(Skill.StaticField));
 
     /// <summary>
-    /// A quarter of the target's life is worth a cast while it has more than 40% left, it stands within reach and is not
-    /// lightning immune - on 1.09 immunity is absolute.
+    /// Static Field fills the orb's one-second wait whenever anything within reach is not lightning immune - on 1.09 immunity
+    /// is absolute (the user's rule). Judged on the orb's target alone, above 40%, she cast it after one orb in four; the cold
+    /// immunes beside it, which her orb cannot touch, are the ones it is most for.
     /// </summary>
-    private bool StaticWorthIt(PartyMember member, WorldObject target)
+    private bool StaticWorthIt(PartyMember member, List<WorldObject> enemies)
         => member.SkillLevel(Skill.StaticField) > 0 && member.Game.Me.Mana >= Uses[Skill.StaticField].Mana + Uses[Skill.FrozenOrb].Mana
-            && target.LifePercentage > 40 && target.Location.Distance(member.Game.Me.Location) <= StaticRadius(member)
-            && !attackService.IsImmuneTo(member.Client, target, D2NG.Core.MonsterData.ResistType.Lightning);
+            && enemies.Any(npc => npc.Location.Distance(member.Game.Me.Location) <= StaticRadius(member)
+                && !attackService.IsImmuneTo(member.Client, npc, D2NG.Core.MonsterData.ResistType.Lightning));
+
+    private const double StaticBossFrom = 40;
+
+    private const double StaticBossReach = 25;
+
+    private const int StaticCast = 450;
+
+    /// <summary>
+    /// A boss above 40% within a teleport of the sorceress that lightning hurts: Static Field takes a quarter of what it has
+    /// left a cast, far more than an orb does, so it gets Static alone until it is down to 40% (the user's pick).
+    /// </summary>
+    private WorldObject StaticBoss(PartyMember member, List<WorldObject> enemies)
+        => member.SkillLevel(Skill.StaticField) <= 0 || member.Game.Me.Mana < Uses[Skill.StaticField].Mana ? null
+            : enemies.FirstOrDefault(npc => (npc.IsBoss || npc.NPCCode == FacedLast) && npc.LifePercentage > StaticBossFrom
+                && npc.Location.Distance(member.Game.Me.Location) <= StaticBossReach
+                && !attackService.IsImmuneTo(member.Client, npc, D2NG.Core.MonsterData.ResistType.Lightning));
+
+    /// <summary>Set by the bot: the monster level of the area the member stands in, when the table has it.</summary>
+    public static Func<PartyMember, int?> AreaMonsterLevel { get; set; }
+
+    private const double BoldFromLife = 0.7;
+
+    /// <summary>
+    /// Whether the member may go in after a boss rather than wait where it stands: at or above the area's monster level and
+    /// with most of its life. A party some levels below the monsters plays as safe as before (the user's rule: how bold
+    /// depends on the party's level).
+    /// </summary>
+    private static bool PlaysBold(PartyMember member)
+        => AreaMonsterLevel?.Invoke(member) is int monsters && member.Level >= monsters && member.Game.Me.Life >= member.Game.Me.MaxLife * BoldFromLife;
+
+    /// <summary>
+    /// Into static reach of the boss - by teleport when she has it and plays bold, kept as far as she keeps from bosses - then
+    /// Static. False when the boss is out of reach and she stays where she is: the orb goes instead.
+    /// </summary>
+    private async Task<bool> StaticOnBoss(PartyMember member, WorldObject boss)
+    {
+        var game = member.Game;
+        var keep = KeepFromBoss(member, boss) ?? RangedFromBoss;
+        if (boss.Location.Distance(game.Me.Location) > StaticRadius(member) - 1)
+        {
+            if (!PlaysBold(member))
+            {
+                return false;
+            }
+
+            var spot = game.Me.Location.GetPointBeforePointInSameDirection(boss.Location, Math.Min(keep, StaticRadius(member) - 2));
+            if (member.SkillLevel(Skill.Teleport) > 0 && game.Me.Mana >= Uses[Skill.StaticField].Mana + TeleportMana)
+            {
+                await game.TeleportToLocationAsync(spot, 0);
+            }
+            else
+            {
+                await Close(member, boss, StaticRadius(member) - 2);
+            }
+        }
+
+        if (boss.Location.Distance(game.Me.Location) > StaticRadius(member))
+        {
+            return false;
+        }
+
+        game.UseRightHandSkillOnLocation(Skill.StaticField, game.Me.Location);
+        await Task.Delay(StaticCast);
+        return true;
+    }
+
+    private const int TeleportMana = 24;
 
     private const int LongGuidedArrowFrom = 30;
     private const double GuidedArrowBossReach = 30;
@@ -827,6 +956,79 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
     }
 
     /// <summary>Walks toward the target until within <paramref name="reach"/>, for at most a second and a half.</summary>
+    private async Task<Point> ShootingSpotFor(PartyMember member, WorldObject target, List<WorldObject> enemies, double reach)
+    {
+        var game = member.Game;
+        var map = await mapApiService.GetArea(game.MapId, AreaTraveler.MapDifficulty, game.Area);
+        if (map?.Map == null)
+        {
+            return null;
+        }
+
+        int? Cell(Point point)
+        {
+            var row = point.Y - map.LevelOrigin.Y;
+            var column = point.X - map.LevelOrigin.X;
+            return row < 0 || row >= map.Map.Length || column < 0 || column >= map.Map[row].Length ? null : map.Map[row][column];
+        }
+
+        return ShootingSpot(game.Me.Location, target.Location, enemies.Select(npc => npc.Location).ToList(), reach, Cell);
+    }
+
+    private async Task WalkToSpot(PartyMember member, Point spot)
+    {
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        try
+        {
+            await MovementHelpers.MoveToLocation(member.Game, pathingService, mapApiService, spot, MovementMode.Walking, cancel.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            Log.Debug("{Character} could not walk to its shooting spot {Spot}: {Reason}", member.Name, spot, exception.Message);
+        }
+    }
+
+    private const double ShootFromAtLeast = 10;
+
+    private const double ShootFromAtMost = 18;
+
+    private const double ShootingSpotDetour = 25;
+
+    /// <summary>
+    /// Where a ranged member shoots from when the target is out of sight: a walkable spot that sees it from 10 to 18 away with
+    /// no monster within 8, the nearest to the member. Closing in on it instead walked the inside of a bend, the shortest way,
+    /// and the amazon saw round a sharp corner only once she stood beside the pack; the wide side of the turn sees it from afar.
+    /// Null when no such spot lies within 25 of the member.
+    /// </summary>
+    public static Point ShootingSpot(Point me, Point target, IReadOnlyList<Point> monsters, double reach, Func<Point, int?> cell)
+    {
+        Point best = null;
+        var bestDetour = double.MaxValue;
+        for (var range = Math.Min(reach - 3, ShootFromAtMost); range >= ShootFromAtLeast; range -= 2)
+        {
+            for (var degrees = 0; degrees < 360; degrees += 15)
+            {
+                var angle = degrees * Math.PI / 180;
+                var spot = new Point((ushort)Math.Round(target.X + range * Math.Cos(angle)), (ushort)Math.Round(target.Y + range * Math.Sin(angle)));
+                var detour = spot.Distance(me);
+                if (detour >= bestDetour || detour > ShootingSpotDetour || cell(spot) is not int value || !D2NG.Navigation.Extensions.AreaMapExtensions.IsMovable(value)
+                    || monsters.Any(monster => monster.Distance(spot) < RangedMinimum)
+                    || AttackService.GetPointsOnLine(spot.X, spot.Y, target.X, target.Y).Any(point => cell(point) is not int seen || AttackService.BlocksSight(seen)))
+                {
+                    continue;
+                }
+
+                best = spot;
+                bestDetour = detour;
+            }
+        }
+
+        return best;
+    }
+
     private async Task Close(PartyMember member, WorldObject target, double reach)
     {
         var game = member.Game;

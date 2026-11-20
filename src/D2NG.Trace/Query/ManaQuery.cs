@@ -349,7 +349,7 @@ public sealed class ManaObserver(TimeSpan from, TimeSpan to, CombatObserver comb
         foreach (var row in rows)
         {
             var share = total > 0 ? (double)row.Amount / total : 0;
-            yield return $"  {row.Amount,6} ({share,4:P0}) {row.Cause,-14} {row.Detail ?? "",-24} {row.Count} change{(row.Count == 1 ? "" : "s")}, median {row.Typical}";
+            yield return $"  {row.Amount,6} ({share,4:0%}) {row.Cause,-14} {row.Detail ?? "",-24} {row.Count} change{(row.Count == 1 ? "" : "s")}, median {row.Typical}";
         }
     }
 

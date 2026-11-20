@@ -497,7 +497,7 @@ static async Task<bool> DropListed(string realm, string keyOwner, string gameFol
         game.ClickButton(ClickType.CloseStash);
         Console.WriteLine($"{character.Name}: dropped {dropped} of {droppable.Count}");
         await Task.Delay(TimeSpan.FromSeconds(1));
-        var snapshot = MuleCharacterSnapshot.Take(game, i => Pickit.CanTouchInventoryItem(game, i));
+        var snapshot = MuleCharacterSnapshot.Take(game, i => Pickit.CanTouchMuleItem(game, i));
         await repository.UpdateCharacter(account, character.Name, snapshot);
         Console.WriteLine($"{character.Name}: recorded {snapshot.Items.Count} items and {snapshot.FreeCells} free cells in the mule database");
         await game.LeaveGame();
@@ -543,7 +543,7 @@ static async Task<bool> Record(string realm, string keyOwner, string gameFolder,
 
         // Item packets keep arriving for a moment after joining.
         await Task.Delay(TimeSpan.FromSeconds(3));
-        var snapshot = MuleCharacterSnapshot.Take(client.Game, i => Pickit.CanTouchInventoryItem(client.Game, i));
+        var snapshot = MuleCharacterSnapshot.Take(client.Game, i => Pickit.CanTouchMuleItem(client.Game, i));
         await repository.UpdateCharacter(account, character.Name, snapshot);
         Console.WriteLine($"{character.Name}: recorded {snapshot.Items.Count} items and {snapshot.FreeCells} free cells");
         await client.Game.LeaveGame();

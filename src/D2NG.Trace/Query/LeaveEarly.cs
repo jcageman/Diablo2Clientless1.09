@@ -96,7 +96,7 @@ public static class LeaveEarly
     private static double PerMinute(long gained, double seconds) => seconds > 0 ? gained / seconds * 60 : 0;
 }
 
-/// <summary>A character's lifetime experience after every experience packet (0x1A-0x1C), per trace file, at offsets from the game's start.</summary>
+/// <summary>A character's lifetime experience after every experience packet (0x1A-0x1C, read by <see cref="ExperienceTotal"/>), per trace file, at offsets from the game's start.</summary>
 public sealed class ExperienceCurveObserver : IReplayObserver
 {
     public sealed record FileCurve(string Character, string Game, DateTime GameStartUtc, TimeSpan End, IReadOnlyList<(TimeSpan At, long Total)> Totals);
@@ -104,12 +104,13 @@ public sealed class ExperienceCurveObserver : IReplayObserver
     public List<FileCurve> Files { get; } = [];
 
     private List<(TimeSpan At, long Total)> _totals = [];
+    private readonly ExperienceTotal _experience = new();
 
     public void After(ReplayContext context, TraceRecord record)
     {
-        if (record.Kind == TraceRecordKind.D2gsReceived && record.Payload.Length > 0 && record.Payload[0] is 0x1A or 0x1B or 0x1C && context.Game.Me != null)
+        if (_experience.Apply(context, record))
         {
-            _totals.Add((context.Offset(record), context.Game.Me.Experience));
+            _totals.Add((context.Offset(record), _experience.Total.Value));
         }
     }
 
@@ -117,6 +118,7 @@ public sealed class ExperienceCurveObserver : IReplayObserver
     {
         Files.Add(new FileCurve(context.Client, TraceHistory.Key(context.GameTrace), context.GameTrace.StartUtc, context.Now, _totals));
         _totals = [];
+        _experience.Reset();
     }
 
     /// <summary>One curve per game and character: the files of a rejoin joined, the gain counted from the game's first total.</summary>

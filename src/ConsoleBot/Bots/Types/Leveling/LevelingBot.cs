@@ -83,14 +83,27 @@ public sealed partial class LevelingBot(
         _gameNumber = _config.StartingGameNumber;
         var catalog = SkillCatalog.Load(GameDataLocation.Resolve(GameDataLocation.SkillsFile));
         var plans = LoadPlans(catalog);
-        // The shield's wearer looks at the start of a run too, not only after a game: the first look waited out a Diablo run.
-        _shieldBuyer = _config.Party.Where(member => plans[member.Plan].Shield)
-            .OrderByDescending(member => plans[member.Plan].Class == CharacterClass.Paladin).Select(member => member.Character).FirstOrDefault();
         LoadStepFailures();
         LevelingGamble.StateFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(FailuresFile) ?? ".", "gamble-state.json");
+        _gemStateFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(FailuresFile) ?? ".", "gem-mule-state.json");
+        LoadGemsLeftByMules();
+        _shieldStateFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(FailuresFile) ?? ".", "shield-state.json");
+        LoadShieldSettled();
+        // A shield bearer looks at the start of a run, not only after a game: the first look waited out a Diablo run, and a
+        // restart after a failure is the quickest way to its shield. One its last game saw settled does not look: a Normal game
+        // puts it in act 1 of the next Hell game wherever it left Normal, and the paladin took the whole party through acts 1
+        // to 3 after every restart.
+        foreach (var bearer in _config.Party.Where(member => plans[member.Plan].Shield && !_shieldSettled.Contains(member.Character)))
+        {
+            _shieldBuyers.Add(bearer.Character);
+        }
         _gear = new LevelingGear(new D2NG.Core.ItemData.ItemRequirements(D2NG.Core.ItemData.ItemAffixTable.Load(GameDataLocation.Resolve(GameDataLocation.ItemAffixesFile))));
         var requirements = new D2NG.Core.ItemData.ItemRequirements(D2NG.Core.ItemData.ItemAffixTable.Load(GameDataLocation.Resolve(GameDataLocation.ItemAffixesFile)));
         LevelingCombat.WeaponSpeed = item => requirements.BaseOf(item)?.Speed;
+        LevelingGems.WieldsTwoHanded = member => _gear.IsTwoHandedWeaponWorn(member);
+        LevelingLoot.WornOrKeptByAnyone = (party, item) => _gear.WantedByAnyone(party, item) || _gear.WantedLater(party, item);
+        LevelingLoot.TeleportAlong = TeleportAlong;
+        LevelingCombat.AreaMonsterLevel = member => AreaLevels?.MonsterLevel(member.Game.Area, member.Game.Difficulty, member.Game.ClientCharacter?.IsExpansion == true);
         LevelingGear.WalkTo = async (member, point) =>
         {
             using var cancel = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(8));
@@ -124,6 +137,7 @@ public sealed partial class LevelingBot(
                 var party = new Party(members, _combat, _traveler, pathingService, mapApiService) { Area = members.First(member => member.IsLeader).Game.Act.MapTownArea() };
                 _party = party;
                 party.BetweenStretches = () => KeepPartyUp(party);
+                party.LootBeforeLeaving = () => LootBeforeLeaving(party);
                 party.RestockInTown = () => VisitTown(party);
                 party.GoHomeAlone = ComeHomeAlone;
                 party.DuringFight = () => KeepPartyUpInFight(party);
@@ -139,6 +153,7 @@ public sealed partial class LevelingBot(
                 LevelingBuffs.ForgetGame();
                 _sweptThisGame.Clear();
                 _cubeChestOpened = false;
+                await party.GatherWhereMostAre();
                 party.StartFollowing();
                 await VisitTown(party);
                 await party.LearnWaypoints();
@@ -195,18 +210,70 @@ public sealed partial class LevelingBot(
     /// </summary>
     private readonly Dictionary<string, int> _gemsLeftByMules = new(StringComparer.OrdinalIgnoreCase);
 
+    private string _gemStateFile;
+
+    /// <summary>
+    /// Kept across runs: forgotten at a restart, the paladin's 46 gems no mule takes sent him to the gem mules after his
+    /// first game of every run, a mule game that moved nothing.
+    /// </summary>
+    private void LoadGemsLeftByMules()
+    {
+        try
+        {
+            if (_gemStateFile != null && System.IO.File.Exists(_gemStateFile)
+                && System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(System.IO.File.ReadAllText(_gemStateFile)) is { } saved)
+            {
+                foreach (var (character, left) in saved)
+                {
+                    _gemsLeftByMules[character] = left;
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            Log.Warning(exception, "Could not read {File}; gem mule passes count from zero", _gemStateFile);
+        }
+    }
+
+    private void SaveGemsLeftByMules()
+    {
+        try
+        {
+            if (_gemStateFile != null)
+            {
+                System.IO.File.WriteAllText(_gemStateFile, System.Text.Json.JsonSerializer.Serialize(_gemsLeftByMules));
+            }
+        }
+        catch (Exception exception)
+        {
+            Log.Warning(exception, "Could not write {File}", _gemStateFile);
+        }
+    }
+
     /// <summary>The perfect diamonds the shields still needed when the last game ended; a mule pass leaves that many.</summary>
     private int _perfectDiamondsOwed;
+
+    /// <summary>The shield's collector when the last game ended: only it keeps perfect diamonds from the gem mules.</summary>
+    private string _diamondKeeper;
+
+    /// <summary>
+    /// Three for each missing shield, on the collector alone: kept on every member, the party held six perfect diamonds
+    /// for the sorceress's one shield.
+    /// </summary>
+    private int KeptPerfectDiamonds(string character)
+        => string.Equals(character, _diamondKeeper, StringComparison.OrdinalIgnoreCase) ? Math.Min(_perfectDiamondsOwed, 3) : 0;
 
     private void NoteGemMules(IEnumerable<PartyMember> members)
     {
         _perfectDiamondsOwed = LevelingGems.PerfectDiamondsOwed(members);
+        _diamondKeeper = LevelingGems.Collector(members.Where(member => member.InGame && member.Game.Me != null))?.Name;
         foreach (var member in members.Where(member => member.InGame && member.Game.Me != null))
         {
             var held = LevelingGems.GemsHeld(member.Game);
             if (_gemMuledBefore.Remove(member.Name))
             {
                 _gemsLeftByMules[member.Name] = held;
+                SaveGemsLeftByMules();
                 continue;
             }
 
@@ -223,7 +290,7 @@ public sealed partial class LevelingBot(
         _gemMuledBefore.Add(character);
         try
         {
-            var muled = await muleService.MuleItemsForClient(client, item => LevelingGems.GemsToMule(client.Game, _perfectDiamondsOwed)(item));
+            var muled = await muleService.MuleItemsForClient(client, item => LevelingGems.GemsToMule(client.Game, KeptPerfectDiamonds(character))(item));
             Log.Information("{Character} gem mule pass {Outcome}", character, muled ? "done" : "FAILED");
         }
         catch (Exception exception)
@@ -239,10 +306,12 @@ public sealed partial class LevelingBot(
         }
     }
 
-    /// <summary>The member that shops for its shield before it joins the next game: the one that will wear it.</summary>
-    private string _shieldBuyer;
+    /// <summary>The members that shop for their shield before they join the next game: the ones that will wear it.</summary>
+    private readonly HashSet<string> _shieldBuyers = new(StringComparer.OrdinalIgnoreCase);
 
     private int _shieldShops;
+
+    private int _shopGames;
 
     private int _gamesSinceShieldShop = ShieldShopEvery;
 
@@ -252,15 +321,57 @@ public sealed partial class LevelingBot(
     /// <summary>Games played between two shopping trips.</summary>
     private const int ShieldShopEvery = 2;
 
+    /// <summary>Shield bearers whose last look found their diamond shield worn, or a two-hander in their hands.</summary>
+    private readonly HashSet<string> _shieldSettled = new(StringComparer.OrdinalIgnoreCase);
+
+    private string _shieldStateFile;
+
+    private void LoadShieldSettled()
+    {
+        try
+        {
+            if (System.IO.File.Exists(_shieldStateFile)
+                && System.Text.Json.JsonSerializer.Deserialize<List<string>>(System.IO.File.ReadAllText(_shieldStateFile)) is { } saved)
+            {
+                _shieldSettled.UnionWith(saved);
+            }
+        }
+        catch (Exception exception)
+        {
+            Log.Warning(exception, "Could not read {File}; every shield bearer looks for its shield", _shieldStateFile);
+        }
+    }
+
+    private void NoteShieldSettled(PartyMember member, bool settled)
+    {
+        if (!(settled ? _shieldSettled.Add(member.Name) : _shieldSettled.Remove(member.Name)))
+        {
+            return;
+        }
+
+        try
+        {
+            System.IO.File.WriteAllText(_shieldStateFile, System.Text.Json.JsonSerializer.Serialize(_shieldSettled.Order().ToList()));
+        }
+        catch (Exception exception)
+        {
+            Log.Warning(exception, "Could not write {File}", _shieldStateFile);
+        }
+    }
+
     private void NoteShieldShopping(IEnumerable<PartyMember> members)
     {
         _gamesSinceShieldShop++;
         var inGame = members.Where(member => member.InGame && member.Game.Me != null).ToList();
-        if (LevelingGems.Collector(inGame) is { } collector && LevelingGems.WantsShield(collector, collector)
-            && _shieldShops < MaxShieldShops && _gamesSinceShieldShop >= ShieldShopEvery)
+        foreach (var bearer in inGame.Where(member => member.Plan.Shield))
         {
-            _shieldBuyer = collector.Name;
-            Log.Information("{Character} holds the perfect diamonds and no shield to set them in: it shops for one in Normal before the next game", collector.Name);
+            NoteShieldSettled(bearer, !LevelingGems.NeedsShieldBought(bearer));
+        }
+
+        if (LevelingGems.Collector(inGame) is { } collector && LevelingGems.NeedsShieldBought(collector) && LevelingGems.PerfectHeld(inGame) >= 3
+            && _shieldShops < MaxShieldShops && _gamesSinceShieldShop >= ShieldShopEvery && _shieldBuyers.Add(collector.Name))
+        {
+            Log.Information("The party holds the perfect diamonds and {Character} no shield to set them in: it shops for one in Normal before the next game", collector.Name);
         }
     }
 
@@ -271,9 +382,9 @@ public sealed partial class LevelingBot(
     /// </summary>
     private async Task ShopForShieldAlone(Client client, LevelingMember account, BuildPlan plan, SkillCatalog catalog)
     {
-        _shieldBuyer = null;
         _gamesSinceShieldShop = 0;
-        var game = $"{_bot.GameNamePrefix}s{_shieldShops + 1}";
+        // A number of its own every time: the sorceress could not make "lvlps1" a second after the paladin had left it.
+        var game = $"{_bot.GameNamePrefix}s{++_shopGames}";
         try
         {
             if (!await client.CreateGame(Difficulty.Normal, game, GamePassword, _bot.GameDescriptions[0])
@@ -287,25 +398,20 @@ public sealed partial class LevelingBot(
             var alone = new Party([member], _combat, _traveler, pathingService, mapApiService) { Area = client.Game.Act.MapTownArea() };
             // Asked at the start of a run too, before anything in the game is known: whether it still wants the shield is only
             // seen here, with its items loaded.
-            if (LevelingGems.Collector(alone.Members) is not { } collector || !LevelingGems.WantsShield(collector, collector))
+            if (!LevelingGems.NeedsShieldBought(member))
             {
-                Log.Information("{Character} needs no shield bought: no diamonds for it, or a shield to set them in already", account.Character);
+                NoteShieldSettled(member, true);
+                Log.Information("{Character} needs no shield bought: it has its diamond shield or one to set the diamonds in, or no hand free for one", account.Character);
                 return;
             }
 
             _shieldShops++;
             var parked = await ParkForShield(member);
             await alone.LearnWaypoints();
-            var bought = await ShopForShield(alone, collector);
+            var bought = await ShopForShield(alone, member);
             Log.Information("{Character} shopped in Normal for the diamond shield ({Count} of {Max}): {Outcome}", account.Character, _shieldShops, MaxShieldShops,
                 bought ? "bought one" : "none on offer");
             await TakeBackParked(member, parked);
-            // Left in act 1 or 2, the next game started there too, and the party walked the towns of acts 2 and 3 to the River of
-            // Flame waypoint: half a minute each time.
-            if (alone.Area != D2NG.Core.D2GS.Act.Area.ThePandemoniumFortress)
-            {
-                await alone.TakeWaypoint(D2NG.Core.D2GS.Objects.Waypoint.ThePandemoniumFortress);
-            }
         }
         catch (Exception exception)
         {
@@ -449,7 +555,7 @@ public sealed partial class LevelingBot(
                 await MuleGems(client, account.Character);
             }
 
-            if (string.Equals(_shieldBuyer, account.Character, StringComparison.OrdinalIgnoreCase))
+            if (_shieldBuyers.Remove(account.Character))
             {
                 await ShopForShieldAlone(client, account, plans[account.Plan], catalog);
             }
@@ -599,6 +705,27 @@ public sealed partial class LevelingBot(
     /// Between stretches of walking: points get spent, a member that dropped out comes back, and a dead
     /// one is brought back to life in town.
     /// </summary>
+    /// <summary>A boss's drop lands with its death; a second pass takes what the first made room for.</summary>
+    private static readonly TimeSpan DropLands = TimeSpan.FromMilliseconds(600);
+
+    private const int LootPassesBeforeLeaving = 2;
+
+    private static readonly TimeSpan SweepBeforeHome = TimeSpan.FromSeconds(20);
+
+    private static async Task LootBeforeLeaving(Party party)
+    {
+        await Task.Delay(DropLands);
+        for (var pass = 0; pass < LootPassesBeforeLeaving && party.Leader.InGame && !party.Leader.Game.IsInTown(); pass++)
+        {
+            await LevelingLoot.Collect(party);
+        }
+
+        if (party.Leader.InGame && !party.Leader.Game.IsInTown())
+        {
+            await LevelingLoot.Sweep(party, LevelingLoot.WholeSweep, SweepBeforeHome);
+        }
+    }
+
     private async Task KeepPartyUp(Party party)
     {
         foreach (var member in party.Members)
@@ -648,6 +775,7 @@ public sealed partial class LevelingBot(
         }
 
         await FindItemOnBodies(party);
+        LevelingLoot.Note(party);
         await LevelingLoot.Collect(party);
         RestockWhenDry(party);
         await TownTripTogether(party);
@@ -664,6 +792,7 @@ public sealed partial class LevelingBot(
     private async Task KeepPartyUpInFight(Party party)
     {
         RejoinInBackground(party);
+        LevelingLoot.Note(party);
 
         foreach (var member in party.Members.Where(member => member.InGame && member.Game.Me != null))
         {

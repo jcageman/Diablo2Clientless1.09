@@ -522,6 +522,22 @@ public static class InventoryHelpers
         return moved ? MoveItemResult.Succes : MoveItemResult.Failed;
     }
 
+    /// <summary>
+    /// Puts an inventory item in the closed cube by dropping it on it (0x2A); the server picks the cell.
+    /// Opening the cube for every item cost a transmute of three ingredients about two seconds more.
+    /// </summary>
+    public static MoveItemResult DropInventoryItemOnCube(Game game, Item item)
+    {
+        var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
+        if (cube == null)
+        {
+            Log.Error($"{game.Me.Name}: Cube not found");
+            return MoveItemResult.Failed;
+        }
+
+        return DropOnCube(game, item, cube) ? MoveItemResult.Succes : MoveItemResult.Failed;
+    }
+
     private static bool DropOnCube(Game game, Item item, Item cube)
     {
         var from = item.Location;

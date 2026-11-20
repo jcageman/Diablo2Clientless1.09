@@ -423,7 +423,7 @@ public sealed partial class LevelingGear
     /// Buys, from the open merchant, the best upgrade per slot the member can afford above its reserve. A
     /// merchant's stock is identified, so the score sees every property.
     /// </summary>
-    private bool IsTwoHandedWeaponWorn(PartyMember member)
+    public bool IsTwoHandedWeaponWorn(PartyMember member)
         => member.Game.Me.Equipment.GetValueOrDefault(DirectoryType.RightHand) is { } weapon && IsTwoHanded(weapon);
 
     /// <summary>

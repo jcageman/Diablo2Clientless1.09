@@ -39,13 +39,150 @@ public static class LevelingLoot
     private static int Gold(D2NG.Core.Game game)
         => game.Me.Attributes.GetValueOrDefault(D2NG.Core.D2GS.Players.Attribute.GoldOnPerson) + game.Me.Attributes.GetValueOrDefault(D2NG.Core.D2GS.Players.Attribute.GoldInStash);
 
-    private static readonly ConcurrentDictionary<uint, int> Attempts = new();
+    /// <summary>
+    /// Tries per item where it lies: an item dropped again somewhere else is tried afresh. Counted by id alone, a rare Full Helm
+    /// the user took back twice while the amazon reached for it was never looked at again, dropped three times.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(uint Id, ushort X, ushort Y), int> Attempts = new();
 
-    public static void Reset() => Attempts.Clear();
+    private static (uint Id, ushort X, ushort Y) Spot(Item item) => (item.Id, item.Location.X, item.Location.Y);
+
+    private const double TeleportPickupFrom = 8;
+
+    private const int TeleportPickupMana = 40;
+
+    private static bool Teleports(PartyMember member)
+        => member.SkillLevel(D2NG.Core.D2GS.Players.Skill.Teleport) > 0 && member.Game.Me.Mana >= TeleportPickupMana;
+
+    public static void Reset()
+    {
+        Attempts.Clear();
+        Remembered.Clear();
+    }
+
+    /// <summary>
+    /// Worthwhile drops any member has seen on the ground, where they lay: dropped in a fight, where nobody loots, they went
+    /// out of every member's sight once the party moved on - a rare Voulge and six magic weapons in one Chaos run.
+    /// </summary>
+    private static readonly ConcurrentDictionary<uint, (string Name, QualityType Quality, Point At, D2NG.Core.D2GS.Act.Area Area)> Remembered = new();
+
+    /// <summary>Rares and better, what the nips take, and gear someone would wear or keep.</summary>
+    private static bool WorthASweep(Party party, PartyMember member, Item item)
+        => item.Ground && item.Name != ItemName.Gold
+            && (item.Quality >= QualityType.Set || Prized(member, item) || (LevelingGear.IsEquippable(item) && WornOrKeptByAnyone?.Invoke(party, item) == true));
+
+    /// <summary>Notes the worthwhile drops every member sees now; run during fights too, where nothing is picked up.</summary>
+    public static void Note(Party party)
+    {
+        foreach (var member in party.Members.Where(member => member.InGame && member.Game.Me != null && !member.Game.IsInTown()))
+        {
+            foreach (var item in member.Game.Items.Values.Where(item => !Remembered.ContainsKey(item.Id) && WorthASweep(party, member, item)).ToList())
+            {
+                Remembered[item.Id] = (item.Name.ToString(), item.Quality, item.Location, member.Game.Area);
+            }
+        }
+    }
+
+    /// <summary>After a seal boss: the drops of that group's fights.</summary>
+    public const double NearSweep = 70;
+
+    /// <summary>
+    /// After the last seal boss and before going home: the whole Sanctuary, as the CS bot's sorceress sweeps it - from the right
+    /// seal the left seal's room lies about 270 away.
+    /// </summary>
+    public const double WholeSweep = 400;
+
+    private const double SweepHop = 25;
+
+    /// <summary>Set by the bot: a teleport along the pathing service's path, hop by hop.</summary>
+    public static Func<PartyMember, Point, Task> TeleportAlong { get; set; }
+
+    /// <summary>
+    /// The sorceress teleports to each remembered drop still lying within <paramref name="reach"/> and picks it up where nothing
+    /// guards it, nearest first from wherever she stands, until <paramref name="budget"/> runs out, then comes back (the user's
+    /// pick: she teleports to safe item spots instead of the party walking).
+    /// </summary>
+    public static async Task Sweep(Party party, double reach, TimeSpan budget)
+    {
+        Note(party);
+        var sorceress = party.Members.FirstOrDefault(member => member.InGame && member.Game.Me != null && !member.Game.IsInTown() && Teleports(member));
+        if (sorceress == null)
+        {
+            return;
+        }
+
+        var game = sorceress.Game;
+        var home = game.Me.Location;
+        var held = party.Members.Where(member => member.InGame).SelectMany(member => member.Game.Items.Values.Where(item => !item.Ground)).Select(item => item.Id).ToHashSet();
+        List<KeyValuePair<uint, (string Name, QualityType Quality, Point At, D2NG.Core.D2GS.Act.Area Area)>> Due()
+            => Remembered.Where(entry => !held.Contains(entry.Key) && entry.Value.Area == game.Area && entry.Value.At.Distance(home) <= reach
+                    && Attempts.GetValueOrDefault((entry.Key, entry.Value.At.X, entry.Value.At.Y)) < AttemptsPerItem)
+                .OrderBy(entry => entry.Value.At.Distance(game.Me.Location)).ToList();
+        var count = Due().Count;
+        if (count == 0)
+        {
+            return;
+        }
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var mode = sorceress.Mode;
+        sorceress.Mode = FollowMode.Off;
+        var taken = 0;
+        try
+        {
+            while (clock.Elapsed < budget && Due() is { Count: > 0 } due)
+            {
+                var (id, seen) = due[0];
+                if (!sorceress.InGame || !Teleports(sorceress) || MonstersWithin(sorceress, game.Me.Location, BusyRadius))
+                {
+                    break;
+                }
+
+                await HopTo(sorceress, game.Me.Location.GetPointBeforePointInSameDirection(seen.At, 2));
+                await Task.Delay(300);
+                Remembered.TryRemove(id, out _);
+                if (game.Items.TryGetValue(id, out var item) && item.Ground && !MonstersWithin(sorceress, item.Location, GuardedRadius)
+                    && (game.Inventory.FindFreeSpace(item) != null || (Prized(sorceress, item) && MakeRoomFor(sorceress, item))))
+                {
+                    await Pickup(sorceress, item);
+                    taken += game.Items.TryGetValue(id, out var after) && after.Ground ? 0 : 1;
+                }
+            }
+
+            await HopTo(sorceress, home);
+        }
+        finally
+        {
+            sorceress.Mode = mode;
+        }
+
+        Log.Information("{Character} swept {Count} remembered drops within {Reach}, took {Taken} in {Seconds:F1}s", sorceress.Name, count, reach, taken,
+            clock.Elapsed.TotalSeconds);
+    }
+
+    /// <summary>Along the teleport path when the bot set one; else straight hops of 25, one reaching about thirty.</summary>
+    private static async Task HopTo(PartyMember member, Point to)
+    {
+        var game = member.Game;
+        if (TeleportAlong != null)
+        {
+            await TeleportAlong(member, to);
+            return;
+        }
+
+        for (var hop = 0; hop < 4 && game.Me.Location.Distance(to) > 3; hop++)
+        {
+            var next = game.Me.Location.Distance(to) <= SweepHop ? to : game.Me.Location.GetPointBeforePointInSameDirection(to, game.Me.Location.Distance(to) - SweepHop);
+            if (!await game.TeleportToLocationAsync(next, 0))
+            {
+                break;
+            }
+        }
+    }
 
     public static bool Wanted(PartyMember member, Item item, bool partyWantsBow)
     {
-        if (!item.Ground || Attempts.GetValueOrDefault(item.Id) >= AttemptsPerItem)
+        if (!item.Ground || Attempts.GetValueOrDefault(Spot(item)) >= AttemptsPerItem)
         {
             return false;
         }
@@ -128,10 +265,13 @@ public static class LevelingLoot
     /// around the leader, and those dropped while every bag was too full for a bow or an armor.
     /// </summary>
     private static bool Prized(PartyMember member, Item item)
-        => item.Ground && Attempts.GetValueOrDefault(item.Id) < AttemptsPerItem && item.Name != ItemName.Gold
+        => item.Ground && Attempts.GetValueOrDefault(Spot(item)) < AttemptsPerItem && item.Name != ItemName.Gold
             && (item.Quality >= QualityType.Set || D2NG.Pickit.Pickit.ShouldPickupItem(member.Game, item, shouldPickupGoldItems: false));
 
     private static double Reach(PartyMember member, Item item) => Prized(member, item) ? PrizedLootRadius : LootRadius;
+
+    /// <summary>Set by the bot: whether a member would wear the item now or keep it until it can.</summary>
+    public static Func<Party, Item, bool> WornOrKeptByAnyone { get; set; }
 
     /// <summary>
     /// Every member picks up what it wants near any member, nearest member first so two do not walk to one item. A prized
@@ -144,8 +284,15 @@ public static class LevelingLoot
         // Not in the middle of a fight: with the leader's ground clear the barbarian, a pack still on him at half life,
         // juggled his bag for a Sharktooth Armor with a Jagged Star on his cursor while the leader stood waiting.
         var field = party.Members.Where(member => member.InGame && !member.Game.IsInTown() && !MonstersWithin(member, member.Game.Me.Location, BusyRadius)).ToList();
+        // Plain and superior gear someone would wear or keep is prized like a rare: a superior Martel de Fer lay in the Chaos
+        // Sanctuary for the barbarian's twenty points of Mace Mastery, and only magic and better was looked at.
+        var gear = field.SelectMany(member => member.Game.Items.Values)
+            .Where(item => item.Ground && item.Quality < QualityType.Magical && item.Name != ItemName.Gold && LevelingGear.IsEquippable(item)
+                && WornOrKeptByAnyone?.Invoke(party, item) == true)
+            .Select(item => item.Id).ToHashSet();
+        double ReachFor(PartyMember member, Item item) => gear.Contains(item.Id) ? PrizedLootRadius : Reach(member, item);
         var ground = field
-            .SelectMany(member => member.Game.Items.Values.Where(item => item.Ground && item.Location.Distance(member.Game.Me.Location) <= Reach(member, item)
+            .SelectMany(member => member.Game.Items.Values.Where(item => item.Ground && item.Location.Distance(member.Game.Me.Location) <= ReachFor(member, item)
                 && !MonstersWithin(member, item.Location, GuardedRadius)))
             .GroupBy(item => item.Id)
             .Select(group => group.First())
@@ -158,10 +305,18 @@ public static class LevelingLoot
         var claims = ground
             .Select(item =>
             {
-                var near = field.Where(member => member.Game.Me.Location.Distance(item.Location) <= Reach(member, item))
+                var near = field.Where(member => member.Game.Me.Location.Distance(item.Location) <= ReachFor(member, item))
                     .OrderBy(member => member.Game.Me.Location.Distance(item.Location)).ToList();
-                var taker = near.FirstOrDefault(member => Wanted(member, item, partyWantsBow));
-                var makesRoom = taker == null && near.FirstOrDefault(member => Prized(member, item)) is { } nearest ? nearest : null;
+                bool Takes(PartyMember member) => Wanted(member, item, partyWantsBow)
+                    || (gear.Contains(item.Id) && Attempts.GetValueOrDefault(Spot(item)) < AttemptsPerItem && member.Game.Inventory.FindFreeSpace(item) != null);
+                var taker = near.FirstOrDefault(Takes);
+                // An item a walk away goes to the sorceress, who teleports to it.
+                if (taker != null && taker.Game.Me.Location.Distance(item.Location) > TeleportPickupFrom
+                    && near.FirstOrDefault(member => Teleports(member) && Takes(member)) is { } teleporter)
+                {
+                    taker = teleporter;
+                }
+                var makesRoom = taker == null && near.FirstOrDefault(member => Prized(member, item) || gear.Contains(item.Id)) is { } nearest ? nearest : null;
                 return (Item: item, Member: taker ?? makesRoom, MakesRoom: makesRoom != null);
             })
             .Where(claim => claim.Member != null)
@@ -226,6 +381,16 @@ public static class LevelingLoot
             return true;
         }
 
+        // The things it always carries to their places first, which leaves the free cells as one block: Diablo's unique
+        // Poleaxe and rare Heavy Crossbow, two by four each, stayed on the ground while every member had the cells but
+        // scattered.
+        LevelingInventory.Tidy(member);
+        if (game.Inventory.FindFreeSpace(wanted) != null)
+        {
+            Log.Information("{Character} made room for {Item}: done, by tidying its bag", member.Name, wanted.Name);
+            return true;
+        }
+
         if (game.Inventory.FindItemByName(ItemName.HoradricCube) != null)
         {
             foreach (var item in game.Inventory.Items.Where(IsLoot).OrderByDescending(item => item.Width * item.Height).ToList())
@@ -286,34 +451,44 @@ public static class LevelingLoot
     private static async Task Pickup(PartyMember member, Item item)
     {
         var game = member.Game;
-        Attempts.AddOrUpdate(item.Id, 1, (_, count) => count + 1);
-        if (game.Me.Location.Distance(item.Location) > LootRadius && LevelingGear.WalkTo != null)
+        Attempts.AddOrUpdate(Spot(item), 1, (_, count) => count + 1);
+        // The member's own loop is held for the whole pickup, near or far: left running it fought and followed the leader
+        // while the member walked to a rare Mage Plate, the pickup went out from yards away, and three members' tries in a
+        // row went unanswered by the server until the item was given up.
+        var mode = member.Mode;
+        member.Mode = FollowMode.Off;
+        try
         {
-            // Far off, along a path and with the follow loop held: a straight move stops at the first wall, and following
-            // pulls the member back to the leader half way.
-            var mode = member.Mode;
-            member.Mode = FollowMode.Off;
-            try
+            // A sorceress with Teleport hops to it: at her level the walking cost the party more than the item (the user's
+            // pick). Only items with no monster near are claimed at all, so the spot she lands on is clear.
+            if (Teleports(member) && game.Me.Location.Distance(item.Location) > TeleportPickupFrom)
+            {
+                await game.TeleportToLocationAsync(game.Me.Location.GetPointBeforePointInSameDirection(item.Location, 2), 0);
+            }
+
+            // Far off, along a path: a straight move stops at the first wall.
+            if (game.Me.Location.Distance(item.Location) > LootRadius && LevelingGear.WalkTo != null)
             {
                 await LevelingGear.WalkTo(member, item.Location);
             }
-            finally
+
+            if (game.Me.Location.Distance(item.Location) > 4)
             {
-                member.Mode = mode;
+                await game.MoveToAsync(item);
             }
-        }
 
-        if (game.Me.Location.Distance(item.Location) > 4)
+            game.PickupItem(item);
+            await Task.Delay(400);
+        }
+        finally
         {
-            await game.MoveToAsync(item);
+            member.Mode = mode;
         }
 
-        game.PickupItem(item);
-        await Task.Delay(400);
         var gone = !game.Items.TryGetValue(item.Id, out var now) || !now.Ground;
         if (gone)
         {
-            Attempts.TryRemove(item.Id, out _);
+            Attempts.TryRemove(Spot(item), out _);
             if (item.Name != ItemName.Gold && item.Classification is not (ClassificationType.HealthPotion or ClassificationType.ManaPotion))
             {
                 Log.Information("{Character} picked up {Quality} {Item}", member.Name, item.Quality, item.Name);

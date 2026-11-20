@@ -113,6 +113,15 @@ public class AttackService : IAttackService
         public Point EndPoint { get; set; }
     }
 
+    /// <summary>Collision bits missiles cross: 0x1 blocks walking only, 0x10 marks the floor as alternate.</summary>
+    private const int SeeThroughBits = 0x1 | 0x10;
+
+    /// <summary>
+    /// Whether a map cell stops a missile. Walkable cells never do. The Chaos Sanctuary's star is 17 (0x10 and 0x1) and is
+    /// shot across, yet read as a wall it hid Diablo on it from the amazon and the sorceress for a minute of his fight.
+    /// </summary>
+    public static bool BlocksSight(int cell) => !AreaMapExtensions.IsMovable(cell) && (cell & ~SeeThroughBits) != 0;
+
     public async Task<bool> IsInLineOfSight(Client client, Point toLocation)
     {
         return await IsInLineOfSight(client, client.Game.Me.Location, toLocation);
@@ -162,8 +171,7 @@ public class AttackService : IAttackService
                     return false;
                 }
 
-                var mapValue = areaMap.Map[row][column];
-                if (!AreaMapExtensions.IsMovable(mapValue) && mapValue != 1)
+                if (BlocksSight(areaMap.Map[row][column]))
                 {
                     return false;
                 }

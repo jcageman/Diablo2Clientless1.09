@@ -99,6 +99,38 @@ internal static class ItemPackets
     public static byte[] OnGround(uint id, string code, ushort x = 5060, ushort y = 1905, uint gold = 0)
         => Item(Action.AddToGround, id, code, ground: (x, y), gold: gold);
 
+    /// <summary>An unidentified ring of <paramref name="quality"/> on the ground in the full layout - level and quality, nothing after - as a fresh drop (AddToGround) or a player's (DropToGround) reaches every client.</summary>
+    public static byte[] Loot(uint id, QualityType quality, ushort x, ushort y, Action action = Action.AddToGround)
+    {
+        var bits = new BitWriter();
+        bits.Write(0x9C, 8);
+        bits.Write((uint)action, 8);
+        bits.Write(0x10, 8);
+        bits.Write(0, 8);
+        bits.Write(id, 32);
+        bits.Write(0, 32);
+        bits.Write(0, 8);
+        bits.Write(0, 2);
+        bits.Write(3, 3);
+        bits.Write(x, 16);
+        bits.Write(y, 16);
+        foreach (var c in Encoding.ASCII.GetBytes("rin "))
+        {
+            bits.Write(c, 8);
+        }
+
+        bits.Write(0, 3);
+        bits.Write(60, 7);
+        bits.Write((uint)quality, 4);
+        bits.Write(0, 2);
+        if (quality is QualityType.Rare or QualityType.Crafted)
+        {
+            bits.Write(0, 6);
+        }
+
+        return bits.ToArray();
+    }
+
     public static byte[] Lift(uint id) => [0x19, .. BitConverter.GetBytes(id)];
 
     /// <summary>A client action the bot records beside its request, as the replay reads it.</summary>

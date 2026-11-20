@@ -320,7 +320,7 @@ public sealed class GameEvents(double radius, TimeSpan? shownFrom = null) : ICac
 
         if (band > _lifeBand)
         {
-            Add(context, $"life {fraction:P0} ({context.Life}/{max}), below {LifeLines[band - 1]:P0}");
+            Add(context, $"life {fraction:0%} ({context.Life}/{max}), below {LifeLines[band - 1]:0%}");
         }
         else if (band < _lifeBand && band == 0)
         {

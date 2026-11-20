@@ -226,33 +226,22 @@ public sealed class SeenObserver : IReplayObserver
 }
 
 /// <summary>
-/// A character's experience over one trace file: the first experience packet after joining (0x1A-0x1C)
-/// is the lifetime total, every later one adds to it, which is what Game does with them too; a death is
-/// the server assigning the character's own corpse right after it took damage (<see cref="DeathCheck"/>).
+/// A character's lifetime experience as the packets give it, whatever rules the replay runs under: 0x1C carries the
+/// total - on joining and every few minutes after - and 0x1A and 0x1B add a gain to it. Game under rules before 5 adds all
+/// three, so its running total grew by the whole lifetime total at every 0x1C after the first, and a batch whose last game
+/// had more than the joining one read billions an hour.
 /// </summary>
-public sealed class ExperienceObserver : IReplayObserver
+public sealed class ExperienceTotal
 {
-    private readonly DeathCheck _deaths = new();
+    public long? Total { get; private set; }
 
-    public sealed record FileExperience(string Character, string Game, DateTime StartUtc, DateTime EndUtc, long? First, long? Last, int Deaths);
-
-    public List<FileExperience> Files { get; } = [];
-
-    private long? _first;
-    private long? _total;
-
-    /// <summary>
-    /// The total is kept here from the packets: 0x1C carries the lifetime total - on joining and every few minutes after -
-    /// and 0x1A and 0x1B add to it. Game adds all three, so its running total grew by the whole lifetime total at every
-    /// 0x1C after the first, and a batch whose last game had more than the joining one read billions an hour.
-    /// </summary>
-    public void After(ReplayContext context, TraceRecord record)
+    /// <summary>True when the record is an experience packet, which <see cref="Total"/> now includes.</summary>
+    public bool Apply(ReplayContext context, TraceRecord record)
     {
-        _deaths.After(context, record);
         var payload = record.Payload;
-        if (record.Kind != TraceRecordKind.D2gsReceived || payload.Length == 0 || payload[0] is not (0x1A or 0x1B or 0x1C))
+        if (record.Kind != TraceRecordKind.D2gsReceived || payload.Length == 0)
         {
-            return;
+            return false;
         }
 
         long? value = payload[0] switch
@@ -264,11 +253,39 @@ public sealed class ExperienceObserver : IReplayObserver
         };
         if (value is not { } amount)
         {
-            return;
+            return false;
         }
 
-        _total = payload[0] == 0x1C ? amount : (_total ?? context.Game.Me?.Experience ?? 0) + amount;
-        _first ??= _total;
+        // A gain before any total: Game's figure, which already holds it.
+        Total = payload[0] == 0x1C ? amount : Total is { } total ? total + amount : context.Game.Me?.Experience ?? amount;
+        return true;
+    }
+
+    public void Reset() => Total = null;
+}
+
+/// <summary>
+/// A character's experience over one trace file, from the first experience packet after joining (<see cref="ExperienceTotal"/>);
+/// a death is the server assigning the character's own corpse right after it took damage (<see cref="DeathCheck"/>).
+/// </summary>
+public sealed class ExperienceObserver : IReplayObserver
+{
+    private readonly DeathCheck _deaths = new();
+
+    public sealed record FileExperience(string Character, string Game, DateTime StartUtc, DateTime EndUtc, long? First, long? Last, int Deaths);
+
+    public List<FileExperience> Files { get; } = [];
+
+    private long? _first;
+    private readonly ExperienceTotal _experience = new();
+
+    public void After(ReplayContext context, TraceRecord record)
+    {
+        _deaths.After(context, record);
+        if (_experience.Apply(context, record))
+        {
+            _first ??= _experience.Total;
+        }
     }
 
     public void Finished(ReplayContext context)
@@ -276,9 +293,9 @@ public sealed class ExperienceObserver : IReplayObserver
         _deaths.Finished(context);
         var start = context.File.Header.StartUtc;
         Files.Add(new FileExperience(context.Client, TraceHistory.Key(context.GameTrace), start, context.GameTrace.StartUtc + context.Now,
-            _first, _total, _deaths.Found.Count(f => f.Kind == "death" && f.Offset >= start - context.GameTrace.StartUtc)));
+            _first, _experience.Total, _deaths.Found.Count(f => f.Kind == "death" && f.Offset >= start - context.GameTrace.StartUtc)));
         _first = null;
-        _total = null;
+        _experience.Reset();
     }
 }
 

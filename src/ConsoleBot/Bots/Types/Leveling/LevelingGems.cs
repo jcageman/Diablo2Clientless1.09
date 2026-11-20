@@ -36,6 +36,15 @@ public static class LevelingGems
 
     private static double PerfectWorth(Item item) => Math.Pow(GemsPerUpgrade, Array.IndexOf(Grades, item.Name) - (Grades.Length - 1));
 
+    /// <summary>Whether the member wields a two-handed weapon now; set by the bot, which knows the bases.</summary>
+    public static Func<PartyMember, bool> WieldsTwoHanded { get; set; } = _ => false;
+
+    /// <summary>
+    /// A member that carries a shield: its plan has one and its hands are free for it. The barbarian's plan keeps a shield
+    /// until whirlwind and then swings a two-handed maul - counted as a bearer he was sent to shop for a diamond shield too.
+    /// </summary>
+    private static bool Bears(PartyMember member) => member.Plan.Shield && !WieldsTwoHanded(member);
+
     public static bool IsDiamond(Item item) => Array.IndexOf(Grades, item.Name) >= 0;
 
     private static bool HasDiamondShield(PartyMember member) => HasDiamondShield(member.Game);
@@ -61,9 +70,10 @@ public static class LevelingGems
     /// Gems a member holds beyond this many - bag, cube and stash - go to the gem mules before its next game. The party never
     /// took from the mules and never gave to them either: the paladin, who every flawless gem was handed to, sat with 14
     /// perfect diamonds, 44 other perfect gems and some 80 flawless ones, his bag full, so nothing more could be handed to
-    /// him or cubed or picked up.
+    /// him or cubed or picked up. Forty, not twenty: each pass is a Normal game of its own that also puts the paladin in act 1
+    /// of the next Hell game, two and a half minutes, and with the gem mules nearly full one moved ten gems.
     /// </summary>
-    public const int MuleGemsFrom = 20;
+    public const int MuleGemsFrom = 40;
 
     public static bool IsGem(Item item) => item.Classification == ClassificationType.Gem;
 
@@ -73,7 +83,7 @@ public static class LevelingGems
 
     /// <summary>The perfect diamonds the party's missing shields still need: three for each shield bearer without one.</summary>
     public static int PerfectDiamondsOwed(IEnumerable<PartyMember> members)
-        => members.Count(member => member.InGame && member.Plan.Shield && !HasDiamondShield(member)) * PerShield;
+        => members.Count(member => member.InGame && Bears(member) && !HasDiamondShield(member)) * PerShield;
 
     /// <summary>
     /// What a gem mule pass takes: every gem but the perfect diamonds the shields still need - <paramref name="perfectKept"/>
@@ -103,7 +113,7 @@ public static class LevelingGems
 
     /// <summary>The shield bearer the diamonds go to: a paladin first, and one with a cube to upgrade them in.</summary>
     public static PartyMember Collector(IEnumerable<PartyMember> members)
-        => members.Where(member => member.InGame && member.Plan.Shield && !HasDiamondShield(member)
+        => members.Where(member => member.InGame && Bears(member) && !HasDiamondShield(member)
                 && member.Game.Inventory.FindItemByName(ItemName.HoradricCube) != null)
             .OrderByDescending(member => member.Plan.Class == CharacterClass.Paladin)
             .FirstOrDefault();
@@ -124,6 +134,16 @@ public static class LevelingGems
         => member.Game.Inventory.Items.Select(item => Fresh(member.Game, item)).FirstOrDefault(OpenForDiamonds);
 
     /// <summary>Whether this member should look for the shield at the merchants: it holds the diamonds and no shield to put them in.</summary>
+    /// <summary>
+    /// A shield bearer without its diamond shield and without one to set the diamonds in: it buys one whoever holds the
+    /// diamonds, which reach it in the next town visit before the socketing.
+    /// </summary>
+    public static bool NeedsShieldBought(PartyMember member)
+        => Bears(member) && !HasDiamondShield(member) && Socketable(member) == null;
+
+    /// <summary>The perfect diamonds the party holds, bags and stashes.</summary>
+    public static int PerfectHeld(IEnumerable<PartyMember> members) => members.Where(member => member.InGame).Sum(Perfect);
+
     public static bool WantsShield(PartyMember member, PartyMember collector)
         => member == collector && Perfect(member) >= PerShield && Socketable(member) == null;
 
@@ -133,7 +153,7 @@ public static class LevelingGems
         // Whether to keep them is the whole party's question, not of those in town: a member restocking alone found no
         // collector beside it, and on the next visit the paladin sold a perfect, two flawless and four lesser diamonds.
         Collecting = Collector(everyone) != null;
-        var needed = everyone.Count(member => member.InGame && member.Plan.Shield && !HasDiamondShield(member)) * PerShield;
+        var needed = everyone.Count(member => member.InGame && Bears(member) && !HasDiamondShield(member)) * PerShield;
         var held = everyone.Where(member => member.InGame).Sum(member => member.Game.Inventory.Items.Concat(member.Game.Cube.Items).Where(IsDiamond).Sum(PerfectWorth));
         PickingUp = Collecting && held < needed;
         var collector = Collector(present);
@@ -146,6 +166,12 @@ public static class LevelingGems
         {
             foreach (var gem in member.Game.Inventory.Items.Where(IsDiamond).ToList())
             {
+                // Perfect ones only while the collector still lacks the shield's three: the rest go to the gem mules.
+                if (gem.Name == ItemName.PerfectDiamond && Perfect(collector) >= PerShield)
+                {
+                    continue;
+                }
+
                 await LevelingGear.HandQuestItem(member, collector, gem);
             }
         }

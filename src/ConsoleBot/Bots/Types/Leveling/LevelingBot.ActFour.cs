@@ -111,27 +111,43 @@ public sealed partial class LevelingBot
             // Before the group's first seal: the Infector of Souls came at the first right seal and died on the way to the
             // second, and counted as an earlier boss's corpse the party stood two minutes at the second seal, every run.
             var deadBefore = DeadSuperUniques(party);
-            var groupOpen = true;
-            foreach (var seal in group)
+            var seals = group.Select(seal => (Seal: seal, At: map.Objects.GetValueOrDefault((int)seal)?.FirstOrDefault())).ToList();
+            foreach (var missing in seals.Where(seal => seal.At == null))
             {
-                if (map.Objects.GetValueOrDefault((int)seal)?.FirstOrDefault() is not { } at)
-                {
-                    Log.Warning("{Seal} is not in the map", seal);
-                    continue;
-                }
+                Log.Warning("{Seal} is not in the map", missing.Seal);
+            }
 
-                if (party.RegroupRequested)
+            bool groupOpen;
+            if (seals.All(seal => seal.At != null) && await KillSpot(party, group, map) is { } kill && SealOpener(party) is { } opener)
+            {
+                groupOpen = await OpenFromKillSpot(party, opener, seals.OrderByDescending(seal => seal.At.Distance(kill)).ToList(), kill);
+            }
+            else
+            {
+                groupOpen = true;
+                foreach (var (seal, at) in seals.Where(seal => seal.At != null))
                 {
-                    return false;
-                }
+                    if (party.RegroupRequested)
+                    {
+                        return false;
+                    }
 
-                groupOpen &= await OpenSealOnFoot(party, seal, at);
+                    groupOpen &= await OpenSealOnFoot(party, seal, at);
+                }
+            }
+
+            if (party.RegroupRequested)
+            {
+                return false;
             }
 
             // A seal that stayed shut may be the one its boss comes from: the hunt is cut short rather than waited out for a
             // boss that never spawns, and the party clears on - the rest of the Sanctuary is the experience left in the run.
             allOpen &= groupOpen;
             await FightSealBoss(party, deadBefore, await SealBossSpawn(party, group, map), groupOpen ? SealBossHunt : ShutSealHunt);
+            // After the last group the whole Sanctuary is swept in the seconds Diablo takes to come, as the CS bot does.
+            var last = group == SealGroupsInOrder[^1];
+            await LevelingLoot.Sweep(party, last ? LevelingLoot.WholeSweep : LevelingLoot.NearSweep, last ? DiabloComes : GroupSweep);
             if (party.RegroupRequested)
             {
                 return false;
@@ -181,6 +197,157 @@ public sealed partial class LevelingBot
         return party.Members.Where(member => member.InGame).All(member => HasFinished(member, QuestId.TerrorsEnd));
     }
 
+    /// <summary>
+    /// Where the party waits for a seal group's boss, from the CS bot's games per layout: thirty and more off where he spawns,
+    /// on the side the party falls back to. Left: seal 1 below seal 2, the north-west corner by seal 2; above, the corridor
+    /// north of the room. Top: left of the seal when that ground is open, else well below it. Right: by which seal lies west.
+    /// </summary>
+    private async Task<Point> KillSpot(Party party, EntityCode[] group, D2NG.Navigation.Services.MapApi.AreaMap map)
+    {
+        Point At(EntityCode code) => map.Objects.GetValueOrDefault((int)code)?.FirstOrDefault();
+        if (group.Contains(EntityCode.LeftSeal1) && At(EntityCode.LeftSeal1) is { } left1 && At(EntityCode.LeftSeal2) is { } left2)
+        {
+            return left1.Y > left2.Y ? left1.Add(5, -43) : left1.Add(-2, 15);
+        }
+
+        if (group.Contains(EntityCode.TopSeal) && At(EntityCode.TopSeal) is { } top)
+        {
+            var leftOpen = await pathingService.IsNavigatablePointInArea(party.Leader.Game.MapId, AreaTraveler.MapDifficulty, Area.ChaosSanctuary, top.Add(-20, 0));
+            return leftOpen ? top.Add(-14, 39) : top.Add(9, 103);
+        }
+
+        if (group.Contains(EntityCode.RightSeal1) && At(EntityCode.RightSeal1) is { } right1 && At(EntityCode.RightSeal2) is { } right2)
+        {
+            return right1.X < right2.X ? right1.Add(30, -10) : right1.Add(12, -38);
+        }
+
+        return null;
+    }
+
+    /// <summary>The member that opens the seals for the party: a sorceress with Telekinesis and Teleport.</summary>
+    private static PartyMember SealOpener(Party party)
+        => party.Followers.FirstOrDefault(member => member.InGame && member.SkillLevel(Skill.Telekinesis) > 0 && member.SkillLevel(Skill.Teleport) > 0);
+
+    /// <summary>
+    /// The user's way: the party clears around each seal on foot without opening it, the one furthest from the kill spot
+    /// first so the round ends on the side it falls back to, then holds the kill spot while the sorceress teleports to each
+    /// seal, opens it and is back almost at once; the paladin's hammers spin while she opens the last. A seal she could not
+    /// open is opened on foot as before.
+    /// </summary>
+    private async Task<bool> OpenFromKillSpot(Party party, PartyMember sorceress, List<(EntityCode Seal, Point At)> seals, Point kill)
+    {
+        Log.Information("Seals {Seals} cleared on foot, then opened by {Character} while the party holds {Kill}", string.Join(", ", seals.Select(seal => seal.Seal)),
+            sorceress.Name, kill);
+        foreach (var (_, at) in seals)
+        {
+            if (party.RegroupRequested)
+            {
+                return false;
+            }
+
+            await party.WalkTo(at);
+            await party.FightHere(Party.EngageRadius);
+        }
+
+        await party.WalkTo(kill);
+        await party.FightHere(Party.EngageRadius);
+        var shut = new List<(EntityCode Seal, Point At)>();
+        var mode = sorceress.Mode;
+        sorceress.Mode = FollowMode.Off;
+        try
+        {
+            foreach (var (seal, at) in seals)
+            {
+                if (party.RegroupRequested || !sorceress.InGame)
+                {
+                    return false;
+                }
+
+                var hammers = seal == seals[^1].Seal ? HammersUp(party.Leader) : Task.CompletedTask;
+                var opened = await OpenBySorceress(sorceress, seal, at);
+                await hammers;
+                Log.Information("{Seal} {Outcome} by {Character}", seal, opened ? "is open" : "did NOT open", sorceress.Name);
+                if (!opened)
+                {
+                    shut.Add((seal, at));
+                }
+            }
+
+            await TeleportAlong(sorceress, kill);
+        }
+        finally
+        {
+            sorceress.Mode = mode;
+        }
+
+        var allOpen = true;
+        foreach (var (seal, at) in shut)
+        {
+            allOpen &= await OpenSealOnFoot(party, seal, at);
+        }
+
+        return allOpen;
+    }
+
+    private const double BesideSeal = 4;
+
+    private static readonly TimeSpan SorceressOpens = TimeSpan.FromSeconds(6);
+
+    private async Task<bool> OpenBySorceress(PartyMember sorceress, EntityCode seal, Point at)
+    {
+        var game = sorceress.Game;
+        if (game.Me.Location.Distance(at) > TelekinesisReach)
+        {
+            await TeleportAlong(sorceress, game.Me.Location.GetPointBeforePointInSameDirection(at, BesideSeal));
+        }
+
+        return game.Me.Location.Distance(at) <= SealHelpReach && await TryOpen(game, seal, SorceressOpens, telekinesis: true);
+    }
+
+    /// <summary>A teleport path, hop by hop: one hop reaches about thirty.</summary>
+    private async Task TeleportAlong(PartyMember member, Point to)
+    {
+        var game = member.Game;
+        if (game.Me.Location.Distance(to) <= 3)
+        {
+            return;
+        }
+
+        var path = await pathingService.GetPathToLocation(game, to, D2NG.Navigation.Services.Pathing.MovementMode.Teleport);
+        if (path.Count == 0 || !await MovementHelpers.TakePathOfLocations(game, path, D2NG.Navigation.Services.Pathing.MovementMode.Teleport))
+        {
+            await game.TeleportToLocationAsync(to, 0);
+        }
+    }
+
+    private static readonly TimeSpan PreHammers = TimeSpan.FromSeconds(1.2);
+
+    private static readonly TimeSpan GroupSweep = TimeSpan.FromSeconds(10);
+
+    /// <summary>Diablo comes about 15.6 s after the last seal boss dies (134 games).</summary>
+    private static readonly TimeSpan DiabloComes = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// The hammerdin's hammers are already spinning when the left and right seals open and their bosses' packs come in beside
+    /// them (the user's pick); held as his fights hold them.
+    /// </summary>
+    private static async Task HammersUp(PartyMember paladin)
+    {
+        if (paladin.SkillLevel(Skill.BlessedHammer) <= 0 || !paladin.InGame)
+        {
+            return;
+        }
+
+        var until = DateTime.UtcNow + PreHammers;
+        while (DateTime.UtcNow < until && paladin.Game.Me.Mana >= PreHammerMana)
+        {
+            paladin.Game.ShiftHoldLeftHandSkillOnLocation(Skill.BlessedHammer, paladin.Game.Me.Location);
+            await Task.Delay(250);
+        }
+    }
+
+    private const int PreHammerMana = 20;
+
     /// <summary>Whether the seal is open.</summary>
     private static async Task<bool> OpenSealOnFoot(Party party, EntityCode seal, Point at)
     {
@@ -204,6 +371,11 @@ public sealed partial class LevelingBot
         }
 
         await party.FightHere(Party.EngageRadius);
+        if (seal != EntityCode.TopSeal)
+        {
+            await HammersUp(party.Leader);
+        }
+
         var opened = await TryOpen(game, seal, TimeSpan.FromSeconds(10));
         // The others try: the paladin stood 4.5 from the top seal while sixteen clicks went unanswered and the server held
         // him in place, and without its boss Diablo never came - the run was lost.

@@ -124,7 +124,7 @@ public static class LevelingBuffs
         // Out of town by the server's word: leaving town, the client's area changes first and a cast in that moment
         // reached nobody - every game the barbarian cast twice ten seconds apart.
         if (!barbarian.InGame || barbarian.Game.Me == null || !barbarian.Game.IsOutOfTownConfirmed() || barbarian.SkillLevel(Skill.BattleOrders) <= 0
-            || Needing(barbarian, party.Members).Count == 0 || !await OneShout.WaitAsync(0))
+            || (Needing(barbarian, party.Members).Count == 0 && GuestsLacking(barbarian, party).Count == 0) || !await OneShout.WaitAsync(0))
         {
             return;
         }
@@ -132,7 +132,14 @@ public static class LevelingBuffs
         barbarian.Shouting = true;
         try
         {
-            await ShoutForParty(barbarian, party);
+            if (Needing(barbarian, party.Members).Count > 0)
+            {
+                await ShoutForParty(barbarian, party);
+            }
+            else
+            {
+                await ShoutForGuests(barbarian, GuestsLacking(barbarian, party));
+            }
         }
         finally
         {
@@ -220,6 +227,7 @@ public static class LevelingBuffs
         var missed = near.Except(got).ToList();
         if (got.Count > 0)
         {
+            await AlongWithOrders(barbarian);
             Log.Information("{Character} casts Battle Orders for {Members}, good until {Until:HH:mm:ss}", barbarian.Name,
                 string.Join(", ", got.Select(member => member.Name)), BattleOrdersUntil.GetValueOrDefault(got[0].Name).ToLocalTime());
         }
@@ -277,6 +285,70 @@ public static class LevelingBuffs
         }
 
         return got;
+    }
+
+    private static readonly TimeSpan GuestRetry = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Players in the game that are not the bots - the user joining a run - beside the barbarian, in his party and without
+    /// Battle Orders (the user's pick). Their states come in like any unit's; how long theirs lasts is not known, so they get
+    /// a cast once it is gone.
+    /// </summary>
+    private static List<D2NG.Core.D2GS.Players.Player> GuestsLacking(PartyMember barbarian, Party party)
+    {
+        var bots = party.Members.Select(member => member.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var me = barbarian.Game.Me;
+        var now = DateTime.UtcNow;
+        return barbarian.Game.Players.Where(player => player.Id != me.Id && !bots.Contains(player.Name) && player.Location != null
+                && player.Location.Distance(me.Location) <= ShoutReach && player.PartyId is { } partyId && partyId != NoParty && partyId == me.PartyId
+                && !player.Effects.ContainsKey(EntityEffect.BattleOrders) && now - LastTriedFor.GetValueOrDefault(player.Name) >= GuestRetry)
+            .ToList();
+    }
+
+    private const ushort NoParty = 0xFFFF;
+
+    private static async Task ShoutForGuests(PartyMember barbarian, List<D2NG.Core.D2GS.Players.Player> guests)
+    {
+        if (guests.Count == 0 || barbarian.Game.Me.Mana < BattleOrdersMana
+            || !await GeneralHelpers.TryWithTimeout(async _ =>
+            {
+                await Task.Delay(100);
+                return !CastDropped.Any(barbarian.Game.Me.Effects.ContainsKey);
+            }, WhirlEnds))
+        {
+            return;
+        }
+
+        foreach (var guest in guests)
+        {
+            LastTriedFor[guest.Name] = DateTime.UtcNow;
+        }
+
+        barbarian.Game.UseRightHandSkillOnLocation(Skill.BattleOrders, barbarian.Game.Me.Location);
+        LastCast[(barbarian.Name, Skill.BattleOrders)] = DateTime.UtcNow;
+        await Task.Delay(WarcryGap);
+        await AlongWithOrders(barbarian);
+        Log.Information("{Character} casts Battle Orders for {Guests}, who are not bots: {Outcome}", barbarian.Name, string.Join(", ", guests.Select(guest => guest.Name)),
+            guests.All(guest => guest.Effects.ContainsKey(EntityEffect.BattleOrders)) ? "taken" : "NOT taken by all");
+    }
+
+    /// <summary>A warcry's animation: the server drops a cast sent before the last one ends.</summary>
+    private static readonly TimeSpan WarcryGap = TimeSpan.FromMilliseconds(700);
+
+    /// <summary>Battle Command and Shout follow Battle Orders for whoever stands beside him (the user's pick).</summary>
+    private static async Task AlongWithOrders(PartyMember barbarian)
+    {
+        foreach (var skill in new[] { Skill.BattleCommand, Skill.Shout })
+        {
+            if (barbarian.SkillLevel(skill) <= 0 || barbarian.Game.Me.Mana < BattleOrdersMana)
+            {
+                continue;
+            }
+
+            barbarian.Game.UseRightHandSkillOnLocation(skill, barbarian.Game.Me.Location);
+            LastCast[(barbarian.Name, skill)] = DateTime.UtcNow;
+            await Task.Delay(WarcryGap);
+        }
     }
 
     /// <summary>Out of town within reach of a fetch, without Battle Orders or with under a minute of it left, and not just tried.</summary>

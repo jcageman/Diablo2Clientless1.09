@@ -26,6 +26,9 @@ public sealed partial class LevelingGear
     private static bool IsCaster(PartyMember member)
         => member.Plan.Class is CharacterClass.Sorceress or CharacterClass.Necromancer || (LevelingShop.IsCaster(member) && member.Stage.Attack != Skill.Attack);
 
+    /// <summary>Whether the item goes in an equipment slot at all.</summary>
+    public static bool IsEquippable(Item item) => IsWeaponOrShield(item) || Slots.ContainsKey(item.Classification);
+
     public static bool IsWeaponOrShield(Item item)
         => item.Classification is ClassificationType.Shield or ClassificationType.PaladinShield or ClassificationType.NecromancerShrunkenHead
             || WeaponKinds.Contains(item.Classification);
@@ -58,7 +61,8 @@ public sealed partial class LevelingGear
         }
 
         // A plan with a shield keeps one until whirlwind: the barbarian chose a two-handed battle axe for its damage and
-        // stood in fights with nothing to block with.
+        // stood in fights with nothing to block with. Whirling, he takes whichever hits harder: kept one-handed with a block
+        // shield, he swung a rare Giant Sword at a quarter of his sold maul's damage and the party made 25% less experience.
         if (!IsCaster(member) && member.Plan.Shield && member.Stage.Attack != Skill.Whirlwind && IsTwoHanded(item))
         {
             return -1;

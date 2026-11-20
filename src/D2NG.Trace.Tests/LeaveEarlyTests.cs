@@ -6,6 +6,38 @@ using Xunit;
 
 namespace D2NG.Trace.Tests;
 
+[Collection(nameof(ReplayRulesOverride))]
+public class ExperienceCurveRulesTests
+{
+    /// <summary>Under rules before 5 Game adds the later 0x1C on top; the curve reads the packets and does not.</summary>
+    [Theory]
+    [InlineData("4")]
+    [InlineData("latest")]
+    public void A_later_lifetime_total_sets_the_curve_under_any_rules(string rules)
+    {
+        using var root = new TempRoot();
+        var folder = Game1.Folder(root);
+        new HandTrace("client1", "party1", Game1.Start).Join(1)
+            .Received(1.0, [0x1C, .. BitConverter.GetBytes(399_999_000u)])
+            .Received(1.1, [0x1B, .. BitConverter.GetBytes((ushort)1_000)])
+            .Received(2.0, [0x1C, .. BitConverter.GetBytes(400_000_000u)])
+            .Received(2.1, [0x1A, 0x10])
+            .WriteTo(folder);
+
+        try
+        {
+            ReplayRules.Use(rules);
+            var curve = Assert.Single(GameQuery.Open(folder).ReplayAll(["client1"], TimeSpan.MaxValue, () => new ExperienceCurveObserver(), o => [o])).Observers;
+
+            Assert.Equal([399_999_000L, 400_000_000L, 400_000_000L, 400_000_016L], Assert.Single(curve.Files).Totals.Select(t => t.Total));
+        }
+        finally
+        {
+            ReplayRules.Use(null);
+        }
+    }
+}
+
 public class LeaveEarlyTests
 {
     private static readonly DateTime Night = new(2026, 11, 20, 0, 0, 0, DateTimeKind.Utc);

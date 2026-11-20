@@ -53,7 +53,8 @@ public static class Incidents
             Difficulty = r.Observers.Activity.Difficulty,
             Combat = r.Observers.Combat,
         }).ToList();
-        var found = MergeUnits(replayed.SelectMany(r => r.Observers.Checks.SelectMany(c => c.Found)));
+        var found = MergeUnits(replayed.SelectMany(r => r.Observers.Checks.SelectMany(c => c.Found)).Where(i => i.Kind != LootLeftBehindCheck.Kind));
+        found.AddRange(LootLeftBehindCheck.OnePerItem([.. replayed.SelectMany(r => r.Observers.Checks.OfType<LootLeftBehindCheck>().Select(c => (r.Client, c)))]));
         CompletedCheck[] completed = [new StuckCheck(), new PathFailureCheck(), new NotWalkableCheck(), new SendRateCheck(), new MoveNotConfirmedCheck(), new CombatCheck()];
         var perClient = new (List<Incident> Found, Exception Error)[contexts.Count];
         System.Threading.Tasks.Parallel.For(0, contexts.Count, i =>

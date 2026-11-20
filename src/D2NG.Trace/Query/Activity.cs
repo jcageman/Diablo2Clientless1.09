@@ -640,6 +640,6 @@ public sealed class ActivitySplit
         return total <= 0
             ? "no time"
             : string.Join(", ", Totals.Where(t => t.Value > TimeSpan.Zero).OrderByDescending(t => t.Value)
-                .Select(t => $"{ActivityObserver.Name(t.Key)} {t.Value.TotalSeconds / total:P0} {t.Value.TotalSeconds:0}s"));
+                .Select(t => $"{ActivityObserver.Name(t.Key)} {t.Value.TotalSeconds / total:0%} {t.Value.TotalSeconds:0}s"));
     }
 }

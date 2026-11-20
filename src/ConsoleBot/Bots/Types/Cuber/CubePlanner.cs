@@ -31,7 +31,7 @@ public static class CubePlanner
 {
     /// <param name="maxItems">Most ingredients one run collects; what the cube character can hold at once.</param>
     /// <param name="isFinished">For <see cref="CubeRecipe.RerollUntilKept"/> recipes: an item already good enough to keep, which is not rerolled.</param>
-    /// <param name="canHandOver">For <see cref="CubeRecipe.RerollUntilKept"/> recipes: whether the mule can get the item to the trade screen at all.</param>
+    /// <param name="canHandOver">Whether the mule can get the item to the trade screen at all.</param>
     public static CubePlan Plan(IReadOnlyList<CubeRecipe> recipes, IReadOnlyList<HeldItem> held, int maxItems, Func<Item, bool> isFinished = null, Func<HeldItem, bool> canHandOver = null)
     {
         // Mules holding many ingredients are asked first, so a run needs as few logins as possible.
@@ -68,7 +68,7 @@ public static class CubePlanner
             var count = 0;
             while (taken.Count + perTransmute <= maxItems)
             {
-                var picked = PickOneTransmute(recipe, held, used, joining, ingredientsPerMule);
+                var picked = PickOneTransmute(recipe, held, used, joining, ingredientsPerMule, canHandOver);
                 if (picked == null)
                 {
                     break;
@@ -157,13 +157,14 @@ public static class CubePlanner
         IReadOnlyList<HeldItem> held,
         bool[] used,
         HashSet<(string, string)> joining,
-        Dictionary<(string, string), int> ingredientsPerMule)
+        Dictionary<(string, string), int> ingredientsPerMule,
+        Func<HeldItem, bool> canHandOver)
     {
         var picked = new List<int>();
         foreach (var requirement in recipe.Requirements)
         {
             var unused = Enumerable.Range(0, held.Count)
-                .Where(i => !used[i] && !picked.Contains(i) && requirement.Takes(held[i]))
+                .Where(i => !used[i] && !picked.Contains(i) && requirement.Takes(held[i]) && (canHandOver?.Invoke(held[i]) ?? true))
                 .ToList();
             if (unused.Count - requirement.Reserve < requirement.Amount)
             {

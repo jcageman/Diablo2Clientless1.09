@@ -241,6 +241,21 @@ public class CubePlannerTests
     }
 
     [Fact]
+    public void Craft_SkipsABaseItsMuleCannotHandOver()
+    {
+        var bloodGloves = Recipe("Blood gloves", ItemName.HeavyGloves, (ItemName.HeavyGloves, 1), (ItemName.PerfectRuby, 1));
+        List<HeldItem> held =
+        [
+            new("account", "full", new Item { Name = ItemName.HeavyGloves, Quality = QualityType.Normal, Width = 2, Height = 2, Properties = [] }),
+            .. On("gems", ItemName.PerfectRuby, 2)
+        ];
+
+        var plan = CubePlanner.Plan([bloodGloves], held, 30, canHandOver: h => h.Character != "full");
+
+        Assert.True(plan.IsEmpty);
+    }
+
+    [Fact]
     public void KeptOnlyBy_LeavesItemsAnotherFileKeeps()
     {
         var bloodRing = new CubeRecipe

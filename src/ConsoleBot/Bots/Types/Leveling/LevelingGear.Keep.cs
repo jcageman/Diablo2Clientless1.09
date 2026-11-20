@@ -48,6 +48,11 @@ public sealed partial class LevelingGear
     /// </summary>
     public bool KeepsForLater(PartyMember member, Item item)
     {
+        if (OneHandedBackup(member, item))
+        {
+            return true;
+        }
+
         var kind = SlotKind(item);
         var keep = KeepScore(member, item);
         if (kind == DirectoryType.NotApplicable || keep < 0 || keep <= WornAlone(member, kind) * UpgradeMargin || SlotGain(member, item, out _) > 0)
@@ -57,6 +62,24 @@ public sealed partial class LevelingGear
 
         return !member.Game.Stash.Items.Concat(member.Game.Inventory.Items)
             .Where(other => other.Id != item.Id && SlotKind(other) == kind)
+            .Select(other => (other.Id, Score: KeepScore(member, other)))
+            .Any(other => other.Score > keep || (other.Score == keep && other.Id < item.Id));
+    }
+
+    /// <summary>
+    /// A shield bearer swinging a two-hander keeps its best one-handed weapon, as its shield is kept, to go back to both: the
+    /// barbarian's maul was sold the moment a one-handed sword and a shield took its place.
+    /// </summary>
+    private bool OneHandedBackup(PartyMember member, Item item)
+    {
+        if (IsCaster(member) || !member.Plan.Shield || !WeaponKinds.Contains(item.Classification) || IsTwoHanded(item) || !IsTwoHandedWeaponWorn(member))
+        {
+            return false;
+        }
+
+        var keep = KeepScore(member, item);
+        return keep > 0 && !member.Game.Stash.Items.Concat(member.Game.Inventory.Items)
+            .Where(other => other.Id != item.Id && WeaponKinds.Contains(other.Classification) && !IsTwoHanded(other))
             .Select(other => (other.Id, Score: KeepScore(member, other)))
             .Any(other => other.Score > keep || (other.Score == keep && other.Id < item.Id));
     }

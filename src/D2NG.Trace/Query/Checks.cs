@@ -65,7 +65,7 @@ public abstract class IncidentCheck : ICachedObserver
     public static List<IncidentCheck> Of(string family)
     {
         var checks = Defaults();
-        IncidentCheck[] extra = [new StaleUnitCheck(), new PositionMismatchCheck(), new PositionUnconfirmedCheck(), new OffMapCheck(), new ServerHoldsPositionCheck(), new StuckCursorCheck(), new LifeAboveMaxCheck(), new UnansweredAttackCheck(), new AttackingWithoutHitsCheck(), new GoldDropCheck(), new PotionWasteCheck(), new ItemStateCheck()];
+        IncidentCheck[] extra = [new StaleUnitCheck(), new PositionMismatchCheck(), new PositionUnconfirmedCheck(), new OffMapCheck(), new ServerHoldsPositionCheck(), new StuckCursorCheck(), new LifeAboveMaxCheck(), new UnansweredAttackCheck(), new AttackingWithoutHitsCheck(), new GoldDropCheck(), new PotionWasteCheck(), new ItemStateCheck(), new LootLeftBehindCheck(), new BossNotAttackedCheck()];
         checks.AddRange(extra.Where(c => family == "all" || ((IFamily)c).Family == family));
         return checks;
     }
@@ -421,7 +421,7 @@ public sealed class LifeDropCheck(double share = 0.3, double windowSeconds = 2) 
         _episode = null;
         var lost = episode.Peak - episode.Lowest;
         Report(context, episode.LowestAt, "life drop",
-            $"lost {(double)lost / episode.MaxLife:P0} of max life ({episode.Peak} -> {episode.Lowest} of {episode.MaxLife}) in {(episode.LowestAt - episode.PeakAt).TotalSeconds:0.0}s at {Names.Point(episode.At)}; attacking: {context.Attackers(episode.PeakAt - TimeSpan.FromSeconds(1), episode.LowestAt)}{Likely(_inferred.Where(i => i.At >= episode.PeakAt && i.At <= episode.LowestAt).Select(i => i.Text))}");
+            $"lost {(double)lost / episode.MaxLife:0%} of max life ({episode.Peak} -> {episode.Lowest} of {episode.MaxLife}) in {(episode.LowestAt - episode.PeakAt).TotalSeconds:0.0}s at {Names.Point(episode.At)}; attacking: {context.Attackers(episode.PeakAt - TimeSpan.FromSeconds(1), episode.LowestAt)}{Likely(_inferred.Where(i => i.At >= episode.PeakAt && i.At <= episode.LowestAt).Select(i => i.Text))}");
     }
 
     /// <summary>The inferred causes of drops no attack packet explains, marked as inference; empty when there are none.</summary>

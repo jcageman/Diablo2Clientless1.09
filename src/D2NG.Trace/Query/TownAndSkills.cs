@@ -345,8 +345,8 @@ public sealed class SkillSplit
         }
 
         var top = Skills.Where(s => s.Value.Time > TimeSpan.Zero).OrderByDescending(s => s.Value.Time).Take(shown)
-            .Select(s => $"{s.Key} {s.Value.Time.TotalSeconds / Fighting.TotalSeconds:P0}");
-        return $"{string.Join(", ", top)}{(ManaKnown > TimeSpan.Zero ? $"; mana under {FightObserver.LowMana:P0} for {LowMana.TotalSeconds / Fighting.TotalSeconds:P0} of it" : "")}";
+            .Select(s => $"{s.Key} {s.Value.Time.TotalSeconds / Fighting.TotalSeconds:0%}");
+        return $"{string.Join(", ", top)}{(ManaKnown > TimeSpan.Zero ? $"; mana under {FightObserver.LowMana:0%} for {LowMana.TotalSeconds / Fighting.TotalSeconds:0%} of it" : "")}";
     }
 
     public IEnumerable<string> Lines()
@@ -354,7 +354,7 @@ public sealed class SkillSplit
         foreach (var (skill, row) in Skills.OrderByDescending(s => s.Value.Time).ThenByDescending(s => s.Value.Casts))
         {
             var share = Fighting > TimeSpan.Zero ? row.Time.TotalSeconds / Fighting.TotalSeconds : 0;
-            yield return $"{skill,-18} {row.Casts,6} casts {row.Time.TotalSeconds,7:0}s ({share,4:P0} of fighting) {row.Hits,6} hits{(row.Time > TimeSpan.Zero ? $"  mana under {FightObserver.LowMana:P0} for {row.LowMana.TotalSeconds / row.Time.TotalSeconds:P0} of its time" : "")}";
+            yield return $"{skill,-18} {row.Casts,6} casts {row.Time.TotalSeconds,7:0}s ({share,4:0%} of fighting) {row.Hits,6} hits{(row.Time > TimeSpan.Zero ? $"  mana under {FightObserver.LowMana:0%} for {row.LowMana.TotalSeconds / row.Time.TotalSeconds:0%} of its time" : "")}";
         }
 
         if (Buffs.Count > 0)
@@ -739,7 +739,7 @@ public static class TownStays
     public static string Evidence(TownObserver.FileEnd ended)
     {
         var life = ended.Life is { } share
-            ? $"life {share:P0} {(ended.Left - ended.LifeAt).TotalSeconds:0.###}s before leaving"
+            ? $"life {share:0%} {(ended.Left - ended.LifeAt).TotalSeconds:0.###}s before leaving"
             : "no life seen before leaving";
         return $"{life}; {(ended.SentLeave ? "the client sent leave-game" : "the file ended without the client sending leave-game (connection dropped)")}";
     }
@@ -869,5 +869,5 @@ public sealed class TownSummary
     public string Inside()
         => Total <= TimeSpan.Zero
             ? ""
-            : string.Join(", ", Parts.Where(p => p.Value > TimeSpan.Zero).OrderByDescending(p => p.Value).Select(p => $"{p.Key} {p.Value.TotalSeconds / Total.TotalSeconds:P0} {p.Value.TotalSeconds:0}s"));
+            : string.Join(", ", Parts.Where(p => p.Value > TimeSpan.Zero).OrderByDescending(p => p.Value).Select(p => $"{p.Key} {p.Value.TotalSeconds / Total.TotalSeconds:0%} {p.Value.TotalSeconds:0}s"));
 }

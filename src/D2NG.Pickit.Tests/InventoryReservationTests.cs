@@ -29,6 +29,16 @@ public class InventoryReservationTests
     }
 
     [Theory]
+    [InlineData(4)]
+    [InlineData(7)]
+    public void AMulesCharmsInTheBottomRowsAreTouched(ushort row)
+    {
+        var charm = InInventoryAt(ClassificationType.GrandCharm, ItemName.GrandCharm, row);
+
+        Assert.True(Pickit.CanTouchInventoryItem(CharacterClass.Barbarian, charm, InventoryHeight, reserveCharmRows: false));
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]

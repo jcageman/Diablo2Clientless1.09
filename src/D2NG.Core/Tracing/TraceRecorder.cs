@@ -380,6 +380,12 @@ public sealed class TraceRecorder : IDisposable
 
     private string DateFolder() => Path.Combine(Root, DateTime.Now.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
 
+    /// <summary>
+    /// What Windows refuses in a file name, on every system: Linux's own list is only '/' and NUL, so a trace named there
+    /// with a ':' could not be copied to the Windows machines that read the traces.
+    /// </summary>
+    private static readonly HashSet<char> WindowsInvalid = [.. "\"<>|:*?\\/", .. Enumerable.Range(0, 32).Select(c => (char)c)];
+
     internal static string Safe(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -387,8 +393,7 @@ public sealed class TraceRecorder : IDisposable
             return "unnamed";
         }
 
-        var invalid = Path.GetInvalidFileNameChars();
-        var safe = name.Select(c => invalid.Contains(c) ? '_' : c).ToArray();
+        var safe = name.Select(c => WindowsInvalid.Contains(c) ? '_' : c).ToArray();
         for (var i = safe.Length - 1; i >= 0 && safe[i] is '.' or ' '; i--)
         {
             safe[i] = '_';

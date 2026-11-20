@@ -467,6 +467,7 @@ public class FolderTakeoverTests
     [Fact]
     public void ATakeoverWhoseMarkCouldNotBeWrittenMovesOnToTheNextFolder()
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "an open file only refuses another writer on Windows");
         using var root = new TempRoot();
         var abandoned = Path.Combine(root.Path, "party1");
         Directory.CreateDirectory(abandoned);

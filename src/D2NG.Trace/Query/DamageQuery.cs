@@ -120,7 +120,7 @@ public sealed class DamageObserver(TimeSpan from, TimeSpan to) : IReplayObserver
         foreach (var attacker in Attackers.Values.OrderByDescending(a => a.Lost))
         {
             var share = TotalLost > 0 ? attacker.Lost / TotalLost : 0;
-            yield return $"  {attacker.Lost,7:0} ({share,4:P0}) {attacker.Name,-24} {attacker.Basis,-28} {attacker.Drops} drops {TraceTime.Format(attacker.First)}..{TraceTime.Format(attacker.Last)}{(attacker.Hows.Count > 0 ? "  " + string.Join(", ", attacker.Hows.Take(4)) : "")}";
+            yield return $"  {attacker.Lost,7:0} ({share,4:0%}) {attacker.Name,-24} {attacker.Basis,-28} {attacker.Drops} drops {TraceTime.Format(attacker.First)}..{TraceTime.Format(attacker.Last)}{(attacker.Hows.Count > 0 ? "  " + string.Join(", ", attacker.Hows.Take(4)) : "")}";
         }
 
         if (Inferred.Count > 0)

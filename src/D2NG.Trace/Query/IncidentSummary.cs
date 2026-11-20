@@ -35,7 +35,7 @@ public static class IncidentSummary
         }
 
         Add("deaths", all.Where(r => r.Incident.Kind == "death"), _ => 0, i => Short(i.Detail));
-        Add("chickens", all.Where(r => r.Incident.Kind == "chicken"), r => -LifeShare(r.Incident), i => LifeShare(i) is var share && share < 1 ? $"at {share:P0} life" : Short(i.Detail));
+        Add("chickens", all.Where(r => r.Incident.Kind == "chicken"), r => -LifeShare(r.Incident), i => LifeShare(i) is var share && share < 1 ? $"at {share:0%} life" : Short(i.Detail));
         Add("longest stalls", all.Where(r => r.Incident.Kind is "stuck" or "party split" && r.Incident.End != null), r => (r.Incident.End.Value - r.Incident.Offset).TotalSeconds,
             i => $"{i.Kind} {(i.End.Value - i.Offset).TotalSeconds:0}s");
         Add("failed steps", all.Where(r => r.Incident.Kind is "step failed" or "step timeout"), _ => 0, i => Short(i.Detail));

@@ -266,6 +266,9 @@ public sealed class Party(
     /// <summary>Called between stretches, for whatever the bot wants done often, such as spending points.</summary>
     public Func<Task> BetweenStretches { get; set; } = () => Task.CompletedTask;
 
+    /// <summary>Set by the bot: the loot round run before the party goes home.</summary>
+    public Func<Task> LootBeforeLeaving { get; set; } = () => Task.CompletedTask;
+
     /// <summary>
     /// The upkeep a fight keeps doing - rejoins, restocks, the trip to town together - without the loot and buffs of
     /// <see cref="BetweenStretches"/>, which would walk members into the pack.
@@ -445,7 +448,7 @@ public sealed class Party(
 
                 // The party is drawing a big pack back to cleared ground: fighting where it stands kept this member in
                 // the middle of the pack while the leader left.
-                if (PullBackTo is { } pullBack && DateTime.UtcNow < _pullBackUntil && member.Game.Me.Location.Distance(pullBack) > PullBackArrived)
+                if (PullBackTo is { } pullBack && PullBackHolds(pullBack) && member.Game.Me.Location.Distance(pullBack) > PullBackArrived)
                 {
                     using var back = CancellationTokenSource.CreateLinkedTokenSource(token);
                     back.CancelAfter(TimeSpan.FromSeconds(2));
@@ -752,6 +755,33 @@ public sealed class Party(
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _failedCrossings = new();
 
+    /// <summary>
+    /// A game starts in the town most members stand in, the higher act on a tie; a member elsewhere takes its own town's
+    /// waypoint there. A game in another difficulty first - the gem mules, the shield check - puts that member in act 1 of
+    /// the next one, and with the paladin leading from there all four walked acts 1 to 3: a minute and a half.
+    /// </summary>
+    public async Task GatherWhereMostAre()
+    {
+        var placed = members.Where(member => member.InGame && member.Game.Me != null && member.Game.IsInTown()).ToList();
+        var most = placed.GroupBy(member => member.Game.Act).OrderByDescending(group => group.Count()).ThenByDescending(group => group.Key).FirstOrDefault();
+        if (most == null || most.Key == Area.MapToAct() || !TownWaypoints.TryGetValue(most.Key, out var town))
+        {
+            return;
+        }
+
+        var before = Area;
+        Area = town.ToArea();
+        Log.Information("The party starts in {Town}, where {Count} of {Members} stand, not in the leader's {Before}", Area, most.Count(), placed.Count, before);
+        foreach (var member in placed.Where(member => member.Game.Act != most.Key))
+        {
+            if (!await WaypointToPartyTown(member) && member == Leader)
+            {
+                Area = before;
+                return;
+            }
+        }
+    }
+
     private async Task<bool> WaypointToPartyTown(PartyMember member)
     {
         var destination = TownWaypoints[Area.MapToAct()];
@@ -962,9 +992,29 @@ public sealed class Party(
         _lastPackCentre = centre;
         _pulledBackAt = DateTime.UtcNow;
         _pullBackUntil = DateTime.UtcNow + PullBackHold;
-        using var back = new CancellationTokenSource(TimeSpan.FromSeconds(4));
-        await MovementHelpers.MoveToLocation(Leader.Game, pathingService, mapApiService, spot, MovementMode.Walking, back.Token);
+        _walkingBack = true;
+        try
+        {
+            using var back = new CancellationTokenSource(TimeSpan.FromSeconds(4));
+            await MovementHelpers.MoveToLocation(Leader.Game, pathingService, mapApiService, spot, MovementMode.Walking, back.Token);
+        }
+        finally
+        {
+            _walkingBack = false;
+        }
     }
+
+    private volatile bool _walkingBack;
+
+    private const double PullBackLeft = 10;
+
+    /// <summary>
+    /// The others make for the pull-back spot while the leader walks there or stands on it. Once he stepped out to fight the
+    /// pack it drew, two seconds after pulling back, the amazon and the sorceress still walked to the spot and out again for
+    /// four more seconds without an arrow or an orb.
+    /// </summary>
+    private bool PullBackHolds(Point pullBack)
+        => DateTime.UtcNow < _pullBackUntil && (_walkingBack || Leader.Game.Me.Location.Distance(pullBack) <= PullBackLeft);
 
     /// <summary>
     /// Whether the party falls back and holds when a member drops out (<see cref="FallBackOnDrop"/>,
@@ -1107,8 +1157,8 @@ public sealed class Party(
     private const double BehindArrived = 3;
 
     /// <summary>
-    /// Where a ranged member stands while monsters are near the leader: a few steps behind him, on the far side from them.
-    /// Null when nothing is near.
+    /// Where a ranged member steps to while monsters are near the leader: a few steps behind him, on the far side from them.
+    /// Null when nothing is near or where it stands will do.
     /// </summary>
     private Point BehindTheLeader(PartyMember member, Point leaderAt)
     {
@@ -1116,7 +1166,31 @@ public sealed class Party(
             .Where(npc => !LevelingCombat.Untargetable.Contains(npc.NPCCode)).ToList();
         var bosses = near.Select(npc => (At: npc.Location, Keep: combat.KeepFromBoss(member, npc)))
             .Where(boss => boss.Keep != null).Select(boss => (boss.At, boss.Keep.Value)).ToList();
-        return BehindSpot(leaderAt, near.Select(npc => npc.Location).ToList(), bosses);
+        var monsters = near.Select(npc => npc.Location).ToList();
+        return MustStepBehind(member.Game.Me.Location, leaderAt, monsters, bosses) ? BehindSpot(leaderAt, monsters, bosses) : null;
+    }
+
+    private const double TooCloseToShoot = 8;
+
+    /// <summary>
+    /// Whether a ranged member has to leave where it stands: a monster is on it, a boss is nearer than it keeps, or it stands
+    /// nearer the pack than the leader. The spot behind him moves with every step he and the pack take, and walking to it
+    /// before every arrow took a quarter of the amazon's fighting time: 1154 runs between 649 shots in one Chaos run.
+    /// </summary>
+    public static bool MustStepBehind(Point me, Point leaderAt, IReadOnlyList<Point> monsters, IReadOnlyList<(Point At, double Keep)> bosses)
+    {
+        if (monsters.Count == 0)
+        {
+            return false;
+        }
+
+        if (monsters.Any(monster => monster.Distance(me) < TooCloseToShoot) || bosses.Any(boss => boss.At.Distance(me) < boss.Keep))
+        {
+            return true;
+        }
+
+        var pack = new Point((ushort)monsters.Average(monster => monster.X), (ushort)monsters.Average(monster => monster.Y));
+        return me.Distance(pack) < leaderAt.Distance(pack);
     }
 
     private const double BossKeepMargin = 2;
@@ -1293,16 +1367,31 @@ public sealed class Party(
         await GeneralHelpers.TryWithTimeout(async _ =>
         {
             var leaderAt = Leader.Game.Me.Location;
-            if (Followers.Where(member => member.InGame && member.Mode == FollowMode.Follow)
-                .All(member => member.Game.Me.Location.Distance(leaderAt) <= distance))
+            var away = Followers.Where(member => member.InGame && member.Mode == FollowMode.Follow && member.Game.Me.Location.Distance(leaderAt) > distance).ToList();
+            if (away.Count == 0)
             {
                 return true;
+            }
+
+            // A member held in a fight is helped, not waited for: the barbarian whirled through a pack of Doom Knights 33
+            // yards from the paladin for ten seconds while the other three stood waiting for him.
+            if (away.FirstOrDefault(InAFight) is { } fighting)
+            {
+                await WalkTo(Leader, leaderAt.GetPointBeforePointInSameDirection(fighting.Game.Me.Location, HelpDistance), TimeSpan.FromSeconds(2));
+                await FightHere(EngageRadius);
+                return false;
             }
 
             await Task.Delay(200);
             return false;
         }, GatherLimit);
     }
+
+    private const double HelpDistance = 6;
+
+    private static bool InAFight(PartyMember member)
+        => !member.Game.IsInTown() && NPCHelpers.GetNearbyNPCs(member.Client, member.Game.Me.Location, 10, (int)EngageRadius)
+            .Any(npc => !LevelingCombat.Untargetable.Contains(npc.NPCCode));
 
     /// <summary>
     /// Walks the leader along <paramref name="path"/>, fighting and gathering the party every few points. A
@@ -1983,6 +2072,9 @@ public sealed class Party(
             return true;
         }
 
+        // What lies around is picked up before leaving: Diablo's four rares and a magic bow lay where he fell on 20 Nov 2026
+        // while the party went home six seconds after his death (the user's rule: any boss or kill, before going home).
+        await LootBeforeLeaving();
         if (await PortalHome(town.ToArea()))
         {
             Area = town.ToArea();

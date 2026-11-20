@@ -3299,7 +3299,7 @@ public class CowBot : MultiClientBotBase
     {
         foreach (var point in AttackService.GetPointsOnLine(from.X, from.Y, to.X, to.Y))
         {
-            if (LevelCell(map, point) is not int cell || (!AreaMapExtensions.IsMovable(cell) && cell != 1))
+            if (LevelCell(map, point) is not int cell || AttackService.BlocksSight(cell))
             {
                 return false;
             }

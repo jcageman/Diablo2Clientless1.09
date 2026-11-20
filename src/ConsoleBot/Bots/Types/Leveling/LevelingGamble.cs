@@ -133,6 +133,7 @@ public static class LevelingGamble
     {
         var game = member.Game;
         var kinds = KindsFor(member.Level);
+        kinds.UnionWith(MasteredWeaponKinds(party));
         var stopAt = Keeps(member);
         if (!GeneralHelpers.TryWithTimeout(_ =>
             {
@@ -224,6 +225,21 @@ public static class LevelingGamble
             startGold - LevelingGear.Gold(game), npc.NPCCode, kept.Count == 0 ? "none" : string.Join(", ", kept), _emptyRounds);
     }
 
+    /// <summary>
+    /// Bases gambled for a unique or set item the party wants, whatever the kinds: Twitchthroe is the only unique Studded
+    /// Leather, and for a shield bearer that is not a paladin its block adds to the shield's (the user's pick).
+    /// </summary>
+    private static readonly HashSet<ItemName> WantedBases = [ItemName.StuddedLeather];
+
+    /// <summary>
+    /// Maces, hammers and clubs while a member has Mace Mastery (the user's pick): its bonus lets a mace beat a better sword,
+    /// and the barbarian's last maul went to a merchant.
+    /// </summary>
+    private static ClassificationType[] MasteredWeaponKinds(Party party)
+        => party.Members.Any(member => member.InGame && member.SkillLevel(D2NG.Core.D2GS.Players.Skill.MaceMastery) > 0)
+            ? [ClassificationType.Mace, ClassificationType.Hammer, ClassificationType.Club]
+            : [];
+
     private static List<Item> Offers(D2NG.Core.Game game, HashSet<ClassificationType> kinds)
-        => game.Items.Values.Where(item => item.IsInMerchantTab() && kinds.Contains(item.Classification)).ToList();
+        => game.Items.Values.Where(item => item.IsInMerchantTab() && (kinds.Contains(item.Classification) || WantedBases.Contains(item.Name))).ToList();
 }
