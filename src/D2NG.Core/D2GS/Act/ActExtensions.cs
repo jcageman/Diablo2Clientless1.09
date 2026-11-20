@@ -4,6 +4,9 @@ namespace D2NG.Core.D2GS.Act;
 
 public static class ActExtensions
 {
+    public static bool IsTown(this Area area)
+        => area is Area.RogueEncampment or Area.LutGholein or Area.KurastDocks or Area.ThePandemoniumFortress or Area.Harrogath;
+
     public static Act MapToAct(this Area area)
     {
         return (int)area switch

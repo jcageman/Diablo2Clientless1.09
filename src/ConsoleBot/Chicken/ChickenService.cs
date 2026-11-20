@@ -6,6 +6,7 @@ using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Players;
+using D2NG.Core.Tracing;
 using ConsoleBot.Helpers;
 using Serilog;
 using System;
@@ -44,6 +45,30 @@ public static class ChickenService
         watch.Start();
     }
 
+    /// <summary>
+    /// Leaves the game now the way a chicken does - the same leave thread, the same trace event - for a
+    /// bot that sees the danger before the damage arrives.
+    /// </summary>
+    public static void LeaveNow(Client client, string reason)
+    {
+        if (Watches.TryGetValue(client, out var watch))
+        {
+            watch.LeaveNow(reason);
+        }
+    }
+
+    /// <summary>
+    /// A different life fraction to leave at for a while - lower to finish a boss that is all but dead - or null for
+    /// the configured one again.
+    /// </summary>
+    public static void OverrideLifeChicken(Client client, double? lifeFraction)
+    {
+        if (Watches.TryGetValue(client, out var watch))
+        {
+            watch.LifeChickenOverride = lifeFraction;
+        }
+    }
+
     /// <summary>Where the character died in the current game when it stayed for its corpse; null when it has not.</summary>
     public static Point DeathLocation(Client client) => Watches.TryGetValue(client, out var watch) ? watch.DeathLocation : null;
 
@@ -52,6 +77,15 @@ public static class ChickenService
     /// line, and says whether to hold the whirl for it. Nothing can be drunk once the whirl has started.
     /// </summary>
     public static bool HoldForRejuvenation(Client client) => Watches.TryGetValue(client, out var watch) && watch.HoldForRejuvenation();
+
+    /// <summary>
+    /// When the character last died for real - its own corpse assigned with damage just taken, or the
+    /// dead body state - whether or not it stayed for the corpse; MinValue when it never has.
+    /// </summary>
+    public static DateTime LastDeath(Client client) => Watches.TryGetValue(client, out var watch) ? watch.LastDeathAt : DateTime.MinValue;
+
+    /// <summary>When this client last asked to leave the game for its own safety; MinValue when it never has.</summary>
+    public static DateTime LastLeaveRequest(Client client) => Watches.TryGetValue(client, out var watch) ? watch.LeaveRequestedAt : DateTime.MinValue;
 
     /// <summary>Back to normal chickening, after the corpse was picked up or at the end of the game.</summary>
     public static void ClearDeath(Client client)
@@ -64,11 +98,19 @@ public static class ChickenService
 
     private sealed class ChickenWatch
     {
+        public volatile object LifeChickenOverrideBox;
+
+        public double? LifeChickenOverride
+        {
+            get => (double?)LifeChickenOverrideBox;
+            set => LifeChickenOverrideBox = value;
+        }
+
         private readonly Client _client;
         private readonly ChickenConfiguration _config;
         private readonly object _leaveGate = new();
 
-        /// <summary>How long after being hit potions and chickening stay armed.</summary>
+        /// <summary>How long after being hit healing and chickening stay armed. Mana does not wait for a hit.</summary>
         private static readonly TimeSpan UnharmedGracePeriod = TimeSpan.FromSeconds(3);
         private bool _leaveSignalled;
 
@@ -82,6 +124,7 @@ public static class ChickenService
         /// </summary>
         private static readonly TimeSpan KillingBurstWindow = TimeSpan.FromMilliseconds(500);
         private int _previousMaxLife;
+        private int _previousLevel;
         private object _loggedLifeAboveMaximumFor;
         private object _loggedManaAboveMaximumFor;
         private DateTime _lastDamageAt = DateTime.MinValue;
@@ -100,13 +143,19 @@ public static class ChickenService
 
         private static readonly TimeSpan BuffedMaximumGrace = TimeSpan.FromSeconds(10);
 
-        private static readonly TimeSpan RejuvenationGap = TimeSpan.FromMilliseconds(500);
-
         private static readonly TimeSpan RespawnDelay = TimeSpan.FromMilliseconds(500);
 
         private readonly bool _stayForCorpse;
 
         public volatile Point DeathLocation;
+
+        private long _lastDeathTicks = DateTime.MinValue.Ticks;
+
+        public DateTime LastDeathAt
+        {
+            get => new(Interlocked.Read(ref _lastDeathTicks));
+            private set => Interlocked.Exchange(ref _lastDeathTicks, value.Ticks);
+        }
 
         public ChickenWatch(Client client, ChickenConfiguration config, bool stayForCorpse)
         {
@@ -207,7 +256,7 @@ public static class ChickenService
                     return false;
                 }
 
-                if (DateTime.Now - _lastRejuvenationAt <= RejuvenationGap)
+                if (DateTime.Now - _lastRejuvenationAt <= PotionRules.RejuvenationGap)
                 {
                     return true;
                 }
@@ -257,6 +306,7 @@ public static class ChickenService
 
                 if (me.Effects.ContainsKey(EntityEffect.Playerbody))
                 {
+                    LastDeathAt = DateTime.Now;
                     RequestLeave($"{me.Name} has died");
                     return;
                 }
@@ -268,7 +318,12 @@ public static class ChickenService
                     _zeroLifeAt = DateTime.Now;
                 }
 
-                var maximumRose = maxLife > _previousMaxLife || me.MaxMana > _previousMaxMana;
+                // Not the first reading of a game, where the previous maximum is still nought, and not a
+                // level-up, which fills life by itself: drinking there cost a level 2 party half its belt.
+                var level = me.Attributes.TryGetValue(D2NG.Core.D2GS.Players.Attribute.Level, out var currentLevel) ? currentLevel : 0;
+                var maximumRose = (maxLife > _previousMaxLife || me.MaxMana > _previousMaxMana)
+                    && _previousMaxLife > 0 && level == _previousLevel;
+                _previousLevel = level;
                 var lostLife = life < _previousLife;
                 var loss = _previousLife - life;
                 var sincePrevious = DateTime.Now - _previousLifeAt;
@@ -306,7 +361,7 @@ public static class ChickenService
                     // value, so nudge the bar once and then stay quiet until something actually
                     // hits us - chasing the new maximum would drain the belt for nothing.
                     _awaitingDamage = true;
-                    if (PotionIntervalElapsed(game))
+                    if (DateTime.Now - game.LastUsedHealthPotionTime > PotionRules.HealingInterval(_config))
                     {
                         game.UseHealthPotions();
                     }
@@ -314,110 +369,70 @@ public static class ChickenService
                     return;
                 }
 
-                // Nothing in town damages you, so nothing in town should drink or leave. Game.Area is
+                // Nothing in town damages you, so nothing in town should heal or leave. Game.Area is
                 // the only town test available here and it lags every transition, so a portal into town
                 // left this drinking at 88% life beside the vendor until the belt was empty. Recent
                 // damage is the one signal that cannot be stale.
-                if (DateTime.Now - _lastDamageAt > UnharmedGracePeriod)
+                var now = DateTime.Now;
+                var recentlyDamaged = now - _lastDamageAt <= UnharmedGracePeriod;
+                var whirling = ClassHelpers.IsWhirling(me);
+                var lifeFraction = maxLife > 0 ? (double)life / maxLife : 0;
+                if (recentlyDamaged && LeaveForLife(me, life, maxLife, loss, lostLife, sincePrevious, lifeFraction, whirling))
                 {
                     return;
                 }
 
-                // An absolute floor cannot be moved by a maximum changing, so it is always honoured.
-                if (_config.LifeChickenAbsolute > 0 && life <= _config.LifeChickenAbsolute)
+                var plan = PotionRules.Plan(new PotionSituation
                 {
-                    RequestLeave($"{me.Name} at {life} life, below absolute floor {_config.LifeChickenAbsolute}");
+                    LifeFraction = lifeFraction,
+                    LifeKnown = maxLife > 0,
+                    Mana = me.Mana,
+                    MaxMana = me.MaxMana,
+                    RecentlyDamaged = recentlyDamaged,
+                    AwaitingDamage = _awaitingDamage,
+                    Whirling = whirling,
+                    OutOfTownConfirmed = game.IsOutOfTownConfirmed(),
+                    SinceHealingPotion = now - game.LastUsedHealthPotionTime,
+                    SinceManaPotion = now - game.LastUsedManaPotionTime,
+                    SinceRejuvenation = now - _lastRejuvenationAt,
+                    Rejuvenations = game.Inventory.Items.Count(i => i.Classification == ClassificationType.RejuvenationPotion),
+                    HealingPotions = game.Belt.NumOfHealthPotions() + game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion),
+                    ManaPotions = game.Belt.NumOfManaPotions() + game.Inventory.Items.Count(i => i.Classification == ClassificationType.ManaPotion),
+                }, _config);
+
+                // A rejuvenation heals at once, so it does not wait out the healing potion interval:
+                // the taxi drank a healing potion at 46%, sat locked out for a second and a half while
+                // she fell from 769 to 471, and chickened with fifteen rejuvenations in her inventory.
+                if (plan.DrinkRejuvenation && game.UseRejuvenationPotion())
+                {
+                    _lastRejuvenationAt = now;
+                }
+
+                // A drink that finds nothing to drink is worth saying out loud: the character
+                // otherwise sits below the threshold looking like it is healing and never does.
+                // With the counts attached, an empty belt tells apart from a belt that was never
+                // filled because there was no inventory room to buy into.
+                if ((plan.DrinkHealing && !game.UseHealthPotions()) || plan.WarnNoHealing)
+                {
+                    Log.Warning("{Character} has no health potions to drink at {Life} of {MaxLife} life, belt {Belt}, inventory {Inventory}, {FreeCells} free cells",
+                        me.Name, life, maxLife,
+                        game.Belt.NumOfHealthPotions(),
+                        game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion),
+                        game.Inventory.FreeCellCount());
+                }
+
+                if (plan.LeaveOutOfHealing)
+                {
+                    RequestLeave($"{me.Name} out of healing and rejuvenation potions at {life} of {maxLife} life");
                     return;
                 }
 
-                if (lostLife && loss >= life && sincePrevious <= KillingBurstWindow)
+                if (plan.DrinkMana)
                 {
-                    RequestLeave($"{me.Name} lost {loss} in {(int)sincePrevious.TotalMilliseconds}ms with {life} of {maxLife} left, one more hit like it kills");
-                    return;
+                    game.UseManaPotion();
                 }
 
-                if (_awaitingDamage || maxLife <= 0)
-                {
-                    return;
-                }
-
-                // Leaving is judged against the maximum before Battle Orders for a few seconds after
-                // it: the shouts doubled the taxi's maximum while Storm Casters at the star had her
-                // at 59%, and against the new maximum that read 30% and chickened her. Drinking is
-                // not: judged the same way, a taxi at 563 of 1795 drank a healing potion instead of
-                // a rejuvenation and chickened two seconds later. The absolute floor above guards
-                // those seconds.
-                var leaveOf = DateTime.Now - _maxLifeRoseAt < BuffedMaximumGrace ? Math.Min(maxLife, _maxLifeBeforeRise) : maxLife;
-                var lifeFraction = (double)life / maxLife;
-                if ((double)life / leaveOf <= _config.LifeChickenPercent)
-                {
-                    RequestLeave($"{me.Name} at {life} of {maxLife} life ({lifeFraction:P0})");
-                    return;
-                }
-
-                // Leaving still works mid-whirl and is judged here; a drink would only be ignored and
-                // start the rejuvenation gap, so it waits for the state update that ends the whirl.
-                // Under Iron Maiden every hit of the rest of the whirl comes back doubled with no potion
-                // possible: seven of eight rejuvenations drunk like that ended in a leave at no life.
-                if (ClassHelpers.IsWhirling(me))
-                {
-                    if (lifeFraction < _config.UseRejuvenationPercent && me.Effects.ContainsKey(EntityEffect.Ironmaiden))
-                    {
-                        RequestLeave($"{me.Name} whirling under Iron Maiden at {life} of {maxLife} life, below the rejuvenation line with no potion possible");
-                    }
-
-                    return;
-                }
-
-                var canDrink = PotionIntervalElapsed(game);
-                if (lifeFraction < _config.UseRejuvenationPercent)
-                {
-                    // A rejuvenation heals at once, so it does not wait out the healing potion
-                    // interval: the taxi drank a healing potion at 46%, sat locked out
-                    // for a second and a half while she fell from 769 to 471, and chickened with
-                    // fifteen rejuvenations in her inventory. The short gap lets the new life value
-                    // arrive before a second one is spent.
-                    if (game.Inventory.Items.Any(i => i.Classification == ClassificationType.RejuvenationPotion))
-                    {
-                        if (DateTime.Now - _lastRejuvenationAt > RejuvenationGap && game.UseRejuvenationPotion())
-                        {
-                            _lastRejuvenationAt = DateTime.Now;
-                        }
-
-                        return;
-                    }
-
-                    if (canDrink && !game.UseHealthPotions() && _config.LeaveWhenOutOfHealthPotions)
-                    {
-                        RequestLeave($"{me.Name} out of healing and rejuvenation potions at {life} of {maxLife} life");
-                    }
-
-                    return;
-                }
-
-                if (lifeFraction < _config.UseHealthPotionPercent && canDrink)
-                {
-                    // A drink that finds nothing to drink is worth saying out loud: the character
-                    // otherwise sits below the threshold looking like it is healing and never does.
-                    if (!game.UseHealthPotions())
-                    {
-                        // With the counts attached, an empty belt tells apart from a belt that was
-                        // never filled because there was no inventory room to buy into.
-                        Log.Warning("{Character} has no health potions to drink at {Life} of {MaxLife} life, belt {Belt}, inventory {Inventory}, {FreeCells} free cells",
-                            me.Name, life, maxLife,
-                            game.Belt.NumOfHealthPotions(),
-                            game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion),
-                            game.Inventory.FreeCellCount());
-                    }
-
-                    return;
-                }
-
-                if (me.MaxMana > 0
-                    && (double)me.Mana / me.MaxMana < _config.UseManaPotionPercent
-                    && canDrink
-                    && !game.UseManaPotion()
-                    && _config.LeaveWhenOutOfManaPotions)
+                if (plan.LeaveOutOfMana)
                 {
                     RequestLeave($"{me.Name} out of mana potions at {me.Mana} of {me.MaxMana} mana");
                 }
@@ -431,7 +446,56 @@ public static class ChickenService
             }
         }
 
+        /// <summary>Whether life alone means leaving now; asked only while damage is recent.</summary>
+        private bool LeaveForLife(Self me, int life, int maxLife, int loss, bool lostLife, TimeSpan sincePrevious, double lifeFraction, bool whirling)
+        {
+            // An absolute floor cannot be moved by a maximum changing, so it is always honoured.
+            if (_config.LifeChickenAbsolute > 0 && life <= _config.LifeChickenAbsolute)
+            {
+                RequestLeave($"{me.Name} at {life} life, below absolute floor {_config.LifeChickenAbsolute}");
+                return true;
+            }
+
+            if (lostLife && loss >= life && sincePrevious <= KillingBurstWindow)
+            {
+                RequestLeave($"{me.Name} lost {loss} in {(int)sincePrevious.TotalMilliseconds}ms with {life} of {maxLife} left, one more hit like it kills");
+                return true;
+            }
+
+            if (_awaitingDamage || maxLife <= 0)
+            {
+                return false;
+            }
+
+            // Leaving is judged against the maximum before Battle Orders for a few seconds after
+            // it: the shouts doubled the taxi's maximum while Storm Casters at the star had her
+            // at 59%, and against the new maximum that read 30% and chickened her. Drinking is
+            // not: judged the same way, a taxi at 563 of 1795 drank a healing potion instead of
+            // a rejuvenation and chickened two seconds later. The absolute floor above guards
+            // those seconds.
+            var leaveOf = DateTime.Now - _maxLifeRoseAt < BuffedMaximumGrace ? Math.Min(maxLife, _maxLifeBeforeRise) : maxLife;
+            if ((double)life / leaveOf <= (LifeChickenOverride ?? _config.LifeChickenPercent))
+            {
+                RequestLeave($"{me.Name} at {life} of {maxLife} life ({lifeFraction:P0})");
+                return true;
+            }
+
+            // Leaving still works mid-whirl and is judged here; a drink would only be ignored and
+            // start the rejuvenation gap, so it waits for the state update that ends the whirl.
+            // Under Iron Maiden every hit of the rest of the whirl comes back doubled with no potion
+            // possible: seven of eight rejuvenations drunk like that ended in a leave at no life.
+            if (whirling && lifeFraction < _config.UseRejuvenationPercent && me.Effects.ContainsKey(EntityEffect.Ironmaiden))
+            {
+                RequestLeave($"{me.Name} whirling under Iron Maiden at {life} of {maxLife} life, below the rejuvenation line with no potion possible");
+                return true;
+            }
+
+            return false;
+        }
+
         private DateTime _leaveRequestedAt = DateTime.MinValue;
+
+        public DateTime LeaveRequestedAt => _leaveRequestedAt;
         private DateTime _zeroLifeAt = DateTime.MinValue;
 
         /// <summary>
@@ -450,6 +514,11 @@ public static class ChickenService
             }
 
             var now = DateTime.Now;
+            if (now - _lastDamageAt < UnharmedGracePeriod)
+            {
+                LastDeathAt = now;
+            }
+
             // A body from an earlier death is assigned right after joining, when the area can still lag;
             // a death always comes with damage just taken.
             if (_stayForCorpse && !_leaving && game.IsInGame() && game.Area != Area.None && !game.IsInTown()
@@ -470,6 +539,7 @@ public static class ChickenService
                 me.Name, packet.CorpseId, _client.Game.Area, me.Location, _client.Game.IsInGame(), _leaving,
                 _leaveRequestedAt == DateTime.MinValue ? "never" : $"{(int)(now - _leaveRequestedAt).TotalMilliseconds}ms",
                 _zeroLifeAt == DateTime.MinValue ? "never" : $"{(int)(now - _zeroLifeAt).TotalMilliseconds}ms");
+            TraceEvents.Death(game, packet.CorpseId, now - _lastDamageAt < UnharmedGracePeriod, me.Location);
         }
 
         /// <summary>
@@ -487,9 +557,18 @@ public static class ChickenService
                 return;
             }
 
-            if ((double)life / maxLife <= _config.LifeChickenPercent)
+            if ((double)life / maxLife <= (LifeChickenOverride ?? _config.LifeChickenPercent))
             {
                 RequestLeave($"{me.Name} at {life} of {maxLife} life on the way back to its corpse");
+            }
+        }
+
+        /// <summary>Under the evaluation lock, so a leave from a bot thread cannot cross an evaluation in progress.</summary>
+        public void LeaveNow(string reason)
+        {
+            lock (_evaluateGate)
+            {
+                RequestLeave(reason);
             }
         }
 
@@ -508,16 +587,11 @@ public static class ChickenService
                 _leaveSignalled = true;
                 Monitor.Pulse(_leaveGate);
             }
+
+            TraceEvents.Chicken(_client.Game, reason);
         }
 
         private static int RejuvenationStock(Game game) =>
             game.Belt.NumOfRejuvenationPotions() + game.Inventory.Items.Count(i => i.Classification == ClassificationType.RejuvenationPotion);
-
-        private bool PotionIntervalElapsed(Game game)
-        {
-            var interval = TimeSpan.FromMilliseconds(_config.MinPotionIntervalMs);
-            return DateTime.Now - game.LastUsedHealthPotionTime > interval
-                && DateTime.Now - game.LastUsedManaPotionTime > interval;
-        }
     }
 }

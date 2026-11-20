@@ -17,7 +17,8 @@ internal class ParseItemPacket : D2gsPacket
 
     public ParseItemPacket(D2gsPacket packet) : base(packet.Raw)
     {
-        Item = Parse(Raw.ToList());
+        Item = Parse(Raw);
+        Item.Packet = Raw;
     }
 
     private static void GenericInfo(BitReader reader, ref Item item) // get basic info such as item
@@ -362,6 +363,7 @@ internal class ParseItemPacket : D2gsPacket
         }
 
         itemProperty.Type = propertyData.StatType;
+        itemProperty.StatId = statId;
         switch (propertyData.StatType)
         {
             case StatType.DefensePerLevel:
@@ -491,7 +493,7 @@ internal class ParseItemPacket : D2gsPacket
                     var maximumDamagePropertyData = DataManager.DataManager.Instance.ItemPropertyData.GetByStatType(StatType.MaximumColdDamage);
                     itemProperty.MaximumValue = reader.Read(maximumDamagePropertyData.SaveBits);
                     itemProperty.Value = itemProperty.MinimumValue;
-                    reader.Read(8); //duration
+                    itemProperty.Length = reader.Read(8);
                     return true;
                 }
 
@@ -501,7 +503,7 @@ internal class ParseItemPacket : D2gsPacket
                     var maximumDamagePropertyData = DataManager.DataManager.Instance.ItemPropertyData.GetByStatType(StatType.MaximumPoisonDamage);
                     itemProperty.MaximumValue = reader.Read(maximumDamagePropertyData.SaveBits);
                     itemProperty.Value = itemProperty.MinimumValue;
-                    reader.Read(8); //duration
+                    itemProperty.Length = reader.Read(8);
                     return true;
                 }
 
@@ -520,10 +522,12 @@ internal class ParseItemPacket : D2gsPacket
         }
     }
 
-    public static Item Parse(List<byte> packet)
+    public static Item Parse(List<byte> packet) => Parse(packet.ToArray());
+
+    private static Item Parse(byte[] packet)
     {
         var item = new Item();
-        var reader = new BitReader(packet.ToArray());
+        var reader = new BitReader(packet);
         try
         {
             GenericInfo(reader, ref item);

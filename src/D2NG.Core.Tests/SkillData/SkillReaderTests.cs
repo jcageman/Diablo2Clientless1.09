@@ -32,6 +32,8 @@ public class SkillReaderTests
             Encoding.ASCII.GetBytes("Natural Resistan").CopyTo(raw, s + 4);
             raw[s + 20] = 4;
             Put(raw, s + 152, 12);
+            Put(raw, s + 160, 44);
+            Put(raw, s + 164, 55);
             raw[s + 212] = 2;
             raw[s + 213] = 3;
             raw[s + 214] = 1;
@@ -57,6 +59,7 @@ public class SkillReaderTests
         Assert.Equal("Natural Resistan", skill.Name);
         Assert.Equal(CharacterClass.Barbarian, skill.Class);
         Assert.Equal(12, skill.RequiredLevel);
+        Assert.Equal([44, 55], skill.Prerequisites);
         Assert.Equal((2, 3, 1), (skill.Page, skill.Row, skill.Column));
         Assert.True(skill.Passive);
         Assert.Equal([0, 80, 0, 0, 0, 0], skill.Params);
@@ -66,6 +69,18 @@ public class SkillReaderTests
         Assert.Equal((40, 45), (skill.ElementMin, skill.ElementMax));
         Assert.Equal([10, 12, 14], skill.ElementLevel);
         Assert.Equal(25, skill.ElementLength);
+    }
+
+    [Fact]
+    public void AnUnusedPrerequisiteSlotIsLeftOut()
+    {
+        var skill = Assert.Single(SkillReader.DecodeSkills(Record(raw =>
+        {
+            Put(raw, 4 + 160, 59);
+            Put(raw, 4 + 164, -1);
+        }), "skills.bin"));
+
+        Assert.Equal([59], skill.Prerequisites);
     }
 
     [Fact]

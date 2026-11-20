@@ -1,6 +1,7 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
 using D2NG.Core.Extensions;
 using Serilog;
+using Serilog.Events;
 using System.IO;
 using System.Text;
 
@@ -35,7 +36,10 @@ public class ChatPacket : D2gsPacket
         _ = reader.ReadByte(); // unknown
         CharacterName = reader.ReadNullTerminatedString();
         Message = reader.ReadNullTerminatedString();
-        Log.Verbose($"Received message from {CharacterName} with message: {Message}");
+        if (Log.IsEnabled(LogEventLevel.Verbose))
+        {
+            Log.Verbose($"Received message from {CharacterName} with message: {Message}");
+        }
     }
 
     public string RenderText()

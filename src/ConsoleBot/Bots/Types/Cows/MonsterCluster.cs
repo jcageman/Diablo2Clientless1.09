@@ -11,7 +11,15 @@ public sealed class MonsterCluster
 {
     public uint Id { get; init; }
 
-    public Point Location { get; init; }
+    /// <summary>
+    /// Where the live members stand on average, followed as they move; <see cref="FirstSeen"/> while
+    /// none is tracked. Fixed at the first sighting, a pack that walked off read as still standing
+    /// there, and the party went to an empty spot or judged itself out of the fight beside it.
+    /// </summary>
+    public Point Location { get; internal set; }
+
+    /// <summary>Where the first member was assigned. The sweep order is taken from here, so it does not churn.</summary>
+    public Point FirstSeen { get; init; }
 
     /// <summary>Whether a client has taken this cluster and is on its way.</summary>
     public bool Claimed { get; set; }

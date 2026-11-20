@@ -56,6 +56,16 @@ public class AccountConfig
     /// <summary>How many mana potions the belt should hold.</summary>
     public int ManaPotionTarget(uint beltHeight) => RowsToFill(beltHeight) * (ManaSlots ?? DefaultManaSlots).Count;
 
+    /// <summary>The belt columns reserved for this kind of potion; none for any other kind.</summary>
+    public IReadOnlyList<int> BeltColumns(Helpers.PotionKind kind) => kind switch
+    {
+        Helpers.PotionKind.Healing => HealthSlots ?? DefaultHealthSlots,
+        Helpers.PotionKind.Mana => ManaSlots ?? DefaultManaSlots,
+        _ => [],
+    };
+
+    public int BeltTarget(Helpers.PotionKind kind, uint beltHeight) => RowsToFill(beltHeight) * BeltColumns(kind).Count;
+
     private int RowsToFill(uint beltHeight) =>
         BeltRowsToFill is int rows ? System.Math.Min(rows, (int)beltHeight) : (int)beltHeight;
 

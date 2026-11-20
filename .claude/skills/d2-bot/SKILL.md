@@ -1,4 +1,4 @@
----
+﻿---
 name: d2-bot
 description: Build and debug clientless Diablo 2 1.09 bots in this repo. Use when writing or changing a bot or a step, when a character will not move, interact, travel or take quest credit, when a step times out, when adding an outgoing packet, when reading D2GS logs and captures, when a party bot's clients disagree or strand each other, or when tuning potions, chickens and retreats.
 ---
@@ -16,8 +16,9 @@ Run a **tight** loop: one step, one change, one log read.
 1. **Shrink the run.** Set `reuseExistingCharacter: true`, `character: "<name>"`, and trim `steps` to
    `["login","create","<step>"]`. Reuse prefers the configured character. This turns an 8-minute full
    pass into ~60s. Pick a character already in the right act.
-2. **Run it** with `logLevel: "Debug"` — packet lines are the whole point.
-3. **Read the packet log before touching code.** See `DEBUGGING.md`.
+2. **Run it.** Every game is recorded as a packet trace; `logLevel: "Debug"` adds the Debug lines.
+3. **Read the trace before touching code**: `Trace incidents`, then the failing window (`d2-trace`
+   skill). `DEBUGGING.md` covers what the packets mean.
 4. **Change one thing**, and say out loud which packet you expect to appear or change.
 5. **Repeat until the step passes twice**, on two different characters.
 
@@ -99,13 +100,18 @@ bytes are not in a capture, go find a capture — `DEBUGGING.md` covers where th
 - **Tests and builds**: follow `AGENTS.md` — it names the build that counts and the test command.
 - **Accounts cap at 18 characters**, and a full account fails as `RealmLogin failed`. The `cleanup`
   step deletes exactly the names in `characterNames`, and only for accounts in `deletableAccounts`.
-- **Always use `gs1` as the game description.** Other realms in the list are not reliable.
+- **Keep every config on the one game description that works.** The others in the list are not reliable. A
+  single-client bot that throws mid-game (a scheduled server restart does it) moves to the next description and
+  stays there for the rest of the process, where town portals can be refused. When one bot fails a step its siblings pass,
+  grep its log for `game description is now:` first, and restart it.
 - Configs hold credentials. Reference them by path; keep them out of documents and commits, and
   name characters by role (the taxi, the amazon) — the repository is public.
 
 ## Reference
 
-- **`DEBUGGING.md`** — reading packet logs, the grep recipes, decoding quest words, finding and
+- **`d2-trace` skill** - the recorded games: finding the failing game and moment, the client's state
+  and packets there, and where a step's time went. Load it first whenever a run went wrong.
+- **`DEBUGGING.md`** — reading the packets, counting what was sent, decoding quest words, finding and
   searching captures. Read it whenever a step fails.
 - **`PACKETS.md`** — the packet and quest facts already established: what each opcode carries, the
   quest bit meanings, and the traps in existing helpers. Read it before adding an outgoing packet or
@@ -113,5 +119,7 @@ bytes are not in a capture, go find a capture — `DEBUGGING.md` covers where th
 - **`PARTY.md`** — multi-client bots: state shared between clients, portals that close or strand,
   leaving mid-run, potion and chicken thresholds, drop reservations, and how to measure a change.
   Read it before changing a party bot or any survival setting.
+- **`d2-109` skill** - the game's own rules on this realm (auras, waves, cast timing, sight, deaths),
+  with provenance. Read it when a mechanic sets a timing or position.
 - **`%TEMP%\rush-bot-handoff.md`** — the rush bot's own history: solved chains, measured portal spots,
   what is still open. Project record, not technique.

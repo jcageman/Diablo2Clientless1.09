@@ -1,4 +1,5 @@
 using D2NG.Core;
+using D2NG.Core.Tracing;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.Pathing;
 using Serilog;
@@ -102,6 +103,7 @@ public static class GeneralHelpers
                 return client.Game.PickupBody(corpse);
             }, TimeSpan.FromSeconds(5));
 
+            TraceEvents.Step(client.Game, "pickup-corpse", StepPhase.End, outcome: pickupSucceeded ? StepOutcome.Ok : StepOutcome.Failed);
             var message = pickupSucceeded ? "succeeded" : "failed";
             Log.Information("Pickup of corpse {Result}", message);
             return pickupSucceeded;

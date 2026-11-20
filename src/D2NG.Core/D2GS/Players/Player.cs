@@ -2,6 +2,7 @@ using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Packet.Incoming;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +11,20 @@ namespace D2NG.Core.D2GS.Players;
 
 public class Player
 {
-    public Point Location { get; set; }
+    private Point _location;
+
+    public Point Location
+    {
+        get => _location;
+        set
+        {
+            _location = value;
+            LocationChanged?.Invoke(value);
+        }
+    }
+
+    internal Action<Point> LocationChanged { get; set; }
+
     public string Name { get; }
     public uint Id { get; }
     public CharacterClass Class { get; }
@@ -36,7 +50,7 @@ public class Player
 
     internal Player(AssignPlayerPacket assignPlayer)
     {
-        Location = assignPlayer.Location;
+        _location = assignPlayer.Location;
         Name = assignPlayer.Name;
         Id = assignPlayer.Id;
         Class = assignPlayer.Class;

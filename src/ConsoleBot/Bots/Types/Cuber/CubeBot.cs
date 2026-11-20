@@ -1,5 +1,6 @@
 using ConsoleBot.Enums;
 using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Escape;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using D2NG.Core;
@@ -77,6 +78,18 @@ public class CubeBot : IBotInstance
         var failuresInARow = 0;
         while (true)
         {
+            if (StrangerEscape.StopRequested)
+            {
+                _logger.LogCritical("{Account}: stopping, a stranger noticed the bot", client.LoggedInUserName());
+                if (client.Game.IsInGame())
+                {
+                    await client.Game.LeaveGame();
+                }
+
+                client.Disconnect();
+                return;
+            }
+
             var plan = await LoadPlan();
             if (plan == null || plan.IsEmpty)
             {
@@ -92,7 +105,7 @@ public class CubeBot : IBotInstance
             // After a good run go straight on: the mules may hold more than one run collects. A run
             // that made nothing waits, or a mule that cannot join would be asked again and again.
             var failure = await RunPlan(client, plan);
-            if (failure == null)
+            if (failure == null || StrangerEscape.StopRequested)
             {
                 failuresInARow = 0;
                 continue;
@@ -138,7 +151,7 @@ public class CubeBot : IBotInstance
     private async Task<Dictionary<(string, string), int[]>> RoomOfRerollOwners(List<HeldItem> held)
     {
         var owners = held
-            .Where(h => _cubeConfig.Recipes.Any(r => r.RerollUntilKept && r.Requirements[0].Matches(h.Item)))
+            .Where(h => _cubeConfig.Recipes.Any(r => r.RerollUntilKept && r.Requirements[0].Takes(h)))
             .Select(h => (h.Account, h.Character))
             .Distinct();
         var room = new Dictionary<(string, string), int[]>();
@@ -190,16 +203,30 @@ public class CubeBot : IBotInstance
         }
 
         _rolledThisRun.Clear();
+        _ownRerollable.Clear();
+        _ownRerollable.UnionWith(CubeCharacterItems(client)
+            .Where(i => _cubeConfig.Recipes.Any(r => r.RerollUntilKept && r.Requirements[0].Matches(i)))
+            .Select(Describe));
         var received = 0;
         var emptyHanded = new List<string>();
         foreach (var giver in plan.Givers)
         {
+            if (StrangerEscape.FleeRequested)
+            {
+                return "a stranger joined the game";
+            }
+
             var handedOver = await CollectFrom(client, gameName, giver);
             received += handedOver;
             if (handedOver == 0)
             {
                 emptyHanded.Add($"{giver.Account}-{giver.Character}");
             }
+        }
+
+        if (StrangerEscape.FleeRequested)
+        {
+            return "a stranger joined the game";
         }
 
         var made = await Transmute(client, plan);
@@ -286,6 +313,7 @@ public class CubeBot : IBotInstance
         }
 
         var muleClient = new Client();
+        StrangerEscape.Watch(muleClient, shortLived: true);
         try
         {
             var accountCharacter = new AccountConfig { Username = account.Username, Password = account.Password, Character = giver.Character };
@@ -474,7 +502,7 @@ public class CubeBot : IBotInstance
         var recipe = transmute.Recipe;
         var others = recipe.Requirements.Skip(1).ToList();
         var item = CubeCharacterItems(cuber)
-            .Where(i => recipe.Requirements[0].Matches(i) && IsRerollable(i))
+            .Where(i => recipe.Requirements[0].Matches(i) && IsRerollable(i) && !_ownRerollable.Contains(Describe(i)))
             .OrderByDescending(i => i.Quality != QualityType.Normal && i.Quality != QualityType.Superior)
             .FirstOrDefault();
         if (item == null)
@@ -801,7 +829,7 @@ public class CubeBot : IBotInstance
         }
 
         return _cubeConfig.Recipes.Any(r => r.RerollUntilKept
-            ? (r.Requirements[0].Matches(item) && IsRerollable(item)) || r.Requirements.Skip(1).Any(q => q.Matches(item))
+            ? (r.Requirements[0].Matches(item) && IsRerollable(item) && !_ownRerollable.Contains(Describe(item))) || r.Requirements.Skip(1).Any(q => q.Matches(item))
             : r.Result.Matches(item) || r.Requirements.Any(q => q.Matches(item)));
     }
 
@@ -809,6 +837,12 @@ public class CubeBot : IBotInstance
     /// The items this run rolled, by description: item ids do not survive into the mule game.
     /// </summary>
     private readonly HashSet<string> _rolledThisRun = [];
+
+    /// <summary>
+    /// What the cube character itself carried on joining, by description, among the items a reroll could
+    /// take: its own charms are never rolled or muled away, also once the keep rules stop keeping them.
+    /// </summary>
+    private readonly HashSet<string> _ownRerollable = [];
 
     private static (ItemName, QualityType) Key(Item item)
     {

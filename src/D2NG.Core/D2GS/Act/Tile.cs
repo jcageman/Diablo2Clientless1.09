@@ -71,6 +71,14 @@ public class Tile
         (p.X >= X * Scale) && (p.X < (X + Size.X) * Scale) &&
         (p.Y >= Y * Scale) && (p.Y < (Y + Size.Y) * Scale);
 
+    /// <summary>What <see cref="Contains"/> answers for the tile at x, y of the area, without building one.</summary>
+    internal static bool Contains(ushort x, ushort y, Area area, Point p)
+    {
+        var size = GetTileSizeByArea((byte)area);
+        return (p.X >= x * Scale) && (p.X < (x + size.X) * Scale) &&
+            (p.Y >= y * Scale) && (p.Y < (y + size.Y) * Scale);
+    }
+
     private static (int X, int Y) GetTileSizeByArea(byte area)
     {
         if (Levels[area].Type == 1)

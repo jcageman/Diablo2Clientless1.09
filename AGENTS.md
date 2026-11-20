@@ -11,6 +11,15 @@ file name and the `Character` field) before committing them.
 The run configs, start scripts, logs, game data, analysis scripts and nips live in a folder outside
 the repo whose location differs per machine. This file calls it `<bot folder>`.
 
+## Strangers stop the bot
+
+`<bot folder>\known-accounts.json` lists every account that is ours - farmers, party members,
+mules - as `{ "knownAccounts": [ ... ] }`; `--knownaccounts` points elsewhere. A bot does not start
+without it. A whisper from any other account lets the bot finish its run and exit without muling; any
+other account joining a game (the join message carries the account) makes every client leave at once
+and the bot exit. Nothing restarts it. `ConsoleBot/Escape` holds the logic; a new mule or party
+account goes into the file before its first run, or the bots flee from it.
+
 ## Building
 
 The start scripts in `<bot folder>` run
@@ -61,6 +70,48 @@ files.
 
 `src/ConsoleBot.Tests` holds the game-free logic lifted out of `ConsoleBot`. To test a bot class,
 extract the pure part rather than reaching through a `Client`. New projects go in `D2NG.slnx`.
+
+## Diagnosing a run
+
+Every game a bot plays is recorded - each client's packets, the log lines and the bot's typed events -
+in a `traces` folder beside its log file, one date folder per day and one folder per game. Unlike the
+log, startup does not delete it; the oldest games are pruned once it passes its cap. `tools/Trace`
+replays those packets through `Game`, and the `d2-trace` skill is where a diagnosis starts. The D2GS
+packets are no longer written to the Debug log at all.
+
+`bot:trace` (default true), `bot:traceFolder` (default `traces` beside the log) and
+`bot:traceMaxGigabytes` (default 10) set it up. A value that does not parse logs a warning and keeps
+the default rather than stopping the bot.
+
+Every bot places a moving monster `simulated`: moved along its path at its speed. There is no setting
+for it any more; a leftover `bot:monsterMotion` is ignored with a warning. `Game` still implements
+`legacy` (on the move packet's destination, its default for a `Game` made outside the bot and what bots
+before 15 Nov 2026 ran) and `anchored` (the last position a packet confirmed), which `Trace` replays and
+scores against. Simulated needs the walk speeds in `monster-resists.json`, which only a
+`tools/MpqData` run from this code writes; with an older file it runs as legacy, and the startup line
+`Monster motion: configured Simulated, effective Legacy` is the only sign. Judge a change to the
+movement model with `Trace accuracy` over a date folder of recorded games, not by watching a bot.
+
+`Trace incidents` keeps a cache of earlier games per user in `%LOCALAPPDATA%\D2NG\Trace`; deleting it
+changes no answer, only how long the next run takes. Every command also caches what reading a trace file
+and replaying a client derived under `%LOCALAPPDATA%\D2NG\Trace\cache`, keyed on the files' lengths and
+write times, the rules, the game data and the build; `--no-cache` must give byte-identical output, so a
+difference is a bug in the cache, not in the game.
+
+A handler registered with `GameServer.OnCoreReceivedPacketEvent` runs on the receive thread under the
+lock that orders the trace, while bot threads wait on it to apply client actions: it only changes game
+state. Anything that sends, waits, sleeps or calls bot code is an ordinary `OnReceivedPacketEvent` handler.
+
+## Changing how Game reads the server
+
+A replay must show the state the recording bot held, so every trace header names the client rules
+version it was made under (files without one are version 0). A change to what `GameData` holds for the
+same packets or client actions is a new rule in `D2NG.Core/ClientRules.cs` at a new version: both
+behaviours stay implemented, switched by a bool the rules set at construction, and the live bot runs
+`ClientRules.Latest`. `RulesGuardTests` replays its fixtures under every version and goes red when an
+old version's state moves; its message gives the one command that adds the new version's golden values.
+Score the change on recorded days before it ships: `Trace accuracy <date> --compare-rules <old>,<new>`
+side by side, and `Trace replay <game> --rules latest` for what today's rules make of an old game.
 
 ## Measuring the cow bot
 
@@ -146,6 +197,12 @@ of a level with their positions for the current seed; shrines from a level's ran
 (Travincal's) are not preset and only exist as world objects once seen. Without the file shrines are
 simply not recognised.
 
+The same run writes `area-levels.json` (`AreaLevelTable`): every area's monster level in Normal, Nightmare
+and Hell, classic and expansion, from `levels.bin` (MonLvl1-3 at +12, MonLvl1Ex-3Ex at +15 in 1.09's 712 byte
+records; the record index is the area id). Classic is Normal plus 25 and 50 for every area, expansion is not
+(Blood Moor 36 in Nightmare, 67 in Hell). The leveling bot picks its farming spots by it and falls back to
+plus 25 and 50 when the file is missing, which only an expansion party would notice.
+
 The same run writes `skills.json` (`SkillTable`): every skill's class, tab, parameters and damage
 fields from the patch's `skills.bin`, which overrides the d2exp txt. The `mule-items` skill reads it,
 with the base damage, speed and requirements now in `item-affixes.json`, to compute damage.
@@ -158,6 +215,12 @@ pickit rules - they live in `<bot folder>\nips`. The d2exp txt files are an olde
 than these bins (fewer item types and bases, different ranges and levels), and the bins carry
 recipes for items no wiki knows (`rcr`, `rca`, `rce`, `rcp`), so take affix values from the report
 and not from a wiki. Nothing reads `item-affixes.json` at runtime yet.
+
+The same run writes `item-prices.json` (`ItemPriceTable`): the price columns of the bases, affixes,
+itemstatcost, skills, uniques, set items, tomes and vendors. `ItemPrice.SellValue` turns it into
+the gold a vendor pays for an item, and reproduces every sale in
+`src/D2NG.Core.Tests/data/item-sales.jsonl`. Every sale the bot makes logs a `Sold item {json}`
+line with the item packet and the gold paid; that is where new test cases come from.
 
 The server rolls items from its own tables, and those do not always match the client's
 `patch_d2.mpq`. The bin says small charms roll 3% faster run/walk ("of Inertia"), yet the realm

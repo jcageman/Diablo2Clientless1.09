@@ -217,6 +217,17 @@ public static class InventoryHelpers
                 && D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i))];
     }
 
+    /// <summary>The cube items a vendor visit sells: what the pickit does not keep and nothing reserved.</summary>
+    public static List<Item> CubeItemsToSell(Game game)
+        => [.. game.Cube.Items.Where(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && !D2NG.Pickit.Pickit.IsReservedItem(i))];
+
+    /// <summary>
+    /// How many items a vendor visit would sell, counted as <see cref="InventoryItemsToSell"/> and <see cref="CubeItemsToSell"/>
+    /// pick them. Counting every untouched inventory item instead took the spare healing potions for junk: thirteen
+    /// spares made a barbarian with nothing to sell walk to the vendor every game to sell nothing.
+    /// </summary>
+    public static int ItemsToSellCount(Game game) => InventoryItemsToSell(game).Count + CubeItemsToSell(game).Count;
+
     public static MoveItemResult StashItemsAndGold(Game game, List<Item> items, int gold)
     {
         if (!OpenStash(game))
@@ -632,6 +643,20 @@ public static class InventoryHelpers
         game.ClickButton(ClickType.CloseHoradricCube);
     }
 
+    /// <summary>The inventory only, with the tome: true when nothing magic is left unidentified after it.</summary>
+    public static bool IdentifyInventoryWithTome(Game game)
+    {
+        var unidentified = game.Inventory.Items.Count(item => !item.IsIdentified);
+        if (game.Inventory.Items.FirstOrDefault(item => item.Name == ItemName.TomeofIdentify) is not { } tome || tome.Amount < unidentified)
+        {
+            return false;
+        }
+
+        IdentifyWithTome(game, tome, game.Inventory.Items);
+        // Items in the rows kept for charms are left alone by the tome: Cain still does those.
+        return !game.Inventory.Items.Any(item => !item.IsIdentified && item.Quality >= QualityType.Magical);
+    }
+
     private static readonly TimeSpan IdentifyTimeout = TimeSpan.FromSeconds(1.5);
 
     /// <summary>
@@ -736,9 +761,9 @@ public static class InventoryHelpers
         return true;
     }
 
-    public static MoveItemResult MoveBeltItemToInventory(Game game, Item item)
+    public static MoveItemResult MoveBeltItemToInventory(Game game, Item item, Point location = null)
     {
-        Point location = game.Inventory.FindFreeSpace(item);
+        location ??= game.Inventory.FindFreeSpace(item);
         if (location == null)
         {
             return MoveItemResult.NoSpace;
@@ -753,62 +778,221 @@ public static class InventoryHelpers
             return MoveItemResult.Failed;
         }
 
-        game.InsertItemIntoContainer(item, location, ItemContainer.Inventory);
-
-        if (!GeneralHelpers.TryWithTimeout(
-            (retryCount) => game.Inventory.FindItemById(item.Id) != null,
-           MoveItemTimeout))
+        // The item is on the cursor now, where it blocks portals, trades and purchases: a refused insert is tried once more
+        // at a fresh cell, and failing that the cursor cleanup puts it wherever it can.
+        for (var attempt = 0; attempt < 2 && location != null; attempt++)
         {
-            Log.Error($"{game.Me.Name}: Inserting item {item.Id} - {item.Name} into Inventory failed");
-            return MoveItemResult.Failed;
+            game.InsertItemIntoContainer(item, location, ItemContainer.Inventory);
+            if (GeneralHelpers.TryWithTimeout((retryCount) => game.Inventory.FindItemById(item.Id) != null, MoveItemTimeout))
+            {
+                return MoveItemResult.Succes;
+            }
+
+            location = game.Inventory.FindFreeSpace(item);
         }
 
-        return MoveItemResult.Succes;
+        Log.Error($"{game.Me.Name}: Inserting item {item.Id} - {item.Name} into Inventory failed, clearing the cursor");
+        game.CleanupCursorItem();
+        return MoveItemResult.Failed;
     }
 
+    /// <summary>
+    /// Takes potions out of belt columns that are not theirs, then refills the belt from the inventory. Nothing is drunk: a
+    /// potion with no inventory cell to go to stays for the vendor, who makes room by selling first.
+    /// </summary>
     public static void CleanupPotionsInBelt(Game game, AccountConfig accountConfig)
     {
-        var manaPotionsInWrongSlot = game.Belt.GetManaPotionsInSlots(accountConfig.HealthSlots);
-        foreach (var manaPotion in manaPotionsInWrongSlot)
-        {
-            game.UseBeltItem(manaPotion);
-        }
+        var (moved, left) = MoveMisplacedPotionsToInventory(game, accountConfig);
+        LogMisplacedPotions(game, moved, left, []);
+        FillBeltFromInventory(game, accountConfig);
+    }
 
-        var healthPotionsInWrongSlot = game.Belt.GetHealthPotionsInSlots(accountConfig.ManaSlots);
-        foreach (var healthPotion in healthPotionsInWrongSlot)
-        {
-            game.UseBeltItem(healthPotion);
-        }
+    /// <summary>
+    /// Healing potions outside the health columns: the inventory's, and those in the mana columns, which the next town visit
+    /// moves to the inventory.
+    /// </summary>
+    public static int SpareHealthPotions(Game game, AccountConfig account)
+        => GetTotalHealthPotions(game) - game.Belt.GetHealthPotionsInSlots([.. account.BeltColumns(PotionKind.Healing)]).Count;
 
-        var revPotions = game.Belt.GetRejuvenationPotions();
-        foreach (var revPotion in revPotions)
-        {
-            MoveBeltItemToInventory(game, revPotion);
-        }
+    public static PotionKind KindOf(Item item) => item.Classification switch
+    {
+        ClassificationType.HealthPotion => PotionKind.Healing,
+        ClassificationType.ManaPotion => PotionKind.Mana,
+        ClassificationType.RejuvenationPotion => PotionKind.Rejuvenation,
+        _ => PotionKind.Other,
+    };
 
-        var missingHealthPotionsInBelt = game.Belt.Height * accountConfig.HealthSlots.Count - game.Belt.GetHealthPotionsInSlots(accountConfig.HealthSlots).Count;
-        if (missingHealthPotionsInBelt > 0)
+    public static List<BeltPotion> BeltPotions(Game game)
+        => game.Belt.Items.Select(i => new BeltPotion(i.Location.X, i.Location.Y, KindOf(i))).ToList();
+
+    /// <summary>Potions of this kind its own belt columns can still take; see <see cref="BeltPlacement.Room"/>.</summary>
+    public static int BeltRoom(Game game, AccountConfig account, PotionKind kind)
+        => BeltPlacement.Room(BeltPotions(game), (int)game.Belt.Height, account.BeltColumns(kind), account.BeltTarget(kind, game.Belt.Height), kind);
+
+    public static BeltFillStep NextBeltFill(Game game, AccountConfig account, PotionKind kind)
+        => BeltPlacement.Next(BeltPotions(game), (int)game.Belt.Height, account.BeltColumns(kind), account.BeltTarget(kind, game.Belt.Height), kind);
+
+    public static List<Item> MisplacedBeltPotions(Game game, AccountConfig account)
+    {
+        var health = account.BeltColumns(PotionKind.Healing);
+        var mana = account.BeltColumns(PotionKind.Mana);
+        return game.Belt.Items
+            .Where(i => BeltPlacement.IsMisplaced(new BeltPotion(i.Location.X, i.Location.Y, KindOf(i)), health, mana))
+            .OrderByDescending(i => i.Location.Y)
+            .ToList();
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string Character, uint Id), bool> MisplacedGivenUp = new();
+
+    /// <summary>
+    /// Misplaced healing and mana potions a vendor visit can still do something about. One that was neither moved nor drunk
+    /// at an earlier visit is left out, so it does not send the character to the vendor on every trip.
+    /// </summary>
+    public static bool HasMisplacedPotionsForVendor(Game game, AccountConfig account)
+        => MisplacedBeltPotions(game, account).Any(i => KindOf(i) is PotionKind.Healing or PotionKind.Mana && !MisplacedGivenUp.ContainsKey((game.Me.Name, i.Id)));
+
+    /// <summary>
+    /// An inventory cell for a potion taken out of the belt. Without a tome of town portal it keeps a tome's space free, so the
+    /// tome can still be bought.
+    /// </summary>
+    public static Point FreeCellForPotion(Game game)
+    {
+        var hasTome = game.Inventory.Items.Any(i => i.Name == ItemName.TomeOfTownPortal);
+        var cell = InventoryReserve.CellKeeping(game.Inventory.IsOccupied, (int)game.Inventory.Width, (int)game.Inventory.Height,
+            hasTome ? 0 : InventoryReserve.TomeWidth, hasTome ? 0 : InventoryReserve.TomeHeight);
+        return cell is var (x, y) ? new Point((ushort)x, (ushort)y) : null;
+    }
+
+    /// <summary>Moves every potion in a belt column not its own to the inventory while there is a cell for it that keeps the tome's room.</summary>
+    public static (List<Item> Moved, List<Item> Left) MoveMisplacedPotionsToInventory(Game game, AccountConfig account)
+    {
+        var moved = new List<Item>();
+        var left = new List<Item>();
+        foreach (var potion in MisplacedBeltPotions(game, account))
         {
-            var healthPotionsToAdd = game.Inventory.Items
-                .Where(i => i.Classification == ClassificationType.HealthPotion)
-                .Take((int)missingHealthPotionsInBelt);
-            foreach (var healthPotion in healthPotionsToAdd)
+            var cell = FreeCellForPotion(game);
+            if (cell != null && MoveBeltItemToInventory(game, potion, cell) == MoveItemResult.Succes)
             {
-                game.PutItemInBelt(healthPotion);
+                moved.Add(potion);
+            }
+            else if (game.Belt.FindItemById(potion.Id) != null)
+            {
+                left.Add(potion);
             }
         }
 
-        var missingManaPotionsInBelt = game.Belt.Height * accountConfig.ManaSlots.Count - game.Belt.GetManaPotionsInSlots(accountConfig.ManaSlots).Count;
-        if (missingManaPotionsInBelt > 0)
+        return (moved, left);
+    }
+
+    /// <summary>
+    /// Drinks the healing and mana potions among these that are still in the belt: the last resort for a potion in the wrong
+    /// column when the inventory has no cell for it. Rejuvenations and anything else are left where they are. One that will
+    /// not go down is given up on, so it no longer calls for a vendor visit.
+    /// </summary>
+    public static List<Item> DrinkMisplacedPotions(Game game, IEnumerable<Item> potions)
+    {
+        var drunk = new List<Item>();
+        foreach (var potion in potions.Where(p => KindOf(p) is PotionKind.Healing or PotionKind.Mana))
         {
-            var manaPotionsToAdd = game.Inventory.Items
-                .Where(i => i.Classification == ClassificationType.ManaPotion)
-                .Take((int)missingManaPotionsInBelt);
-            foreach (var manaPotion in manaPotionsToAdd)
+            if (game.Belt.FindItemById(potion.Id) == null)
             {
-                game.PutItemInBelt(manaPotion);
+                continue;
+            }
+
+            game.UseBeltItem(potion);
+            if (GeneralHelpers.TryWithTimeout((_) => game.Belt.FindItemById(potion.Id) == null, MoveItemTimeout))
+            {
+                drunk.Add(potion);
+            }
+            else
+            {
+                MisplacedGivenUp[(game.Me.Name, potion.Id)] = true;
             }
         }
+
+        return drunk;
+    }
+
+    public static void LogMisplacedPotions(Game game, List<Item> moved, List<Item> left, List<Item> drunk)
+    {
+        if (moved.Count == 0 && left.Count == 0 && drunk.Count == 0)
+        {
+            return;
+        }
+
+        static string Counts(IEnumerable<Item> potions) => string.Join(", ", potions.GroupBy(KindOf).Select(g => $"{g.Count()} {g.Key}"));
+        Log.Information("{Character} found potions in belt columns not theirs: moved to the inventory [{Moved}], drunk for want of a cell [{Drunk}], still in the belt [{Left}]",
+            game.Me.Name, Counts(moved), Counts(drunk), Counts(left.Except(drunk)));
+    }
+
+    /// <summary>Moves inventory potions into their own belt columns, in <see cref="BeltPlacement.FillOrder"/>.</summary>
+    public static void FillBeltFromInventory(Game game, AccountConfig account) => RefillBelt(game, account, 0, 0);
+
+    /// <summary>
+    /// Fills the belt in <see cref="BeltPlacement.FillOrder"/>, each kind from the inventory first and then by buying while the
+    /// budget lasts, one step at a time and only while the next potion lands in one of the kind's own columns. The buy gets the
+    /// kind and the budget left and returns how many potions it gained; without one nothing is bought.
+    /// </summary>
+    public static (long Healing, long Mana) RefillBelt(Game game, AccountConfig account, long healingBudget, long manaBudget, Func<PotionKind, long, long> buy = null)
+    {
+        long boughtHealing = 0;
+        long boughtMana = 0;
+        foreach (var kind in BeltPlacement.FillOrder)
+        {
+            while (true)
+            {
+                var budget = buy == null ? 0 : kind == PotionKind.Healing ? healingBudget - boughtHealing : manaBudget - boughtMana;
+                var action = BeltPlacement.NextRefill(BeltPotions(game), (int)game.Belt.Height, account.BeltColumns(kind),
+                    account.BeltTarget(kind, game.Belt.Height), kind, game.Inventory.Items.Count(i => KindOf(i) == kind), budget);
+                if (action == BeltRefillAction.PutFromInventory)
+                {
+                    var potion = game.Inventory.Items.First(i => KindOf(i) == kind);
+                    if (!game.PutItemInBelt(potion)
+                        || !GeneralHelpers.TryWithTimeout((_) => game.Belt.FindItemById(potion.Id) != null, MoveItemTimeout))
+                    {
+                        break;
+                    }
+                }
+                else if (action == BeltRefillAction.Buy)
+                {
+                    var gained = buy(kind, budget);
+                    if (gained <= 0)
+                    {
+                        break;
+                    }
+
+                    if (kind == PotionKind.Healing)
+                    {
+                        boughtHealing += gained;
+                    }
+                    else
+                    {
+                        boughtMana += gained;
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
+        return (boughtHealing, boughtMana);
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string, PotionKind), bool> BlockedFillLogged = new();
+
+    /// <summary>Logs, once per character and kind, that the belt cannot be filled with this kind without it spilling.</summary>
+    public static void LogBlockedBeltFill(Game game, AccountConfig account, PotionKind kind)
+    {
+        if (NextBeltFill(game, account, kind) != BeltFillStep.Blocked || !BlockedFillLogged.TryAdd((game.Me.Name, kind), true))
+        {
+            return;
+        }
+
+        var column = BeltPlacement.Column(BeltPotions(game), (int)game.Belt.Height, kind);
+        Log.Warning("{Character} cannot fill its {Kind} columns {Columns}: the server would put the next one in column {Column}, so the belt is left short",
+            game.Me.Name, kind, string.Join(",", account.BeltColumns(kind)), column?.ToString() ?? "none");
     }
 
     public static int GetTotalHealthPotions(Game game)

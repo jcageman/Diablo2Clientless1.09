@@ -569,7 +569,7 @@ public class CSBot : MultiClientBotBase
 
         var beltShortfall = account.HealthPotionTarget(client.Game.Belt.Height)
             - client.Game.Belt.GetHealthPotionsInSlots(account.HealthSlots).Count;
-        var carried = client.Game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion);
+        var carried = InventoryHelpers.SpareHealthPotions(client.Game, account);
         // A follower's spare potions come out of the cells it picks loot into. The amazon carried
         // fourteen and had two cells left, so every arrow quiver she picked up stuck on her cursor.
         var roomForPotions = client.Game.Inventory.FreeCellCount() + carried - FollowerInventoryReserve;
@@ -577,10 +577,14 @@ public class CSBot : MultiClientBotBase
         // dry for most of every fight. They carry spares and the health buffer gives up the cells.
         var manaSpares = IsTeleportClient(client) ? 0 : Math.Clamp(roomForPotions / 3, 0, FollowerManaSpares);
         var buffer = IsTeleportClient(client) ? TaxiPotionBuffer : Math.Clamp(roomForPotions - manaSpares, 0, TaxiPotionBuffer);
-        // The taxi always buys back to full: she visits Jamella to sell anyway, so topping up costs about
-        // half a second, while skipping it above half her spares once left her with none for a whole
-        // seal fight (17 potions in one game, five on a typical one).
+        // The taxi always buys back to full, a walk to Jamella for a single potion included: skipping it
+        // above half her spares once left her with none for a whole seal fight (17 potions in one game,
+        // five on a typical one).
         townManagementOptions.HealthPotionsToBuy = Math.Max(0, Math.Max(0, beltShortfall) + buffer - carried);
+        if (IsTeleportClient(client))
+        {
+            townManagementOptions.HealthPotionsNotWorthAVisit = 0;
+        }
         if (manaSpares > 0)
         {
             townManagementOptions.ManaPotionsToBuy = Math.Max(0, account.ManaPotionTarget(client.Game.Belt.Height) + manaSpares - InventoryHelpers.GetTotalManaPotions(client.Game));
@@ -859,7 +863,7 @@ public class CSBot : MultiClientBotBase
         // left for loot.
         var beltShortfall = account.HealthPotionTarget(client.Game.Belt.Height)
             - client.Game.Belt.GetHealthPotionsInSlots(account.HealthSlots).Count;
-        var carried = client.Game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion);
+        var carried = InventoryHelpers.SpareHealthPotions(client.Game, account);
         var options = new TownManagementOptions(account, Act.Act4)
         {
             HealthPotionsToBuy = Math.Max(0, Math.Max(0, beltShortfall) + FollowerRestockSpares - carried),

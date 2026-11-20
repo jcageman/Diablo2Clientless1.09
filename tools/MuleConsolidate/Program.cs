@@ -1,4 +1,4 @@
-using ConsoleBot.Bots;
+﻿using ConsoleBot.Bots;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using D2NG.Core;
@@ -284,7 +284,7 @@ internal sealed class Consolidator(BotConfiguration botConfig, Microsoft.Extensi
         _lastGameCreated = DateTime.UtcNow;
         _gameName = $"mc{Random.Shared.Next(1000, 9999)}";
         _gamePassword = $"p{Random.Shared.Next(1000, 9999)}";
-        if (!await client.CreateGame(Difficulty.Normal, _gameName, _gamePassword, botConfig.GameDescriptions?.FirstOrDefault() ?? "gs1")
+        if (!await client.CreateGame(Difficulty.Normal, _gameName, _gamePassword, botConfig.GameDescriptions.First())
             || !await MuleClientSteps.WaitForInitialize(client, logger))
         {
             logger.LogError("{Role}: could not create a game", role);

@@ -1,4 +1,4 @@
-using D2NG.Core;
+﻿using D2NG.Core;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
@@ -36,7 +36,8 @@ using System.Threading.Tasks;
 // putaway does the same, then puts an item left on the cursor into a free stash cell, else a free
 // inventory cell. It never drops: an item that fits nowhere stays on the cursor.
 //
-// drop throws away the magic, rare and crafted items a list names for this account: the classic-wipe.tsv
+// drop throws away the magic, rare and crafted items a list names for this account, and healing and mana
+// potions (never rejuvenation potions or other normal items): the classic-wipe.tsv
 // the mule cleanup writes (account, character, quality, item, type, eth, sockets, stats). An item is
 // dropped only when its name, quality, ethereal flag, sockets and every stat match a line, and each
 // line drops at most one item. The cube is not opened. Afterwards the character is recorded in the
@@ -90,6 +91,8 @@ var bot = Property(JsonDocument.Parse(File.ReadAllText(configPath)).RootElement,
 var realm = Property(bot, "realm").GetString();
 var keyOwner = Property(bot, "keyOwner").GetString();
 var gameFolder = Property(bot, "gameFolder").GetString();
+var descriptions = Property(bot, "gameDescriptions");
+var configuredDescription = descriptions.ValueKind == JsonValueKind.Array ? descriptions.EnumerateArray().Select(d => d.GetString()).FirstOrDefault() : null;
 
 var muleConfig = Property(JsonDocument.Parse(File.ReadAllText(muleConfigPath)).RootElement, "mule");
 var passwordAccount = options.GetValueOrDefault("password-of", account);
@@ -130,10 +133,10 @@ if (rest[0] == "record")
         // Games created from one machine within seconds of each other go unanswered.
         if (index > 0)
         {
-            await Task.Delay(TimeSpan.FromSeconds(25));
+            await Task.Delay(TimeSpan.FromSeconds(5));
         }
 
-        failedRecords += await Record(realm, keyOwner, gameFolder, account, password, name, rest.ElementAtOrDefault(2) ?? "gs1", recorder) ? 0 : 1;
+        failedRecords += await Record(realm, keyOwner, gameFolder, account, password, name, rest.ElementAtOrDefault(2) ?? configuredDescription, recorder) ? 0 : 1;
     }
 
     return failedRecords == 0 ? 0 : 1;
@@ -160,7 +163,7 @@ if (rest[0] == "drop")
         }
 
         var ok = await DropListed(realm, keyOwner, gameFolder, account, password, name, wanted.GetValueOrDefault(name) ?? [],
-            rest.ElementAtOrDefault(2) ?? "gs1", dryRun, repository);
+            rest.ElementAtOrDefault(2) ?? configuredDescription, dryRun, repository);
         failedCharacters += ok ? 0 : 1;
     }
 
@@ -200,7 +203,7 @@ if (rest[0] is "list" or "createaccount")
 
 if (rest[0] is "inspect" or "putaway")
 {
-    return await Inspect(client, characters, rest.ElementAtOrDefault(1), rest.ElementAtOrDefault(2) ?? "gs3", putAway: rest[0] == "putaway");
+    return await Inspect(client, characters, rest.ElementAtOrDefault(1), rest.ElementAtOrDefault(2) ?? configuredDescription, putAway: rest[0] == "putaway");
 }
 
 if (rest[0] != "create")
@@ -356,7 +359,8 @@ static Dictionary<string, Dictionary<string, int>> ReadDropList(string path, str
     foreach (var line in File.ReadLines(path).Skip(1))
     {
         var c = line.Split('\t');
-        if (c.Length < 8 || !string.Equals(c[0], account, StringComparison.OrdinalIgnoreCase) || !droppable.Contains(c[2]))
+        if (c.Length < 8 || !string.Equals(c[0], account, StringComparison.OrdinalIgnoreCase)
+            || !(droppable.Contains(c[2]) || IsSparePotion(c[2], c[3])))
         {
             continue;
         }
@@ -373,6 +377,11 @@ static Dictionary<string, Dictionary<string, int>> ReadDropList(string path, str
 
     return byCharacter;
 }
+
+// Healing and mana potions a played character hoards in its bag, never rejuvenation potions and never
+// another normal item: runes and gems are normal too.
+static bool IsSparePotion(string quality, string name) =>
+    quality == "Normal" && (name.EndsWith("HealingPotion", StringComparison.Ordinal) || name.EndsWith("ManaPotion", StringComparison.Ordinal));
 
 static string Signature(string quality, string name, bool ethereal, string sockets, IEnumerable<string> stats) =>
     $"{quality}|{name}|{(ethereal ? "eth" : "")}|{sockets}|{string.Join(";", stats.OrderBy(s => s, StringComparer.Ordinal))}";

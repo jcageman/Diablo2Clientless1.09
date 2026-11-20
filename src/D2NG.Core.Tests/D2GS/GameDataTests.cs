@@ -44,6 +44,18 @@ public class GameDataTests
         Assert.Null(exception);
     }
 
+    // An item an NPC takes out of the inventory - Akara keeping the Scroll of Inifuss - is gone, not on the cursor.
+    [Fact]
+    public void RemoveFromContainer_WithoutALiftLeavesTheCursorEmpty()
+    {
+        var data = CreateGameWithAssignedPlayer();
+        data.ItemUpdate(Gem(0x7E, D2NG.Core.D2GS.Items.ContainerType.Inventory, 2, 2, D2NG.Core.D2GS.Items.Action.PutInContainer));
+        data.ItemUpdate(Gem(0x7E, D2NG.Core.D2GS.Items.ContainerType.Inventory, 2, 2, D2NG.Core.D2GS.Items.Action.RemoveFromContainer));
+
+        Assert.Null(data.CursorItem);
+        Assert.Null(data.Inventory.FindItemById(0x7E));
+    }
+
     // A stash gem put down on an inventory gem (0x1F): the server reports the gem that landed with
     // SwapInContainer, and the gem it displaced is then on the cursor.
     [Fact]
@@ -54,6 +66,7 @@ public class GameDataTests
         var inventoryGem = Gem(0x7E, D2NG.Core.D2GS.Items.ContainerType.Inventory, 2, 2, D2NG.Core.D2GS.Items.Action.PutInContainer);
         data.ItemUpdate(stashGem);
         data.ItemUpdate(inventoryGem);
+        data.Lifted(0x7C);
         data.ItemUpdate(Gem(0x7C, D2NG.Core.D2GS.Items.ContainerType.Stash, 7, 1, D2NG.Core.D2GS.Items.Action.RemoveFromContainer));
         Assert.Equal(0x7CU, data.CursorItem?.Id);
 
@@ -70,14 +83,28 @@ public class GameDataTests
     public void TradeGridRemoval_ReachesTheCursorOnlyWhileTheItemIsBeingLifted()
     {
         var data = CreateGameWithAssignedPlayer();
-        data.LiftRequested = 0x22;
+        data.Lifted(0x22);
         data.ItemUpdate(Gem(0x22, D2NG.Core.D2GS.Items.ContainerType.ForTrade, 0, 0, D2NG.Core.D2GS.Items.Action.PutInContainer));
         data.ItemUpdate(Gem(0x22, D2NG.Core.D2GS.Items.ContainerType.ForTrade, 0, 0, D2NG.Core.D2GS.Items.Action.RemoveFromContainer));
         Assert.Null(data.CursorItem);
 
-        data.LiftRequested = 0x23;
+        data.Lifted(0x23);
         data.ItemUpdate(Gem(0x23, D2NG.Core.D2GS.Items.ContainerType.ForTrade, 1, 0, D2NG.Core.D2GS.Items.Action.RemoveFromContainer));
         Assert.Equal(0x23U, data.CursorItem?.Id);
+    }
+
+    // Right-clicking a potion of life (seen live, 4 Nov 2026): the server answers with a removal from the
+    // inventory and nothing after it. A used item is gone, where a lifted one would be on the cursor.
+    [Fact]
+    public void UsedItemRemoval_LeavesTheCursorEmpty()
+    {
+        var data = CreateGameWithAssignedPlayer();
+        data.ItemUpdate(Gem(0x15C, D2NG.Core.D2GS.Items.ContainerType.Inventory, 3, 1, D2NG.Core.D2GS.Items.Action.PutInContainer));
+        data.UseRequested[0x15C] = 0;
+        data.ItemUpdate(Gem(0x15C, D2NG.Core.D2GS.Items.ContainerType.Inventory, 3, 1, D2NG.Core.D2GS.Items.Action.RemoveFromContainer));
+
+        Assert.Null(data.Inventory.FindItemById(0x15C));
+        Assert.Null(data.CursorItem);
     }
 
     private static D2NG.Core.D2GS.Items.Item Gem(uint id, D2NG.Core.D2GS.Items.ContainerType container, ushort x, ushort y, D2NG.Core.D2GS.Items.Action action)

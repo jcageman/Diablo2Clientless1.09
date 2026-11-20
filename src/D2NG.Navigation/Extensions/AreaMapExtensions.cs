@@ -14,7 +14,53 @@ namespace D2NG.Navigation.Extensions;
 public static class AreaMapExtensions
 {
     private static readonly float DistanceBetweenCells = 5.0f;
+
+    /// <summary>objects.txt rows with IsDoor set.</summary>
+    public static readonly HashSet<int> DoorObjectCodes = [13, 14, 15, 16, 23, 24, 25, 27, 47, 62, 63, 64, 75, 91, 92, 98, 99, 229, 230, 290, 291, 292, 293, 294, 295];
+
+    /// <summary>
+    /// The map api draws a door as part of its wall, so no path ever runs through one. A bot that opens the
+    /// doors it meets turns this on before its first map is loaded, and its paths then go through them.
+    /// </summary>
+    public static bool DoorsArePassable { get; set; }
+
+    /// <summary>
+    /// The map already leaves a doorway three to five tiles wide; only the door's own tiles are cleared on top. Clearing
+    /// four tiles round it cut nine wide gaps in walls one tile thick, and paths went through the wall beside the door.
+    /// </summary>
+    private const int DoorReach = 1;
+
     public static AreaMap MapFromDto(this AreaMapDto areaMapDto)
+    {
+        var map = MapFromDtoCore(areaMapDto);
+        if (DoorsArePassable)
+        {
+            OpenDoors(map);
+        }
+
+        return map;
+    }
+
+    private static void OpenDoors(AreaMap map)
+    {
+        foreach (var door in map.Objects.Where(entry => DoorObjectCodes.Contains(entry.Key)).SelectMany(entry => entry.Value))
+        {
+            var column = door.X - map.LevelOrigin.X;
+            var row = door.Y - map.LevelOrigin.Y;
+            for (var y = Math.Max(0, row - DoorReach); y <= Math.Min(map.Map.Length - 1, row + DoorReach); y++)
+            {
+                for (var x = Math.Max(0, column - DoorReach); x <= Math.Min(map.Map[y].Length - 1, column + DoorReach); x++)
+                {
+                    if (!IsMovable(map.Map[y][x]))
+                    {
+                        map.Map[y][x] = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    private static AreaMap MapFromDtoCore(AreaMapDto areaMapDto)
     {
         return new AreaMap
         {

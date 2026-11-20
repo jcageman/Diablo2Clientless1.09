@@ -13,25 +13,37 @@ namespace ConsoleBot.Helpers;
 
 public static class ClassHelpers
 {
-    public static async Task<bool> CastAllShouts(Client client)
+    /// <summary>The warcries in the order they are cast unless a caller gives another.</summary>
+    public static readonly IReadOnlyList<Skill> ShoutOrder = [Skill.BattleCommand, Skill.BattleOrders, Skill.Shout];
+
+    /// <param name="order">
+    /// The warcries in the order to cast them, <see cref="ShoutOrder"/> by default. Two barbarians shouting together in
+    /// different orders have all three on the party a cast sooner.
+    /// </param>
+    public static async Task<bool> CastAllShouts(Client client, IReadOnlyList<Skill> order = null)
     {
         if (client != null && client.Game.Me.Skills.GetValueOrDefault(Skill.BattleOrders, 0) > 0)
         {
-            if (client.Game.Players.Any(p => NeedsShoutFrom(client.Game.Me, p)))
+            if (client.Game.Players.Any(p => NeedsShoutFrom(client.Game.Me, p) && ReachedByShouts(client.Game, p)))
             {
-                client.Game.UseRightHandSkillOnLocation(Skill.BattleCommand, client.Game.Me.Location);
-                await Task.Delay(TimeSpan.FromSeconds(0.5));
-                client.Game.UseRightHandSkillOnLocation(Skill.BattleOrders, client.Game.Me.Location);
-                await Task.Delay(TimeSpan.FromSeconds(0.5));
-                client.Game.UseRightHandSkillOnLocation(Skill.Shout, client.Game.Me.Location);
-                await Task.Delay(TimeSpan.FromSeconds(0.5));
+                foreach (var shout in order ?? ShoutOrder)
+                {
+                    client.Game.UseRightHandSkillOnLocation(shout, client.Game.Me.Location);
+                    await Task.Delay(TimeSpan.FromSeconds(0.5));
+                }
             }
 
-            return client.Game.Players.Any(p => NeedsShoutFrom(client.Game.Me, p));
+            return client.Game.Players.Any(p => NeedsShoutFrom(client.Game.Me, p) && ReachedByShouts(client.Game, p));
         }
 
         return true;
     }
+
+    /// <summary>
+    /// Shouts land on the barbarian and his party only. A rejoined member left outside the party never
+    /// gets them, and asking for them had the barbarian recast all three every tick.
+    /// </summary>
+    private static bool ReachedByShouts(Game game, Player player) => player.Id == game.Me.Id || game.IsInPartyWith(player);
 
     /// <summary>
     /// A player close enough for this barbarian's shouts to reach who is still missing them. Judged by

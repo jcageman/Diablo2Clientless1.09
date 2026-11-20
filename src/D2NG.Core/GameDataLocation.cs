@@ -21,6 +21,8 @@ public static class GameDataLocation
     public const string ShrinesFile = "shrines.json";
     public const string ItemAffixesFile = "item-affixes.json";
     public const string SkillsFile = "skills.json";
+    public const string ItemPricesFile = "item-prices.json";
+    public const string AreaLevelsFile = "area-levels.json";
 
     /// <summary>Files without which no item can be parsed, so a host should check them up front.</summary>
     public static IReadOnlyList<string> RequiredFiles { get; } = [ItemDataFile, ItemPropertiesFile];

@@ -4,6 +4,8 @@ using D2NG.Core.D2GS.Enums;
 using D2NG.Navigation.Core;
 using D2NG.Navigation.Extensions;
 using Microsoft.Extensions.Caching.Memory;
+using Serilog;
+using System.Linq;
 using Microsoft.Extensions.Options;
 using System;
 using System.Net.Http;
@@ -62,7 +64,29 @@ public class MapApiService : IMapApiService
     {
         if (hintArea != null && hintArea != Area.None)
         {
+            // Walkable ground first: the outdoor levels' rectangles overlap, so a point in the Spider Forest
+            // also lies inside the Great Marsh's rectangle, and taking the rectangle alone kept a wrong hint.
             var area = await GetArea(mapId, difficulty, hintArea.Value);
+            if (area.IsNavigable(point))
+            {
+                return hintArea;
+            }
+
+            // A wrong hint is almost always the level next door: the client's own area comes from revealed
+            // tiles whose sizes are estimated, so near a border it names the neighbour. Those maps are
+            // usually cached already, unlike the whole act below.
+            var neighbours = area.AdjacentLevels?.Keys.ToList() ?? [];
+            foreach (var neighbour in neighbours)
+            {
+                var neighbourMap = await GetArea(mapId, difficulty, neighbour);
+                if (neighbourMap.IsNavigable(point))
+                {
+                    Log.Debug("Position {Point} is in {Area}, not in the reported {Hint}", point, neighbour, hintArea);
+                    return neighbour;
+                }
+            }
+
+            // Standing on an unwalkable cell, a waypoint for one: then the rectangle is all there is to go by.
             if (area.TryMapToPointInMap(point, out var _))
             {
                 return hintArea;
@@ -94,7 +118,7 @@ public class MapApiService : IMapApiService
     private async Task<AreaMap> GetAreaFromApi(uint mapId, Difficulty difficulty, Area area)
     {
         var client = _httpClientFactory.CreateClient();
-        var areaDto = await client.GetFromJsonAsync<AreaMapDto>($"{_mapConfiguration.ApiUrl}/maps?mapid={mapId}&area={area}&difficulty={difficulty}");
+        var areaDto = await client.GetFromJsonAsync<AreaMapDto>($"{_mapConfiguration.ApiUrl}/maps?mapid={mapId}&area={(int)area}&difficulty={difficulty}");
         return areaDto.MapFromDto();
     }
 }

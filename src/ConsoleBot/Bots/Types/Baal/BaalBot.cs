@@ -1,4 +1,4 @@
-using ConsoleBot.Attack;
+﻿using ConsoleBot.Attack;
 using ConsoleBot.Clients.ExternalMessagingClient;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
@@ -7,6 +7,7 @@ using D2NG.Core;
 using D2NG.Core.D2GS;
 using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
+using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
@@ -27,12 +28,18 @@ namespace ConsoleBot.Bots.Types.Baal;
 
 public class BaalBot : MultiClientBotBase
 {
+    // The throne only raises the next wave while no monster is alive within 64 of it (D2MOO
+    // AITHINK_Fn134_BaalThrone), so anything left standing in the hall stalls the waves for good. Every
+    // walkable cell that close is the hall or the open mouth of the entrance corridor; a larger radius
+    // starts reaching rooms behind the hall walls.
+    private const int ThroneWaveRadius = 64;
     private readonly ITownManagementService _townManagementService;
     private readonly IAttackService _attackService;
     private readonly BaalConfiguration _baalConfig;
     private uint? BoClientPlayerId;
     private uint? PortalClientPlayerId;
     private readonly ConcurrentDictionary<string, bool> ShouldFollow = new();
+    private readonly ConcurrentDictionary<string, bool> RefilledThisGame = new();
     private readonly ConcurrentDictionary<string, (Point, CancellationTokenSource)> FollowTasks = new();
 
     public BaalBot(IOptions<BotConfiguration> config, IOptions<BaalConfiguration> baalconfig,
@@ -85,6 +92,11 @@ public class BaalBot : MultiClientBotBase
 
     protected override async Task<bool> PrepareForRun(Client client, AccountConfig account)
     {
+        // Following is switched on for the Baal fight; left on, the paladin chased the portal sorceress around
+        // town next game while also walking to Malah, and the two run streams kept him from ever reaching her.
+        StopFollowingLead(client);
+        RefilledThisGame.TryRemove(client.Game.Me.Name, out _);
+
         var townManagementOptions = new TownManagementOptions(account,  Act.Act5);
 
         if(client.Game.Act == Act.Act5)
@@ -214,7 +226,11 @@ public class BaalBot : MultiClientBotBase
         return true;
     }
 
-    private async Task<bool> CreateBaalPortal(Client client)
+    /// <summary>
+    /// Takes Baal's own portal behind the throne. The portal character calls it as soon as the last wave is
+    /// cleared and keeps clicking until the portal opens, instead of waiting for the throne to empty first.
+    /// </summary>
+    private async Task<bool> EnterWorldstoneChamber(Client client, MovementMode movementMode, TimeSpan clickFor)
     {
         var baalPortal = client.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
         if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
@@ -225,10 +241,10 @@ public class BaalBot : MultiClientBotBase
             {
                 return false;
             }
-            var pathBaalPortal = await _pathingService.GetPathToLocation(client.Game, baalPortal.Location, MovementMode.Teleport);
-            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBaalPortal, MovementMode.Teleport))
+            var pathBaalPortal = await _pathingService.GetPathToLocation(client.Game, baalPortal.Location, movementMode);
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathBaalPortal, movementMode))
             {
-                Log.Warning($"Client {client.Game.Me.Name} {MovementMode.Teleport} to {EntityCode.BaalPortal} failed at {client.Game.Me.Location}");
+                Log.Warning($"Client {client.Game.Me.Name} {movementMode} to {EntityCode.BaalPortal} failed at {client.Game.Me.Location}");
             }
 
             return true;
@@ -248,12 +264,8 @@ public class BaalBot : MultiClientBotBase
             }
 
             client.Game.InteractWithEntity(baalPortal);
-            return await GeneralHelpers.TryWithTimeout(async (retryCount) =>
-            {
-                await Task.Delay(50);
-                return client.Game.Area == Area.TheWorldStoneChamber;
-            }, TimeSpan.FromSeconds(0.5));
-        }, TimeSpan.FromSeconds(10)))
+            return await ArrivedIn(client, Area.TheWorldStoneChamber);
+        }, clickFor))
         {
             return false;
         }
@@ -269,6 +281,16 @@ public class BaalBot : MultiClientBotBase
 
             return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.TheWorldStoneChamber, client.Game.Me.Location);
         }, TimeSpan.FromSeconds(10)))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task<bool> CreateBaalPortal(Client client)
+    {
+        if (!await EnterWorldstoneChamber(client, MovementMode.Teleport, TimeSpan.FromSeconds(20)))
         {
             return false;
         }
@@ -416,7 +438,7 @@ public class BaalBot : MultiClientBotBase
                     await client.Game.MoveToAsync(warp1.Location);
                 }
 
-                return client.Game.TakeWarp(warp1) && client.Game.Area == Area.TheWorldStoneKeepLevel3;
+                return client.Game.TakeWarp(warp1) && await ArrivedIn(client, Area.TheWorldStoneKeepLevel3);
             }, TimeSpan.FromSeconds(3.5));
         }, TimeSpan.FromSeconds(4)))
         {
@@ -449,6 +471,20 @@ public class BaalBot : MultiClientBotBase
             return false;
         }
 
+        // Monsters waiting at this entrance hit hard and some are extra fast: draw them off one hop back first,
+        // the way the first warp is approached, so they never get a swing in at the warp.
+        var atWarp = NPCHelpers.GetNearbyNPCs(client, warp2.Location, 10, 10).ToList();
+        if (atWarp.Count > 0 && pathToThroneRoom.Count >= 2)
+        {
+            Log.Information($"Client {client.Game.Me.Name} luring {string.Join(", ", atWarp.Select(m => $"{m.NPCCode} [{string.Join("/", m.MonsterEnchantments)}]"))} away from the throne room warp");
+            await MovementHelpers.TakePathOfLocations(client.Game, [pathToThroneRoom[^2]], MovementMode.Teleport);
+            await GeneralHelpers.TryWithTimeout(async (_) =>
+            {
+                await Task.Delay(100);
+                return !NPCHelpers.GetNearbyNPCs(client, warp2.Location, 1, 8).Any();
+            }, TimeSpan.FromSeconds(2));
+        }
+
         if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
             if (warp2.Location.Distance(client.Game.Me.Location) > 5 && !await game.TeleportToLocationAsync(warp2.Location))
@@ -457,7 +493,7 @@ public class BaalBot : MultiClientBotBase
                 return false;
             }
 
-            return client.Game.TakeWarp(warp2) && client.Game.Area == Area.ThroneOfDestruction;
+            return client.Game.TakeWarp(warp2) && await ArrivedIn(client, Area.ThroneOfDestruction);
         }, TimeSpan.FromSeconds(4)))
         {
             Log.Warning($"Teleport failed at location: {game.Me.Location}");
@@ -473,6 +509,12 @@ public class BaalBot : MultiClientBotBase
         {
             Log.Error("Checking whether moved to area failed");
             return false;
+        }
+
+        var atEntrance = NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 10, 15).ToList();
+        if (atEntrance.Count > 0)
+        {
+            Log.Information($"Client {client.Game.Me.Name} entered the throne room next to {string.Join(", ", atEntrance.Select(m => $"{m.NPCCode} [{string.Join("/", m.MonsterEnchantments)}] {m.Location.Distance(client.Game.Me.Location):0} away"))}");
         }
 
         var pathToThrone = await _pathingService.GetPathToObjectWithOffset(client.Game, EntityCode.BaalPortal, 27, 65, MovementMode.Teleport);
@@ -495,6 +537,15 @@ public class BaalBot : MultiClientBotBase
         Log.Information("Got to starting location");
 
         return true;
+    }
+
+    private async Task<bool> ArrivedIn(Client client, Area area)
+    {
+        return await GeneralHelpers.TryWithTimeout(async (_) =>
+        {
+            await Task.Delay(50);
+            return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location);
+        }, TimeSpan.FromSeconds(0.6));
     }
 
     private async Task FollowToLocation(Client client, Point location)
@@ -529,6 +580,17 @@ public class BaalBot : MultiClientBotBase
         ShouldFollow[client.Game.Me.Name.ToLower()] = follow;
     }
 
+    private void StopFollowingLead(Client client)
+    {
+        var name = client.Game.Me.Name.ToLower();
+        ShouldFollow[name] = false;
+        if (FollowTasks.TryGetValue(name, out var follow))
+        {
+            follow.Item2?.Cancel();
+            FollowTasks[name] = (null, new CancellationTokenSource());
+        }
+    }
+
     private async Task GetTaskForWave(Client client, AccountConfig account)
     {
         if (client.Game.Me.Attributes[D2NG.Core.D2GS.Players.Attribute.Level] < 50 && !client.Game.Me.HasSkill(Skill.Teleport))
@@ -557,7 +619,14 @@ public class BaalBot : MultiClientBotBase
                 await BasicIdleClient(client);
                 break;
             case CharacterClass.Paladin:
-                await BasicPalaClient(client, account);
+                if (client.Game.Me.Skills.GetValueOrDefault(Skill.BlessedHammer) >= 20)
+                {
+                    await HammerWaveClient(client, account);
+                }
+                else
+                {
+                    await BasicPalaClient(client, account);
+                }
                 break;
             case CharacterClass.Barbarian:
                 await BarbClient(client, account);
@@ -567,6 +636,17 @@ public class BaalBot : MultiClientBotBase
                 await BasicIdleClient(client);
                 break;
         }
+    }
+
+    // Lister's wave arrives as class 571 on this realm (named BaalCrabClone in NPCCode); no earlier wave has it.
+    private static bool IsLastWave(WorldObject monster)
+    {
+        return monster.NPCCode is NPCCode.BaalCrabClone or NPCCode.BaalsMinion1 or NPCCode.BaalsMinion2 or NPCCode.BaalsMinion3;
+    }
+
+    private async Task<bool> InWorldstoneChamber(Client client)
+    {
+        return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, Area.TheWorldStoneChamber, client.Game.Me.Location);
     }
 
     private async Task GetTaskForBaal(Client client, AccountConfig account)
@@ -583,7 +663,7 @@ public class BaalBot : MultiClientBotBase
             case CharacterClass.Sorceress:
                 if (client.Game.Me.HasSkill(Skill.StaticField))
                 {
-                    if (client.Game.Area != Area.TheWorldStoneChamber && !await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                    if (!await InWorldstoneChamber(client) && !await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                     {
                         await Task.Delay(100);
                         return await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.TheWorldStoneChamber);
@@ -603,7 +683,7 @@ public class BaalBot : MultiClientBotBase
                 }
                 break;
             case CharacterClass.Paladin:
-                if (client.Game.Area != Area.TheWorldStoneChamber && !await GeneralHelpers.TryWithTimeout(async (retryCount) =>
+                if (!await InWorldstoneChamber(client) && !await GeneralHelpers.TryWithTimeout(async (retryCount) =>
                 {
                     await Task.Delay(100);
                     return await _townManagementService.TakeTownPortalToArea(client, portalPlayer, Area.TheWorldStoneChamber);
@@ -632,11 +712,15 @@ public class BaalBot : MultiClientBotBase
         runStopWatch.Start();
 
         var random = new Random();
+        var lastWaveSeen = false;
         while (!await IsNextGame() && client.Game.IsInGame())
         {
             if (runStopWatch.Elapsed > TimeSpan.FromSeconds(50))
             {
-                Log.Warning($"Client {client.Game.Me.Name} waiting too long going next game");
+                var known = client.Game.WorldObjects
+                    .Where(w => w.Key.Item2 == EntityType.NPC && baalThrone != null && w.Value.Location?.Distance(baalThrone) < 100)
+                    .Select(w => $"{w.Value.NPCCode} {w.Value.State} at {w.Value.Location} ({w.Value.Location.Distance(baalThrone):0} from throne)");
+                Log.Warning($"Client {client.Game.Me.Name} waiting too long going next game, throne {baalThrone}, monsters near it: {string.Join(", ", known)}");
                 NextGame.TrySetResult(true);
                 break;
             }
@@ -663,7 +747,14 @@ public class BaalBot : MultiClientBotBase
                 }
             }
 
-            var nearbyMonsters = NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 10, 50).Where(m => baalThrone == null || baalThrone.Distance(m.Location) < 50).ToList();
+            if (baalThrone != null && await RefillPotionsIfOut(client, account))
+            {
+                runStopWatch.Restart();
+            }
+
+            var nearbyMonsters = baalThrone == null
+                ? NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 10, 50).ToList()
+                : NPCHelpers.GetNearbyNPCs(client, baalThrone, 10, ThroneWaveRadius).ToList();
             if (nearbyMonsters.Count != 0)
             {
                 runStopWatch.Restart();
@@ -671,6 +762,13 @@ public class BaalBot : MultiClientBotBase
             else
             {
                 await PickupItemsAndPotions(client, account, 30);
+            }
+
+            lastWaveSeen |= baalThrone != null && nearbyMonsters.Any(IsLastWave);
+            if (lastWaveSeen && nearbyMonsters.Count == 0)
+            {
+                Log.Information($"Last wave cleared, {client.Game.Me.Name} heading for Baal's portal");
+                break;
             }
 
             var boPlayer = client.Game.Players.FirstOrDefault(p => p.Id == BoClientPlayerId);
@@ -754,6 +852,54 @@ public class BaalBot : MultiClientBotBase
         Log.Information($"Finished with Sorc Client {client.Game.Me.Name}");
     }
 
+    /// <summary>
+    /// Refills an empty belt in town during the waves and comes back through the own portal. Leaving the game instead
+    /// threw away whole runs with the character at half life and nothing near. The portal character never goes:
+    /// her own portal is the one the party comes through.
+    /// </summary>
+    private async Task<bool> RefillPotionsIfOut(Client client, AccountConfig account)
+    {
+        var game = client.Game;
+        // Rejuvenations are kept for the emergency line, so an empty healing belt is what sends a character to town.
+        // One trip a game: a character that cannot buy (out of gold) otherwise walked to town and back every 12s.
+        if (game.IsInTown()
+            || game.Belt.NumOfHealthPotions() > 0
+            || game.Inventory.Items.Any(i => i.Classification == ClassificationType.HealthPotion)
+            || game.Me.Id == PortalClientPlayerId
+            || !RefilledThisGame.TryAdd(game.Me.Name, true))
+        {
+            return false;
+        }
+
+        var timer = Stopwatch.StartNew();
+        Log.Information($"Client {game.Me.Name} out of healing potions at {game.Me.Life} of {game.Me.MaxLife} life, refilling in town");
+        if (!await _townManagementService.TakeTownPortalToTown(client))
+        {
+            Log.Warning($"Client {game.Me.Name} could not get to town for potions");
+            return true;
+        }
+
+        var townResult = await _townManagementService.PerformTownTasks(client, new TownManagementOptions(account, Act.Act5));
+        if (townResult.ShouldMule)
+        {
+            ClientsNeedingMule.Add(client.LoggedInUserName());
+        }
+
+        var me = game.Players.FirstOrDefault(p => p.Id == game.Me.Id);
+        if (me == null || !await GeneralHelpers.TryWithTimeout(async (_) =>
+        {
+            await Task.Delay(100);
+            return await _townManagementService.TakeTownPortalToArea(client, me, Area.ThroneOfDestruction);
+        }, TimeSpan.FromSeconds(10)))
+        {
+            Log.Warning($"Client {game.Me.Name} could not get back to the throne after refilling");
+            return true;
+        }
+
+        Log.Information($"Client {game.Me.Name} back from refilling potions after {timer.Elapsed.TotalSeconds:0.0}s, belt {game.Belt.NumOfHealthPotions()} healing");
+        return true;
+    }
+
     private async Task BasicIdleClient(Client client)
     {
         Log.Information($"Starting Basic idle Client {client.Game.Me.Name}");
@@ -795,6 +941,98 @@ public class BaalBot : MultiClientBotBase
                 }
             }
         }
+
+        StopFollowingLead(client);
+    }
+
+    /// <summary>
+    /// Holds Blessed Hammer on a fixed spot just below where the throne raises each wave (13 below it), so the
+    /// hammers are already spiralling when a wave appears instead of starting once it has walked up.
+    /// </summary>
+    private async Task HammerWaveClient(Client client, AccountConfig account)
+    {
+        Log.Information($"Starting Hammer wave Client {client.Game.Me.Name}");
+        var throne = client.Game.GetNPCsByCode(NPCCode.BaalThrone).FirstOrDefault()?.Location;
+        if (throne == null)
+        {
+            Log.Warning($"Client {client.Game.Me.Name} sees no throne, waiting for the next game");
+            await NextGame.Task;
+            return;
+        }
+
+        var hammerSpot = throne.Add(4, 18);
+        // Conviction for the sorceresses' novas, Fanaticism for the barbarian and the mercenaries, taking turns.
+        // On 1.09 an aura lands at once and lingers ~8s after the switch, so 6s turns keep both on the party.
+        var auras = new[] { Skill.Conviction, Skill.Fanaticism }.Where(client.Game.Me.HasSkill).ToList();
+        if (auras.Count == 0)
+        {
+            auras.Add(client.Game.Me.HasSkill(Skill.Concentration) ? Skill.Concentration : Skill.Might);
+        }
+
+        var auraRotation = Stopwatch.StartNew();
+        var auraIndex = 0;
+        var movementMode = MovementHelpers.PreferredMovement(client.Game);
+        var holdRefresh = Stopwatch.StartNew();
+        var holding = false;
+        var lastWaveSeen = false;
+        while (!await IsNextGame() && client.Game.IsInGame())
+        {
+            if (client.Game.GetNPCsByCode(NPCCode.BaalThrone).Count == 0)
+            {
+                Log.Information($"Waves done, moving on {client.Game.Me.Name}");
+                break;
+            }
+
+            var hallMonsters = NPCHelpers.GetNearbyNPCs(client, throne, 10, ThroneWaveRadius).ToList();
+            lastWaveSeen |= hallMonsters.Any(IsLastWave);
+            if (lastWaveSeen && hallMonsters.Count == 0)
+            {
+                Log.Information($"Last wave cleared, {client.Game.Me.Name} stops hammering");
+                break;
+            }
+
+            await RefillPotionsIfOut(client, account);
+            if (client.Game.Me.Location.Distance(hammerSpot) > 3)
+            {
+                var path = await _pathingService.GetPathToLocation(client.Game, hammerSpot, movementMode);
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, path, movementMode))
+                {
+                    await client.Game.MoveToAsync(hammerSpot);
+                }
+
+                holding = false;
+            }
+
+            if (client.Game.Me.HasSkill(Skill.HolyShield) && !client.Game.Me.Effects.ContainsKey(EntityEffect.Holyshield) && client.Game.Me.Mana > 20)
+            {
+                client.Game.UseRightHandSkillOnLocation(Skill.HolyShield, client.Game.Me.Location);
+                await Task.Delay(300);
+                holding = false;
+            }
+
+            if (auraRotation.Elapsed > TimeSpan.FromSeconds(6))
+            {
+                auraIndex = (auraIndex + 1) % auras.Count;
+                auraRotation.Restart();
+            }
+
+            var aura = auras[auraIndex];
+            if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var rightSkill) || rightSkill != aura)
+            {
+                client.Game.ChangeSkill(aura, Hand.Right);
+            }
+
+            if (!holding || holdRefresh.Elapsed > TimeSpan.FromSeconds(0.5))
+            {
+                client.Game.ShiftHoldLeftHandSkillOnLocation(Skill.BlessedHammer, client.Game.Me.Location);
+                holding = true;
+                holdRefresh.Restart();
+            }
+
+            await Task.Delay(200);
+        }
+
+        Log.Information($"Stopped Hammer wave Client {client.Game.Me.Name}");
     }
 
     private async Task BarbClient(Client client, AccountConfig account)
@@ -802,8 +1040,23 @@ public class BaalBot : MultiClientBotBase
         Log.Information($"Starting BoBarb Client {client.Game.Me.Name}");
         bool shouldBo = client.Game.Me.Id == BoClientPlayerId;
 
+        // Left where the portal lands, he pulled the hall's monsters to its edge, where they stood within the
+        // throne's reach but beyond the sorceresses' and kept the next wave from coming.
+        var baalPortal = client.Game.GetEntityByCode(EntityCode.BaalPortal).FirstOrDefault();
+        if (baalPortal != null && client.Game.GetNPCsByCode(NPCCode.BaalThrone).Count > 0)
+        {
+            var waveSpot = baalPortal.Location.Add(0, 30);
+            var movementMode = MovementHelpers.PreferredMovement(client.Game);
+            var pathToWaveSpot = await _pathingService.GetPathToLocation(client.Game, waveSpot, movementMode);
+            if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToWaveSpot, movementMode))
+            {
+                Log.Warning($"Client {client.Game.Me.Name} could not reach the wave spot {waveSpot}, holding at {client.Game.Me.Location}");
+            }
+        }
+
         while (NextGame.Task != await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(1)), NextGame.Task) && client.Game.IsInGame())
         {
+            await RefillPotionsIfOut(client, account);
             if (shouldBo)
             {
                 await ClassHelpers.CastAllShouts(client);

@@ -1,6 +1,4 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
-using System.IO;
-using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming;
 
@@ -8,7 +6,7 @@ public class CorpseAssignPacket : D2gsPacket
 {
     public CorpseAssignPacket(D2gsPacket packet) : base(packet.Raw)
     {
-        var reader = new BinaryReader(new MemoryStream(packet.Raw), Encoding.ASCII);
+        var reader = new PacketReader(packet.Raw);
         if ((InComingPacket)reader.ReadByte() != InComingPacket.CorpseAssign)
         {
             throw new D2GSPacketException("Expected Packet Type Not Found");

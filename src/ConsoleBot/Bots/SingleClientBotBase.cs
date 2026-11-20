@@ -1,10 +1,12 @@
 ﻿using ConsoleBot.Chicken;
 using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
+using ConsoleBot.Escape;
 using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using D2NG.Core;
+using D2NG.Core.Tracing;
 using Serilog;
 using System;
 using System.Linq;
@@ -53,6 +55,13 @@ public abstract class SingleClientBotBase
             int gameDescriptionIndex = 0;
             while (true)
             {
+                // Before the mule trip too: muling right after a stranger noticed us only shows more of us.
+                if (StrangerEscape.StopRequested)
+                {
+                    Log.Fatal("{Account}: stopping, a stranger noticed the bot", client.LoggedInUserName());
+                    return;
+                }
+
                 if (successiveFailures > 0 && successiveFailures % 10 == 0)
                 {
                     gameDescriptionIndex++;
@@ -83,6 +92,10 @@ public abstract class SingleClientBotBase
                         NeedsMule = false;
                         muleFailuresInARow = 0;
                         Log.Information("{Account}: finished mule", client.LoggedInUserName());
+                    }
+                    else if (StrangerEscape.StopRequested)
+                    {
+                        continue;
                     }
                     else
                     {
@@ -128,7 +141,11 @@ public abstract class SingleClientBotBase
                             await Task.Delay(10);
                         }
 
-                        if (!await RunSingleGame(client))
+                        var runStarted = DateTime.UtcNow;
+                        TraceEvents.Step(client.Game, "run", StepPhase.Start);
+                        var ran = await RunSingleGame(client);
+                        TraceEvents.Step(client.Game, "run", StepPhase.End, outcome: ran ? StepOutcome.Ok : StepOutcome.Failed, duration: DateTime.UtcNow - runStarted);
+                        if (!ran)
                         {
                             successiveFailures += 1;
                         }
@@ -145,7 +162,13 @@ public abstract class SingleClientBotBase
 
                     if (client.Game.IsInGame())
                     {
+                        TraceEvents.Decision(client.Game, "leave", ("reason", "run over"));
                         await client.Game.LeaveGame();
+                    }
+
+                    if (StrangerEscape.StopRequested)
+                    {
+                        continue;
                     }
 
                     if (!await RealmConnectHelpers.RejoinRealm(client, _config, _accountConfig))
@@ -157,12 +180,17 @@ public abstract class SingleClientBotBase
                         await Task.Delay(TimeSpan.FromSeconds(1));
                     }
                 }
-                catch (HttpRequestException e)
+                catch (HttpRequestException e) when (!StrangerEscape.FleeRequested)
                 {
                     var mapServerMessage = $"{client.LoggedInUserName()} Received http exception, map server is probably down";
                     Log.Fatal(e, mapServerMessage);
                     await _externalMessagingClient.SendMessage(mapServerMessage);
                     throw new MapServerUnavailableException(mapServerMessage, e);
+                }
+                catch (Exception) when (StrangerEscape.FleeRequested)
+                {
+                    // Leaving under the run's feet makes whatever it was doing throw.
+                    continue;
                 }
                 catch (Exception e)
                 {
@@ -173,6 +201,7 @@ public abstract class SingleClientBotBase
                     }
 
                     successiveFailures += 1;
+                    TraceEvents.Decision(client.Game, "exception", ("where", "game loop"), ("error", e.Message));
                     Log.Warning($"Disconnecting client due to exception {e}, reconnecting to realm, game description is now: {_config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)}");
                     bool reconnectResult = await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, _accountConfig, 10);
                     if (!reconnectResult)

@@ -210,4 +210,67 @@ public class CubePlannerTests
         Assert.Equal(2, Assert.Single(plan.Transmutes).Count);
         Assert.Equal(4, Givers(plan)["runes"][ItemName.IstRune]);
     }
+
+    [Fact]
+    public void Accounts_RerollTakesOnlyStockOnThoseMules()
+    {
+        var reroll = new CubeRecipe
+        {
+            Name = "Grand charm reroll",
+            RerollUntilKept = true,
+            Requirements =
+            [
+                new RecipeRequirement { ItemNames = [ItemName.GrandCharm], Quality = QualityType.Magical, Amount = 1, Accounts = ["stock-mules"] },
+                new RecipeRequirement { ItemNames = [ItemName.PerfectTopaz], Amount = 3 }
+            ],
+            Result = new RecipeResult { ItemNames = [ItemName.GrandCharm], Quality = QualityType.Magical },
+            MaxRerollsPerRun = 1
+        };
+        List<HeldItem> held =
+        [
+            new("keeper-mules", "stored", new Item { Name = ItemName.GrandCharm, Quality = QualityType.Magical, Properties = [] }),
+            new("stock-mules", "stock", new Item { Name = ItemName.GrandCharm, Quality = QualityType.Magical, Properties = [] }),
+            .. On("gems", ItemName.PerfectTopaz, 3)
+        ];
+
+        var plan = CubePlanner.Plan([reroll], held, 30);
+
+        Assert.Equal(1, Assert.Single(plan.Transmutes).Count);
+        Assert.DoesNotContain("stored", Givers(plan).Keys);
+        Assert.Equal(1, Givers(plan)["stock"][ItemName.GrandCharm]);
+    }
+
+    [Fact]
+    public void KeptOnlyBy_LeavesItemsAnotherFileKeeps()
+    {
+        var bloodRing = new CubeRecipe
+        {
+            Name = "Blood ring",
+            Requirements =
+            [
+                new RecipeRequirement
+                {
+                    ItemNames = [ItemName.Ring],
+                    Quality = QualityType.Magical,
+                    Amount = 1,
+                    KeptOnlyBy = "CraftBases",
+                    KeepRuleSources = item => item.Level == 85 ? ["CraftBases.nip", "Rings.nip"] : ["CraftBases.nip"]
+                },
+                new RecipeRequirement { ItemNames = [ItemName.PerfectRuby], Amount = 1 }
+            ],
+            Result = new RecipeResult { ItemNames = [ItemName.Ring], Quality = QualityType.Crafted }
+        };
+        List<HeldItem> held =
+        [
+            new("account", "keepers", new Item { Name = ItemName.Ring, Quality = QualityType.Magical, Level = 85, Properties = [] }),
+            new("account", "stock", new Item { Name = ItemName.Ring, Quality = QualityType.Magical, Level = 90, Properties = [] }),
+            .. On("gems", ItemName.PerfectRuby, 2)
+        ];
+
+        var plan = CubePlanner.Plan([bloodRing], held, 30);
+
+        Assert.Equal(1, Assert.Single(plan.Transmutes).Count);
+        Assert.DoesNotContain("keepers", Givers(plan).Keys);
+        Assert.Equal(1, Givers(plan)["stock"][ItemName.Ring]);
+    }
 }

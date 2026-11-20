@@ -31,11 +31,20 @@ internal sealed class CowManager
     public static readonly TimeSpan HuntPatience = TimeSpan.FromSeconds(90);
 
     /// <summary>
-    /// Overall budget for the hunt, measured from the moment the party first sets off. The hunted
-    /// queue keeps growing while the party explores, so this has to outlast discovery rather than
-    /// just the clusters known when the hunt started.
+    /// The budget of a game that clears the level: a party with no hunt budget configured
+    /// (<see cref="CowConfiguration.HuntBudgetSeconds"/>), and a game that ends with a farmer muling - its identify
+    /// trip to Cain runs while the rest of the party is still in the game, which is only safe in a cleared level.
     /// </summary>
-    public static readonly TimeSpan ActivePhaseBudget = TimeSpan.FromSeconds(480);
+    public static readonly TimeSpan ClearingBudget = TimeSpan.FromSeconds(480);
+
+    /// <summary>Overall budget for the hunt, measured from the moment the party first sets off; see <see cref="CowConfiguration.HuntBudgetSeconds"/>.</summary>
+    public TimeSpan HuntBudget { get; init; } = ClearingBudget;
+
+    /// <summary>Asked once, when the party sets off: whether this game has to clear the level, see <see cref="ClearingBudget"/>.</summary>
+    public Func<bool> ClearsTheLevel { get; init; } = () => false;
+
+    /// <summary>Fixed when the party sets off: a budget that grew later turned a hunt already over back into one running.</summary>
+    private TimeSpan _budget = ClearingBudget;
 
     private readonly List<Client> _killingClients;
     private readonly HashSet<Client> _listeners;
@@ -63,6 +72,7 @@ internal sealed class CowManager
     private const double KingGuardRadius = 20;
     private Point _cowKingLocation;
     private int _killed;
+    private readonly Lock _killLock = new();
 
     public CowManager(List<Client> killingclients, List<Client> listeningClients, IMapApiService mapApiService, bool activeMode)
     {
@@ -80,15 +90,40 @@ internal sealed class CowManager
     /// </summary>
     public bool Listens(Client client) => _listeners.Contains(client);
 
-    public void OnAssignNpc(D2gsPacket packet) => HandleAssignNPC(new AssignNpcPacket(packet));
+    public void OnAssignNpc(D2gsPacket packet) => Guarded(() => HandleAssignNPC(new AssignNpcPacket(packet)));
 
-    public void OnNpcState(D2gsPacket packet) => HandleNPCStateChange(new NpcStatePacket(packet));
+    public void OnNpcState(D2gsPacket packet) => Guarded(() => HandleNPCStateChange(new NpcStatePacket(packet)));
 
-    public void OnNpcMove(Point location, uint entityId) => HandleNPCMove(entityId, location);
+    public void OnNpcMove(Point location, uint entityId) => Guarded(() => HandleNPCMove(entityId, location));
 
-    public void OnNpcStop(uint entityId, Point location, double lifePercentage) => HandleNPCMove(entityId, location, lifePercentage);
+    public void OnNpcStop(uint entityId, Point location, double lifePercentage) => Guarded(() => HandleNPCMove(entityId, location, lifePercentage));
 
-    public void OnNpcHit(uint entityId, double lifePercentage) => UpdateNPCLife(entityId, lifePercentage);
+    public void OnNpcHit(uint entityId, double lifePercentage) => Guarded(() => UpdateNPCLife(entityId, lifePercentage));
+
+    private static readonly TimeSpan HandlerWarningInterval = TimeSpan.FromSeconds(10);
+    private long _lastHandlerWarning;
+
+    /// <summary>
+    /// These run in the clients' packet handlers and read the other clients' games, and an exception
+    /// escaping a packet handler drops that client's connection. A missed update costs one position.
+    /// </summary>
+    private void Guarded(Action handle)
+    {
+        try
+        {
+            handle();
+        }
+        catch (Exception e)
+        {
+            var now = Stopwatch.GetTimestamp();
+            var last = Interlocked.Read(ref _lastHandlerWarning);
+            if (Stopwatch.GetElapsedTime(last, now) >= HandlerWarningInterval
+                && Interlocked.CompareExchange(ref _lastHandlerWarning, now, last) == last)
+            {
+                Log.Warning(e, "Cow manager could not apply a monster packet");
+            }
+        }
+    }
 
     /// <summary>
     /// Spacing of the sweep waypoints in game units. A killer standing on one covers the ground
@@ -107,6 +142,9 @@ internal sealed class CowManager
     /// distance test took them for leftovers here and sent the party looking for a path to them.
     /// </summary>
     public bool? InLevel(Point point) => _levelMap?.TryMapToPointInMap(point, out _);
+
+    /// <summary>The cow level's map, or null before the sweep has loaded it.</summary>
+    public AreaMap LevelMap => _levelMap;
 
     /// <summary>
     /// Lays a serpentine route over the level and orders all cluster work along it, so the killers
@@ -162,75 +200,8 @@ internal sealed class CowManager
 
     public async Task<List<Point>> GetPossibleStartingLocations(Game game)
     {
-        var result = new List<Point>();
         var areaMap = await mapApiService.GetArea(game.MapId, Difficulty.Normal, D2NG.Core.D2GS.Act.Area.CowLevel);
-        var cowKing = areaMap.Npcs[(int)NPCCode.CowKing][0];
-        var rows = areaMap.Map.GetLength(0);
-        for (var i = 0; i < rows; i += rows / 5)
-        {
-            var edge1 = GetNearestLocationToEdge(areaMap.Map[i], true);
-            if(edge1.HasValue)
-            {
-                var option1 = areaMap.MapToPoint(i, edge1.Value);
-                if (option1.Distance(cowKing) > 150)
-                {
-                    result.Add(option1);
-                }
-            }
-
-            var edge2 = GetNearestLocationToEdge(areaMap.Map[i], false);
-            if(edge2.HasValue)
-            {
-                var option2 = areaMap.MapToPoint(i, edge2.Value);
-                if (option2.Distance(cowKing) > 150)
-                {
-                    result.Add(option2);
-                }
-            }
-        }
-
-        return result.OrderBy(p => p.X).ThenBy(p => p.Y).ToList();
-    }
-
-    private static int? GetNearestLocationToEdge(int[] locations, bool leftToRight)
-    {
-        var startX = leftToRight ? 0 : locations.Length - 1;
-        int x = startX;
-        int count = 0;
-        while (true)
-        {
-            if (AreaMapExtensions.IsMovable(locations[x]))
-            {
-                count++;
-                if(count > 5)
-                {
-                    return x;
-                }
-            }
-            else
-            {
-                count = 0;
-            }
-
-            if(leftToRight)
-            {
-                x++;
-                if(x >= locations.Length)
-                {
-                    break;
-                }
-            }
-            else
-            {
-                x--;
-                if (x < 0)
-                {
-                    break;
-                }
-            }
-        }
-
-        return null;
+        return StartLocations.Candidates(areaMap.Map, areaMap.LevelOrigin, areaMap.Npcs[(int)NPCCode.CowKing][0]);
     }
 
     private void UpdateNPCLife(uint entityId, double lifePercentage)
@@ -249,8 +220,11 @@ internal sealed class CowManager
     {
         if (_aliveMonsters.TryGetValue(entityId, out var monster))
         {
-            monster.Location = location;
-            _aliveMonsters.TryUpdateLocation(entityId, location);
+            // A move packet's destination is where the monster is going, not where it is: the clients
+            // place it along its path, and that is what every range check here should see.
+            var at = SightingOf(entityId).Location ?? location;
+            monster.Location = at;
+            _aliveMonsters.TryUpdateLocation(entityId, at);
             if(lifePercentage.HasValue)
             {
                 monster.LifePercentage = lifePercentage.Value;
@@ -269,8 +243,7 @@ internal sealed class CowManager
     /// preset id, which is the map API's key for a placed unit, and the server never sends it.
     /// </remarks>
     private static bool IsCowKing(AssignNpcPacket packet)
-        => packet.UniqueCode == NPCCode.HellBovine
-            && packet.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique);
+        => CowKing.IsCowKing(packet.UniqueCode, packet.MonsterEnchantments, packet.IsBossMinion);
 
     /// <summary>
     /// Whether this NPC is one of the party's mercenaries or a friendly summon.
@@ -326,9 +299,20 @@ internal sealed class CowManager
         // Everything in the level counts. Which character can hurt a given monster is decided from
         // its resistances when the attack is chosen, so there is nothing to configure here and
         // nothing to leave out - a monster type nobody thought to list used to be invisible.
-        if (_confirmedDead.ContainsKey(packet.EntityId) || IsOnOurSide(packet))
+        var tracked = _aliveMonsters.TryGetValue(packet.EntityId, out var known);
+        switch (MonsterTracking.OnAssign(_confirmedDead.ContainsKey(packet.EntityId), IsOnOurSide(packet), tracked, packet.LifePercentage))
         {
-            return;
+            case AssignOutcome.Ignore:
+                return;
+            case AssignOutcome.RemoveDead:
+                RemoveMonster(packet.EntityId);
+                return;
+            case AssignOutcome.Move:
+                // Assigned again on coming back into view, where it stands now.
+                known.Location = packet.Location;
+                known.LifePercentage = packet.LifePercentage;
+                _aliveMonsters.TryUpdateLocation(packet.EntityId, packet.Location);
+                return;
         }
 
         var cluster = _clusters.FindOrRegister(packet.Location, out var created);
@@ -372,7 +356,72 @@ internal sealed class CowManager
 
     public List<AliveMonster> GetNearbyAliveMonsters(Point location, double distance, int numberOfMonsters)
     {
+        RefreshPositions();
         return _aliveMonsters.Within(location, distance, numberOfMonsters);
+    }
+
+    /// <summary>How often tracked positions are read again from the clients' world objects.</summary>
+    private static readonly TimeSpan PositionRefreshInterval = TimeSpan.FromMilliseconds(100);
+    private readonly Stopwatch _sinceRefresh = Stopwatch.StartNew();
+    private int _refreshing;
+
+    /// <summary>
+    /// Moves every tracked monster to where the clients place it now, and its cluster with it, and drops
+    /// the ones a client has seen die. The positions used to be the destinations of move packets,
+    /// 4.5 units off at the median against 1.0 for the clients' own simulated positions.
+    /// </summary>
+    private void RefreshPositions()
+    {
+        if (_sinceRefresh.Elapsed < PositionRefreshInterval || Interlocked.Exchange(ref _refreshing, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            _sinceRefresh.Restart();
+            var members = new List<(uint ClusterId, Point Location)>();
+            foreach (var monster in _aliveMonsters.Snapshot())
+            {
+                var (location, dead) = SightingOf(monster.Id);
+                if (dead)
+                {
+                    RemoveMonster(monster.Id);
+                    continue;
+                }
+
+                if (location != null && location != monster.Location)
+                {
+                    monster.Location = location;
+                    _aliveMonsters.TryUpdateLocation(monster.Id, location);
+                }
+
+                members.Add((monster.ClusterId, monster.Location));
+            }
+
+            _clusters.Follow(members);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _refreshing, 0);
+        }
+    }
+
+    /// <summary>Where the clients that see this monster place it, the freshest first, and whether any saw it die.</summary>
+    private (Point Location, bool Dead) SightingOf(uint entityId)
+    {
+        var sightings = new List<(Point, TimeSpan)>(2);
+        var dead = false;
+        foreach (var client in _listeners)
+        {
+            if (client.Game.WorldObjects.TryGetValue((entityId, EntityType.NPC), out var seen))
+            {
+                dead |= MonsterTracking.IsDead(seen.State);
+                sightings.Add((seen.Location, seen.LocationAge));
+            }
+        }
+
+        return (MonsterTracking.Freshest(sightings), dead);
     }
 
 
@@ -402,6 +451,7 @@ internal sealed class CowManager
     /// </summary>
     public Point GetNearestClusterMember(MonsterCluster cluster, Point from)
     {
+        RefreshPositions();
         Point nearest = null;
         var nearestDistance = double.MaxValue;
         foreach (var monster in _aliveMonsters.Snapshot())
@@ -430,11 +480,18 @@ internal sealed class CowManager
     /// </summary>
     public void PruneMonstersOutOfSight(Client client, double distance)
     {
+        RefreshPositions();
         foreach (var monster in _aliveMonsters.Within(client.Game.Me.Location, distance, int.MaxValue))
         {
-            if (!client.Game.WorldObjects.ContainsKey((monster.Id, EntityType.NPC)))
+            var inWorld = client.Game.WorldObjects.TryGetValue((monster.Id, EntityType.NPC), out var seen);
+            switch (MonsterTracking.OnPrune(inWorld, seen?.State ?? EntityState.Alive))
             {
-                RemoveMonster(monster.Id, killed: false);
+                case PruneOutcome.OutOfSight:
+                    RemoveMonster(monster.Id, killed: false);
+                    break;
+                case PruneOutcome.Dead:
+                    RemoveMonster(monster.Id);
+                    break;
             }
         }
     }
@@ -447,13 +504,18 @@ internal sealed class CowManager
         }
 
         _clusters.RemoveMember(monster.ClusterId, killed);
+
+        // Packet handlers and the position refresh both get here; the id counts once whoever does.
         if (!killed || !_confirmedDead.TryAdd(entityId, 0))
         {
             return;
         }
 
-        _killed++;
-        _sinceLastKill.Restart();
+        Interlocked.Increment(ref _killed);
+        lock (_killLock)
+        {
+            _sinceLastKill.Restart();
+        }
     }
 
     /// <summary>Returns a cluster to the pool so another client can pick it up.</summary>
@@ -490,6 +552,7 @@ internal sealed class CowManager
         double maxDistance = double.MaxValue,
         Func<AliveMonster, bool> canHarm = null)
     {
+        RefreshPositions();
         var from = anchor ?? client.Game.Me.Location;
         Func<MonsterCluster, bool> canWork = null;
         if (canHarm != null)
@@ -514,12 +577,30 @@ internal sealed class CowManager
         return _clusters.ClaimNearest(from, fromSweepIndex, maxDistance, nearestFirst: anchor != null, canWork);
     }
 
+    /// <summary>
+    /// What is left of the active phase's budget; null outside active mode or before the hunt has set
+    /// off, when nothing bounds it. Not the patience for the next kill: the party goes on killing
+    /// while a member is away.
+    /// </summary>
+    public TimeSpan? HuntTimeLeft => ActiveMode && _activePhase.IsRunning ? _budget - _activePhase.Elapsed : null;
+
+    /// <summary>Whether the hunt's budget has run out, so cows may still stand around the party.</summary>
+    public bool OutOfTime => ActiveMode && _activePhase.IsRunning && _activePhase.Elapsed > _budget;
+
+    /// <summary>
+    /// The party's own hunt budget ran out, not <see cref="ClearingBudget"/>: the level was cut short on purpose, with packs
+    /// standing, so the party leaves at once. A game that clears the level ends at its budget as it always did, with the
+    /// loot sweep and the muling farmer's Cain trip after it.
+    /// </summary>
+    public bool CutShort => OutOfTime && _budget != ClearingBudget;
+
     /// <summary>Starts the overall hunt budget, on the first cluster the party sets off towards.</summary>
     public void NotifyHuntStarted()
     {
         if (!_activePhase.IsRunning)
         {
-            Log.Information($"Hunting party setting off, active phase budget is {ActivePhaseBudget}");
+            _budget = ClearsTheLevel() ? ClearingBudget : HuntBudget;
+            Log.Information($"Hunting party setting off, active phase budget is {_budget}");
             _activePhase.Start();
             _sinceLastKill.Restart();
         }
@@ -537,8 +618,7 @@ internal sealed class CowManager
             return false;
         }
 
-        if (ActiveMode && _activePhase.IsRunning
-            && (_activePhase.Elapsed > ActivePhaseBudget || IsProducingTooSlowly()))
+        if (OutOfTime || (ActiveMode && _activePhase.IsRunning && IsProducingTooSlowly()))
         {
             return true;
         }

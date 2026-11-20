@@ -8,6 +8,7 @@ using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
 using D2NG.Core.MonsterData;
+using D2NG.Core.Tracing;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.MapApi;
 using D2NG.Navigation.Services.Pathing;
@@ -56,7 +57,7 @@ public class AttackService : IAttackService
 
     private const double BossSightApproach = 12;
 
-    private const double BossChaseRange = 30;
+    public const double BossChaseRange = 30;
 
     private const double AmplifyKeepOutRadius = 15;
 
@@ -81,7 +82,7 @@ public class AttackService : IAttackService
     private static readonly HashSet<NPCCode> CurseCasters = [NPCCode.OblivionKnight, NPCCode.AbyssKnight];
 
     /// <summary>Four: at three the left seal's thirty-strong swarm outlived the party; the 80% whirl floor is what keeps a cursed whirl survivable.</summary>
-    private const int MaxWhirlwindTargets = 4;
+    public const int MaxWhirlwindTargets = 4;
 
     /// <summary>At 0.6 a whirl started at 2218 life ended at 205; a curse landing mid-whirl returns about 2000, so in the Sanctuary he starts one only with that much to spare.</summary>
     private const double BarbarianWhirlMinLife = 0.8;
@@ -89,15 +90,20 @@ public class AttackService : IAttackService
     private const double CorpseExplosionRadius = 6;
 
     /// <summary>Short whirls in the Sanctuary: a long one commits him to every hit on the line, cursed or not. Six was tried on 15 Sept 2026 and the top seal went from 22 to 30 seconds with two timeouts in fourteen games; eight is the trade.</summary>
-    private const double MaxWhirlwindAimDistance = 8;
+    public const double MaxWhirlwindAimDistance = 8;
 
     private const double WhirlwindPackRadius = 8;
 
-    private const double WhirlwindApproachDistance = 10;
+    public const double WhirlwindApproachDistance = 10;
+
+    /// <summary>The barbarian's enemies: the ten nearest within twenty of whom he assists.</summary>
+    public const int AssistNearbyCount = 10;
+
+    public const int AssistNearbyRange = 20;
 
     private static readonly TimeSpan WhirlwindRetryInterval = TimeSpan.FromMilliseconds(100);
 
-    private const double WhirlwindArrivalDistance = 4;
+    public const double WhirlwindArrivalDistance = 4;
 
 
     internal sealed class Line
@@ -229,7 +235,7 @@ public class AttackService : IAttackService
 
     }
 
-    private async Task<Point> FindNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, double minDistance = 0, double maxdistance = 30)
+    public async Task<Point> FindNearbySafeSpot(Client client, List<Point> enemies, Point toLocation, double minDistance = 0, double maxdistance = 30)
     {
         Point bestSpot = null;
         int spotMonsters = int.MaxValue;
@@ -289,7 +295,7 @@ public class AttackService : IAttackService
             else
             {
                 var path = await _pathingService.GetPathToLocation(client.Game, spot, MovementMode.Walking);
-                if (!await MovementHelpers.TakePathOfLocations(client.Game, path, MovementMode.Walking))
+                if (!await MovementHelpers.TakePathOfLocations(client.Game, path, MovementMode.Walking, CallerWalkStop))
                 {
                     if (_logger.IsEnabled(LogLevel.Warning))
                         _logger.LogWarning("Walking to safe spot failed at {Location}", client.Game.Me.Location);
@@ -304,8 +310,10 @@ public class AttackService : IAttackService
         return false;
     }
 
-    public async Task<bool> AssistPlayer(Client client, Player player, IReadOnlyCollection<NPCCode> priorityCodes = null, Point focus = null, Point standAt = null)
+    public async Task<bool> AssistPlayer(Client client, Player player, IReadOnlyCollection<NPCCode> priorityCodes = null, Point focus = null, Point standAt = null, bool wallAwareWhirl = false, uint? targetId = null, double? keepDistance = null, bool whirlOut = false, System.Threading.CancellationToken cancellation = default)
     {
+        // Flows into every walk this assist makes, however deep: set here, it is gone when the assist returns.
+        CallerStop.Value = cancellation;
         if (client.Game.IsInTown())
         {
             return true;
@@ -317,22 +325,22 @@ public class AttackService : IAttackService
             && !client.Game.Inventory.Items.Any(i => i.Classification == ClassificationType.HealthPotion || i.Classification == ClassificationType.RejuvenationPotion))
         {
             _logger.LogWarning("{Character} has no health potions left, disengaging instead of fighting", client.Game.Me.Name);
-            await IdleReposition(client, player.Location);
+            await IdleReposition(client, player.Location, keepDistance);
             return true;
         }
 
         switch (client.Game.Me.Class)
         {
             case CharacterClass.Amazon:
-                return await AmazonAssist(client, player, priorityCodes, focus, standAt);
+                return await AmazonAssist(client, player, priorityCodes, focus, standAt, keepDistance);
             case CharacterClass.Sorceress:
                 return await SorceressAssist(client, player, priorityCodes);
             case CharacterClass.Necromancer:
-                return await NecromancerAssist(client, player, focus);
+                return await NecromancerAssist(client, player, focus, keepDistance);
             case CharacterClass.Paladin:
                 return await PaladinAssist(client, player, priorityCodes, focus);
             case CharacterClass.Barbarian:
-                return await BarbarianAssist(client, player, priorityCodes, focus);
+                return await BarbarianAssist(client, player, priorityCodes, focus, wallAwareWhirl, targetId, whirlOut);
             case CharacterClass.Druid:
                 break;
             case CharacterClass.Assassin:
@@ -342,7 +350,7 @@ public class AttackService : IAttackService
         return true;
     }
 
-    private async Task<bool> CloseOnFocus(Client client, Point focus, double reach)
+    private async Task<bool> CloseOnFocus(Client client, Point focus, double reach, double? keepDistance = null)
     {
         var me = client.Game.Me.Location;
         if (focus == null || me.Distance(focus) <= reach)
@@ -351,13 +359,22 @@ public class AttackService : IAttackService
         }
 
         var toward = me.GetPointBeforePointInSameDirection(focus, reach - 3);
-        var cancel = new System.Threading.CancellationTokenSource();
-        cancel.CancelAfter(FocusStepMs);
+        if (!KeepsDistance(client, toward, keepDistance))
+        {
+            return false;
+        }
+
+        using var cancel = WalkCancellation(FocusStepMs);
         await MovementHelpers.MoveToLocation(client.Game, _pathingService, _mapApiService, toward, MovementMode.Walking, cancel.Token);
         return true;
     }
 
-    private async Task IdleReposition(Client client, Point anchor)
+    /// <summary>Whether a spot keeps every monster this client sees at <paramref name="keepDistance"/>; always when none is asked.</summary>
+    private static bool KeepsDistance(Client client, Point spot, double? keepDistance)
+        => keepDistance is not double keep || spot == null
+            || !NPCHelpers.GetNearbyNPCs(client, spot, 1, (int)Math.Ceiling(keep)).Any(npc => npc.Location.Distance(spot) < keep);
+
+    private async Task IdleReposition(Client client, Point anchor, double? keepDistance = null)
     {
         var threats = NPCHelpers.GetNearbyNPCs(client, client.Game.Me.Location, 20, IdleDangerRadius).ToList();
         if (threats.Count == 0)
@@ -365,7 +382,22 @@ public class AttackService : IAttackService
             return;
         }
 
-        if (await MoveToNearbySafeSpot(client,
+        if (keepDistance != null)
+        {
+            // Fewest monsters within five of a spot can still be a spot beside one.
+            var spot = await FindNearbySafeSpot(client, threats.Select(e => e.Location).ToList(), anchor, IdleStepMinDistance, IdleStepMaxDistance);
+            if (spot != null && KeepsDistance(client, spot, keepDistance))
+            {
+                // Not back to the lead through the pack: every point of the walk keeps half the distance.
+                var safePath = await _pathingService.GetPathToLocation(client.Game, spot, MovementMode.Walking);
+                if (safePath.Count > 0 && safePath.All(point => NearestThreat(threats, point) >= keepDistance.Value / 2))
+                {
+                    await MovementHelpers.TakePathOfLocations(client.Game, safePath, MovementMode.Walking, CallerWalkStop);
+                    return;
+                }
+            }
+        }
+        else if (await MoveToNearbySafeSpot(client,
             threats.Select(e => e.Location).ToList(),
             anchor,
             MovementMode.Walking,
@@ -391,15 +423,47 @@ public class AttackService : IAttackService
         }
 
         var step = from.Add((short)(dx / length * IdleStepMaxDistance), (short)(dy / length * IdleStepMaxDistance));
+        // Away from them, and not towards anything that throws charged bolts.
+        var lightning = threats.Where(threat => threat.MonsterEnchantments.Contains(MonsterEnchantment.LightningEnchanted)).ToList();
+        if (keepDistance != null
+            && (NearestThreat(threats, step) < Math.Min(keepDistance.Value, NearestThreat(threats, from)) || NearestThreat(lightning, step) < NearestThreat(lightning, from)))
+        {
+            return;
+        }
+
         var path = await _pathingService.GetPathToLocation(client.Game, step, MovementMode.Walking);
         if (path.Count > 0)
         {
-            await MovementHelpers.TakePathOfLocations(client.Game, path, MovementMode.Walking);
+            await MovementHelpers.TakePathOfLocations(client.Game, path, MovementMode.Walking, CallerWalkStop);
         }
     }
 
+    /// <summary>
+    /// The stop of the <see cref="AssistPlayer"/> call this code runs in, if any. Its walks end on it: an amazon walking
+    /// 190 units to a safe spot as the cow game ended held the whole party's leave for fourteen seconds.
+    /// </summary>
+    private static readonly System.Threading.AsyncLocal<System.Threading.CancellationToken> CallerStop = new();
+
+    /// <summary>A walk's cancellation, linked to the assist's stop, cancelled after <paramref name="milliseconds"/> when given.</summary>
+    private static System.Threading.CancellationTokenSource WalkCancellation(int? milliseconds = null)
+    {
+        var cancel = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(CallerStop.Value);
+        if (milliseconds is int ms)
+        {
+            cancel.CancelAfter(ms);
+        }
+
+        return cancel;
+    }
+
+    /// <summary>The assist's stop for a walk that has no bound of its own; none outside an assist.</summary>
+    private static System.Threading.CancellationToken? CallerWalkStop => CallerStop.Value.CanBeCanceled ? CallerStop.Value : null;
+
+    private static double NearestThreat(IEnumerable<WorldObject> threats, Point spot)
+        => threats.Select(threat => threat.Location.Distance(spot)).DefaultIfEmpty(double.MaxValue).Min();
+
     /// <param name="standAt">Where she repositions when nothing is in sight; the player she assists when null. A barbarian whirling through a pack by a wall is no place to stand beside.</param>
-    private async Task<bool> AmazonAssist(Client client, Player player, IReadOnlyCollection<NPCCode> priorityCodes, Point focus, Point standAt = null)
+    private async Task<bool> AmazonAssist(Client client, Player player, IReadOnlyCollection<NPCCode> priorityCodes, Point focus, Point standAt = null, double? keepDistance = null)
     {
         var me = client.Game.Me;
         var enemies = Prioritize(NPCHelpers.GetNearbyNPCs(client, focus ?? player.Location, 20, 40).ToList(), priorityCodes);
@@ -413,7 +477,7 @@ public class AttackService : IAttackService
             return true;
         }
 
-        if (await CloseOnFocus(client, focus, AmazonFocusReach))
+        if (await CloseOnFocus(client, focus, AmazonFocusReach, keepDistance))
         {
             return true;
         }
@@ -427,16 +491,16 @@ public class AttackService : IAttackService
             // the wall and away from the party; for the boss alone she closes to sight range, since
             // a Vizier a few units out of view with the amazon idle cost a whole seal timeout.
             var hiddenBoss = enemies.FirstOrDefault(e => e.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique));
-            if (hiddenBoss != null && hiddenBoss.Location.Distance(me.Location) > BossSightApproach)
+            if (hiddenBoss != null && hiddenBoss.Location.Distance(me.Location) > BossSightApproach
+                && KeepsDistance(client, me.Location.GetPointBeforePointInSameDirection(hiddenBoss.Location, BossSightApproach), keepDistance))
             {
                 var toward = me.Location.GetPointBeforePointInSameDirection(hiddenBoss.Location, BossSightApproach);
-                var cancel = new System.Threading.CancellationTokenSource();
-                cancel.CancelAfter(1500);
+                using var cancel = WalkCancellation(1500);
                 await MovementHelpers.MoveToLocation(client.Game, _pathingService, _mapApiService, toward, MovementMode.Walking, cancel.Token);
                 return true;
             }
 
-            await IdleReposition(client, anchor);
+            await IdleReposition(client, anchor, keepDistance);
             return true;
         }
 
@@ -478,7 +542,7 @@ public class AttackService : IAttackService
             client.Game.RepeatRightHandSkillOnEntity(Skill.Attack, nearest);
             await Task.Delay(200);
         }
-        else if (me.Attributes[Attribute.Level] < 10
+        else if (me.Attributes[Attribute.Level] < 10 && keepDistance == null
             && client.Game.Me.Equipment.TryGetValue(DirectoryType.RightHand, out var javalin)
             && javalin.Classification == ClassificationType.Javelin)
         {
@@ -489,7 +553,7 @@ public class AttackService : IAttackService
         }
         else
         {
-            await IdleReposition(client, anchor);
+            await IdleReposition(client, anchor, keepDistance);
         }
 
         return true;
@@ -764,7 +828,11 @@ public class AttackService : IAttackService
         }
         else if (me.HasSkill(Skill.Might) || me.HasSkill(Skill.Concentration) || me.HasSkill(Skill.Fanaticism))
         {
-            var damageSkill = me.HasSkill(Skill.Fanaticism) ? Skill.Fanaticism : me.HasSkill(Skill.Concentration) ? Skill.Concentration : Skill.Might;
+            // Fanaticism speeds up the party's melee; a hammer paladin fighting for himself is better off with
+            // Concentration, which adds to Blessed Hammer itself.
+            var fightsAlone = player.Id == me.Id && me.Skills.GetValueOrDefault(Skill.BlessedHammer) >= 20 && me.HasSkill(Skill.Concentration);
+            var damageSkill = fightsAlone ? Skill.Concentration
+                : me.HasSkill(Skill.Fanaticism) ? Skill.Fanaticism : me.HasSkill(Skill.Concentration) ? Skill.Concentration : Skill.Might;
             if (!client.Game.Me.ActiveSkills.TryGetValue(Hand.Right, out var currentSkill) || currentSkill != damageSkill)
             {
                 _logger.LogInformation("Changing from {CurrentSkill} to {DamageSkill}", currentSkill, damageSkill);
@@ -804,8 +872,7 @@ public class AttackService : IAttackService
                 // Bounded: a walk toward a boss standing on lava never arrives, and unbounded it
                 // held this loop past the seal timeout.
                 var pathNearest = await _pathingService.GetPathToLocation(client.Game, goalLocation, MovementMode.Walking);
-                var walkCancel = new System.Threading.CancellationTokenSource();
-                walkCancel.CancelAfter(1500);
+                using var walkCancel = WalkCancellation(1500);
                 if (!await MovementHelpers.TakePathOfLocations(client.Game, pathNearest, MovementMode.Walking, walkCancel.Token))
                 {
                     _logger.LogWarning("Walking to Nearest failed at {Location}", client.Game.Me.Location);
@@ -813,11 +880,73 @@ public class AttackService : IAttackService
                 client.Game.ChangeSkill(rightSkill, Hand.Right);
             }
 
+            await StepToHammerSpot(client, enemies);
             client.Game.ShiftHoldLeftHandSkillOnLocation(Skill.BlessedHammer, client.Game.Me.Location);
         }
 
         return true;
     }
+
+    /// <summary>
+    /// A step to where the hammers reach more of the monsters near before a wall swallows them
+    /// (<see cref="BlessedHammerSpiral"/>): every hammer starts east and spirals out from the paladin, and one beside a
+    /// wall threw them all into it.
+    /// </summary>
+    private async Task StepToHammerSpot(Client client, IEnumerable<WorldObject> enemies)
+    {
+        var map = await LaneMap(client);
+        if (map == null)
+        {
+            return;
+        }
+
+        var me = client.Game.Me.Location;
+        var monsters = enemies.Where(enemy => enemy.Location.Distance(me) <= HammerLook).Select(enemy => enemy.Location).ToList();
+        if (monsters.Count == 0)
+        {
+            return;
+        }
+
+        var open = BlessedHammerSpiral.OpenOn(map);
+        var spot = BlessedHammerSpiral.BestSpot(me, monsters, open);
+        var here = BlessedHammerSpiral.Hits(me, monsters, open);
+        var there = BlessedHammerSpiral.Hits(spot, monsters, open);
+        if (there > here && spot.Distance(me) >= MinHammerStep)
+        {
+            _logger.LogInformation("{Character} steps from {From} to {To} for its hammers: {There} monsters in reach instead of {Here}", client.Game.Me.Name, me, spot, there, here);
+            await StepWhileHammering(client.Game, spot);
+        }
+    }
+
+    /// <summary>
+    /// A run asked while a hammer is still being cast is refused: the server stops the paladin where he stands, 160 ms
+    /// later, and the next hammers go out from there. Crossing the Hell River of Flame he logged 316 steps, most of them
+    /// never taken. The run is asked again until the server's position puts him there or the tries run out.
+    /// </summary>
+    public static async Task<bool> StepWhileHammering(Game game, Point spot)
+    {
+        for (var attempt = 0; attempt < StepAttempts; attempt++)
+        {
+            await game.RunToAsync(spot);
+            await Task.Delay(StepAnswerWait);
+            if (game.Me.Location.Distance(spot) <= 1.5)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private const int StepAttempts = 3;
+
+    /// <summary>The server's stop for a refused run came 160 ms after it.</summary>
+    private static readonly TimeSpan StepAnswerWait = TimeSpan.FromMilliseconds(250);
+
+    private const double HammerLook = 15;
+
+    /// <summary>A shorter step than this to a better hammer spot is not taken: the server left the paladin where he stood.</summary>
+    private const double MinHammerStep = 2;
 
     /// <summary>
     /// Hammers spiral outwards from the caster and a wall swallows the half that meets it; a
@@ -841,7 +970,7 @@ public class AttackService : IAttackService
 
     private const short HammerClearance = 3;
 
-    private async Task<bool> NecromancerAssist(Client client, Player player, Point focus)
+    private async Task<bool> NecromancerAssist(Client client, Player player, Point focus, double? keepDistance = null)
     {
         var me = client.Game.Me;
         var acted = false;
@@ -874,7 +1003,7 @@ public class AttackService : IAttackService
             acted = true;
         }
 
-        if (await CloseOnFocus(client, focus, NecromancerFocusReach))
+        if (await CloseOnFocus(client, focus, NecromancerFocusReach, keepDistance))
         {
             return true;
         }
@@ -886,7 +1015,7 @@ public class AttackService : IAttackService
         {
             if (!acted)
             {
-                await IdleReposition(client, anchor);
+                await IdleReposition(client, anchor, keepDistance);
             }
 
             return true;
@@ -992,13 +1121,106 @@ public class AttackService : IAttackService
 
         if (!acted)
         {
-            await IdleReposition(client, anchor);
+            await IdleReposition(client, anchor, keepDistance);
         }
 
         return true;
     }
 
-    private async Task<bool> BarbarianAssist(Client client, Player player, IReadOnlyCollection<NPCCode> priorityCodes, Point focus)
+    private async Task<AreaMap> LaneMap(Client client)
+    {
+        var area = client.Game.Area;
+        return area == Area.None ? null : await _mapApiService.GetArea(client.Game.MapId, Difficulty.Normal, area);
+    }
+
+    private async Task<bool> IsLaneClear(Client client, Point from, Point to)
+    {
+        var map = await LaneMap(client);
+        return map == null || WallAwareWhirl.IsLaneClear(map, from, to, WallAwareWhirl.EdgeSlack);
+    }
+
+    private static readonly TimeSpan MySideMemory = TimeSpan.FromSeconds(1);
+
+    private const int MySideGrain = 2;
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<uint, ((int, int, int, int) Ends, bool OnMySide, DateTime At)> _mySide = new();
+
+    private static (int, int, int, int) MySideEnds(Point me, Point target)
+        => (me.X / MySideGrain, me.Y / MySideGrain, target.X / MySideGrain, target.Y / MySideGrain);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, FailedWhirls> _failedWhirls = new();
+
+    private FailedWhirls FailedWhirlsOf(Client client) => _failedWhirls.GetOrAdd(client.Game.Me.Name, _ => new FailedWhirls());
+
+    /// <summary>A clear lane on the map. A whirl that just failed refuses its direction in the plan, not the monsters it aimed at.</summary>
+    private static bool MonsterLaneOpen(AreaMap map, Point from, WorldObject monster)
+        => WallAwareWhirl.IsLaneClear(map, from, monster.Location, WallAwareWhirl.EdgeSlack);
+
+    private Func<Point, bool> RefusedFrom(Client client, Point from)
+    {
+        var failed = FailedWhirlsOf(client);
+        return end => failed.Refuses(from, end, DateTime.Now);
+    }
+
+    public Task<bool> IsOnMySide(Client client, WorldObject monster) => OnMySide(client, monster, allowPath: true);
+
+    /// <param name="allowPath">Without it a blocked lane is only on his side when a recent pathed answer says so: the pathing runs for council members, not for every monster in sight.</param>
+    private async Task<bool> OnMySide(Client client, WorldObject monster, bool allowPath)
+    {
+        var me = client.Game.Me.Location;
+        var target = monster.Location;
+        if (FailedWhirlsOf(client).Refuses(me, target, DateTime.Now))
+        {
+            return false;
+        }
+
+        if (await IsLaneClear(client, me, target))
+        {
+            return true;
+        }
+
+        var ends = MySideEnds(me, target);
+        if (_mySide.TryGetValue(monster.Id, out var known) && known.Ends == ends && DateTime.Now - known.At < MySideMemory)
+        {
+            return known.OnMySide;
+        }
+
+        if (!allowPath)
+        {
+            return false;
+        }
+
+        var path = await _pathingService.GetPathToLocation(client.Game, target, MovementMode.Walking);
+        var onMySide = WallAwareWhirl.IsShortDetour(me.Distance(target), WallAwareWhirl.PathLength(me, path));
+        if (_mySide.Count > 1000)
+        {
+            _mySide.Clear();
+        }
+
+        _mySide[monster.Id] = (ends, onMySide, DateTime.Now);
+        return onMySide;
+    }
+
+    private const int WallWalkMs = 1500;
+
+    private async Task WalkAroundWall(Client client, Point target)
+    {
+        var path = await _pathingService.GetPathToLocation(client.Game, target, MovementMode.Walking);
+        if (path.Count == 0)
+        {
+            await Task.Delay(200);
+            return;
+        }
+
+        using var cancel = WalkCancellation(WallWalkMs);
+        await MovementHelpers.TakePathOfLocations(client.Game, path, MovementMode.Walking, cancel.Token);
+    }
+
+    private const int BarbarianManaFloor = 30;
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ManaPotionPacer> _manaPacers = new();
+
+    private async Task<bool> BarbarianAssist(Client client, Player player, IReadOnlyCollection<NPCCode> priorityCodes, Point focus, bool wallAware, uint? targetId, bool whirlOut = false)
     {
         var me = client.Game.Me;
         await ClassHelpers.CastAllShouts(client);
@@ -1009,21 +1231,23 @@ public class AttackService : IAttackService
 
         var anchor = focus != null ? me.Location : player.Location;
 
-        var enemies = Prioritize(NPCHelpers.GetNearbyNPCs(client, focus ?? player.Location, 10, 20).ToList(), priorityCodes);
+        var enemies = Prioritize(NPCHelpers.GetNearbyNPCs(client, focus ?? player.Location, AssistNearbyCount, AssistNearbyRange).ToList(), priorityCodes);
         // In the Sanctuary there is always a knight close enough to curse him, so distance is no
         // guard. The knights go first, then whatever is left.
         // Knights, then the boss, then the rest: Infector stood behind a candle holder with the
         // amazon and the paladin missing him while the barbarian whirled trash beside them.
-        var nearest = enemies.FirstOrDefault(e => CurseCasters.Contains(e.NPCCode))
-            ?? enemies.FirstOrDefault(e => (e.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique) || e.NPCCode == NPCCode.Diablo) && e.Location.Distance(me.Location) < BossChaseRange)
-            ?? enemies.FirstOrDefault();
+        var nearest = wallAware
+            ? enemies.FirstOrDefault(e => e.Id == targetId) ?? (await WallAwareWhirl.ChooseMySideFirst(enemies, e => me.Location.Distance(e.Location), e => OnMySide(client, e, allowPath: false))).Pick
+            : enemies.FirstOrDefault(e => CurseCasters.Contains(e.NPCCode))
+                ?? enemies.FirstOrDefault(e => (e.MonsterEnchantments.Contains(MonsterEnchantment.IsSuperUnique) || e.NPCCode == NPCCode.Diablo) && e.Location.Distance(me.Location) < BossChaseRange)
+                ?? enemies.FirstOrDefault();
         if (nearest == null)
         {
             var onMe = NPCHelpers.GetNearbyNPCs(client, me.Location, 10, SurroundedRadius).ToList();
             if (onMe.Count >= SurroundedCount
                 && me.HasSkill(Skill.Whirlwind)
-                && me.Mana > 30
-                && await WhirlWindThroughPack(client, onMe))
+                && me.Mana > BarbarianManaFloor
+                && await WhirlWindThroughPack(client, onMe, wallAware) is WhirlResult.Whirled or WhirlResult.WentNowhere)
             {
                 return true;
             }
@@ -1045,6 +1269,13 @@ public class AttackService : IAttackService
         // is the first choice against anything. The skills below are what is left when it cannot be
         // used at all: too low a level, or mana already drained by a bad stretch.
         var pack = enemies.Where(e => e.Location.Distance(nearest.Location) < WhirlwindPackRadius).ToList();
+        if (wallAware && await LaneMap(client) is { } laneMap)
+        {
+            // Any monster a whirl from here can reach, not only the target's pack: a member hit
+            // directly beats walking round to the one against the wall.
+            pack = enemies.Where(e => e == nearest || MonsterLaneOpen(laneMap, me.Location, e)).ToList();
+        }
+
         var canWhirlwind = me.HasSkill(Skill.Whirlwind)
             && ((me.Attributes[Attribute.Level] > 33 && client.Game.Difficulty != Difficulty.Normal) || me.Attributes[Attribute.Level] > 40);
 
@@ -1066,10 +1297,17 @@ public class AttackService : IAttackService
                 return true;
             }
 
-            if (me.Mana <= 30)
+            var pacer = wallAware ? _manaPacers.GetOrAdd(me.Name, _ => new ManaPotionPacer(BarbarianManaFloor, ManaPotionPacer.DefaultWait)) : null;
+            var potionWorking = pacer != null && pacer.Waiting(me.Mana, DateTime.Now);
+            if (me.Mana <= BarbarianManaFloor)
             {
-                if (client.Game.UseManaPotion())
+                if (potionWorking)
                 {
+                    await IdleReposition(client, anchor);
+                }
+                else if (client.Game.UseManaPotion())
+                {
+                    pacer?.Drank(DateTime.Now);
                     await Task.Delay(300);
                 }
                 else
@@ -1081,8 +1319,15 @@ public class AttackService : IAttackService
                 return true;
             }
 
-            if (aimPack.Count > 0 && await WhirlWindThroughPack(client, aimPack))
+            var whirl = aimPack.Count > 0 ? await WhirlWindThroughPack(client, aimPack, wallAware) : WhirlResult.NotStarted;
+            if (whirl == WhirlResult.Whirled)
             {
+                return true;
+            }
+
+            if (whirl is WhirlResult.Blocked or WhirlResult.WentNowhere)
+            {
+                await WalkAroundWall(client, nearest.Location);
                 return true;
             }
 
@@ -1091,10 +1336,22 @@ public class AttackService : IAttackService
             // happened once something was already within eight of him.
             if (nearest.Location.Distance(me.Location) < BossChaseRange)
             {
+                if (wallAware && (FailedWhirlsOf(client).Refuses(me.Location, nearest.Location, DateTime.Now) || !await IsLaneClear(client, me.Location, nearest.Location)))
+                {
+                    await WalkAroundWall(client, nearest.Location);
+                    return true;
+                }
+
                 var approach = me.Location.GetPointBeforePointInSameDirection(nearest.Location, WhirlwindApproachDistance - 2);
-                var cancel = new System.Threading.CancellationTokenSource();
-                cancel.CancelAfter(1200);
+                if (whirlOut && await WhirlOutOfPack(client, approach))
+                {
+                    return true;
+                }
+
+                var from = me.Location;
+                using var cancel = WalkCancellation(1200);
                 await MovementHelpers.MoveToLocation(client.Game, _pathingService, _mapApiService, approach, MovementMode.Walking, cancel.Token);
+                RecordWalk(client, from);
                 return true;
             }
 
@@ -1146,22 +1403,118 @@ public class AttackService : IAttackService
         return _ironMaidenSeen.TryGetValue(me.Id, out var seen) && DateTime.Now - seen < IronMaidenMemory;
     }
 
-    private async Task<bool> WhirlWindThroughPack(Client client, List<WorldObject> pack)
+    private enum WhirlResult
     {
-        var me = client.Game.Me;
+        NotStarted,
+        Whirled,
+        Blocked,
+        WentNowhere,
+    }
 
-        var nearest = pack.OrderBy(e => me.Location.Distance(e.Location)).First();
-        if (me.Location.Distance(nearest.Location) > WhirlwindApproachDistance)
+    private static double PackLife(List<WorldObject> pack)
+        => pack.Sum(e => e.State == EntityState.Dead || e.State == EntityState.Dieing ? 0 : e.LifePercentage);
+
+    private const int FlankPathCandidates = 3;
+
+    private static readonly TimeSpan FlankPathBudget = TimeSpan.FromMilliseconds(5);
+
+    /// <summary>The nearest spots by straight line ranked again by the walk itself; null when the paths cost more than the budget.</summary>
+    private async Task<FlankCandidate> FlankByPath(Client client, AreaMap map, Point from, Point against, IReadOnlyList<Point> monsters)
+    {
+        var nearest = WallAwareWhirl.FlankCandidates(map, against, monsters)
+            .OrderBy(c => from.Distance(c.Start))
+            .Take(FlankPathCandidates)
+            .ToList();
+        if (nearest.Count < 2)
         {
-            var approach = me.Location.GetPointBeforePointInSameDirection(nearest.Location, WhirlwindApproachDistance);
-            await MovementHelpers.MoveToLocation(client.Game, _pathingService, _mapApiService, approach, MovementMode.Walking);
+            return null;
         }
 
-        var aim = WhirlwindPlanner.Aim(me.Location, pack.Select(e => e.Location).ToList());
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        var walks = new List<(FlankCandidate, double)>();
+        foreach (var candidate in nearest)
+        {
+            var path = await _pathingService.GetPathToLocation(client.Game, candidate.Start, MovementMode.Walking);
+            if (timer.Elapsed > FlankPathBudget)
+            {
+                return null;
+            }
+
+            if (path.Count > 0)
+            {
+                walks.Add((candidate, WallAwareWhirl.PathLength(from, path)));
+            }
+        }
+
+        return WallAwareWhirl.BestFlank(walks);
+    }
+
+    private async Task<WhirlResult> WhirlWindThroughPack(Client client, List<WorldObject> pack, bool wallAware = false)
+    {
+        var me = client.Game.Me;
+        var map = wallAware ? await LaneMap(client) : null;
+
+        var nearest = pack.OrderBy(e => me.Location.Distance(e.Location)).First();
+        var aimAt = map == null ? pack : pack.Where(e => MonsterLaneOpen(map, me.Location, e)).ToList();
+        if (aimAt.Count > 0)
+        {
+            var approachTo = aimAt.OrderBy(e => me.Location.Distance(e.Location)).First();
+            if (me.Location.Distance(approachTo.Location) > WhirlwindApproachDistance)
+            {
+                var approach = me.Location.GetPointBeforePointInSameDirection(approachTo.Location, WhirlwindApproachDistance);
+                using var cancel = WalkCancellation(map != null ? WallWalkMs : null);
+                await MovementHelpers.MoveToLocation(client.Game, _pathingService, _mapApiService, approach, MovementMode.Walking, map == null ? CallerWalkStop : cancel.Token);
+            }
+        }
+
+        var from = me.Location;
+        if (map != null)
+        {
+            aimAt = aimAt.Where(e => MonsterLaneOpen(map, from, e)).ToList();
+        }
+
+        var aim = aimAt.Count == 0
+            ? (Target: null, Covered: 0)
+            : map == null
+                ? WhirlwindPlanner.Aim(from, aimAt.Select(e => e.Location).ToList())
+                : (null, 0);
+        if (map != null && aimAt.Count > 0)
+        {
+            var locations = aimAt.Select(e => e.Location).ToList();
+            var plan = WallAwareWhirl.PlanWhirl(map, from, locations, WhirlwindArrivalDistance + 1, RefusedFrom(client, from));
+            if (plan.WalkTo != null)
+            {
+                var against = aimAt.MinBy(e => from.Distance(e.Location));
+                if (await FlankByPath(client, map, from, against.Location, locations) is { } byPath)
+                {
+                    plan = new WhirlPlan(byPath.End, byPath.Covered, byPath.Start);
+                }
+
+                _logger.LogInformation("{Character} whirl along the wall past {NPCCode} at {Target}: walking from {Location} to {Start}", me.Name, against.NPCCode, against.Location, from, plan.WalkTo);
+                TraceEvents.Decision(client.Game, "whirl along wall", ("target", against.Location), ("code", against.NPCCode.ToString()), ("at", from), ("start", plan.WalkTo), ("end", plan.Target));
+                await WalkAroundWall(client, plan.WalkTo);
+                from = me.Location;
+                if (from.Distance(plan.WalkTo) > WallAwareWhirl.EdgeSlack)
+                {
+                    plan = WallAwareWhirl.PlanWhirl(map, from, locations, WhirlwindArrivalDistance + 1, RefusedFrom(client, from));
+                    plan = plan.WalkTo == null ? plan : new WhirlPlan(null, 0, null);
+                }
+            }
+
+            aim = (plan.Target, plan.Covered);
+        }
+
         var target = aim.Target;
         if (target == null)
         {
-            return false;
+            if (map == null)
+            {
+                return WhirlResult.NotStarted;
+            }
+
+            _logger.LogInformation("{Character} whirl blocked by wall towards {NPCCode} at {Target} from {Location}", me.Name, nearest.NPCCode, nearest.Location, from);
+            TraceEvents.Decision(client.Game, "whirl blocked by wall", ("target", nearest.Location), ("code", nearest.NPCCode.ToString()), ("at", from));
+            return WhirlResult.Blocked;
         }
 
         // Iron Maiden returns every hit of the whirl doubled, and a whirl cannot be stopped once it
@@ -1173,23 +1526,56 @@ public class AttackService : IAttackService
         if (IsUnderIronMaiden(client))
         {
             _logger.LogInformation("{Character} cursed, not starting a whirl", me.Name);
-            return false;
+            return WhirlResult.NotStarted;
         }
 
         if (ChickenService.HoldForRejuvenation(client))
         {
             _logger.LogInformation("{Character} drinking a rejuvenation at {Life} of {MaxLife} before whirling", me.Name, me.Life, me.MaxLife);
-            return false;
+            return WhirlResult.NotStarted;
         }
+
+        var packLifeBefore = PackLife(pack);
 
         _logger.LogInformation("{Character} attacking {Count} {NPCCode} with {Skill} towards {Target} covering {Covered}",
             me.Name, pack.Count, pack[0].NPCCode, Skill.Whirlwind, target, aim.Covered);
 
         var distance = me.Location.Distance(target);
+        var manaBefore = me.Mana;
+        var (result, started, cursed) = CastWhirl(client, target);
+
+        if (cursed)
+        {
+            _logger.LogInformation("{Character} cursed before the whirl started, standing down", me.Name);
+            return WhirlResult.NotStarted;
+        }
+
+        var manaBurn = (pack.Any(e => e.MonsterEnchantments.Contains(MonsterEnchantment.ManaBurn)) ? ", mana burn" : string.Empty)
+            + (pack.Any(e => e.MonsterEnchantments.Contains(MonsterEnchantment.StoneSkin)) ? ", stone skin" : string.Empty);
+        _logger.LogInformation("{Character} whirled through {Count} over {Distance:0} units, mana {Before} to {After}, delta {Delta}{ManaBurn}, covering {Covered}",
+            me.Name, pack.Count, distance, manaBefore, me.Mana, me.Mana - manaBefore, manaBurn, aim.Covered);
+
+        if (map != null && WallAwareWhirl.WentNowhere(from, me.Location, packLifeBefore, PackLife(pack), started))
+        {
+            _logger.LogInformation("{Character} whirl went nowhere towards {Target} from {Location}, now at {Now}", me.Name, target, from, me.Location);
+            TraceEvents.Decision(client.Game, "whirl went nowhere", ("target", target), ("from", from), ("at", me.Location));
+            FailedWhirlsOf(client).Record(from, target, DateTime.Now);
+            return WhirlResult.WentNowhere;
+        }
+
+        return result ? WhirlResult.Whirled : WhirlResult.NotStarted;
+    }
+
+    /// <param name="origin">Where the server has him when that is not where the client believes he is; the whirl starts there.</param>
+    private (bool Result, bool Started, bool Cursed) CastWhirl(Client client, Point target, Point origin = null)
+    {
+        var me = client.Game.Me;
+        _walks.TryRemove(me.Name, out _);
+        var distance = (origin ?? me.Location).Distance(target);
+        var believedElsewhere = origin != null && origin.Distance(me.Location) > WhirlwindArrivalDistance;
         var started = false;
         var cursed = false;
         var lastCast = DateTime.MinValue;
-        var manaBefore = me.Mana;
         var result = GeneralHelpers.TryWithTimeout((retryCount) =>
         {
             // Over when the server says so. Arriving near the target used to end the wait while the
@@ -1205,7 +1591,7 @@ public class AttackService : IAttackService
                 return true;
             }
 
-            if (me.Location.Distance(target) <= WhirlwindArrivalDistance)
+            if (!believedElsewhere && me.Location.Distance(target) <= WhirlwindArrivalDistance)
             {
                 return true;
             }
@@ -1224,18 +1610,97 @@ public class AttackService : IAttackService
 
             return false;
         }, TimeSpan.FromSeconds(distance * 0.2 + 1));
+        return (result, started, cursed);
+    }
 
-        if (cursed)
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (Point From, Point End, DateTime At)> _walks = new();
+
+    public void RecordWalk(Client client, Point from)
+    {
+        if (client.Game.Me?.Name is { } name && client.Game.Me.Location is { } end)
         {
-            _logger.LogInformation("{Character} cursed before the whirl started, standing down", me.Name);
+            _walks[name] = (from, end, DateTime.Now);
+        }
+    }
+
+    /// <summary>His last walk, recorded with <see cref="RecordWalk"/>, ended somewhere the server did not put him.</summary>
+    private bool LastWalkHeld(Client client)
+    {
+        if (client.Game.ServerHoldsPosition != null)
+        {
+            return true;
+        }
+
+        if (!_walks.TryGetValue(client.Game.Me.Name, out var walk) || DateTime.Now - walk.At > WhirlOut.HeldMemory)
+        {
             return false;
         }
 
-        var manaBurn = (pack.Any(e => e.MonsterEnchantments.Contains(MonsterEnchantment.ManaBurn)) ? ", mana burn" : string.Empty)
-            + (pack.Any(e => e.MonsterEnchantments.Contains(MonsterEnchantment.StoneSkin)) ? ", stone skin" : string.Empty);
-        _logger.LogInformation("{Character} whirled through {Count} over {Distance:0} units, mana {Before} to {After}, delta {Delta}{ManaBurn}, covering {Covered}",
-            me.Name, pack.Count, distance, manaBefore, me.Mana, me.Mana - manaBefore, manaBurn, aim.Covered);
+        return client.Game.ServerConfirmedAge <= DateTime.Now - walk.At
+            && WhirlOut.WalkHeld(walk.From, walk.End, client.Game.ServerConfirmedLocation);
+    }
 
-        return result;
+    public async Task<bool> WhirlOutOfPack(Client client, Point destination, bool forAttacks = false)
+    {
+        var me = client.Game.Me;
+        var whirls = me?.Location != null
+            && WhirlOut.Whirls(me.HasSkill(Skill.Whirlwind), me.Attributes[Attribute.Level], client.Game.Difficulty == Difficulty.Normal);
+        if (destination == null || !whirls || me.Mana <= WhirlOut.ManaFloor || IsUnderIronMaiden(client) || ChickenService.HoldForRejuvenation(client))
+        {
+            return false;
+        }
+
+        // Held, he is where the server holds him, and that is where a whirl starts.
+        var heldAt = client.Game.ServerHoldsPosition?.Location;
+        var from = heldAt ?? me.Location;
+        var held = LastWalkHeld(client);
+        var nearby = NPCHelpers.GetNearbyNPCs(client, from, 30, (int)Math.Ceiling(WhirlOut.WhirlLength + WhirlOut.PathClearance)).ToList();
+        if (!held && nearby.Count == 0)
+        {
+            return false;
+        }
+
+        var path = await _pathingService.GetPathToLocation(client.Game.MapId, Difficulty.Normal, await _pathingService.CurrentArea(client.Game), from, destination, MovementMode.Walking);
+        Point end = null;
+        foreach (var candidate in WhirlOut.Ends(from, path.Count > 0 ? path : [destination]))
+        {
+            if (candidate.Distance(from) > WhirlwindArrivalDistance
+                && !FailedWhirlsOf(client).Refuses(from, candidate, DateTime.Now)
+                && await IsLaneClear(client, from, candidate))
+            {
+                end = candidate;
+                break;
+            }
+        }
+
+        if (end == null)
+        {
+            return false;
+        }
+
+        var count = WhirlOut.InTheWay(from, end, nearby.Select(monster => monster.Location));
+        var underAttack = forAttacks && client.Game.UnderAttack;
+        if (!WhirlOut.ShouldWhirl(whirls, me.Mana, count, held, underAttack))
+        {
+            return false;
+        }
+
+        _logger.LogInformation("{Character} whirling out towards {To}: {Count} in the way, last walk held {Held}, under attack {UnderAttack}, from {From} to {End}", me.Name, destination, count, held, underAttack, from, end);
+        TraceEvents.Decision(client.Game, "whirl-out", ("to", destination), ("inTheWay", count), ("held", held), ("underAttack", underAttack), ("from", from), ("end", end), ("mana", me.Mana));
+        var lifeBefore = PackLife(nearby);
+        var (result, started, cursed) = CastWhirl(client, end, heldAt);
+        if (cursed)
+        {
+            _logger.LogInformation("{Character} cursed before the whirl out started, walking instead", me.Name);
+            return false;
+        }
+
+        if (WallAwareWhirl.WentNowhere(from, me.Location, lifeBefore, PackLife(nearby), started))
+        {
+            FailedWhirlsOf(client).Record(from, end, DateTime.Now);
+            return false;
+        }
+
+        return result || started;
     }
 }

@@ -21,6 +21,13 @@ public sealed class MonsterResistEntry
     public int[] Cold { get; set; } = new int[3];
     public int[] Poison { get; set; } = new int[3];
 
+    /// <summary>Walk speed in monstats units; 0 in a file generated before movement was extracted.</summary>
+    public int Velocity { get; set; }
+
+    public int Run { get; set; }
+
+    public int MeleeRange { get; set; }
+
     public int Base(ResistType type, Difficulty difficulty)
     {
         var values = type switch

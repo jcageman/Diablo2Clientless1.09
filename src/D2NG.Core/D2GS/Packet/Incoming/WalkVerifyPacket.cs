@@ -1,6 +1,7 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
 using D2NG.Core.D2GS.Helpers;
 using Serilog;
+using Serilog.Events;
 
 namespace D2NG.Core.D2GS.Packet.Incoming;
 
@@ -23,7 +24,10 @@ internal class WalkVerifyPacket : D2gsPacket
 
         Location = new Point(x, y);
 
-        Log.Verbose($"WalkVerify:\n" +
-            $"\tLocation: {Location}");
+        if (Log.IsEnabled(LogEventLevel.Verbose))
+        {
+            Log.Verbose($"WalkVerify:\n" +
+                $"\tLocation: {Location}");
+        }
     }
 }

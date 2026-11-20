@@ -16,10 +16,12 @@ namespace ConsoleBot.Helpers;
 public static class NPCHelpers
 {
     private static readonly HashSet<NPCCode> FriendlyNPCs = [ 
-        NPCCode.MephistoGhost, NPCCode.ATrap1, NPCCode.ATrap2, NPCCode.ATrap3, NPCCode.ATrap4,
+        // Hadriel stands at the River of Flame waypoint: the leveling party hit him for twelve minutes.
+        NPCCode.MephistoGhost, NPCCode.IzualAct4, NPCCode.Hadriel, NPCCode.ATrap1, NPCCode.ATrap2, NPCCode.ATrap3, NPCCode.ATrap4,
         NPCCode.ATrap5, NPCCode.ATrap6, NPCCode.ATrap7, NPCCode.Hydra1, NPCCode.Hydra2, NPCCode.Hydra3, NPCCode.CompellingOrb,
         NPCCode.ClayGolem, NPCCode.BloodGolem, NPCCode.FireGolem, NPCCode.IronGolem, NPCCode.Valkyrie,
-        NPCCode.Act1Npc, NPCCode.Guard, NPCCode.BaalThrone, NPCCode.BaalTentacle1, NPCCode.BaalTentacle2, NPCCode.BaalTentacle3, NPCCode.BaalTentacle4, NPCCode.BaalTentacle5];
+        NPCCode.Act1Npc, NPCCode.Guard, NPCCode.Navi, NPCCode.DeckardCainQuest, NPCCode.RogueScout, NPCCode.TyraelAct3, NPCCode.Natalya, NPCCode.Hireling1, NPCCode.Hireling2,
+        NPCCode.BaalThrone, NPCCode.BaalTentacle1, NPCCode.BaalTentacle2, NPCCode.BaalTentacle3, NPCCode.BaalTentacle4, NPCCode.BaalTentacle5];
     /// <summary>
     /// Whether an NPC is on our side: a hireling, a summon, a town guard or scenery that never dies.
     /// </summary>
@@ -85,7 +87,8 @@ public static class NPCHelpers
         return true;
     }
 
-    public static bool GambleItems(Game game, WorldObject npc)
+    /// <param name="stop">Ends the gamble between listings, for one made while the rest of a party is in the game.</param>
+    public static bool GambleItems(Game game, WorldObject npc, Func<bool> stop = null)
     {
         Log.Information($"Gambling items");
         bool moveResult = GeneralHelpers.TryWithTimeout((retryCount) =>
@@ -127,7 +130,9 @@ public static class NPCHelpers
         game.InitiateEntityChat(npc);
         game.TownFolkAction(npc, TownFolkActionType.Gamble);
         var oldItems = game.Items.Values.Where(i => i.Container == ContainerType.ArmorTab).Select(i => i.Id).ToHashSet();
-        while (game.Me.Attributes.TryGetValue(D2NG.Core.D2GS.Players.Attribute.GoldInStash, out var goldInStash)
+        var listed = true;
+        while (stop?.Invoke() != true
+            && game.Me.Attributes.TryGetValue(D2NG.Core.D2GS.Players.Attribute.GoldInStash, out var goldInStash)
             && goldInStash > 200000)
         {
             if (!GeneralHelpers.TryWithTimeout((retryCount) =>
@@ -136,8 +141,11 @@ public static class NPCHelpers
                  return newItems.Except(oldItems).Any();
              }, TimeSpan.FromSeconds(1)))
             {
+                // Closed below like any other end: a merchant window left open may make the server refuse what the
+                // character does next, as an open waypoint menu refuses every portal.
                 Log.Debug("Waiting for items failed");
-                return false;
+                listed = false;
+                break;
             }
 
             Thread.Sleep(10);
@@ -156,7 +164,7 @@ public static class NPCHelpers
         game.TerminateEntityChat(npc);
         Thread.Sleep(50);
 
-        return true;
+        return listed;
     }
 
     private static bool GambleCurrentItemsAtNpc(Game game, Entity npc)
@@ -444,32 +452,40 @@ public static class NPCHelpers
         return true;
     }
 
-    /// <summary>
-    /// Healing potions the belt can still take: the target for the health columns minus every cell
-    /// of those columns already taken, whatever potion is in it.
-    /// </summary>
-    private static int BeltRoomForHealingPotions(Game game, Bots.Types.AccountConfig account)
-        => BeltRoom(game, account.HealthSlots, account.HealthPotionTarget(game.Belt.Height));
-
-    /// <summary>
-    /// Potions the belt can still take in these columns: the target minus every cell of them already
-    /// taken, whatever potion is in it. Counting only one kind of potion read a column half full of
-    /// rejuvenations as short forever.
-    /// </summary>
-    public static int BeltRoom(Game game, List<int> columns, int target)
+    /// <summary>Why the character needs the vendor for its belt, tome or life, in the order they are checked; none when it does not.</summary>
+    public static IEnumerable<string> RefreshReasons(Game game, TownManagementOptions options)
     {
-        var taken = game.Belt.Items.Count(i => columns.Contains(i.Location.X));
-        return Math.Max(0, target - taken);
-    }
+        var account = options.AccountConfig;
+        int Short(PotionKind kind)
+            => account.BeltTarget(kind, game.Belt.Height)
+                - game.Belt.Items.Count(i => InventoryHelpers.KindOf(i) == kind && account.BeltColumns(kind).Contains(i.Location.X));
+        if (Short(PotionKind.Healing) > 1)
+        {
+            yield return "belt healing";
+        }
 
-    public static bool ShouldRefreshCharacterAtNPC(Game game, TownManagementOptions options)
-    {
-        return game.Belt.Height * options.AccountConfig.HealthSlots.Count - game.Belt.NumOfHealthPotions() > 1
-            || game.Belt.Height * options.AccountConfig.ManaSlots.Count - game.Belt.NumOfManaPotions() > 1
-            // A missing tome has to count as needing a trip: with null propagation an absent tome compares
-            // the same as a full one, so losing it used to go unnoticed until a portal was needed.
-            || game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeOfTownPortal) is not { Amount: >= 5 }
-            || IsBelowHealthPotionBar(game, options);
+        if (Short(PotionKind.Mana) > 1)
+        {
+            yield return "belt mana";
+        }
+
+        // Left behind by the town-start cleanup for want of an inventory cell: the vendor sells first and so has room.
+        if (InventoryHelpers.HasMisplacedPotionsForVendor(game, account))
+        {
+            yield return "misplaced potions";
+        }
+
+        // A missing tome has to count as needing a trip: with null propagation an absent tome compares
+        // the same as a full one, so losing it used to go unnoticed until a portal was needed.
+        if (game.Inventory.Items.FirstOrDefault(i => i.Name == ItemName.TomeOfTownPortal) is not { Amount: >= 5 })
+        {
+            yield return "town portal tome";
+        }
+
+        if (IsBelowHealthPotionBar(game, options))
+        {
+            yield return "life";
+        }
     }
 
     /// <summary>
@@ -520,6 +536,8 @@ public static class NPCHelpers
         // never reached the merchant went on to chat and trade with her from wherever it had got
         // to: the shop then held nothing, and every purchase failed without saying so - the town
         // portal tomes included, which is what strands the portal character a few minutes later.
+        // The merchant answers one character at a time, so a party shopping together queues: a sorceress next to
+        // Malah went unanswered for the whole of another character's 6.5s visit and gave up a second after it.
         if (!GeneralHelpers.TryWithTimeout((retryCount) =>
         {
             if (game.Me.Location.Distance(npc.Location) >= 2)
@@ -533,7 +551,7 @@ public static class NPCHelpers
             }
 
             return false;
-        }, TimeSpan.FromSeconds(10)))
+        }, TimeSpan.FromSeconds(20)))
         {
             Log.Warning("{Character} never reached {NPCCode} to trade, {Distance:F0} away at {Location} - skipping the shop rather than buying from nowhere",
                 game.Me.Name, npc.NPCCode, game.Me.Location.Distance(npc.Location), game.Me.Location);
@@ -586,7 +604,7 @@ public static class NPCHelpers
         // The potion reserve is bought a few lines below; selling it here and buying it straight
         // back would be a round trip for nothing.
         var inventoryItemsToSell = InventoryHelpers.InventoryItemsToSell(game);
-        var cubeItemsToSell = game.Cube.Items.Where(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i) && !D2NG.Pickit.Pickit.IsReservedItem(i)).ToList();
+        var cubeItemsToSell = InventoryHelpers.CubeItemsToSell(game);
         Log.Debug($"Selling {inventoryItemsToSell.Count} inventory items and {cubeItemsToSell.Count} cube items");
 
         foreach (Item item in inventoryItemsToSell)
@@ -627,28 +645,26 @@ public static class NPCHelpers
             }
         }
 
-        // With no buy amount set the healing potions belong in the belt, and the belt's health
-        // columns can be partly taken by other potions. Buying the target minus what the belt holds
-        // then bought the same shortfall every visit into the inventory: the portal sorceress
-        // carried fifty of them, had no cell left for a town portal tome and could not open the
-        // portal at all. The surplus goes back to the vendor before the tome is bought.
-        var beltRoomForHealing = BeltRoomForHealingPotions(game, options.AccountConfig);
-        if (options.HealthPotionsToBuy == null)
+        // Potions in the other kind's columns block the belt from being filled: out to the inventory, which the sales above
+        // have just made room in. What still has no cell is drunk once the trade is closed.
+        var account = options.AccountConfig;
+        var misplacedLeft = new List<Item>();
+        var spilled = 0;
+        if (options.TendBelt)
         {
-            var surplusHealing = game.Inventory.Items
-                .Where(i => i.Classification == ClassificationType.HealthPotion)
-                .Skip(beltRoomForHealing)
-                .ToList();
-            if (surplusHealing.Count > 0)
-            {
-                Log.Information("{Character} selling {Count} healing potions the belt has no room for", game.Me.Name, surplusHealing.Count);
-            }
-
-            foreach (var potion in surplusHealing)
-            {
-                game.SellItem(npc, potion);
-            }
+            var (moved, left) = InventoryHelpers.MoveMisplacedPotionsToInventory(game, account);
+            misplacedLeft = left;
+            InventoryHelpers.LogMisplacedPotions(game, moved, [], []);
+            InventoryHelpers.FillBeltFromInventory(game, account);
         }
+
+        // With no buy amount set the potions belong in the belt, and the belt's columns can be
+        // partly taken by other potions. Buying the target minus what the belt holds then bought
+        // the same shortfall every visit into the inventory: the portal sorceress carried fifty
+        // healing potions, had no cell left for a town portal tome and could not open the portal
+        // at all. The surplus goes back to the vendor before the tome is bought.
+        SellPotionSurplus(game, npc, account, PotionKind.Healing, options.HealthPotionsToBuy);
+        SellPotionSurplus(game, npc, account, PotionKind.Mana, options.ManaPotionsToBuy);
 
         RestockTome(game, npc, ItemName.TomeOfTownPortal, ItemName.ScrollofTownPortal);
 
@@ -657,34 +673,76 @@ public static class NPCHelpers
             RestockTome(game, npc, ItemName.TomeofIdentify, ItemName.ScrollofIdentify);
         }
 
-        if(healingPotion != null)
+        // Belt first, healing columns then mana columns, each from the inventory before buying, and only then the spares,
+        // which go to the inventory. A stack buy fills every column the kind may enter, the other kind's empty ones included,
+        // so the belt is bought into one potion at a time unless the placement rule says a stack stays in the kind's own columns.
+        const long BeltOnly = long.MaxValue / 4;
+        long gainedHealing = 0;
+        long gainedMana = 0;
+        if (options.TendBelt)
         {
-            var numberOfHealthPotions = options.HealthPotionsToBuy
-                ?? beltRoomForHealing - game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion);
-            // Buying is fire and forget: with no gold every call fails and the character walks out
-            // with an empty belt looking like it shopped. Report what it actually came away with.
-            var wanted = numberOfHealthPotions;
-            var gained = BuyPotions(game, npc, "hp", wanted);
-            if (gained < wanted)
+            (gainedHealing, gainedMana) = InventoryHelpers.RefillBelt(game, account,
+                healingPotion == null ? 0 : options.HealthPotionsToBuy ?? BeltOnly,
+                manaPotion == null ? 0 : options.ManaPotionsToBuy ?? BeltOnly,
+                (kind, budget) => BuyOneIntoBelt(game, npc, account, kind, budget));
+        }
+
+        // A spare goes wherever the server puts it: an empty column of the other kind takes it, and it then has to be moved
+        // out, so spares stop once one would land there with no cell to move it to.
+        bool SpareCanBeBought(PotionKind kind)
+        {
+            spilled += InventoryHelpers.MoveMisplacedPotionsToInventory(game, account).Moved.Count;
+            var column = BeltPlacement.Column(InventoryHelpers.BeltPotions(game), (int)game.Belt.Height, kind);
+            return column == null || account.BeltColumns(kind).Contains(column.Value) || InventoryHelpers.FreeCellForPotion(game) != null;
+        }
+
+        if (healingPotion != null && options.HealthPotionsToBuy is long healingSpares && options.TendBelt)
+        {
+            gainedHealing += BuySinglePotions(game, npc, "hp", healingSpares - gainedHealing, () => SpareCanBeBought(PotionKind.Healing));
+        }
+
+        if (manaPotion != null && options.ManaPotionsToBuy is long manaSpares && options.TendBelt)
+        {
+            gainedMana += BuySinglePotions(game, npc, "mp", manaSpares - gainedMana, () => SpareCanBeBought(PotionKind.Mana));
+        }
+
+        if (options.TendBelt)
+        {
+            spilled += InventoryHelpers.MoveMisplacedPotionsToInventory(game, account).Moved.Count;
+            if (spilled > 0)
             {
-                Log.Warning($"{game.Me.Name} wanted {wanted} {healingPotion.Name} but only got {gained}, {game.Inventory.FreeCellCount()} free inventory cells");
+                Log.Information("{Character} moved {Count} bought potions out of the other kind's belt columns", game.Me.Name, spilled);
+            }
+
+            InventoryHelpers.LogBlockedBeltFill(game, account, PotionKind.Healing);
+            InventoryHelpers.LogBlockedBeltFill(game, account, PotionKind.Mana);
+        }
+
+        // Buying is fire and forget: with no gold every call fails and the character walks out
+        // with an empty belt looking like it shopped. Report what it actually came away with.
+        // Without a set amount, what was wanted is what came plus what the belt is still short.
+        var wantedHealing = options.HealthPotionsToBuy ?? gainedHealing + InventoryHelpers.BeltRoom(game, account, PotionKind.Healing);
+        var wantedMana = options.ManaPotionsToBuy ?? gainedMana + InventoryHelpers.BeltRoom(game, account, PotionKind.Mana);
+        if (healingPotion != null)
+        {
+            if (gainedHealing < wantedHealing)
+            {
+                Log.Warning($"{game.Me.Name} wanted {wantedHealing} {healingPotion.Name} but only got {gainedHealing}, leaving town with belt {game.Belt.NumOfHealthPotions()}, inventory {game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion)}, {game.Inventory.FreeCellCount()} free cells");
             }
             else
             {
-                Log.Information($"{game.Me.Name} bought {gained} {healingPotion.Name}, leaving town with belt {game.Belt.NumOfHealthPotions()}, inventory {game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion)}, {game.Inventory.FreeCellCount()} free cells");
+                Log.Information($"{game.Me.Name} bought {gainedHealing} {healingPotion.Name}, leaving town with belt {game.Belt.NumOfHealthPotions()}, inventory {game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion)}, {game.Inventory.FreeCellCount()} free cells");
             }
         }
 
-        if(manaPotion != null)
+        // Reported the same way as the healing buy above. Without this a half-filled mana belt is
+        // invisible: a character leaving town with two mana potions instead of six read exactly
+        // like one that needed none.
+        if (manaPotion != null)
         {
-            var numberOfManaPotions = options.ManaPotionsToBuy ?? options.AccountConfig.ManaPotionTarget(game.Belt.Height) - game.Belt.NumOfManaPotions();
-            // Reported the same way as the healing buy above. Without this a half-filled mana belt is
-            // invisible: the return value was thrown away, so a character leaving town with two mana
-            // potions instead of six read exactly like one that needed none.
-            var gainedMana = BuyPotions(game, npc, "mp", numberOfManaPotions);
-            if (gainedMana < numberOfManaPotions)
+            if (gainedMana < wantedMana)
             {
-                Log.Warning($"{game.Me.Name} wanted {numberOfManaPotions} {manaPotion.Name} but only got {gainedMana}, leaving town with belt {game.Belt.NumOfManaPotions()}, inventory {game.Inventory.Items.Count(i => i.Classification == ClassificationType.ManaPotion)}, {game.Inventory.FreeCellCount()} free cells");
+                Log.Warning($"{game.Me.Name} wanted {wantedMana} {manaPotion.Name} but only got {gainedMana}, leaving town with belt {game.Belt.NumOfManaPotions()}, inventory {game.Inventory.Items.Count(i => i.Classification == ClassificationType.ManaPotion)}, {game.Inventory.FreeCellCount()} free cells");
             }
             else
             {
@@ -751,7 +809,42 @@ public static class NPCHelpers
         game.TerminateEntityChat(npc);
         Thread.Sleep(50);
         game.TerminateEntityChat(npc);
+
+        // The last resort for a misplaced potion with no cell to go to, outside the trade: whether the server lets a belt
+        // potion be drunk with a shop open is not known.
+        if (misplacedLeft.Count > 0)
+        {
+            var drunk = InventoryHelpers.DrinkMisplacedPotions(game, misplacedLeft);
+            InventoryHelpers.LogMisplacedPotions(game, [], misplacedLeft, drunk);
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// Sells the potions of this kind in the inventory that the belt has no room for, when no amount to carry is set: the
+    /// inventory is then not where this kind is kept.
+    /// </summary>
+    private static void SellPotionSurplus(Game game, WorldObject npc, Bots.Types.AccountConfig account, PotionKind kind, long? toBuy)
+    {
+        if (toBuy != null)
+        {
+            return;
+        }
+
+        var surplus = game.Inventory.Items
+            .Where(i => InventoryHelpers.KindOf(i) == kind)
+            .Skip(InventoryHelpers.BeltRoom(game, account, kind))
+            .ToList();
+        if (surplus.Count > 0)
+        {
+            Log.Information("{Character} selling {Count} {Kind} potions the belt has no room for", game.Me.Name, surplus.Count, kind);
+        }
+
+        foreach (var potion in surplus)
+        {
+            game.SellItem(npc, potion);
+        }
     }
 
     /// <summary>
@@ -760,7 +853,7 @@ public static class NPCHelpers
     /// apart landed one potion, which is how characters reached the cow level with an empty belt.
     /// The stock is looked up each time as well, though a potion vendor keeps the same item id.
     /// </summary>
-    private static long BuyPotions(Game game, WorldObject npc, string typePrefix, long wanted)
+    internal static long BuyPotions(Game game, WorldObject npc, string typePrefix, long wanted)
     {
         if (wanted <= 0)
         {
@@ -779,9 +872,20 @@ public static class NPCHelpers
             GeneralHelpers.TryWithTimeout((_) => CountPotions(game, typePrefix) > before, TimeSpan.FromSeconds(2));
         }
 
-        while (CountPotions(game, typePrefix) - start < wanted)
+        var stacked = CountPotions(game, typePrefix) - start;
+        return stacked + BuySinglePotions(game, npc, typePrefix, wanted - stacked);
+    }
+
+    /// <summary>
+    /// Buys potions one at a time, waiting for each. A single potion goes into the belt when it has a column for it, the
+    /// other kind's empty columns included, and to the inventory otherwise.
+    /// </summary>
+    private static long BuySinglePotions(Game game, WorldObject npc, string typePrefix, long wanted, Func<bool> keepBuying = null)
+    {
+        var start = CountPotions(game, typePrefix);
+        while (CountPotions(game, typePrefix) - start < wanted && (keepBuying == null || keepBuying()))
         {
-            stock = FindPotionInStock(game, typePrefix);
+            var stock = FindPotionInStock(game, typePrefix);
             if (stock == null)
             {
                 Log.Warning($"{game.Me.Name} found no more {typePrefix} potions to buy at {npc.NPCCode}");
@@ -796,7 +900,51 @@ public static class NPCHelpers
             }
         }
 
-        return CountPotions(game, typePrefix) - start;
+        return Math.Max(0, CountPotions(game, typePrefix) - start);
+    }
+
+    /// <summary>
+    /// Buys into the belt for <see cref="InventoryHelpers.RefillBelt"/>: a stack when it cannot reach another kind's column
+    /// or buy past the room, a single potion otherwise. Returns how many potions arrived.
+    /// </summary>
+    private static long BuyOneIntoBelt(Game game, WorldObject npc, Bots.Types.AccountConfig account, PotionKind kind, long budget)
+    {
+        var typePrefix = kind == PotionKind.Healing ? "hp" : "mp";
+        var stock = FindPotionInStock(game, typePrefix);
+        if (stock == null)
+        {
+            Log.Warning($"{game.Me.Name} found no more {typePrefix} potions to buy at {npc.NPCCode}");
+            return 0;
+        }
+
+        var before = CountPotions(game, typePrefix);
+        var stack = budget >= InventoryHelpers.BeltRoom(game, account, kind)
+            && BeltPlacement.StackBuyStays(InventoryHelpers.BeltPotions(game), (int)game.Belt.Height, account.BeltColumns(kind), account.BeltTarget(kind, game.Belt.Height), kind);
+        game.BuyItem(npc, stock, buyStack: stack);
+        if (!GeneralHelpers.TryWithTimeout((_) => CountPotions(game, typePrefix) > before, TimeSpan.FromSeconds(stack ? 2 : 1)))
+        {
+            return 0;
+        }
+
+        // A stack arrives one potion at a time: a single bought before it has settled would go past a belt about to be full.
+        if (stack)
+        {
+            var seen = CountPotions(game, typePrefix);
+            var since = DateTime.Now;
+            GeneralHelpers.TryWithTimeout((_) =>
+            {
+                var now = CountPotions(game, typePrefix);
+                if (now != seen)
+                {
+                    seen = now;
+                    since = DateTime.Now;
+                }
+
+                return InventoryHelpers.NextBeltFill(game, account, kind) != BeltFillStep.Fill || DateTime.Now - since > TimeSpan.FromMilliseconds(100);
+            }, TimeSpan.FromSeconds(2));
+        }
+
+        return CountPotions(game, typePrefix) - before;
     }
 
     private static Item FindPotionInStock(Game game, string typePrefix)
@@ -819,7 +967,7 @@ public static class NPCHelpers
     /// a character that has lost its tome of town portal cannot make a portal, and every attempt to leave
     /// an area fails until somebody notices.
     /// </summary>
-    private static void RestockTome(Game game, WorldObject npc, ItemName tomeName, ItemName scrollName)
+    internal static void RestockTome(Game game, WorldObject npc, ItemName tomeName, ItemName scrollName)
     {
         var tome = game.Inventory.Items.FirstOrDefault(i => i.Name == tomeName);
         if (tome == null)

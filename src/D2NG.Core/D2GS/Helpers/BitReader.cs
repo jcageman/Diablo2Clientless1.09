@@ -1,28 +1,33 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace D2NG.Core.D2GS.Helpers;
 
+/// <summary>
+/// Reads bits least significant first, as a BitArray over the bytes numbers them. Reading past the end
+/// throws what that BitArray's indexer threw, for the first index past the end.
+/// </summary>
 internal class BitReader
 {
-    #region Private Members
-    // The set of bits we are streaming
-    private readonly BitArray _bits;
+    private readonly byte[] _bytes;
+
+    private readonly int _bitCount;
 
     // Current offset in the stream
     private int Offset;
-    #endregion
 
-    /**
-        * Basic constructor for the BitReader
-        * Set the BitArray to the passed in array of bytes
-        * Set the offset to 0
-        */
     public BitReader(byte[] bytes)
     {
-        _bits = new BitArray(bytes);
+        if (bytes == null)
+        {
+            _ = new BitArray(bytes);
+        }
+
+        _bytes = bytes;
+        _bitCount = bytes.Length * 8;
         Offset = 0;
     }
 
@@ -32,7 +37,13 @@ internal class BitReader
       */
     public bool ReadBit()
     {
-        return _bits[Offset++];
+        var offset = Offset++;
+        if (offset >= _bitCount)
+        {
+            ThrowPastEnd(offset);
+        }
+
+        return ((_bytes[offset >> 3] >> (offset & 7)) & 1) != 0;
     }
 
     public byte ReadByte() => (byte)Read(8);
@@ -72,16 +83,30 @@ internal class BitReader
 
     protected int ReadBitsLittleEndian(int length)
     {
-        var initialLen = length;
-        var bits = 0;
-        while (length > 0)
+        if (length <= 0)
         {
-            bool bit = ReadBit();
-            bits |= (bit ? 1 : 0) << initialLen - length;
-
-            length -= 1;
+            return 0;
         }
-        return bits;
+
+        var end = Offset + length;
+        if (end > _bitCount)
+        {
+            var failed = Math.Max(Offset, _bitCount);
+            Offset = failed + 1;
+            ThrowPastEnd(failed);
+        }
+
+        var first = Offset >> 3;
+        var shift = Offset & 7;
+        var last = (end - 1) >> 3;
+        ulong chunk = 0;
+        for (var i = first; i <= last; i++)
+        {
+            chunk |= (ulong)_bytes[i] << ((i - first) * 8);
+        }
+
+        Offset = end;
+        return (int)((chunk >> shift) & ((1UL << length) - 1));
     }
 
     public int ReadBitsBigEndian(int length)
@@ -95,5 +120,12 @@ internal class BitReader
             length -= 1;
         }
         return bits;
+    }
+
+    [DoesNotReturn]
+    private void ThrowPastEnd(int index)
+    {
+        _ = new BitArray(_bytes)[index];
+        throw new InvalidOperationException("unreachable");
     }
 }
