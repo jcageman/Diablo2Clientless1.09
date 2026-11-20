@@ -274,10 +274,9 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
         // Fanaticism for the barbarian's and the amazon's attacks and Concentration for his own hammers, taking turns: on 1.09
         // an aura lands at once and lingers about 8 s after the switch, so 6 s turns keep both on the party (the user's pick,
         // as the Baal bot's paladin turns Conviction and Fanaticism).
-        if (wantedAura is Skill.Fanaticism or Skill.Concentration
-            && member.SkillLevel(Skill.Fanaticism) >= FanaticismFrom && member.SkillLevel(Skill.Concentration) >= FanaticismFrom)
+        if (wantedAura is Skill.Fanaticism or Skill.Concentration && AuraTurns(member) is { Count: >= 2 } turns)
         {
-            wantedAura = DateTime.UtcNow.Ticks / AuraTurn.Ticks % 2 == 0 ? Skill.Fanaticism : Skill.Concentration;
+            wantedAura = TurnOf(turns, DateTime.UtcNow);
         }
         // The paladin ran dry crossing the River of Flame, drinking a mana potion every ten seconds with 61 mana: one
         // point of Meditation quadruples his recovery and the sorceress's beside him.
@@ -781,7 +780,43 @@ public sealed class LevelingCombat(IPathingService pathingService, IMapApiServic
 
     private const int FanaticismFrom = 10;
 
-    private static readonly TimeSpan AuraTurn = TimeSpan.FromSeconds(6);
+    /// <summary>
+    /// The auras the paladin takes turns with: Fanaticism for the physical attackers, Concentration for his hammers, and,
+    /// once he has it, Conviction, which lowers what the sorceress's cold and everyone's elements meet (the user's pick).
+    /// </summary>
+    private static List<Skill> AuraTurns(PartyMember member)
+    {
+        var turns = new List<Skill>();
+        if (member.SkillLevel(Skill.Fanaticism) >= FanaticismFrom)
+        {
+            turns.Add(Skill.Fanaticism);
+        }
+
+        if (member.SkillLevel(Skill.Concentration) >= FanaticismFrom)
+        {
+            turns.Add(Skill.Concentration);
+        }
+
+        if (member.SkillLevel(Skill.Conviction) > 0)
+        {
+            turns.Add(Skill.Conviction);
+        }
+
+        return turns;
+    }
+
+    /// <summary>
+    /// Whose turn it is. On 1.09 an aura lingers about 8 s after the switch (7.7-8.1 s measured), so each one is back within
+    /// 6 s: two auras take 6 s turns, three take 3 s turns.
+    /// </summary>
+    public static Skill TurnOf(IReadOnlyList<Skill> turns, DateTime now)
+    {
+        var turn = TimeSpan.FromSeconds(AuraAway.TotalSeconds / (turns.Count - 1));
+        return turns[(int)(now.Ticks / turn.Ticks % turns.Count)];
+    }
+
+    /// <summary>The longest an aura is left off, inside its ~8 s linger.</summary>
+    private static readonly TimeSpan AuraAway = TimeSpan.FromSeconds(6);
 
     private const int OrbCast = 500;
 
