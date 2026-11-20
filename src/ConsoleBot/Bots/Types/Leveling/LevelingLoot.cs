@@ -58,6 +58,7 @@ public static class LevelingLoot
     {
         Attempts.Clear();
         Remembered.Clear();
+        RoomFailed.Clear();
     }
 
     /// <summary>
@@ -142,7 +143,7 @@ public static class LevelingLoot
                 await Task.Delay(300);
                 Remembered.TryRemove(id, out _);
                 if (game.Items.TryGetValue(id, out var item) && item.Ground && !MonstersWithin(sorceress, item.Location, GuardedRadius)
-                    && (game.Inventory.FindFreeSpace(item) != null || (Prized(sorceress, item) && MakeRoomFor(sorceress, item))))
+                    && (game.Inventory.FindFreeSpace(item) != null || (Prized(sorceress, item) && TryMakeRoom(sorceress, item))))
                 {
                     await Pickup(sorceress, item);
                     taken += game.Items.TryGetValue(id, out var after) && after.Ground ? 0 : 1;
@@ -325,7 +326,7 @@ public static class LevelingLoot
         {
             foreach (var (item, _, makesRoom) in claim.OrderBy(entry => entry.Item.Location.Distance(claim.Key.Game.Me.Location)))
             {
-                if (makesRoom && !MakeRoomFor(claim.Key, item))
+                if (makesRoom && !TryMakeRoom(claim.Key, item))
                 {
                     continue;
                 }
@@ -373,6 +374,31 @@ public static class LevelingLoot
     /// when that is not enough the cheapest loot is dropped. A full bag at the Inifuss tree or a quest chest otherwise
     /// costs the step.
     /// </summary>
+    private static readonly ConcurrentDictionary<(string Member, uint Item), DateTime> RoomFailed = new();
+
+    private static readonly TimeSpan RoomRetry = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// Room for loot, not tried again for a minute once it failed for that member and item: with full bags the loot pass
+    /// tidied and gave up on the same rare Breast Plate every second, eight times in seven seconds.
+    /// </summary>
+    private static bool TryMakeRoom(PartyMember member, Item wanted)
+    {
+        var key = (member.Name, wanted.Id);
+        if (DateTime.UtcNow - RoomFailed.GetValueOrDefault(key) < RoomRetry)
+        {
+            return false;
+        }
+
+        if (MakeRoomFor(member, wanted))
+        {
+            return true;
+        }
+
+        RoomFailed[key] = DateTime.UtcNow;
+        return false;
+    }
+
     public static bool MakeRoomFor(PartyMember member, Item wanted)
     {
         var game = member.Game;
@@ -388,6 +414,11 @@ public static class LevelingLoot
         if (game.Inventory.FindFreeSpace(wanted) != null)
         {
             Log.Information("{Character} made room for {Item}: done, by tidying its bag", member.Name, wanted.Name);
+            return true;
+        }
+
+        if (LevelingInventory.ClearRoomFor(member, wanted))
+        {
             return true;
         }
 
