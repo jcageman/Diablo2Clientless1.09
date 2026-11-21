@@ -51,6 +51,8 @@ public static class LevelingGamble
     /// </summary>
     private const int MaxPerVisit = 30;
 
+    private const int EmptyWindowsInARow = 3;
+
     /// <summary>What the gambler is topped up to from the others; a gambler already this rich takes nothing.</summary>
     public static int GoldCap(PartyMember member) => StartAtGold(member) + 1_000_000;
 
@@ -157,9 +159,13 @@ public static class LevelingGamble
         var startGold = LevelingGear.Gold(game);
         var tries = 0;
         var kept = new List<string>();
+        // A window with nothing the gambler has room for is refreshed at most this many times in a row: with only the first
+        // offer looked at and no try counted, a two by four maul the sorceress had no room for refreshed Jamella's window
+        // for half an hour while the party stood in town.
+        var emptyWindows = 0;
         try
         {
-            while (tries < MaxPerVisit && LevelingGear.Gold(game) > stopAt)
+            while (tries < MaxPerVisit && LevelingGear.Gold(game) > stopAt && emptyWindows < EmptyWindowsInARow)
             {
                 GeneralHelpers.TryWithTimeout(_ => Offers(game, kinds).Count > 0, TimeSpan.FromSeconds(2));
                 var offers = Offers(game, kinds);
@@ -168,11 +174,17 @@ public static class LevelingGamble
                     break;
                 }
 
+                var triesBefore = tries;
                 foreach (var offer in offers)
                 {
-                    if (tries >= MaxPerVisit || LevelingGear.Gold(game) <= stopAt || game.Inventory.FindFreeSpace(offer) == null)
+                    if (tries >= MaxPerVisit || LevelingGear.Gold(game) <= stopAt)
                     {
                         break;
+                    }
+
+                    if (game.Inventory.FindFreeSpace(offer) == null)
+                    {
+                        continue;
                     }
 
                     tries++;
@@ -210,6 +222,7 @@ public static class LevelingGamble
                     }
                 }
 
+                emptyWindows = tries == triesBefore ? emptyWindows + 1 : 0;
                 game.TownFolkAction(npc, TownFolkActionType.RefreshGamble);
             }
         }
