@@ -1,6 +1,10 @@
 ﻿using D2NG.Core.D2GS.Items;
+using D2NG.Pickit;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
+using System.Linq;
 
 namespace ConsoleBot.Bots.Types.Cuber;
 
@@ -45,6 +49,33 @@ public class RecipeRequirement
     public uint? MinLevel { get; set; }
 
     /// <summary>
+    /// The one nip file allowed to keep a matching item, for example <c>CraftBases</c>: a craft then
+    /// takes crafting stock only, never a magic find ring or a life jewel another file keeps for its
+    /// own stats. Leave unset to accept an item whatever keeps it.
+    /// </summary>
+    public string KeptOnlyBy { get; set; }
+
+    /// <summary>
+    /// The nip files keeping an item, for <see cref="KeptOnlyBy"/>. Unset, the pickit's own rules decide.
+    /// </summary>
+    public Func<Item, IReadOnlyList<string>> KeepRuleSources { get; set; }
+
+    /// <summary>
+    /// The mule accounts a matching item must be held on, for example the crafting-stock mules: a reroll
+    /// then never takes a charm stored on the general mules, whatever the keep rules say of it now.
+    /// Leave unset to take it from any mule.
+    /// </summary>
+    public List<string> Accounts { get; set; }
+
+    /// <summary>
+    /// True when the held item passes every filter, <see cref="Accounts"/> included.
+    /// </summary>
+    public bool Takes(HeldItem held)
+    {
+        return Matches(held.Item) && (Accounts == null || Accounts.Contains(held.Account, StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// True when the item passes every filter that is set.
     /// </summary>
     public bool Matches(Item item)
@@ -52,7 +83,15 @@ public class RecipeRequirement
         return (ItemNames == null || ItemNames.Contains(item.Name))
             && (Classification == null || Classification == item.Classification)
             && (Quality == null || Quality == item.Quality)
-            && (MinLevel == null || item.Level >= MinLevel);
+            && (MinLevel == null || item.Level >= MinLevel)
+            && (KeptOnlyBy == null || IsKeptOnlyBy(item));
+    }
+
+    private bool IsKeptOnlyBy(Item item)
+    {
+        var sources = (KeepRuleSources ?? Pickit.KeepRuleSources)(item);
+        return sources.Count == 1
+            && string.Equals(Path.GetFileNameWithoutExtension(sources[0]), Path.GetFileNameWithoutExtension(KeptOnlyBy), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

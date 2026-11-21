@@ -134,7 +134,7 @@ public class CubeBot : IBotInstance
                 .Where(i => accounts.Contains(MuleNames.Normalize(i.AccountName)) && !i.Untouchable)
                 .Select(i => new HeldItem(i.AccountName, i.CharacterName, MuledItemStock.ToItem(i)))
                 .ToList();
-            var room = await RoomOfRerollOwners(held);
+            var room = await RoomOfOwners(held);
             return CubePlanner.Plan(_cubeConfig.Recipes, held, _cubeConfig.MaxItemsPerRun, i => !IsRerollable(i), h => CanHandOver(h, room));
         }
         catch (Exception e)
@@ -145,13 +145,13 @@ public class CubeBot : IBotInstance
     }
 
     /// <summary>
-    /// The free shapes of every mule holding something a reroll recipe could take, as the mule
-    /// database last saw them.
+    /// The free shapes of every mule holding something a recipe could take that is larger than one
+    /// cell, as the mule database last saw them.
     /// </summary>
-    private async Task<Dictionary<(string, string), int[]>> RoomOfRerollOwners(List<HeldItem> held)
+    private async Task<Dictionary<(string, string), int[]>> RoomOfOwners(List<HeldItem> held)
     {
         var owners = held
-            .Where(h => _cubeConfig.Recipes.Any(r => r.RerollUntilKept && r.Requirements[0].Matches(h.Item)))
+            .Where(h => h.Item.Width * h.Item.Height > 1 && _cubeConfig.Recipes.Any(r => r.Requirements.Any(q => q.Takes(h))))
             .Select(h => (h.Account, h.Character))
             .Distinct();
         var room = new Dictionary<(string, string), int[]>();
@@ -166,11 +166,12 @@ public class CubeBot : IBotInstance
     /// <summary>
     /// A stash item reaches the trade screen only through the inventory, and the swap that makes room
     /// needs an inventory item of the same size. A mule with no spot left for the item's shape
-    /// usually cannot hand it over, and a run planned around it would fail and wait an hour.
+    /// usually cannot hand it over, and a run planned around it would fail and wait an hour. A
+    /// one-cell item swaps with any one-cell item the mule is not handing over, so only larger items are judged.
     /// </summary>
     private static bool CanHandOver(HeldItem held, Dictionary<(string, string), int[]> room)
     {
-        if (!room.TryGetValue((held.Account, held.Character), out var profile) || profile == null)
+        if (held.Item.Width * held.Item.Height <= 1 || !room.TryGetValue((held.Account, held.Character), out var profile) || profile == null)
         {
             return true;
         }
@@ -203,6 +204,10 @@ public class CubeBot : IBotInstance
         }
 
         _rolledThisRun.Clear();
+        _ownRerollable.Clear();
+        _ownRerollable.UnionWith(CubeCharacterItems(client)
+            .Where(i => _cubeConfig.Recipes.Any(r => r.RerollUntilKept && r.Requirements[0].Matches(i)))
+            .Select(Describe));
         var received = 0;
         var emptyHanded = new List<string>();
         foreach (var giver in plan.Givers)
@@ -390,7 +395,7 @@ public class CubeBot : IBotInstance
         StashSwap.SwapIntoInventory(
             mule.Game,
             inStash,
-            i => Pickit.CanTouchInventoryItem(mule.Game, i) && !wanted.ContainsKey(Key(i))
+            i => Pickit.CanTouchMuleItem(mule.Game, i) && !wanted.ContainsKey(Key(i))
                 && i.Name is not (ItemName.ScrollofTownPortal or ItemName.ScrollofIdentify),
             _logger);
     }
@@ -407,7 +412,7 @@ public class CubeBot : IBotInstance
         // matched by name and quality, so a finished roll must not stand in for the sword planned
         // for a reroll.
         var available = mule.Game.Inventory.Items.Concat(mule.Game.Stash.Items)
-            .Where(i => i.IsIdentified && Pickit.CanTouchInventoryItem(mule.Game, i))
+            .Where(i => i.IsIdentified && Pickit.CanTouchMuleItem(mule.Game, i))
             .Where(IsIngredient)
             .ToList();
         foreach (var (key, amount) in wanted)
@@ -498,7 +503,7 @@ public class CubeBot : IBotInstance
         var recipe = transmute.Recipe;
         var others = recipe.Requirements.Skip(1).ToList();
         var item = CubeCharacterItems(cuber)
-            .Where(i => recipe.Requirements[0].Matches(i) && IsRerollable(i))
+            .Where(i => recipe.Requirements[0].Matches(i) && IsRerollable(i) && !_ownRerollable.Contains(Describe(i)))
             .OrderByDescending(i => i.Quality != QualityType.Normal && i.Quality != QualityType.Superior)
             .FirstOrDefault();
         if (item == null)
@@ -747,7 +752,7 @@ public class CubeBot : IBotInstance
         {
             var inventoryItem = game.Inventory.FindItemById(input.Id);
             var freeSpace = inventoryItem == null ? null : game.Cube.FindFreeSpace(inventoryItem);
-            if (freeSpace == null || InventoryHelpers.PutInventoryItemInCube(game, inventoryItem, freeSpace) != MoveItemResult.Succes)
+            if (freeSpace == null || InventoryHelpers.DropInventoryItemOnCube(game, inventoryItem) != MoveItemResult.Succes)
             {
                 _logger.LogError("{Cuber}: could not put {Item} in the cube", game.Me.Name, input.Name);
                 InventoryHelpers.MoveCubeItemsToInventory(game);
@@ -825,7 +830,7 @@ public class CubeBot : IBotInstance
         }
 
         return _cubeConfig.Recipes.Any(r => r.RerollUntilKept
-            ? (r.Requirements[0].Matches(item) && IsRerollable(item)) || r.Requirements.Skip(1).Any(q => q.Matches(item))
+            ? (r.Requirements[0].Matches(item) && IsRerollable(item) && !_ownRerollable.Contains(Describe(item))) || r.Requirements.Skip(1).Any(q => q.Matches(item))
             : r.Result.Matches(item) || r.Requirements.Any(q => q.Matches(item)));
     }
 
@@ -833,6 +838,12 @@ public class CubeBot : IBotInstance
     /// The items this run rolled, by description: item ids do not survive into the mule game.
     /// </summary>
     private readonly HashSet<string> _rolledThisRun = [];
+
+    /// <summary>
+    /// What the cube character itself carried on joining, by description, among the items a reroll could
+    /// take: its own charms are never rolled or muled away, also once the keep rules stop keeping them.
+    /// </summary>
+    private readonly HashSet<string> _ownRerollable = [];
 
     private static (ItemName, QualityType) Key(Item item)
     {

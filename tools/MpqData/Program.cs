@@ -22,8 +22,8 @@ if (options == null && ProbeArgs(args) == null)
         Usage: MpqData --gamedir <Diablo 2 install> --out <data directory> [--report <directory>]
 
           --gamedir  Folder holding patch_d2.mpq / d2exp.mpq / d2data.mpq.
-          --out      Folder to write monster-resists.json, shrines.json, item-affixes.json and
-                     skills.json into.
+          --out      Folder to write monster-resists.json, shrines.json, area-levels.json, item-affixes.json,
+                     skills.json and item-prices.json into.
                      Created if missing.
           --report   Folder to write affixes-classic.md and affixes-expansion.md into: what can
                      spawn on each item type, for reviewing pickit rules.
@@ -131,6 +131,35 @@ foreach (var classId in new[] { 2, 81, 84 })
 }
 
 Console.WriteLine();
+Console.WriteLine($"Reading area levels from {gameDirectory}");
+
+D2NG.Core.LevelData.AreaLevelTable areaLevels;
+try
+{
+    var (read, notes) = D2NG.Core.LevelData.LevelsReader.Read(gameDirectory);
+    areaLevels = read;
+    foreach (var note in notes)
+    {
+        Console.WriteLine($"  {note}");
+    }
+}
+catch (Exception ex) when (ex is InvalidDataException or FileNotFoundException)
+{
+    Console.Error.WriteLine($"Extraction failed: {ex.Message}");
+    return 1;
+}
+
+var areaLevelsTarget = Path.Combine(outDirectory, GameDataLocation.AreaLevelsFile);
+areaLevels.Save(areaLevelsTarget);
+areaLevels = D2NG.Core.LevelData.AreaLevelTable.Load(areaLevelsTarget);
+Console.WriteLine($"Wrote {areaLevels.Count} areas to {areaLevelsTarget}");
+foreach (var area in new[] { D2NG.Core.D2GS.Act.Area.BloodMoor, D2NG.Core.D2GS.Act.Area.CatacombsLevel3 })
+{
+    Console.WriteLine($"  {area}: classic {string.Join("/", Enum.GetValues<Difficulty>().Select(d => areaLevels.MonsterLevel(area, d, false)))}, "
+        + $"expansion {string.Join("/", Enum.GetValues<Difficulty>().Select(d => areaLevels.MonsterLevel(area, d, true)))}");
+}
+
+Console.WriteLine();
 Console.WriteLine($"Reading item affix data from {gameDirectory}");
 
 ItemAffixTable affixTable;
@@ -194,6 +223,37 @@ foreach (var id in new[] { 9, 98, 153 })
 {
     var skill = skillTable.Skills[id];
     Console.WriteLine($"  {id} '{skill.Name}' {skill.Class} page {skill.Page}: params {string.Join(" ", skill.Params)}");
+}
+
+Console.WriteLine();
+Console.WriteLine($"Reading item price data from {gameDirectory}");
+ItemPriceTable priceTable;
+try
+{
+    var (read, notes) = ItemPriceReader.Read(gameDirectory);
+    priceTable = read;
+    foreach (var note in notes)
+    {
+        Console.WriteLine($"  {note}");
+    }
+}
+catch (Exception ex) when (ex is InvalidDataException or FileNotFoundException)
+{
+    Console.Error.WriteLine($"Extraction failed: {ex.Message}");
+    return 1;
+}
+
+var priceTarget = Path.Combine(outDirectory, GameDataLocation.ItemPricesFile);
+priceTable.Save(priceTarget);
+Console.WriteLine($"Wrote {priceTable.Bases.Count} bases, {priceTable.Stats.Count} stats and {priceTable.Vendors.Count} vendors to {priceTarget}");
+
+// A hand axe is 170 gold in weapons.bin, and the vendors pay half of an item's worth, at most 35000 in Hell.
+priceTable = ItemPriceTable.Load(priceTarget);
+Console.WriteLine("Spot check (reloaded from disk):");
+Console.WriteLine($"  hax cost {priceTable.Base("hax")?.Cost}, life stat add/multiply {priceTable.Stat(7)?.Add}/{priceTable.Stat(7)?.Multiply}");
+foreach (var vendor in priceTable.Vendors.Where(v => v.Name is "akara" or "jamella"))
+{
+    Console.WriteLine($"  {vendor.Name} pays {vendor.BuyMultiply}/1024, at most {string.Join("/", vendor.MaxBuy)}");
 }
 
 if (reportDirectory != null)

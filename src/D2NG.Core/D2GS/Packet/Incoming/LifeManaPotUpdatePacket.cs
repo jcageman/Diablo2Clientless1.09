@@ -1,6 +1,7 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
 using D2NG.Core.D2GS.Helpers;
 using Serilog;
+using Serilog.Events;
 
 namespace D2NG.Core.D2GS.Packet.Incoming;
 
@@ -21,10 +22,13 @@ internal class LifeManaPotUpdatePacket : D2gsPacket
         var x = reader.ReadUInt16();
         var y = reader.ReadUInt16();
         Location = new Point(x, y);
-        Log.Verbose($"(0x{id,2:X2})Update Self Packet:\n" +
-                    $"\tLife: {Life}\n" +
-                    $"\tMana: {Mana}\n" +
-                    $"\tLocation: {Location}");
+        if (Log.IsEnabled(LogEventLevel.Verbose))
+        {
+            Log.Verbose($"(0x{id,2:X2})Update Self Packet:\n" +
+                        $"\tLife: {Life}\n" +
+                        $"\tMana: {Mana}\n" +
+                        $"\tLocation: {Location}");
+        }
     }
 
     public int Life { get; }

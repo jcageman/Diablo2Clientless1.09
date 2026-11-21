@@ -24,7 +24,9 @@ internal class McpConnection : Connection
             ReadUpTo(ref buffer, packetLength);
         } while (buffer[2] == 0x00);
 
-        PacketReceived?.Invoke(this, new McpPacket(buffer.ToArray()));
+        var packet = new McpPacket(buffer.ToArray());
+        Trace?.Write(Tracing.TraceRecordKind.McpReceived, packet.Raw);
+        PacketReceived?.Invoke(this, packet);
         return buffer.ToArray();
     }
 
@@ -40,6 +42,7 @@ internal class McpConnection : Connection
     internal override void WritePacket(byte[] packet)
     {
         _stream.Write(packet, 0, packet.Length);
+        Trace?.Write(Tracing.TraceRecordKind.McpSent, packet);
         PacketSent?.Invoke(this, new McpPacket(packet));
     }
 

@@ -31,6 +31,15 @@ public static class MonstatsReader
     /// </summary>
     private static readonly Dictionary<int, int> ResistOffsetByRecordSize = new() { [864] = 729 };
 
+    /// <summary>
+    /// 1.09 offsets of Velocity and Run (int32 each, equal to monstats.txt for every class whose name
+    /// is unique) and of the byte read as MeleeRng, which the 1.09 txt does not have, so that offset
+    /// is unconfirmed.
+    /// </summary>
+    private const int VelocityOffset = 412;
+    private const int RunOffset = 416;
+    private const int MeleeRangeOffset = 457;
+
     public static (MonsterResistTable Table, IReadOnlyList<string> Notes) Read(string gameDirectory)
     {
         var notes = new List<string>();
@@ -124,8 +133,28 @@ public static class MonstatsReader
             Fire = ReadResists(raw, start + resistOffset + 2 * 3, classId, archive),
             Lightning = ReadResists(raw, start + resistOffset + 3 * 3, classId, archive),
             Cold = ReadResists(raw, start + resistOffset + 4 * 3, classId, archive),
-            Poison = ReadResists(raw, start + resistOffset + 5 * 3, classId, archive)
+            Poison = ReadResists(raw, start + resistOffset + 5 * 3, classId, archive),
+            Velocity = ReadSpeed(raw, start + VelocityOffset, classId, archive),
+            Run = ReadSpeed(raw, start + RunOffset, classId, archive),
+            MeleeRange = raw[start + MeleeRangeOffset]
         };
+    }
+
+    private static int ReadSpeed(byte[] raw, int start, int classId, string archive)
+    {
+        var value = BitConverter.ToInt32(raw, start);
+        if (value < 0 || value > 100)
+        {
+            throw new InvalidDataException(
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Record {0} in {1} decodes a speed of {2}, outside the plausible 0..100, so the speed offset is wrong for this version.",
+                    classId,
+                    archive,
+                    value));
+        }
+
+        return value;
     }
 
     /// <summary>

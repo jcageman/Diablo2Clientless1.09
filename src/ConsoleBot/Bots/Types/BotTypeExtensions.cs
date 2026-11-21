@@ -3,6 +3,7 @@ using ConsoleBot.Bots.Types.Baal;
 using ConsoleBot.Bots.Types.Cows;
 using ConsoleBot.Bots.Types.CS;
 using ConsoleBot.Bots.Types.Cuber;
+using ConsoleBot.Bots.Types.Leveling;
 using ConsoleBot.Bots.Types.Mephisto;
 using ConsoleBot.Bots.Types.Pindle;
 using ConsoleBot.Bots.Types.Rush;
@@ -28,6 +29,7 @@ public static class BotTypeExtensions
         services.AddSingleton<IBotInstance, CubeBot>();
         services.AddSingleton<IBotInstance, RushBot>();
         services.AddSingleton<IBotInstance, RushProbeBot>();
+        services.AddSingleton<IBotInstance, LevelingBot>();
         services.AddSingleton<IBotFactory, BotFactory>();
         services.AddOptions<CowConfiguration>()
             .Bind(config.GetSection("bot").GetSection("cows"));
@@ -47,6 +49,8 @@ public static class BotTypeExtensions
             .Bind(config.GetSection("bot").GetSection("assist"));
         services.AddOptions<RushConfiguration>()
             .Bind(config.GetSection("bot").GetSection("rush"));
+        services.AddOptions<LevelingConfiguration>()
+            .Bind(config.GetSection("bot").GetSection("leveling"));
         services.AddOptions<RushProbeConfiguration>()
             .Bind(config.GetSection("bot").GetSection("rushprobe"));
     }

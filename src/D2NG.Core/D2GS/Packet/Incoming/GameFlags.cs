@@ -1,9 +1,8 @@
 ﻿using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Exceptions;
 using Serilog;
+using Serilog.Events;
 using System;
-using System.IO;
-using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming;
 
@@ -16,7 +15,7 @@ internal class GameFlags : D2gsPacket
 
     public GameFlags(D2gsPacket packet) : base(packet.Raw)
     {
-        var reader = new BinaryReader(new MemoryStream(packet.Raw), Encoding.ASCII);
+        var reader = new PacketReader(packet.Raw);
         var id = reader.ReadByte();
         if (InComingPacket.GameFlags != (InComingPacket)id)
         {
@@ -28,12 +27,14 @@ internal class GameFlags : D2gsPacket
         _ = reader.ReadUInt16();
         Expansion = reader.ReadByte() != 0;
         Ladder = reader.ReadByte() != 0;
-        reader.Close();
-        Log.Verbose(BitConverter.ToString(packet.Raw));
-        Log.Verbose($"(0x{packet.Raw[0],2:X2}) Game flags:\n" +
-                    $"\tDifficulty: {Difficulty}\n" +
-                    $"\tType: {(Hardcore ? "Hardcore" : "Softcore")}" +
-                    $" {(Expansion ? "Expansion" : "")}" +
-                    $" {(Ladder ? "Ladder" : "")}");
+        if (Log.IsEnabled(LogEventLevel.Verbose))
+        {
+            Log.Verbose(BitConverter.ToString(packet.Raw));
+            Log.Verbose($"(0x{packet.Raw[0],2:X2}) Game flags:\n" +
+                        $"\tDifficulty: {Difficulty}\n" +
+                        $"\tType: {(Hardcore ? "Hardcore" : "Softcore")}" +
+                        $" {(Expansion ? "Expansion" : "")}" +
+                        $" {(Ladder ? "Ladder" : "")}");
+        }
     }
 }

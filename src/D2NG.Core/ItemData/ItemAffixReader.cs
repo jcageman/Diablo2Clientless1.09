@@ -67,6 +67,8 @@ public static class ItemAffixReader
         table.Affixes.AddRange(DecodeAffixes(Load("automagic.bin", AffixSize), "automagic.bin", AffixKind.AutoMagic, properties, typeCodes));
 
         table.CubeRecipes = DecodeCubeRecipes(Load("cubemain.bin", CubeRecipeSize), "cubemain.bin", properties);
+        table.UniqueItems = UniqueItemReader.DecodeUniqueItems(Load("uniqueitems.bin", UniqueItemReader.UniqueItemSize), "uniqueitems.bin");
+        (table.SetItems, table.Sets) = UniqueItemReader.DecodeSetItems(Load("setitems.bin", UniqueItemReader.SetSize), "setitems.bin", properties);
 
         return (table, notes);
     }

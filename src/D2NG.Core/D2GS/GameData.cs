@@ -1,8 +1,10 @@
-﻿using D2NG.Core.D2GS.Act;
+using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Items.Containers;
+using D2NG.Core.D2GS.Motion;
 using D2NG.Core.D2GS.Objects;
+using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Players;
 using D2NG.Core.D2GS.Quest;
@@ -17,12 +19,20 @@ namespace D2NG.Core.D2GS;
 
 internal class GameData
 {
-    internal GameData(GameFlags gameFlags, Character clientCharacter)
+    internal GameData(GameFlags gameFlags, Character clientCharacter, MonsterMotionSettings motion = null, ClientRules rules = null)
     {
         ArgumentNullException.ThrowIfNull(clientCharacter);
 
         Flags = gameFlags;
-        Act = new ActData();
+        Rules = rules ?? ClientRules.Latest;
+        _cursorNeedsLift = Rules.CursorNeedsLift;
+        _outstandingLifts = Rules.OutstandingLifts;
+        _quiverCountFollowsServer = Rules.QuiverCountFollowsServer;
+        _carriedCountFollowsServer = Rules.CarriedCountFollowsServer;
+        _experienceTotalSets = Rules.ExperienceTotalSets;
+        _socketingClearsCursor = Rules.SocketingClearsCursor;
+        motion ??= new MonsterMotionSettings();
+        Act = new ActData { Motion = new MotionContext(motion, ChasedUnitLocation), Resolver = new AreaResolver(motion.Clock, () => Me?.Location), Rules = Rules };
         ClientCharacter = clientCharacter;
         _walkingSpeedMultiplier = new Lazy<double>(() =>
         {
@@ -53,6 +63,68 @@ internal class GameData
 
     private readonly Lazy<double> _walkingSpeedMultiplier;
 
+    internal ClientRules Rules { get; }
+
+    private readonly bool _cursorNeedsLift;
+
+    private readonly bool _outstandingLifts;
+
+    private readonly bool _quiverCountFollowsServer;
+
+    private readonly bool _carriedCountFollowsServer;
+
+    private readonly bool _experienceTotalSets;
+
+    private readonly bool _socketingClearsCursor;
+
+    /// <summary>The last packet in which the server stated where this character is since the act load; null until the first.</summary>
+    internal PositionConfirmation PositionConfirmation => Act.Resolver.Current.Confirmation;
+
+    /// <summary>
+    /// Records a position the server stated for this character, with where the client held itself just before.
+    /// The join's 0x59 and first 0x95 carry 0,0, which is no position.
+    /// </summary>
+    internal void ConfirmPosition(Point location, InComingPacket packet)
+    {
+        if (Me != null && location != null && (location.X != 0 || location.Y != 0))
+        {
+            Act.Resolver.Confirmed(location, packet);
+        }
+    }
+
+    internal void ConfirmPosition(EntityType type, uint id, Point location, InComingPacket packet)
+    {
+        if (type == EntityType.Player && Me?.Id == id)
+        {
+            ConfirmPosition(location, packet);
+        }
+    }
+
+    /// <summary>Where a monster's chase target is as far as this client knows; a monster target gives its last known position.</summary>
+    private Point ChasedUnitLocation(EntityType type, uint id)
+    {
+        if (type == EntityType.NPC)
+        {
+            return Act.WorldObjects.TryGetValue((id, EntityType.NPC), out var npc) ? npc.LastKnownLocation : null;
+        }
+
+        if (Me is { } me && me.Id == id)
+        {
+            return me.Location;
+        }
+
+        var players = Players;
+        for (var i = 0; i < players.Count; i++)
+        {
+            if (players[i] is { } player && player.Id == id)
+            {
+                return player.Location;
+            }
+        }
+
+        return null;
+    }
+
     public Character ClientCharacter { get; }
     public GameFlags Flags { get; }
     public ActData Act { get; }
@@ -76,12 +148,142 @@ internal class GameData
     /// </summary>
     internal uint? LiftRequested { get; set; }
 
+    /// <summary>How many lifts <see cref="ClientRule.OutstandingLifts"/> keeps waiting for their removal; the oldest goes first.</summary>
+    internal const int MaxLiftsOutstanding = 16;
+
+    private readonly List<uint> _liftsOutstanding = [];
+
+    /// <summary>
+    /// Under <see cref="ClientRule.OutstandingLifts"/>, every lift not answered yet, oldest first: a lift answered after
+    /// the caller gave up and lifted another item still puts its item on the cursor, where the server holds it. The server
+    /// handles a client's packets in order and answers an accepted lift by taking the item out of its container, so a lift
+    /// stops counting once the server is seen to be past it: its own item leaves its container or is put down or dropped
+    /// (that lift and every older one are done - an older one with no answer by then was refused), or any item reaches the
+    /// cursor (every lift is done - an older one was refused, a newer one finds the cursor full).
+    /// </summary>
+    internal IReadOnlyList<uint> LiftsOutstanding
+    {
+        get
+        {
+            lock (_liftsOutstanding)
+            {
+                return [.. _liftsOutstanding];
+            }
+        }
+    }
+
+    /// <summary>The client asked to lift an item out of a container (<see cref="ClientAction.Lift"/>).</summary>
+    internal void Lifted(uint id)
+    {
+        LiftRequested = id;
+        if (!_outstandingLifts)
+        {
+            return;
+        }
+
+        lock (_liftsOutstanding)
+        {
+            _liftsOutstanding.Remove(id);
+            _liftsOutstanding.Add(id);
+            if (_liftsOutstanding.Count > MaxLiftsOutstanding)
+            {
+                _liftsOutstanding.RemoveAt(0);
+            }
+        }
+    }
+
+    private bool LiftAsked(uint id)
+    {
+        if (!_outstandingLifts)
+        {
+            return LiftRequested == id;
+        }
+
+        lock (_liftsOutstanding)
+        {
+            return _liftsOutstanding.Contains(id);
+        }
+    }
+
+    /// <summary>The server dealt with this item's lift - took it out, put it down or dropped it: that lift and every older one are done.</summary>
+    private void LiftSettled(uint id)
+    {
+        if (!_outstandingLifts)
+        {
+            return;
+        }
+
+        lock (_liftsOutstanding)
+        {
+            var index = _liftsOutstanding.IndexOf(id);
+            if (index >= 0)
+            {
+                _liftsOutstanding.RemoveRange(0, index + 1);
+            }
+        }
+    }
+
+    /// <summary>An item reached this client's cursor: under <see cref="ClientRule.OutstandingLifts"/> no lift is outstanding any more.</summary>
+    private void CursorFilled()
+    {
+        if (!_outstandingLifts)
+        {
+            return;
+        }
+
+        lock (_liftsOutstanding)
+        {
+            _liftsOutstanding.Clear();
+        }
+    }
+
+    /// <summary>The server emptied the cursor (<see cref="ClientAction.ClearCursor"/>): no lift is outstanding any more.</summary>
+    internal void CursorCleared()
+    {
+        CursorItem = null;
+        LiftRequested = null;
+        lock (_liftsOutstanding)
+        {
+            _liftsOutstanding.Clear();
+        }
+    }
+
+    /// <summary>An act load (0x03) closes any shop, and under <see cref="ClientRule.OutstandingLifts"/> ends every outstanding lift.</summary>
+    internal void ActLoaded()
+    {
+        ShopOpen = false;
+        if (!_outstandingLifts)
+        {
+            return;
+        }
+
+        lock (_liftsOutstanding)
+        {
+            _liftsOutstanding.Clear();
+        }
+    }
+
     /// <summary>
     /// Items this client sold and the server has not taken yet. A sale takes the item out of its
     /// container with the same packet a lift gets and nothing follows to say it is gone, so without
     /// this the last item sold sat on the cursor for the rest of the game.
     /// </summary>
     internal ConcurrentDictionary<uint, byte> SellRequested { get; } = new();
+
+    /// <summary>
+    /// A vendor's trade or gamble screen is open: opened by <see cref="ClientAction.OpenShop"/>, closed by
+    /// <see cref="ClientAction.RemoveMerchantItems"/> (the end of the chat) and by an act load.
+    /// </summary>
+    internal bool ShopOpen { get; set; }
+
+    /// <summary>
+    /// This game has opened a shop with <see cref="ClientAction.OpenShop"/>, so listings arriving with none open are
+    /// dropped. False in traces recorded before the action existed, whose bot kept them: their replay keeps them too.
+    /// </summary>
+    internal bool ShopTracked { get; set; }
+
+    /// <summary>The trade screen was closed before the vendor's listing arrived: kept, it stays until the next vendor visit.</summary>
+    private bool ListingWithoutShop(Item item) => item.Action == Action.AddToShop && ShopTracked && !ShopOpen;
 
     /// <summary>
     /// Items the client right-clicked to use - a potion of life, a book, a scroll. The server takes them out
@@ -100,7 +302,15 @@ internal class GameData
     }
 
     internal void AddExperience(AddExpPacket addExpPacket)
-        => Me.Experience += addExpPacket.Experience;
+    {
+        if (_experienceTotalSets && addExpPacket.IsTotal)
+        {
+            Me.Experience = addExpPacket.Experience;
+            return;
+        }
+
+        Me.Experience += addExpPacket.Experience;
+    }
 
     internal void PlayerAssign(AssignPlayerPacket packet)
     {
@@ -127,6 +337,7 @@ internal class GameData
     private Self NewSelf(Self self)
     {
         self.CarriedCharms = () => Inventory.Items.Where(i => i.Classification is ClassificationType.SmallCharm or ClassificationType.LargeCharm or ClassificationType.GrandCharm);
+        self.LocationChanged = _ => Act.Resolver.Moved();
         return self;
     }
 
@@ -155,6 +366,20 @@ internal class GameData
         }
     }
 
+    /// <summary>The first player with the id, as Players.Where(...).FirstOrDefault() found it, without a closure per packet.</summary>
+    private Player FindPlayer(uint id)
+    {
+        foreach (var player in Players)
+        {
+            if (player.Id == id)
+            {
+                return player;
+            }
+        }
+
+        return null;
+    }
+
     internal void PlayerLeave(PlayerLeftGamePacket packet)
     {
         Players.RemoveAll(p => p.Id == packet.Id);
@@ -164,7 +389,7 @@ internal class GameData
     {
         if (packet.EntityType == EntityType.Player)
         {
-            var player = Players.Where(p => p.Id == packet.EntityId).FirstOrDefault();
+            var player = FindPlayer(packet.EntityId);
             player?.AddEffect(packet);
 
             if (packet.EntityId == Me.Id)
@@ -182,7 +407,7 @@ internal class GameData
     {
         if (packet.EntityType == EntityType.Player)
         {
-            var player = Players.Where(p => p.Id == packet.EntityId).FirstOrDefault();
+            var player = FindPlayer(packet.EntityId);
             player?.Effects.TryAdd(packet.Effect, packet.Effect);
 
             if (packet.EntityId == Me.Id)
@@ -200,7 +425,7 @@ internal class GameData
     {
         if (packet.EntityType == EntityType.Player)
         {
-            var player = Players.Where(p => p.Id == packet.EntityId).FirstOrDefault();
+            var player = FindPlayer(packet.EntityId);
             player?.UpdateEffects(packet.EntityEffects);
 
             if (packet.EntityId == Me.Id)
@@ -237,6 +462,7 @@ internal class GameData
     {
         if (packet.UnitId == Me.Id)
         {
+            ConfirmPosition(packet.CurrentLocation, InComingPacket.EntityMove);
             Me.Location = packet.MoveToLocation;
         }
 
@@ -259,6 +485,7 @@ internal class GameData
 
         if (packet.EntityId == Me.Id)
         {
+            ConfirmPosition(packet.Location, InComingPacket.PlayerStop);
             Me.Location = packet.Location;
         }
 
@@ -396,6 +623,11 @@ internal class GameData
         if (packet.UnitId == Me.Id)
         {
             Me.ItemSkills[packet.Skill] = packet.Amount;
+            // 0x21 carries the hard points too, and is what the server sends after a skill point is spent.
+            if (packet.HasBaseLevel)
+            {
+                Me.Skills[packet.Skill] = packet.BaseLevel;
+            }
         }
     }
 
@@ -420,6 +652,7 @@ internal class GameData
 
     internal void UpdateSelf(LifeManaPotUpdatePacket packet)
     {
+        ConfirmPosition(packet.Location, InComingPacket.LifeManaUpdatePot);
         Me.Location = packet.Location;
         Me.Life = packet.Life;
         Me.Mana = packet.Mana;
@@ -428,6 +661,7 @@ internal class GameData
 
     internal void UpdateSelf(LifeManaUpdatePacket packet)
     {
+        ConfirmPosition(packet.Location, InComingPacket.LifeManaUpdate);
         Me.Location = packet.Location;
         Me.Life = packet.Life;
         Me.Mana = packet.Mana;
@@ -447,6 +681,11 @@ internal class GameData
 
     internal void ItemUpdate(Item item)
     {
+        if (ListingWithoutShop(item))
+        {
+            return;
+        }
+
         if (Items.TryGetValue(item.Id, out var previous) && previous != item && item.SocketedItems.IsEmpty)
         {
             foreach (var gem in previous.SocketedItems)
@@ -464,6 +703,14 @@ internal class GameData
                 {
                     parent.SocketedItems[item.Id] = item;
                 }
+
+                // Put into a socket is put down: the lift that brought it to the cursor is settled like a drop's.
+                if (_socketingClearsCursor && CursorItem?.Id == item.Id)
+                {
+                    CursorItem = null;
+                    LiftSettled(item.Id);
+                }
+
                 break;
             case Action.Equip:
 
@@ -477,6 +724,12 @@ internal class GameData
                         }
                         Me.EquipItem(item);
 
+                        // Equipping takes the item off the cursor; without this the client kept believing it
+                        // held the item there and spent seconds trying to put away something already worn.
+                        if (CursorItem?.Id == item.Id)
+                        {
+                            CursorItem = null;
+                        }
                     }
 
                 }
@@ -490,12 +743,22 @@ internal class GameData
                         {
                             Belt.UpdateBeltRows(1);
                         }
+
+                        // A quiver shot empty is unequipped by the server and gone; it does not land on the
+                        // cursor. Taken for held, it blocked an amazon without a spare quiver for minutes: every
+                        // attempt to put it away went unanswered.
+                        var emptied = Me.Equipment.Values.FirstOrDefault(worn => worn.Id == item.Id) is { } worn
+                            && worn.Classification is ClassificationType.Arrows or ClassificationType.Bolts && worn.Amount == 0;
                         Me.UnequipItem(item);
 
                         // An item taken off the body lands on the cursor, exactly as one pulled out of a
                         // container does. Without this the cursor stays empty as far as the bot is
                         // concerned and anything waiting to place the item waits for ever.
-                        CursorItem = item;
+                        if (!emptied)
+                        {
+                            CursorItem = item;
+                            CursorFilled();
+                        }
                     }
                 }
                 break;
@@ -530,6 +793,7 @@ internal class GameData
                 break;
             case Action.ToCursor:
                 CursorItem = item;
+                CursorFilled();
                 break;
             case Action.UpdateStats:
                 UpdateItemStatsInContainer(item);
@@ -539,6 +803,8 @@ internal class GameData
                 {
                     CursorItem = null;
                 }
+
+                LiftSettled(item.Id);
                 break;
             default:
                 // Do nothing because we don't know
@@ -576,16 +842,20 @@ internal class GameData
     private void RemoveFromContainer(Item item)
     {
         var lifted = !SellRequested.TryRemove(item.Id, out _) & !UseRequested.TryRemove(item.Id, out _);
+        // Only an item this client asked to lift is on its cursor. Akara took the Scroll of Inifuss out of the inventory
+        // and put the Key to the Cairn Stones in its place; read as lifted, the scroll stayed on the cursor for good and
+        // every put-away was refused.
+        var asked = !_cursorNeedsLift || LiftAsked(item.Id);
         switch (item.Container)
         {
             case ContainerType.Stash:
-                if (Stash.Remove(item) && lifted)
+                if (Stash.Remove(item) && lifted && asked)
                 {
                     CursorItem = item;
                 }
                 break;
             case ContainerType.Stash2:
-                if (Stash.Remove(item) && lifted)
+                if (Stash.Remove(item) && lifted && asked)
                 {
                     CursorItem = item;
                 }
@@ -597,13 +867,13 @@ internal class GameData
                 }
                 break;
             case ContainerType.Cube:
-                if (Cube.Remove(item) && lifted)
+                if (Cube.Remove(item) && lifted && asked)
                 {
                     CursorItem = item;
                 }
                 break;
             case ContainerType.Inventory:
-                if (Inventory.Remove(item) && lifted)
+                if (Inventory.Remove(item) && lifted && asked)
                 {
                     CursorItem = item;
                 }
@@ -612,7 +882,7 @@ internal class GameData
             case ContainerType.ForTrade:
             case ContainerType.TradeOffer:
                 // Lifted off the trade grid: the trade page is not modelled, but the item is on the cursor now.
-                if (LiftRequested == item.Id)
+                if (LiftAsked(item.Id))
                 {
                     CursorItem = item;
                 }
@@ -620,6 +890,15 @@ internal class GameData
             default:
                 // Do nothing we don't know how to handle this
                 break;
+        }
+
+        if (ReferenceEquals(CursorItem, item))
+        {
+            CursorFilled();
+        }
+        else
+        {
+            LiftSettled(item.Id);
         }
     }
 
@@ -650,6 +929,7 @@ internal class GameData
         if (displaced.Count == 1)
         {
             CursorItem = displaced[0];
+            CursorFilled();
         }
     }
 
@@ -672,6 +952,8 @@ internal class GameData
         {
             LiftRequested = null;
         }
+
+        LiftSettled(item.Id);
 
         switch (item.Container)
         {
@@ -722,12 +1004,28 @@ internal class GameData
         if(item != null)
         {
             if (packet.UpdateType == 70
-               && (item.Classification == ClassificationType.Javelin || item.Classification == ClassificationType.AmazonJavelin))
+               && (item.Classification == ClassificationType.Javelin || item.Classification == ClassificationType.AmazonJavelin
+                   || (_quiverCountFollowsServer && item.Classification is ClassificationType.Arrows or ClassificationType.Bolts)))
             {
                 item.Amount = packet.Amount;
             }
+
+            return;
         }
 
+        if (_carriedCountFollowsServer && packet.UpdateType == 70)
+        {
+            var carried = Inventory.FindItemById(packet.ItemId) ?? Cube.FindItemById(packet.ItemId) ?? Stash.FindItemById(packet.ItemId);
+            if (carried != null)
+            {
+                carried.Amount = packet.Amount;
+            }
+
+            if (Items.TryGetValue(packet.ItemId, out var known) && known != carried && carried != null)
+            {
+                known.Amount = packet.Amount;
+            }
+        }
     }
 
     internal void RemoveObject(RemoveObjectPacket packet)

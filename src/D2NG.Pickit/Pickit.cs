@@ -311,7 +311,17 @@ public static class Pickit
         return CanTouchInventoryItem(game.Me.Class, item, (int)game.Inventory.Height);
     }
 
-    public static bool CanTouchInventoryItem(CharacterClass characterClass, Item item, int inventoryHeight)
+    /// <summary>
+    /// <see cref="CanTouchInventoryItem(Game, Item)"/> for a mule character. A mule wears no charms of its
+    /// own, so the bottom rows reserved for a farmer's charms do not apply: a charm muled there is stock
+    /// like any other. The cube and tomes still stay.
+    /// </summary>
+    public static bool CanTouchMuleItem(Game game, Item item)
+    {
+        return CanTouchInventoryItem(game.Me.Class, item, (int)game.Inventory.Height, reserveCharmRows: false);
+    }
+
+    public static bool CanTouchInventoryItem(CharacterClass characterClass, Item item, int inventoryHeight, bool reserveCharmRows = true)
     {
         if (item.Container != ContainerType.Inventory)
         {
@@ -336,7 +346,7 @@ public static class Pickit
             return false;
         }
 
-        var reservedRows = GetConfiguration().Inventory.BottomCharmRowsToNotTouch;
+        var reservedRows = reserveCharmRows ? GetConfiguration().Inventory.BottomCharmRowsToNotTouch : 0;
         var firstReservedRow = Math.Max(0, inventoryHeight - reservedRows);
         if (reservedRows > 0
             && item.Location.Y >= firstReservedRow

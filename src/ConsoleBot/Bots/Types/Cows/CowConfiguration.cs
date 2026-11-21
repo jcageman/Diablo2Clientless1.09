@@ -25,6 +25,15 @@ public class CowConfiguration : MultiClientConfiguration
     /// </summary>
     public bool ActiveMode { get; set; }
 
+    /// <summary>
+    /// Seconds the hunt may run from the moment the party sets off; unset, the party clears the level. A party's last
+    /// packs, spread out over the level, can earn less per minute than a fresh game does with its setup counted, but
+    /// where that point lies depends on how fast the party kills and how long its setup takes: pick it from
+    /// <c>Trace kpi xp &lt;date&gt; --leave-after</c> over the party's own games. The classic Hell cow party of
+    /// 20 Nov 2026 did best leaving 110-120 s after setting off (+2.0-2.4% in a replay of 249 games).
+    /// </summary>
+    public int? HuntBudgetSeconds { get; set; }
+
     /// <summary>Validates that a portal character is configured.</summary>
     public override void Validate()
     {

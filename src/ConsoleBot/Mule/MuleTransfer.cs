@@ -55,6 +55,7 @@ public class MuleTransfer
         var cells = 0;
         var rejections = 0;
         var repackTried = false;
+        var handedOver = new HashSet<uint>();
         var giverName = giver.Game.Me.Name;
         var receiverName = receiver.Game.Me.Name;
 
@@ -146,6 +147,17 @@ public class MuleTransfer
                 return new TransferResult(TransferEnding.Stuck, rounds, items, cells, rejections);
             }
 
+            // An item a completed round handed over cannot be offered again: when it is, the client's idea of its items is
+            // out of step with the server's, and every further round "trades" an item the server no longer moves. Live on
+            // 20 Nov that ran 158 rounds of the same three potions before anyone stopped it.
+            var again = offer.Where(o => handedOver.Contains(o.Item.Id)).ToList();
+            if (again.Count > 0)
+            {
+                _logger.LogError("{Giver} -> {Receiver}: {Items} handed over in an earlier round are offered again; the client's items are out of step with the server's, ending the transfer",
+                    giverName, receiverName, string.Join(", ", again.Select(o => $"{o.Item.Name} 0x{o.Item.Id:X}")));
+                return new TransferResult(TransferEnding.Stuck, rounds, items, cells, rejections);
+            }
+
             var outcome = await _trades.Trade(giver, receiver, offer);
             rejections += outcome.Rejections;
             _logger.LogInformation("{Giver} -> {Receiver} round {Round}: planned {Planned} items/{Cells} cells ({ToStash} to stash, {ToInventory} staying in inventory), traded {Traded}, refused {Refused} times, {Skipped} left for later: {Result}",
@@ -168,7 +180,10 @@ public class MuleTransfer
 
             rounds++;
             items += outcome.ItemsTraded;
-            cells += offer.Take(outcome.ItemsTraded).Sum(o => o.Item.Width * o.Item.Height);
+            // The items that went over, not the first ones offered: an item that found no room on the grid is skipped
+            // and stays with the giver, to be offered again.
+            cells += outcome.Placed.Sum(o => o.Item.Width * o.Item.Height);
+            handedOver.UnionWith(outcome.Placed.Select(o => o.Item.Id));
             await Task.Delay(SettleAfterTrade);
         }
     }

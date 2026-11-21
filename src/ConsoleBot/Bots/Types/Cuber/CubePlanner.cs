@@ -31,12 +31,12 @@ public static class CubePlanner
 {
     /// <param name="maxItems">Most ingredients one run collects; what the cube character can hold at once.</param>
     /// <param name="isFinished">For <see cref="CubeRecipe.RerollUntilKept"/> recipes: an item already good enough to keep, which is not rerolled.</param>
-    /// <param name="canHandOver">For <see cref="CubeRecipe.RerollUntilKept"/> recipes: whether the mule can get the item to the trade screen at all.</param>
+    /// <param name="canHandOver">Whether the mule can get the item to the trade screen at all.</param>
     public static CubePlan Plan(IReadOnlyList<CubeRecipe> recipes, IReadOnlyList<HeldItem> held, int maxItems, Func<Item, bool> isFinished = null, Func<HeldItem, bool> canHandOver = null)
     {
         // Mules holding many ingredients are asked first, so a run needs as few logins as possible.
         var ingredientsPerMule = held
-            .Where(h => recipes.Any(r => r.Requirements.Any(q => q.Matches(h.Item))))
+            .Where(h => recipes.Any(r => r.Requirements.Any(q => q.Takes(h))))
             .GroupBy(Owner)
             .ToDictionary(g => g.Key, g => g.Count());
         var used = new bool[held.Count];
@@ -68,7 +68,7 @@ public static class CubePlanner
             var count = 0;
             while (taken.Count + perTransmute <= maxItems)
             {
-                var picked = PickOneTransmute(recipe, held, used, joining, ingredientsPerMule);
+                var picked = PickOneTransmute(recipe, held, used, joining, ingredientsPerMule, canHandOver);
                 if (picked == null)
                 {
                     break;
@@ -115,7 +115,7 @@ public static class CubePlanner
         var others = recipe.Requirements.Skip(1).ToList();
         var perReroll = others.Sum(r => r.Amount);
         var item = Enumerable.Range(0, held.Count)
-            .Where(i => !used[i] && target.Matches(held[i].Item) && !(isFinished?.Invoke(held[i].Item) ?? false) && (canHandOver?.Invoke(held[i]) ?? true))
+            .Where(i => !used[i] && target.Takes(held[i]) && !(isFinished?.Invoke(held[i].Item) ?? false) && (canHandOver?.Invoke(held[i]) ?? true))
             .OrderByDescending(i => held[i].Item.Quality != QualityType.Normal && held[i].Item.Quality != QualityType.Superior)
             .Cast<int?>()
             .FirstOrDefault();
@@ -132,7 +132,7 @@ public static class CubePlanner
             foreach (var requirement in others)
             {
                 set.AddRange(Enumerable.Range(0, held.Count)
-                    .Where(i => !used[i] && !picked.Contains(i) && !set.Contains(i) && requirement.Matches(held[i].Item))
+                    .Where(i => !used[i] && !picked.Contains(i) && !set.Contains(i) && requirement.Takes(held[i]))
                     .OrderByDescending(i => joining.Contains(Owner(held[i])) || picked.Any(p => Owner(held[p]) == Owner(held[i])))
                     .ThenByDescending(i => ingredientsPerMule[Owner(held[i])])
                     .ThenBy(i => held[i].Account)
@@ -157,13 +157,14 @@ public static class CubePlanner
         IReadOnlyList<HeldItem> held,
         bool[] used,
         HashSet<(string, string)> joining,
-        Dictionary<(string, string), int> ingredientsPerMule)
+        Dictionary<(string, string), int> ingredientsPerMule,
+        Func<HeldItem, bool> canHandOver)
     {
         var picked = new List<int>();
         foreach (var requirement in recipe.Requirements)
         {
             var unused = Enumerable.Range(0, held.Count)
-                .Where(i => !used[i] && !picked.Contains(i) && requirement.Matches(held[i].Item))
+                .Where(i => !used[i] && !picked.Contains(i) && requirement.Takes(held[i]) && (canHandOver?.Invoke(held[i]) ?? true))
                 .ToList();
             if (unused.Count - requirement.Reserve < requirement.Amount)
             {

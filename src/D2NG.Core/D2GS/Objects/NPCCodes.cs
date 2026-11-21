@@ -339,7 +339,7 @@ public enum NPCCode : ushort
     JamellaAct4 = 405,
     IzualAct4 = 406,
     RatMan3 = 407,
-    Malachai = 408,
+    Hadriel = 408,
     TheFeatureCreep = 409,
     WakeOfDestruction = 411,
     ChargedBoltSentry = 412,

@@ -65,6 +65,11 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
 
     private int _itemsPickedUp;
 
+    private DateTime _runStarted;
+
+    /// <summary>A potion trip mid-run takes about 40 s; the run's deadline does not cancel it, so it starts only with this much left.</summary>
+    private static readonly TimeSpan TownTripLeast = TimeSpan.FromSeconds(60);
+
     protected override async Task<bool> RunSingleGame(Client client)
     {
         _itemsPickedUp = 0;
@@ -86,7 +91,7 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
 
         if (!await GeneralHelpers.WithDeadline(() => RunTravincal(client), GameDeadline, "Travincal run"))
         {
-            return false;
+            return NeedsMule;
         }
 
         return await GeneralHelpers.WithDeadline(() => FinishInTown(client), TownDeadline, "Travincal town tasks after the run");
@@ -112,6 +117,7 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
 
     private async Task<bool> RunTravincal(Client client)
     {
+        _runStarted = DateTime.Now;
         Log.Information("Taking travincal wp");
         if (!await _townManagementService.TakeWaypoint(client, Waypoint.Travincal))
         {
@@ -131,6 +137,11 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
         if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToCouncil, MovementMode.Walking))
         {
             Log.Information($"Walking to councile members failed");
+            return false;
+        }
+
+        if (!await EnsureBeltPotions(client))
+        {
             return false;
         }
 
@@ -173,6 +184,117 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
 
         return true;
     }
+
+    private static (int BeltHealing, int BeltMana, int InventoryHealing, int InventoryMana) PotionCounts(Game game)
+        => (game.Belt.NumOfHealthPotions(), game.Belt.NumOfManaPotions(),
+            game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion),
+            game.Inventory.Items.Count(i => i.Classification == ClassificationType.ManaPotion));
+
+    private static CouncilPotionAction Decide((int BeltHealing, int BeltMana, int InventoryHealing, int InventoryMana) counts)
+        => CouncilPotionCheck.Decide(counts.BeltHealing, counts.BeltMana, counts.InventoryHealing, counts.InventoryMana);
+
+    /// <summary>
+    /// Before the council: a belt without a healing or a mana potion is refilled from the inventory, and when that leaves
+    /// it still short the character restocks in town and comes back by its portal. False ends the run.
+    /// </summary>
+    private async Task<bool> EnsureBeltPotions(Client client)
+    {
+        var game = client.Game;
+        var before = PotionCounts(game);
+        var action = Decide(before);
+        if (action == CouncilPotionAction.Fight)
+        {
+            return true;
+        }
+
+        RefillBeltFromInventory(game, before.BeltHealing == 0, before.BeltMana == 0);
+        var refilled = PotionCounts(game);
+        var after = Decide(refilled);
+        var outcome = after == CouncilPotionAction.Fight ? "refilled from the inventory" : "going to town for potions";
+        Log.Information("{Character} reached the council with {BeltHealing} healing and {BeltMana} mana potions in the belt ({InventoryHealing} and {InventoryMana} in the inventory): {Outcome}, belt now {NowHealing} healing and {NowMana} mana",
+            game.Me.Name, before.BeltHealing, before.BeltMana, before.InventoryHealing, before.InventoryMana, outcome, refilled.BeltHealing, refilled.BeltMana);
+        D2NG.Core.Tracing.TraceEvents.Decision(game, "council potion check",
+            ("action", after == CouncilPotionAction.Fight ? "refill" : "town"),
+            ("beltHealing", before.BeltHealing), ("beltMana", before.BeltMana),
+            ("inventoryHealing", before.InventoryHealing), ("inventoryMana", before.InventoryMana),
+            ("nowHealing", refilled.BeltHealing), ("nowMana", refilled.BeltMana));
+        if (after == CouncilPotionAction.Fight)
+        {
+            return true;
+        }
+
+        var left = GameDeadline - (DateTime.Now - _runStarted);
+        if (left < TownTripLeast)
+        {
+            Log.Warning("{Character} has {Seconds:F0}s of the run left, too little for a town trip for potions; ending the run", game.Me.Name, left.TotalSeconds);
+            return false;
+        }
+
+        if (!await _townManagementService.TakeTownPortalToTown(client))
+        {
+            Log.Warning("{Character} could not take a portal to town for potions, ending the run", game.Me.Name);
+            return false;
+        }
+
+        // The portal lands in Kurast Docks: shopping there keeps the portal back to Travincal in reach, where the
+        // run's usual Act 4 options would take the waypoint away from it first.
+        var town = await _townManagementService.PerformTownTasks(client, TownOptions(client, Act.Act3));
+        if (town.ShouldMule)
+        {
+            Log.Information("{Character} needs to mule, ending the run", game.Me.Name);
+            NeedsMule = true;
+            return false;
+        }
+
+        if (!town.Succes)
+        {
+            Log.Warning("{Character} town tasks for potions failed, ending the run", game.Me.Name);
+            return false;
+        }
+
+        if (!await _townManagementService.TakeTownPortalToArea(client, game.Me, Area.Travincal))
+        {
+            Log.Warning("{Character} could not take the portal back to Travincal, ending the run", game.Me.Name);
+            return false;
+        }
+
+        var restocked = PotionCounts(game);
+        if (Decide(restocked) != CouncilPotionAction.Fight)
+        {
+            Log.Warning("{Character} still has {BeltHealing} healing and {BeltMana} mana potions in the belt after town, ending the run",
+                game.Me.Name, restocked.BeltHealing, restocked.BeltMana);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Moves inventory potions of the missing kinds into the belt. A belt column holds one kind and the server refuses a
+    /// potion with no empty or same-kind column left, so each is sent only while one has room, and the first unanswered
+    /// put ends it rather than waiting out the timeout again.
+    /// </summary>
+    private static void RefillBeltFromInventory(Game game, bool healing, bool mana)
+    {
+        var potions = game.Inventory.Items
+            .Where(i => (healing && i.Classification == ClassificationType.HealthPotion) || (mana && i.Classification == ClassificationType.ManaPotion))
+            .ToList();
+        foreach (var potion in potions)
+        {
+            if (!BeltTakes(game, potion))
+            {
+                continue;
+            }
+
+            if (!game.PutItemInBelt(potion))
+            {
+                return;
+            }
+        }
+    }
+
+    private static bool BeltTakes(Game game, Item potion)
+        => BeltPlacement.Column(InventoryHelpers.BeltPotions(game), (int)game.Belt.Height, InventoryHelpers.KindOf(potion)) != null;
 
     private async Task<bool> FinishInTown(Client client)
     {
@@ -277,10 +399,8 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
     {
         var startTime = DateTime.Now;
         var givenUp = new HashSet<uint>();
-        uint? trackedId = null;
-        var closest = double.MaxValue;
-        var lowestLife = double.MaxValue;
-        var lastProgress = DateTime.Now;
+        var progress = new KillProgress(NoProgressLimit);
+        (uint Pick, uint Skipped)? lastSkip = null;
         List<WorldObject> aliveMembers;
         do
         {
@@ -294,25 +414,29 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
             var nearest = aliveMembers.FirstOrDefault();
             if (nearest != null)
             {
-                var distance = client.Game.Me.Location.Distance(nearest.Location);
-                if (trackedId != nearest.Id || distance < closest - 1 || nearest.LifePercentage < lowestLife)
+                var me = client.Game.Me.Location;
+                var (pick, skipped) = await WallAwareWhirl.ChooseMySideFirst(aliveMembers, n => me.Distance(n.Location), n => _attackService.IsOnMySide(client, n));
+                if (skipped.Count > 0 && lastSkip != (pick.Id, skipped[0].Id))
                 {
-                    if (trackedId != nearest.Id)
-                    {
-                        closest = double.MaxValue;
-                    }
-
-                    trackedId = nearest.Id;
-                    closest = Math.Min(closest, distance);
-                    lowestLife = nearest.LifePercentage;
-                    lastProgress = DateTime.Now;
+                    Log.Information("{Character} skipping {Code} {Id} at {Location} across a wall for {PickCode} {PickId} at {PickLocation}, from {MyLocation}",
+                        client.Game.Me.Name, skipped[0].NPCCode, skipped[0].Id, skipped[0].Location, pick.NPCCode, pick.Id, pick.Location, me);
+                    D2NG.Core.Tracing.TraceEvents.Decision(client.Game, "council member across wall skipped",
+                        ("skipped", skipped[0].Id), ("skippedAt", skipped[0].Location), ("pick", pick.Id), ("pickAt", pick.Location), ("at", me));
                 }
-                else if (DateTime.Now - lastProgress > NoProgressLimit)
+
+                lastSkip = skipped.Count > 0 ? (pick.Id, skipped[0].Id) : null;
+                nearest = pick;
+            }
+
+            if (nearest != null)
+            {
+                var distance = client.Game.Me.Location.Distance(nearest.Location);
+                if (progress.Stalled(nearest.Id, distance, nearest.LifePercentage, DateTime.Now))
                 {
                     Log.Warning("{Character} got no closer to {Code} {Id} at {Location} and did not hurt it in {Seconds:F0}s, {Distance:F0} away at {MyLocation}, its life {Life:F0}%, state {State}; leaving it",
                         client.Game.Me.Name, nearest.NPCCode, nearest.Id, nearest.Location, NoProgressLimit.TotalSeconds, distance, client.Game.Me.Location, nearest.LifePercentage, nearest.State);
                     givenUp.Add(nearest.Id);
-                    trackedId = null;
+                    progress.GaveUp(DateTime.Now);
                     continue;
                 }
 
@@ -346,7 +470,7 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
                     }
                 }
 
-                await _attackService.AssistPlayer(client, client.Game.Me);
+                await _attackService.AssistPlayer(client, client.Game.Me, wallAwareWhirl: true, targetId: nearest.Id);
             }
 
             var pass = DateTime.Now - passStarted;
@@ -362,20 +486,23 @@ public class TravincalBot : SingleClientBotBase, IBotInstance
     /// <summary>Mana Burn council packs drained the belt in a fight and ended the game; these ride in the inventory.</summary>
     private const int ManaSpares = 4;
 
-    private TownManagementOptions TownOptions(Client client) => new(_accountConfig, Act.Act4)
+    private TownManagementOptions TownOptions(Client client, Act act = Act.Act4) => new(_accountConfig, act)
     {
         IdentifyWithTome = _travConfig.IdentifyWithTome,
         ManaPotionsToBuy = Math.Max(0, _accountConfig.ManaPotionTarget(client.Game.Belt.Height) + ManaSpares - InventoryHelpers.GetTotalManaPotions(client.Game)),
     };
 
-    private static readonly TimeSpan NoProgressLimit = TimeSpan.FromSeconds(15);
+    public static readonly TimeSpan NoProgressLimit = TimeSpan.FromSeconds(15);
 
     private static readonly TimeSpan MinimumPass = TimeSpan.FromMilliseconds(100);
 
+    /// <summary>The council members the run kills: CouncilMember3 is not among them.</summary>
+    public static readonly IReadOnlyList<NPCCode> CouncilCodes = [NPCCode.CouncilMember1, NPCCode.CouncilMember2];
+
     private static List<WorldObject> GetCouncilMembers(Game game)
     {
-        var councilMembers = game.GetNPCsByCode(NPCCode.CouncilMember1);
-        councilMembers.AddRange(game.GetNPCsByCode(NPCCode.CouncilMember2));
+        var councilMembers = game.GetNPCsByCode(CouncilCodes[0]);
+        councilMembers.AddRange(game.GetNPCsByCode(CouncilCodes[1]));
         return councilMembers;
     }
 

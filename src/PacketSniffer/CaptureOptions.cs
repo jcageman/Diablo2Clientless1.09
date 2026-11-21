@@ -81,6 +81,12 @@ public sealed class CaptureOptions
     /// </summary>
     public string DataDirectory { get; private set; }
 
+    /// <summary>
+    /// Root folder for trace files in the bot's format (source sniffer), written beside the text log.
+    /// Off unless given. Give it a folder of its own rather than a bot's trace root.
+    /// </summary>
+    public string TraceDirectory { get; private set; }
+
     public bool LogIncoming { get; private set; } = true;
 
     public bool LogOutgoing { get; private set; } = true;
@@ -135,6 +141,9 @@ public sealed class CaptureOptions
                     break;
                 case "datadir":
                     options.DataDirectory = value;
+                    break;
+                case "tracedir":
+                    options.TraceDirectory = value;
                     break;
                 case "raw":
                     options.LogRawPayloads = ParseBool(value, options.LogRawPayloads);
@@ -218,6 +227,7 @@ public sealed class CaptureOptions
         var direction = LogIncoming && LogOutgoing ? "both" : LogIncoming ? "in" : "out";
         return $"device={DeviceIndex?.ToString() ?? "prompt"} d2gsPort={D2gsPort} protocols={protocols} " +
             $"direction={direction} raw={LogRawPayloads} dataDir={DataDirectory ?? "default"}" +
+            (TraceDirectory != null ? $" traceDir={TraceDirectory}" : "") +
             $"{DescribeSet("include in", _includeIncoming, true)}" +
             $"{DescribeSet("include out", _includeOutgoing, false)}" +
             $"{DescribeSet("exclude in", _excludeIncoming, true)}" +

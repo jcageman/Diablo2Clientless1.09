@@ -34,6 +34,28 @@ public class PathingService : IPathingService
         return GetPath(mapId, difficulty, area, map, movementMode, fromLocation, toLocation);
     }
 
+    public async Task<List<Point>> GetWalkingPathAround(uint mapId, Difficulty difficulty, Area area, Point fromLocation, Point toLocation,
+        IReadOnlyCollection<Point> blocked)
+    {
+        var map = await _mapApiService.GetArea(mapId, difficulty, area);
+        if (map == null || !map.TryMapToPointInMap(fromLocation, out var fromPosition) || !map.TryMapToPointInMap(toLocation, out var toPosition))
+        {
+            return [];
+        }
+
+        var grid = map.MapToGrid();
+        foreach (var point in blocked)
+        {
+            if (point != fromLocation && point != toLocation && map.TryMapToPointInMap(point, out var cell)
+                && cell.X < grid.Columns && cell.Y < grid.Rows)
+            {
+                grid.DisconnectNode(new GridPosition(cell.X, cell.Y));
+            }
+        }
+
+        return WalkingPath(map, grid, fromPosition, toPosition, toLocation);
+    }
+
     /// <summary>
     /// Path into a neighbouring area. Uses the level exit when the map data has one and otherwise paths
     /// to the shared boundary and steps over it in whatever movement mode the caller asked for, which is the only way across the many level borders the
@@ -346,18 +368,19 @@ public class PathingService : IPathingService
                 cacheEntry.SlidingExpiration = TimeSpan.FromMinutes(2);
                 return map.MapToGrid();
             });
-            var pathFinder = new PathFinder();
-            var fromGridPosition = new GridPosition(fromPosition.X, fromPosition.Y);
-            var toGridPosition = new GridPosition(toPosition.X, toPosition.Y);
-            var path = pathFinder.FindPath(fromGridPosition, toGridPosition, grid);
-            var endPosition = path.Edges.Count > 0 ? path.Edges[^1]?.End.Position : null;
-            if (endPosition.HasValue && map.MapToPoint(endPosition.Value) == toLocation)
-            {
-                return path.Edges.Where((p, i) => i % 3 == 0 || i == path.Edges.Count - 1).Select(e => map.MapToPoint(e.End.Position)).ToList();
-            }
+            return WalkingPath(map, grid, fromPosition, toPosition, toLocation);
         }
 
         return [];
+    }
+
+    private static List<Point> WalkingPath(AreaMap map, Grid grid, Point fromPosition, Point toPosition, Point toLocation)
+    {
+        var path = new PathFinder().FindPath(new GridPosition(fromPosition.X, fromPosition.Y), new GridPosition(toPosition.X, toPosition.Y), grid);
+        var endPosition = path.Edges.Count > 0 ? path.Edges[^1]?.End.Position : null;
+        return endPosition.HasValue && map.MapToPoint(endPosition.Value) == toLocation
+            ? path.Edges.Where((p, i) => i % 3 == 0 || i == path.Edges.Count - 1).Select(e => map.MapToPoint(e.End.Position)).ToList()
+            : [];
     }
 
     public async Task<Area> ResolveArea(uint mapId, Difficulty difficulty, Area reported, Act act, Point location)

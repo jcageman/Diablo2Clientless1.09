@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>TraceTool</RootNamespace>
+    <AssemblyName>Trace</AssemblyName>
+    <!-- A query runs for a second or two: profiling the code it compiles costs more than the faster code it would bring. -->
+    <TieredPGO>false</TieredPGO>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\D2NG.Core\D2NG.Core.csproj" />
+    <ProjectReference Include="..\..\src\D2NG.Trace\D2NG.Trace.csproj" />
+  </ItemGroup>
+
+</Project>

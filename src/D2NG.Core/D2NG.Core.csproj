@@ -11,13 +11,37 @@
   <ItemGroup>
     <ProjectReference Include="..\MpqLib\MpqLib.csproj" />
   </ItemGroup>
-  
+
+  <!--
+    BuildIdentity reads the informational version, "1.0.0+<sha>": a checkout with uncommitted changes to tracked files gets "+<sha>-dirty",
+    so a trace never names a commit its code was not. One git call per build of this project; without git, or outside a
+    repository, the version stays as the SDK made it and the build goes on.
+  -->
+  <Target Name="AddDirtyMarker" BeforeTargets="AddSourceRevisionToInformationalVersion" Condition="'$(SourceRevisionId)' != '' and !$(SourceRevisionId.EndsWith('-dirty'))">
+    <Exec Command="git status --porcelain --untracked-files=no" WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true" IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true" ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_GitStatusLine" />
+      <Output TaskParameter="ExitCode" PropertyName="_GitStatusExitCode" />
+    </Exec>
+    <PropertyGroup>
+      <SourceRevisionId Condition="'$(_GitStatusExitCode)' == '0' and '@(_GitStatusLine)' != ''">$(SourceRevisionId)-dirty</SourceRevisionId>
+    </PropertyGroup>
+  </Target>
+
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>D2NG.Core.Tests</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>PacketSniffer</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>D2NG.Trace</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>D2NG.Trace.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ConsoleBot.Tests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 

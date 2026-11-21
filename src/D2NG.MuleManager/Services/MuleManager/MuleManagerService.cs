@@ -99,7 +99,7 @@ public class MuleManagerService : IMuleManagerService
 
             await Task.Delay(TimeSpan.FromSeconds(0.5));
 
-            await _muleRepository.UpdateCharacter(account.Name, character.Name, MuleCharacterSnapshot.Take(client.Game, i => Pickit.Pickit.CanTouchInventoryItem(client.Game, i)));
+            await _muleRepository.UpdateCharacter(account.Name, character.Name, MuleCharacterSnapshot.Take(client.Game, i => Pickit.Pickit.CanTouchMuleItem(client.Game, i)));
             if(client.Game.IsInGame())
             {
                 await client.Game.LeaveGame();

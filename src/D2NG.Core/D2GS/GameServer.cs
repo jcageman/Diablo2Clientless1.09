@@ -3,7 +3,9 @@ using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Outgoing;
 using D2NG.Core.Extensions;
 using D2NG.Core.MCP;
+using D2NG.Core.Tracing;
 using Serilog;
+using Serilog.Events;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -21,10 +23,27 @@ internal class GameServer : IDisposable
     private bool InGame;
 
     private static int instanceCounter;
-    private readonly int InstanceId;
+    internal int InstanceId { get; }
 
     private GameServerConnection Connection { get; }
 
+    private TraceChannel _trace;
+
+    /// <summary>
+    /// Keeps client actions, received packets and digests in the trace in the order they touched the state: while
+    /// tracing, a received packet is recorded and its core handlers run under it, so a client action from a bot thread
+    /// never lands between a packet's record and the state it changes. Only core handlers run under it: they change
+    /// <see cref="GameData"/> and nothing else, never block, wait, sleep or send, and take no lock a bot thread holds
+    /// while it applies a client action. Everything else - bots' handlers, sends, waits - runs after it is released.
+    /// </summary>
+    private readonly Lock _traceOrder = new();
+
+    internal Func<TraceDigest> DigestSource { get; set; }
+
+    /// <summary>Handlers that build the game state the replay rebuilds; run first, and under <see cref="_traceOrder"/> while tracing.</summary>
+    private readonly ConcurrentDictionary<InComingPacket, Action<D2gsPacket>> _coreHandlers = new();
+
+    /// <summary>Every other handler - bots', and Game's own that send, wait or call out - run after the core ones with no lock held.</summary>
     protected ConcurrentDictionary<InComingPacket, Action<D2gsPacket>> PacketReceivedEventHandlers { get; } = new ConcurrentDictionary<InComingPacket, Action<D2gsPacket>>();
 
     protected ConcurrentDictionary<OutGoingPacket, Action<D2gsPacket>> PacketSentEventHandlers { get; } = new ConcurrentDictionary<OutGoingPacket, Action<D2gsPacket>>();
@@ -48,6 +67,22 @@ internal class GameServer : IDisposable
     private static readonly TimeSpan ReportedSilence = TimeSpan.FromSeconds(8);
 
     private DateTime _lastReceived = DateTime.MinValue;
+
+    private static readonly bool[] DefinedIncoming = Defined<InComingPacket>();
+
+    private static readonly bool[] DefinedOutgoing = Defined<OutGoingPacket>();
+
+    /// <summary>Enum.IsDefined for every byte, without boxing the byte on each packet.</summary>
+    private static bool[] Defined<T>() where T : struct, Enum
+    {
+        var defined = new bool[256];
+        for (var i = 0; i < defined.Length; i++)
+        {
+            defined[i] = Enum.IsDefined(typeof(T), (byte)i);
+        }
+
+        return defined;
+    }
 
     private void Remember(bool sent, byte[] raw)
     {
@@ -99,33 +134,15 @@ internal class GameServer : IDisposable
         InstanceId = ++instanceCounter;
         Connection = new GameServerConnection(InstanceId);
 
-        Connection.PacketReceived += (obj, eventArgs) =>
-        {
-            Remember(false, eventArgs.Raw);
-            if (Enum.IsDefined(typeof(InComingPacket), eventArgs.Type))
-            {
-                var incomingPacketType = (InComingPacket)eventArgs.Type;
-                if (incomingPacketType == InComingPacket.GameFlags)
-                {
-                    InGame = true;
-                }
-                Log.Debug($"Instance {InstanceId} Received D2GS packet of type: {incomingPacketType} with data {eventArgs.Raw.ToPrintString()}");
-                PacketReceivedEventHandlers.GetValueOrDefault(incomingPacketType, p => Log.Debug($"Received unhandled D2GS packet of type: {incomingPacketType}"))?.Invoke(eventArgs);
-                SetPacketEventType(incomingPacketType);
-            }
-            else
-            {
-                Log.Warning($"Instance {InstanceId} Received unknown D2GS packet of type: 0x{eventArgs.Type,2:X2} with data {eventArgs.Raw.ToPrintString()}");
-            }
-        };
+        Connection.PacketReceived += (obj, eventArgs) => OnPacketReceived(eventArgs);
 
         Connection.PacketSent += (obj, eventArgs) =>
         {
+            _trace?.Write(TraceRecordKind.D2gsSent, eventArgs.Raw);
             Remember(true, eventArgs.Raw);
-            if (Enum.IsDefined(typeof(OutGoingPacket), eventArgs.Type))
+            if (DefinedOutgoing[eventArgs.Type])
             {
                 var outgoingPacketType = (OutGoingPacket)eventArgs.Type;
-                Log.Debug($"Instance {InstanceId} send D2GS packet of type: {outgoingPacketType} with data {eventArgs.Raw.ToPrintString()}");
                 PacketSentEventHandlers.GetValueOrDefault(outgoingPacketType, null)?.Invoke(eventArgs);
             }
             else
@@ -135,8 +152,135 @@ internal class GameServer : IDisposable
         };
     }
 
+    internal void OnPacketReceived(D2gsPacket packet)
+    {
+        var trace = _trace;
+        Remember(false, packet.Raw);
+        if (!DefinedIncoming[packet.Type])
+        {
+            trace?.Write(TraceRecordKind.D2gsReceived, packet.Raw);
+            Log.Warning($"Instance {InstanceId} Received unknown D2GS packet of type: 0x{packet.Type,2:X2} with data {packet.Raw.ToPrintString()}");
+        }
+        else
+        {
+            var incomingPacketType = (InComingPacket)packet.Type;
+            if (incomingPacketType == InComingPacket.GameFlags)
+            {
+                InGame = true;
+            }
+
+            _coreHandlers.TryGetValue(incomingPacketType, out var core);
+            if (trace == null)
+            {
+                core?.Invoke(packet);
+            }
+            else
+            {
+                lock (_traceOrder)
+                {
+                    trace.Write(TraceRecordKind.D2gsReceived, packet.Raw);
+                    core?.Invoke(packet);
+                }
+            }
+
+            if (incomingPacketType == InComingPacket.GameFlags)
+            {
+                _leftGame = false;
+            }
+
+            if (PacketReceivedEventHandlers.TryGetValue(incomingPacketType, out var external))
+            {
+                external?.Invoke(packet);
+            }
+            else if (core == null && Log.IsEnabled(LogEventLevel.Debug))
+            {
+                Log.Debug($"Received unhandled D2GS packet of type: {incomingPacketType}");
+            }
+
+            SetPacketEventType(incomingPacketType);
+        }
+
+        if (trace != null && trace.DigestDue())
+        {
+            WriteDigest(trace);
+        }
+    }
+
+    private void WriteDigest(TraceChannel trace)
+    {
+        try
+        {
+            lock (_traceOrder)
+            {
+                trace.WriteDigest(DigestSource?.Invoke());
+            }
+        }
+        catch (Exception e)
+        {
+            trace.PostponeDigest();
+            Log.Debug(e, "Instance {InstanceId} could not take a trace digest", InstanceId);
+        }
+    }
+
+    internal void ApplyClientAction(GameData data, ClientAction action, uint argument)
+    {
+        lock (_traceOrder)
+        {
+            _trace?.WriteClientAction(action, argument);
+            ClientActions.Apply(data, action, argument);
+        }
+    }
+
+    /// <summary>Whether a packet id is one the bot knows, and whether anything handles it.</summary>
+    internal (bool Known, bool Handled) Handling(byte type, bool sent)
+        => sent
+            ? (DefinedOutgoing[type], DefinedOutgoing[type] && PacketSentEventHandlers.ContainsKey((OutGoingPacket)type))
+            : (DefinedIncoming[type], DefinedIncoming[type] && (_coreHandlers.ContainsKey((InComingPacket)type) || PacketReceivedEventHandlers.ContainsKey((InComingPacket)type)));
+
+    /// <summary>Handlers only: the live path's logging and wait events are left out.</summary>
+    internal void Replay(D2gsPacket packet, bool sent)
+    {
+        if (sent)
+        {
+            if (DefinedOutgoing[packet.Type])
+            {
+                PacketSentEventHandlers.GetValueOrDefault((OutGoingPacket)packet.Type, null)?.Invoke(packet);
+            }
+        }
+        else if (DefinedIncoming[packet.Type])
+        {
+            _coreHandlers.GetValueOrDefault((InComingPacket)packet.Type, null)?.Invoke(packet);
+            PacketReceivedEventHandlers.GetValueOrDefault((InComingPacket)packet.Type, null)?.Invoke(packet);
+        }
+    }
+
+    /// <summary>The trace ends with the connection, when the listener stops.</summary>
+    /// <param name="serverGame">The game server's own id for the game, which tells a rejoin from a new game reusing the name.</param>
+    internal void TraceGame(string gameName, string clientLabel, string serverGame = null)
+    {
+        _trace?.Close();
+        TraceIdentity = (clientLabel ?? $"instance{InstanceId}", gameName);
+        _trace = TraceRecorder.Current?.OpenGame(gameName, TraceIdentity.Client, serverGame);
+    }
+
+    /// <summary>The client and game the last trace was opened for, kept after the game ends for the events reported on it.</summary>
+    internal (string Client, string Game) TraceIdentity { get; private set; }
+
+    internal TraceChannel Trace { get => _trace; set => _trace = value; }
+
+    internal void EndTrace() => Interlocked.Exchange(ref _trace, null)?.Close();
+
+    /// <summary>A handler run after the core ones, with no lock held: bots', and anything that sends, waits, sleeps or calls out.</summary>
     internal void OnReceivedPacketEvent(InComingPacket type, Action<D2gsPacket> handler)
         => PacketReceivedEventHandlers.AddOrUpdate(type, handler, (t, h) => h += handler);
+
+    /// <summary>
+    /// A handler that only changes <see cref="GameData"/>, run before every other and, while tracing, under the lock that
+    /// orders the trace: it must not block, wait, sleep, send, call out to a bot, or take a lock a bot thread can hold
+    /// while it applies a client action.
+    /// </summary>
+    internal void OnCoreReceivedPacketEvent(InComingPacket type, Action<D2gsPacket> handler)
+        => _coreHandlers.AddOrUpdate(type, handler, (t, h) => h += handler);
 
     internal void OnSentPacketEvent(OutGoingPacket type, Action<D2gsPacket> handler)
         => PacketSentEventHandlers.AddOrUpdate(type, handler, (t, h) => h += handler);
@@ -153,12 +297,37 @@ internal class GameServer : IDisposable
         return Connection.Connected && InGame;
     }
 
+    private volatile bool _leftGame;
+
+    /// <summary>
+    /// The client left the game or lost its connection, and no game has started since. Unlike <see cref="IsInGame"/>
+    /// this is false in a replay, which has no connection.
+    /// </summary>
+    internal bool LeftGame => _leftGame;
+
+    internal void GameLeft() => _leftGame = true;
+
     public bool IsConnected()
     {
         return Connection.Connected;
     }
 
     private void Listen()
+    {
+        var trace = _trace;
+        try
+        {
+            ListenUntilClosed();
+        }
+        finally
+        {
+            GameLeft();
+            trace?.Close();
+            Interlocked.CompareExchange(ref _trace, null, trace);
+        }
+    }
+
+    private void ListenUntilClosed()
     {
         while (Connection.Connected)
         {
@@ -179,6 +348,7 @@ internal class GameServer : IDisposable
                 }
 
                 InGame = false;
+                GameLeft();
                 Connection.Terminate();
                 break;
             }
@@ -199,6 +369,7 @@ internal class GameServer : IDisposable
     {
         var leaveGameConfirmed = GetResetEventOfType(InComingPacket.LeaveGameConfirmed);
         InGame = false;
+        GameLeft();
         Connection.WritePacket(OutGoingPacket.LeaveGame);
         await leaveGameConfirmed.AsTask(TimeSpan.FromSeconds(10));
         Disconnect();

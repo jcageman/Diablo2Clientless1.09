@@ -9,6 +9,7 @@ using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Players;
+using D2NG.Core.Tracing;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.Pathing;
 using Microsoft.Extensions.Logging;
@@ -111,18 +112,32 @@ public class TownManagementService : ITownManagementService
         // Only after a click that did not take: in town the character's position is already known,
         // and the blocking update request cost every trip half a second before it started.
         var clicked = false;
+        // Set when the server's answer about the position is already in for this try, so it is not asked again.
+        var positionKnown = false;
+        var walkedOntoPortal = false;
+        var ignoredClicks = 0;
         // Where a trip's time goes before the click: followers reached the star 5-6s after the taxi's
         // portal opened, and the click itself is only the last 0.1s of it.
         var tripClock = Stopwatch.StartNew();
         double? startDistance = null;
         if (!await GeneralHelpers.TryWithTimeout(async (retryCount) =>
         {
-            if (clicked)
+            if (clicked && !positionKnown)
             {
-                client.Game.RequestUpdate(client.Game.Me.Id);
-                await Task.Delay(100);
+                if (walkedOntoPortal)
+                {
+                    // The walk is what the server refused before: the click goes from where it says.
+                    await client.Game.RequestUpdateAndWaitAsync(client.Game.Me.Id, UpdateAnswerTimeout);
+                }
+                else
+                {
+                    client.Game.RequestUpdate(client.Game.Me.Id);
+                    await Task.Delay(100);
+                }
             }
 
+            positionKnown = false;
+            walkedOntoPortal = false;
             if (await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location))
             {
                 return true;
@@ -156,6 +171,7 @@ public class TownManagementService : ITownManagementService
             if (distance > 5)
             {
                 await client.Game.MoveToAsync(portal);
+                walkedOntoPortal = true;
                 return false;
             }
 
@@ -175,21 +191,49 @@ public class TownManagementService : ITownManagementService
             // the click; asking for an update first noticed it only after 0.65s, every trip, and the
             // followers stood at the seal for it. The update request stays as the fallback.
             var clickClock = Stopwatch.StartNew();
-            var arrived = await GeneralHelpers.TryWithTimeout(async _ =>
+            bool arrived;
+            if (ignoredClicks < QuickReclicks)
             {
-                await Task.Delay(20);
-                return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location);
-            }, TimeSpan.FromSeconds(1.5))
-                || await GeneralHelpers.TryWithTimeout(async _ =>
+                // Every click the server took landed within 0.55s, 120 of them in one batch. The 5 it ignored went out
+                // after a step onto the portal the server never made: it kept the character where it stood, 6 from
+                // the portal, while two or three party members ran onto the same cell. Nothing came back, and the
+                // re-click 5.6-7.2s later took. The answer to the request below says where to click from.
+                arrived = await GeneralHelpers.TryWithTimeout(async _ =>
                 {
-                    await Task.Delay(250);
-                    client.Game.RequestUpdate(client.Game.Me.Id);
+                    await Task.Delay(20);
                     return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location);
-                }, TimeSpan.FromSeconds(3));
+                }, IgnoredClickWait);
+                if (!arrived)
+                {
+                    positionKnown = await client.Game.RequestUpdateAndWaitAsync(client.Game.Me.Id, UpdateAnswerTimeout);
+                    arrived = await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location);
+                }
+            }
+            else
+            {
+                arrived = await GeneralHelpers.TryWithTimeout(async _ =>
+                {
+                    await Task.Delay(20);
+                    return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location);
+                }, TimeSpan.FromSeconds(1.5))
+                    || await GeneralHelpers.TryWithTimeout(async _ =>
+                    {
+                        await Task.Delay(250);
+                        client.Game.RequestUpdate(client.Game.Me.Id);
+                        return await _pathingService.IsNavigatablePointInArea(client.Game.MapId, Difficulty.Normal, area, client.Game.Me.Location);
+                    }, TimeSpan.FromSeconds(3));
+            }
+
             if (arrived)
             {
                 _logger.LogInformation("Client {ClientName} through the portal to {Area}: noticed after {Noticed:F2}s",
                     client.Game.Me.Name, area, clickClock.Elapsed.TotalSeconds);
+            }
+            else
+            {
+                ignoredClicks++;
+                _logger.LogInformation("Client {ClientName} click {Count} on the portal to {Area} went unanswered for {Seconds:F2}s, at {Location}, {Distance:F1} from it",
+                    client.Game.Me.Name, ignoredClicks, area, clickClock.Elapsed.TotalSeconds, client.Game.Me.Location, client.Game.Me.Location.Distance(portal.Location));
             }
 
             return arrived;
@@ -236,6 +280,18 @@ public class TownManagementService : ITownManagementService
 
         return true;
     }
+
+    /// <summary>How long a portal click goes unanswered before it counts as ignored and is made again.</summary>
+    private static readonly TimeSpan IgnoredClickWait = TimeSpan.FromSeconds(0.5);
+
+    /// <summary>
+    /// Ignored clicks made again at <see cref="IgnoredClickWait"/>; past these a trip waits 4.5s per click as it always
+    /// has, so a portal that never takes is not clicked twice a second for the whole trip.
+    /// </summary>
+    private const int QuickReclicks = 3;
+
+    /// <summary>The longest wait for the server's answer to a position request, the fixed sleep the old request took.</summary>
+    private static readonly TimeSpan UpdateAnswerTimeout = TimeSpan.FromMilliseconds(400);
 
     // Game.Area lags every transition, so trust it only when the position agrees with it; otherwise the character is in its town.
     private async Task<Area> ResolveCurrentArea(Client client)
@@ -457,7 +513,7 @@ public class TownManagementService : ITownManagementService
 
         var townArea = WayPointHelpers.MapTownArea(game.Act);
 
-        if (!await IdentifyItems(game, movementMode, options))
+        if (options.Runs(TownStep.Identify) && !await IdentifyItems(game, movementMode, options))
         {
             return result;
         }
@@ -476,12 +532,12 @@ public class TownManagementService : ITownManagementService
             return result;
         }
 
-        if (options.AccountConfig.ResurrectMerc && !await ResurrectMerc(game, movementMode))
+        if (options.AccountConfig.ResurrectMerc && options.Runs(TownStep.ResurrectMerc) && !await ResurrectMerc(game, movementMode))
         {
             return result;
         }
 
-        if (InventoryHelpers.ShouldStashItems(client.Game))
+        if (options.Runs(TownStep.Stash) && InventoryHelpers.ShouldStashItems(client.Game))
         {
             var pathStash = await _pathingService.GetPathToObject(game.MapId, Difficulty.Normal, townArea, game.Me.Location, EntityCode.Stash, movementMode);
             if (!await MovementHelpers.TakePathOfLocations(game, pathStash, movementMode))
@@ -514,9 +570,11 @@ public class TownManagementService : ITownManagementService
             }
         }
 
-        if (!await GambleItems(client, movementMode))
+        // A gamble that cannot reach its merchant waits for the next visit rather than failing this one: the gold keeps,
+        // and failing the town tasks over it made a bot that retries them until a budget runs out give its game up.
+        if (options.Runs(TownStep.Gamble) && !await GambleItems(client, movementMode))
         {
-            return result;
+            _logger.LogWarning("Client {ClientName} could not reach the gamble merchant, gambling on a later visit", game.Me.Name);
         }
 
         result.Succes = true;
@@ -620,6 +678,7 @@ public class TownManagementService : ITownManagementService
         {
             HealthPotionsToBuy = 0,
             ManaPotionsToBuy = 0,
+            TendBelt = false,
             IdentifyWithTome = game.Inventory.Items.Any(i => i.Name == ItemName.TomeofIdentify)
         };
         var movementMode = GetMovementMode(game);
@@ -642,6 +701,7 @@ public class TownManagementService : ITownManagementService
         {
             HealthPotionsToBuy = 0,
             ManaPotionsToBuy = 0,
+            TendBelt = false,
             IdentifyWithTome = game.Inventory.Items.Any(i => i.Name == ItemName.TomeofIdentify)
         };
         var start = game.Me.Location;
@@ -679,7 +739,7 @@ public class TownManagementService : ITownManagementService
 
     private async Task<bool> RefreshAndSellItems(Game game, MovementMode movementMode, TownManagementOptions options, bool sellAny = false)
     {
-        var sellItemCount = game.Inventory.Items.Count(i => D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i) && !D2NG.Pickit.Pickit.ShouldKeepItem(game, i)) + game.Cube.Items.Count(i => !D2NG.Pickit.Pickit.ShouldKeepItem(game, i));
+        var sellItemCount = InventoryHelpers.ItemsToSellCount(game);
         var surplusRejuvenations = options.RejuvenationsToKeep is int keep
             && game.Inventory.Items.Count(i => i.Classification == ClassificationType.RejuvenationPotion) > keep;
         if (sellAny && sellItemCount == 0)
@@ -687,14 +747,47 @@ public class TownManagementService : ITownManagementService
             return true;
         }
 
-        if (sellAny
-            || NPCHelpers.ShouldRefreshCharacterAtNPC(game, options)
-            || surplusRejuvenations
-            || !options.IdentifyWithTome && game.Inventory.Items.Any(i => i.Name == ItemName.TomeofIdentify)
-            || sellItemCount > 5
-            || options.ItemsToBuy?.Count > 0
-            || options.HealthPotionsToBuy > 0
-            || options.ManaPotionsToBuy > 0)
+        var reasons = new List<string>();
+        if (sellAny)
+        {
+            reasons.Add("selling");
+        }
+
+        reasons.AddRange(NPCHelpers.RefreshReasons(game, options));
+        if (surplusRejuvenations)
+        {
+            reasons.Add("surplus rejuvenations");
+        }
+
+        if (!options.IdentifyWithTome && game.Inventory.Items.Any(i => i.Name == ItemName.TomeofIdentify))
+        {
+            reasons.Add("identify tome");
+        }
+
+        if (options.Runs(TownStep.SellRun) && sellItemCount > 5)
+        {
+            reasons.Add("items to sell");
+        }
+
+        if (options.ItemsToBuy?.Count > 0)
+        {
+            reasons.Add("items to buy");
+        }
+
+        if (options.ManaPotionsToBuy > 0)
+        {
+            reasons.Add("mana potions");
+        }
+
+        var visit = VendorVisit.Needed(reasons.Count > 0, options.HealthPotionsToBuy, options.HealthPotionsNotWorthAVisit);
+        TraceEvents.Decision(game, "vendor-visit",
+            ("visit", visit),
+            ("reasons", string.Join(",", reasons)),
+            ("healthPotionsToBuy", options.HealthPotionsToBuy),
+            ("notWorthAVisit", options.HealthPotionsNotWorthAVisit),
+            ("sellItems", sellItemCount),
+            ("beltHeight", game.Belt.Height));
+        if (visit)
         {
             var sellNpc = NPCHelpers.GetSellNPC(game.Act);
             _logger.LogDebug("Client {ClientName} moving to {SellNpc} for refresh and selling {SellCount} items", game.Me.Name, sellNpc, sellItemCount);
@@ -773,6 +866,11 @@ public class TownManagementService : ITownManagementService
                 _logger.LogWarning("Client {ClientName} {MovementMode} to {SellNpc} failed at {Location}", game.Me.Name, movementMode, sellNpc, game.Me.Location);
                 return false;
             }
+        }
+        else if (options.HealthPotionsToBuy > 0)
+        {
+            _logger.LogInformation("Client {ClientName} skips the vendor: {Count} healing potions short and nothing else to buy or sell there",
+                game.Me.Name, options.HealthPotionsToBuy);
         }
 
         return true;
@@ -854,24 +952,41 @@ public class TownManagementService : ITownManagementService
         return true;
     }
 
-    private async Task<bool> GambleItems(Client client, MovementMode movementMode)
+    /// <summary>Stash gold above which a character gambles it down.</summary>
+    public const long GambleAboveStashGold = 7_000_000;
+
+    /// <summary>A client of this process is gambling: about 80s that a party bot's members wait on.</summary>
+    public static bool AnyClientGambling => System.Threading.Volatile.Read(ref isAnyClientGambling) == 1;
+
+    public static bool GambleDue(Game game)
+        => game.Me.Attributes.TryGetValue(D2NG.Core.D2GS.Players.Attribute.GoldInStash, out var goldInStash)
+            && goldInStash > GambleAboveStashGold;
+
+    public Task<bool> GambleIfDue(Client client, Func<bool> until = null) => GambleItems(client, GetMovementMode(client.Game), until);
+
+    private async Task<bool> GambleItems(Client client, MovementMode movementMode, Func<bool> stop = null)
     {
-        bool shouldGamble = client.Game.Me.Attributes.TryGetValue(D2NG.Core.D2GS.Players.Attribute.GoldInStash, out var goldInStash)
-            && goldInStash > 7_000_000;
-        if (shouldGamble && System.Threading.Interlocked.Exchange(ref isAnyClientGambling, 1) == 0)
+        if (!GambleDue(client.Game) || System.Threading.Interlocked.Exchange(ref isAnyClientGambling, 1) != 0)
+        {
+            return true;
+        }
+
+        // Released however the gamble ends: one that failed on the way to the merchant kept it set, and nobody in
+        // the process gambled again.
+        try
         {
             var gambleNPC = NPCHelpers.GetGambleNPC(client.Game.Act);
             _logger.LogDebug("Client {ClientName} Gambling items at {GambleNpc}", client.Game.Me.Name, gambleNPC);
             List<Point> pathToGamble;
             if (gambleNPC == NPCCode.Anya)
             {
-                pathToGamble = await _pathingService.GetPathToLocation(client.Game, new Point(5108, 5114), MovementMode.Teleport); 
+                pathToGamble = await _pathingService.GetPathToLocation(client.Game, new Point(5108, 5114), MovementMode.Teleport);
             }
             else
             {
                 pathToGamble = await _pathingService.GetPathToNPC(client.Game, gambleNPC, movementMode);
             }
-            
+
             if (!await MovementHelpers.TakePathOfLocations(client.Game, pathToGamble, movementMode))
             {
                 _logger.LogDebug("Client {ClientName} {MovementMode} to {GambleNpc} failed at {Location}", client.Game.Me.Name, movementMode, gambleNPC, client.Game.Me.Location);
@@ -885,10 +1000,12 @@ public class TownManagementService : ITownManagementService
                 return false;
             }
 
-            NPCHelpers.GambleItems(client.Game, uniqueNPC);
+            NPCHelpers.GambleItems(client.Game, uniqueNPC, stop);
+            return true;
+        }
+        finally
+        {
             System.Threading.Interlocked.Exchange(ref isAnyClientGambling, 0);
         }
-
-        return true;
     }
 }

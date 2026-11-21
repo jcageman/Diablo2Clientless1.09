@@ -36,7 +36,8 @@ using System.Threading.Tasks;
 // putaway does the same, then puts an item left on the cursor into a free stash cell, else a free
 // inventory cell. It never drops: an item that fits nowhere stays on the cursor.
 //
-// drop throws away the magic, rare and crafted items a list names for this account: the classic-wipe.tsv
+// drop throws away the magic, rare and crafted items a list names for this account, and healing and mana
+// potions (never rejuvenation potions or other normal items): the classic-wipe.tsv
 // the mule cleanup writes (account, character, quality, item, type, eth, sockets, stats). An item is
 // dropped only when its name, quality, ethereal flag, sockets and every stat match a line, and each
 // line drops at most one item. The cube is not opened. Afterwards the character is recorded in the
@@ -358,7 +359,8 @@ static Dictionary<string, Dictionary<string, int>> ReadDropList(string path, str
     foreach (var line in File.ReadLines(path).Skip(1))
     {
         var c = line.Split('\t');
-        if (c.Length < 8 || !string.Equals(c[0], account, StringComparison.OrdinalIgnoreCase) || !droppable.Contains(c[2]))
+        if (c.Length < 8 || !string.Equals(c[0], account, StringComparison.OrdinalIgnoreCase)
+            || !(droppable.Contains(c[2]) || IsSparePotion(c[2], c[3])))
         {
             continue;
         }
@@ -375,6 +377,11 @@ static Dictionary<string, Dictionary<string, int>> ReadDropList(string path, str
 
     return byCharacter;
 }
+
+// Healing and mana potions a played character hoards in its bag, never rejuvenation potions and never
+// another normal item: runes and gems are normal too.
+static bool IsSparePotion(string quality, string name) =>
+    quality == "Normal" && (name.EndsWith("HealingPotion", StringComparison.Ordinal) || name.EndsWith("ManaPotion", StringComparison.Ordinal));
 
 static string Signature(string quality, string name, bool ethereal, string sockets, IEnumerable<string> stats) =>
     $"{quality}|{name}|{(ethereal ? "eth" : "")}|{sockets}|{string.Join(";", stats.OrderBy(s => s, StringComparer.Ordinal))}";
@@ -490,7 +497,7 @@ static async Task<bool> DropListed(string realm, string keyOwner, string gameFol
         game.ClickButton(ClickType.CloseStash);
         Console.WriteLine($"{character.Name}: dropped {dropped} of {droppable.Count}");
         await Task.Delay(TimeSpan.FromSeconds(1));
-        var snapshot = MuleCharacterSnapshot.Take(game, i => Pickit.CanTouchInventoryItem(game, i));
+        var snapshot = MuleCharacterSnapshot.Take(game, i => Pickit.CanTouchMuleItem(game, i));
         await repository.UpdateCharacter(account, character.Name, snapshot);
         Console.WriteLine($"{character.Name}: recorded {snapshot.Items.Count} items and {snapshot.FreeCells} free cells in the mule database");
         await game.LeaveGame();
@@ -536,7 +543,7 @@ static async Task<bool> Record(string realm, string keyOwner, string gameFolder,
 
         // Item packets keep arriving for a moment after joining.
         await Task.Delay(TimeSpan.FromSeconds(3));
-        var snapshot = MuleCharacterSnapshot.Take(client.Game, i => Pickit.CanTouchInventoryItem(client.Game, i));
+        var snapshot = MuleCharacterSnapshot.Take(client.Game, i => Pickit.CanTouchMuleItem(client.Game, i));
         await repository.UpdateCharacter(account, character.Name, snapshot);
         Console.WriteLine($"{character.Name}: recorded {snapshot.Items.Count} items and {snapshot.FreeCells} free cells");
         await client.Game.LeaveGame();

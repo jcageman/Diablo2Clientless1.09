@@ -11,6 +11,7 @@ using D2NG.Core.D2GS.Items;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
 using D2NG.Core.D2GS.Players;
+using D2NG.Core.Tracing;
 using D2NG.Navigation.Extensions;
 using D2NG.Navigation.Services.Pathing;
 using Microsoft.Extensions.Options;
@@ -281,6 +282,7 @@ public abstract class MultiClientBotBase : IBotInstance
             // Only the clients that can join at once hold the run back. The game server makes the rest
             // wait out its connection window, and the party waiting with them stood 17s in town a
             // game for a sixth character that made the clear 9s faster; they come in like a rejoin.
+            var partyPrepared = _partyPrepared = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var prepareTasks = new List<Task<bool>>();
             for (int i = 0; i < clients.Count; i++)
             {
@@ -288,6 +290,12 @@ public abstract class MultiClientBotBase : IBotInstance
             }
 
             var firstGroup = Math.Min(clients.Count, RealmConnectHelpers.ClientsPerConnectionWindow);
+            var partyClients = clients.Take(firstGroup).ToList();
+            var gameForSetUp = gameCount;
+            var setUp = new Lazy<Task<bool>>(() => SetUpParty(clients, firstGroup, gameForSetUp, firstFiller));
+            var earlyRuns = Enumerable.Range(0, firstGroup)
+                .Select(i => RunBeforePartyIfAllowed(clients[i], _multiClientConfig.Accounts[i], prepareTasks[i], partyClients, gameCount, partyPrepared.Task, setUp))
+                .ToList();
             try
             {
                 var townResults = await Task.WhenAll(prepareTasks.Take(firstGroup));
@@ -295,6 +303,7 @@ public abstract class MultiClientBotBase : IBotInstance
                 {
                     var failedAccounts = string.Join(",", townResults.Select((r, idx) => (clients[idx], r)).Where(i => !i.r).Select(c => c.Item1.LoggedInUserName()));
                     Log.Warning($"One or more accounts {failedAccounts} failed there join or prepare task");
+                    await GiveUpEarlyRuns(partyPrepared, earlyRuns);
                     await AwaitLateJoiners(prepareTasks.Skip(firstGroup));
                     gameCount++;
                     continue;
@@ -303,41 +312,29 @@ public abstract class MultiClientBotBase : IBotInstance
             catch (Exception e)
             {
                 Log.Error($"Failed one or more town tasks with exception {e}");
+                await GiveUpEarlyRuns(partyPrepared, earlyRuns);
                 await AwaitLateJoiners(prepareTasks.Skip(firstGroup));
                 continue;
             }
 
-            var firstGroupInGame = _multiClientConfig.Accounts.Take(firstGroup).Select(a => PlayersInGame[a.Character.ToLower()]).ToArray();
-            if (!WaitHandle.WaitAll(firstGroupInGame, TimeSpan.FromSeconds(5)))
+            if (!await setUp.Value)
             {
                 Log.Information($"Not all players joined the game in time, retrying");
+                await GiveUpEarlyRuns(partyPrepared, earlyRuns);
                 await AwaitLateJoiners(prepareTasks.Skip(firstGroup));
                 gameCount++;
                 continue;
             }
 
-            await Task.WhenAny(PostInitializeAllJoined(clients), Task.Delay(TimeSpan.FromSeconds(2)));
-
-            foreach (var player in firstFiller.Game.Players)
-            {
-                if (firstFiller.Game.Me.Id == player.Id)
-                {
-                    continue;
-                }
-
-                firstFiller.Game.InvitePlayer(player);
-            }
-
-            _currentGameCount = gameCount;
-            _partyLeader = firstFiller;
+            partyPrepared.TrySetResult(true);
             try
             {
                 var clientTasks = new List<Task<bool>>();
                 for (int i = 0; i < clients.Count; i++)
                 {
                     clientTasks.Add(i < firstGroup
-                        ? PerformRun(clients[i], _multiClientConfig.Accounts[i])
-                        : PerformLateRun(clients[i], _multiClientConfig.Accounts[i], prepareTasks[i]));
+                        ? await earlyRuns[i] ?? Traced(clients[i], "run", PerformRun(clients[i], _multiClientConfig.Accounts[i]))
+                        : Traced(clients[i], "run", PerformLateRun(clients[i], _multiClientConfig.Accounts[i], prepareTasks[i])));
                 }
 
                 var clientResults = await Task.WhenAll(clientTasks);
@@ -362,6 +359,107 @@ public abstract class MultiClientBotBase : IBotInstance
         }
     }
 
+    /// <summary>
+    /// Asked of a first-group client whose prepare succeeded: completes true once it may start its run without waiting
+    /// for the rest of the group to prepare, false to start with the group. <paramref name="partyPrepared"/> is
+    /// <see cref="PartyPrepared"/>. A run started early must wait on that before it changes anything the others'
+    /// prepare still uses. By default no client starts early.
+    /// </summary>
+    protected virtual Task<bool> StartsRunBeforeParty(Client client, IReadOnlyList<Client> party, Task<bool> partyPrepared)
+        => Task.FromResult(false);
+
+    /// <summary>
+    /// True once every client of the first group has prepared and the party is set up, false once one failed and the
+    /// game is given up. Already true when a run starts with the group.
+    /// </summary>
+    protected Task<bool> PartyPrepared => _partyPrepared.Task;
+
+    private TaskCompletionSource<bool> _partyPrepared = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>The game count each client last started its prepare in, so a party is set up only once all of it has joined.</summary>
+    private readonly ConcurrentDictionary<Client, int> _preparingIn = new();
+
+    /// <summary>What every run needs before it starts: the whole first group in the game, the bot's set-up and the invites.</summary>
+    private async Task<bool> SetUpParty(List<Client> clients, int firstGroup, int gameCount, Client firstFiller)
+    {
+        var firstGroupInGame = _multiClientConfig.Accounts.Take(firstGroup).Select(a => PlayersInGame[a.Character.ToLower()]).ToArray();
+        if (!WaitHandle.WaitAll(firstGroupInGame, TimeSpan.FromSeconds(5)))
+        {
+            return false;
+        }
+
+        await Task.WhenAny(PostInitializeAllJoined(clients), Task.Delay(TimeSpan.FromSeconds(2)));
+
+        foreach (var player in firstFiller.Game.Players)
+        {
+            if (firstFiller.Game.Me.Id == player.Id)
+            {
+                continue;
+            }
+
+            firstFiller.Game.InvitePlayer(player);
+        }
+
+        _currentGameCount = gameCount;
+        _partyLeader = firstFiller;
+        return true;
+    }
+
+    /// <summary>
+    /// The run of a client <see cref="StartsRunBeforeParty"/> lets go early, started once the party can be set up; null
+    /// for every other client, which starts with the group.
+    /// </summary>
+    private async Task<Task<bool>> RunBeforePartyIfAllowed(Client client, AccountConfig account, Task<bool> prepare,
+        List<Client> party, int gameCount, Task<bool> partyPrepared, Lazy<Task<bool>> setUp)
+    {
+        try
+        {
+            // A prepare that failed or threw is the group's wait to report.
+            if (!await prepare || !await StartsRunBeforeParty(client, party, partyPrepared))
+            {
+                return null;
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Warning("{Client} could not be started before the party: {Error}", client.LoggedInUserName(), e.Message);
+            return null;
+        }
+
+        // The set-up reads every member's character, so all of them have to be in this game.
+        if (partyPrepared.IsCompleted
+            || !party.All(member => _preparingIn.TryGetValue(member, out var game) && game == gameCount)
+            || !await setUp.Value
+            || partyPrepared.IsCompleted)
+        {
+            return null;
+        }
+
+        Log.Information("{Character} starts its run before the rest of the party has prepared", client.Game.Me?.Name);
+        return Traced(client, "run", PerformRun(client, account));
+    }
+
+    /// <summary>A run started before the party ends with the game it was started for: told so, then waited for.</summary>
+    private async Task GiveUpEarlyRuns(TaskCompletionSource<bool> partyPrepared, List<Task<Task<bool>>> earlyRuns)
+    {
+        partyPrepared.TrySetResult(false);
+        foreach (var early in earlyRuns)
+        {
+            try
+            {
+                if (await early is { } run)
+                {
+                    NextGame.TrySetResult(true);
+                    await run;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Warning("A run started before the party failed while the game was given up: {Error}", e.Message);
+            }
+        }
+    }
+
     /// <summary>Whether this character stays in the game after dying, for a bot that brings it back to its corpse.</summary>
     protected virtual bool StaysForCorpse(AccountConfig account) => false;
 
@@ -379,30 +477,33 @@ public abstract class MultiClientBotBase : IBotInstance
     /// is still worth its share of the experience - and back into the party, without which it would
     /// get none of it.
     /// </summary>
-    protected async Task<bool> RejoinCurrentGame(Client client, AccountConfig account)
+    /// <param name="giveUp">Besides the game ending, when the bot no longer wants the rejoin; checked between its steps.</param>
+    protected async Task<bool> RejoinCurrentGame(Client client, AccountConfig account, Func<bool> giveUp = null)
     {
-        if (StrangerEscape.FleeRequested)
+        bool Abandoned() => StrangerEscape.FleeRequested || NextGame.Task.IsCompleted || (giveUp?.Invoke() ?? false);
+        if (Abandoned())
         {
             return false;
         }
 
         Log.Information("{Client} rejoining game {Prefix}{Count}", client.LoggedInUserName(), _config.GameNamePrefix, _currentGameCount);
         if (!await LeaveGameAndRejoinMCPWithRetry(client, account)
-            || !await RealmConnectHelpers.JoinGameWithRetry(_currentGameCount, client, _config, account, () => NextGame.Task.IsCompleted))
+            || Abandoned()
+            || !await RealmConnectHelpers.JoinGameWithRetry(_currentGameCount, client, _config, account, Abandoned))
         {
             Log.Warning("{Client} could not rejoin game {Prefix}{Count}", client.LoggedInUserName(), _config.GameNamePrefix, _currentGameCount);
             return false;
         }
 
         if (!GeneralHelpers.TryWithTimeout(
-            (_) => client.Game.Me != null && client.Game.Me.Location.X != 0 && client.Game.Me.Location.Y != 0,
-            TimeSpan.FromSeconds(5)))
+            (_) => Abandoned() || (client.Game.Me != null && client.Game.Me.Location.X != 0 && client.Game.Me.Location.Y != 0),
+            TimeSpan.FromSeconds(5)) || Abandoned())
         {
             return false;
         }
 
-        await EnsureInParty(client);
-        return true;
+        await EnsureInParty(client, Abandoned);
+        return !Abandoned();
     }
 
     /// <summary>
@@ -411,39 +512,64 @@ public abstract class MultiClientBotBase : IBotInstance
     /// was left outside the party, the server refused her the taxi's portal three times, and she
     /// missed the whole Diablo fight.
     /// </summary>
-    private async Task EnsureInParty(Client client)
+    private async Task EnsureInParty(Client client, Func<bool> abandoned = null)
     {
-        var leader = _partyLeader;
-        if (leader == null || leader == client || !leader.Game.IsInGame())
-        {
-            return;
-        }
-
         var waited = Stopwatch.StartNew();
-        while (waited.Elapsed < PartyJoinTimeout && client.Game.IsInGame() && leader.Game.IsInGame())
+        while (waited.Elapsed < PartyJoinTimeout && client.Game.IsInGame() && !(abandoned?.Invoke() ?? false))
         {
-            var me = leader.Game.Players.FirstOrDefault(p => p.Id == client.Game.Me.Id);
-            var leaderPlayer = client.Game.Players.FirstOrDefault(p => p.Id == leader.Game.Me.Id);
-            if (leaderPlayer != null && client.Game.IsInPartyWith(leaderPlayer))
+            // The leader invites when he can. When he is the one rejoining, or out himself, anyone
+            // already in the party can: a member left outside it gets no shouts and no party
+            // positions, and the party's portals refuse him.
+            var inviter = PartyInviter(client);
+            var inviterSelf = inviter?.Game.Me;
+            var self = client.Game.Me;
+            if (inviterSelf == null || self == null)
+            {
+                return;
+            }
+
+            var me = inviter.Game.Players.FirstOrDefault(p => p.Id == self.Id);
+            var inviterPlayer = client.Game.Players.FirstOrDefault(p => p.Id == inviterSelf.Id);
+            if (inviterPlayer != null && client.Game.IsInPartyWith(inviterPlayer))
             {
                 return;
             }
 
             if (me != null)
             {
-                leader.Game.InvitePlayer(me);
+                inviter.Game.InvitePlayer(me);
             }
 
             await Task.Delay(500);
-            if (leaderPlayer != null)
+            if (inviterPlayer != null)
             {
-                client.Game.AcceptInvite(leaderPlayer);
+                client.Game.AcceptInvite(inviterPlayer);
             }
 
             await Task.Delay(500);
         }
 
-        Log.Warning("{Character} is not in the party {Seconds:F0}s after joining", client.Game.Me?.Name, waited.Elapsed.TotalSeconds);
+        if (client.Game.IsInGame() && !(abandoned?.Invoke() ?? false))
+        {
+            Log.Warning("{Character} is not in the party {Seconds:F0}s after joining", client.Game.Me?.Name, waited.Elapsed.TotalSeconds);
+        }
+    }
+
+    /// <summary>
+    /// The leader when he is in the party, else anyone who is, else the leader anyway. A leader whose own
+    /// rejoin left him outside the party would otherwise start a second one.
+    /// </summary>
+    private Client PartyInviter(Client client)
+    {
+        var leader = _partyLeader;
+        var leaderPresent = leader != null && leader != client && leader.Game.IsInGame() && leader.Game.Me != null;
+        if (leaderPresent && leader.Game.IsInParty())
+        {
+            return leader;
+        }
+
+        return _clients.FirstOrDefault(other => other != client && other.Game.IsInGame() && other.Game.Me != null && other.Game.IsInParty())
+            ?? (leaderPresent ? leader : null);
     }
 
     private static readonly TimeSpan PartyJoinTimeout = TimeSpan.FromSeconds(8);
@@ -507,7 +633,25 @@ public abstract class MultiClientBotBase : IBotInstance
             return false;
         }
 
-        return await PrepareForRun(client, account);
+        _preparingIn[client] = gameCount;
+        return await Traced(client, "prepare", PrepareForRun(client, account));
+    }
+
+    private static async Task<bool> Traced(Client client, string step, Task<bool> work)
+    {
+        var started = DateTime.UtcNow;
+        TraceEvents.Step(client.Game, step, StepPhase.Start);
+        try
+        {
+            var ok = await work;
+            TraceEvents.Step(client.Game, step, StepPhase.End, outcome: ok ? StepOutcome.Ok : StepOutcome.Failed, duration: DateTime.UtcNow - started);
+            return ok;
+        }
+        catch (Exception e)
+        {
+            TraceEvents.Step(client.Game, step, StepPhase.End, outcome: StepOutcome.Failed, reason: $"{e.GetType().Name}: {e.Message}", duration: DateTime.UtcNow - started);
+            throw;
+        }
     }
 
     /// <summary>
@@ -566,14 +710,21 @@ public abstract class MultiClientBotBase : IBotInstance
             StopBatch = true;
             StopReason = reason;
             Log.Fatal("Stop requested: {Reason}", reason);
+            TraceEvents.Decision((string)null, null, "stop requested", ("source", reason));
         }
 
         NextGame.TrySetResult(true);
     }
 
-    protected async Task PickupItemsAndPotions(Client client, AccountConfig account, double distance, Point anchor = null)
+    /// <param name="stop">Ends the pickups between items: a bot whose game is over has no use for the rest.</param>
+    protected async Task PickupItemsAndPotions(Client client, AccountConfig account, double distance, Point anchor = null, Func<bool> stop = null)
     {
-        await PickupItemsFromPickupList(client, distance, anchor);
+        await PickupItemsFromPickupList(client, distance, anchor, stop);
+        if (stop?.Invoke() == true)
+        {
+            return;
+        }
+
         await PickupNearbyPotionsIfNeeded(client, account, distance);
     }
 
@@ -628,6 +779,7 @@ public abstract class MultiClientBotBase : IBotInstance
         if (client.Game.IsInGame())
         {
             Log.Information($"Leaving game with {client.LoggedInUserName()}");
+            TraceEvents.Decision(client.Game, "leave", ("reason", "next game"));
             await client.Game.LeaveGame();
         }
 
@@ -775,9 +927,9 @@ public abstract class MultiClientBotBase : IBotInstance
 
         _pickitItemsOnGround.TryAdd(item.Id, item.Location, item);
     }
-    private void PutRejuvenationOnPickitList(Client client, Item item)
+    private void PutRejuvenationOnPickitList(Client client, Item item, Item target)
     {
-        if (!item.IsPotion || !item.Ground)
+        if (!item.IsPotion || !item.Ground || IsTaken(client, item) || IsTaken(client, target))
         {
             return;
         }
@@ -794,6 +946,16 @@ public abstract class MultiClientBotBase : IBotInstance
 
         _pickitItemsOnGround.TryAdd(item.Id, item.Location, item);
     }
+
+    /// <summary>
+    /// Whether this item is known to be off the ground. The list keeps the object it was given, whose
+    /// Ground stays true, so a pickup confirmed a moment after its timeout went back on the list.
+    /// </summary>
+    private bool IsTaken(Client client, Item item)
+        => _pickedUp.ContainsKey(item.Id)
+            || client.Game.Belt.FindItemById(item.Id) != null
+            || client.Game.Inventory.FindItemById(item.Id) != null
+            || (client.Game.Items.TryGetValue(item.Id, out var known) && !known.Ground);
 
     /// <summary>
     /// The items on the list within <paramref name="distance"/>, left on it. GetPickitList takes what
@@ -948,7 +1110,8 @@ public abstract class MultiClientBotBase : IBotInstance
         return resultPickitList;
     }
 
-    protected async Task MoveToLocation(Client client, Point location, CancellationToken? token = null)
+    /// <returns>False when no path was found and the character did not move; true otherwise.</returns>
+    protected async Task<bool> MoveToLocation(Client client, Point location, CancellationToken? token = null, bool warnNoPath = true)
     {
         var movementMode = MovementHelpers.PreferredMovement(client.Game);
         var distance = client.Game.Me.Location.Distance(location);
@@ -957,7 +1120,7 @@ public abstract class MultiClientBotBase : IBotInstance
             var path = await _pathingService.GetPathToLocation(client.Game, location, movementMode);
             if (token.HasValue && token.Value.IsCancellationRequested)
             {
-                return;
+                return true;
             }
 
             // An empty path leaves the character exactly where it was, and the caller then does
@@ -965,9 +1128,13 @@ public abstract class MultiClientBotBase : IBotInstance
             // a pickup failing from a hundred units away for no stated reason.
             if (path.Count == 0)
             {
-                Log.Warning("Client {ClientName} found no {MovementMode} path from {From} to {To}, {Distance:F0} away",
-                    client.Game.Me.Name, movementMode, client.Game.Me.Location, location, distance);
-                return;
+                if (warnNoPath)
+                {
+                    Log.Warning("Client {ClientName} found no {MovementMode} path from {From} to {To}, {Distance:F0} away",
+                        client.Game.Me.Name, movementMode, client.Game.Me.Location, location, distance);
+                }
+
+                return false;
             }
 
             await MovementHelpers.TakePathOfLocations(client.Game, path.ToList(), movementMode, token);
@@ -990,6 +1157,8 @@ public abstract class MultiClientBotBase : IBotInstance
                 await client.Game.MoveToAsync(location);
             }
         }
+
+        return true;
     }
 
     protected Task PickupPotionsOnly(Client client, AccountConfig account, double distance)
@@ -1004,8 +1173,8 @@ public abstract class MultiClientBotBase : IBotInstance
         // Whatever the belt can still take, less what already waits in the inventory to refill it.
         // Measured against healing potions alone, a health column shared with rejuvenations looked
         // short every time, and the sorceresses carried seventeen spare potions to every town visit.
-        var healthRoom = NPCHelpers.BeltRoom(client.Game, account.HealthSlots, account.HealthPotionTarget(client.Game.Belt.Height));
-        var manaRoom = NPCHelpers.BeltRoom(client.Game, account.ManaSlots, account.ManaPotionTarget(client.Game.Belt.Height));
+        var healthRoom = InventoryHelpers.BeltRoom(client.Game, account, PotionKind.Healing);
+        var manaRoom = InventoryHelpers.BeltRoom(client.Game, account, PotionKind.Mana);
         var missingHealthPotions = Math.Max(0, healthRoom - client.Game.Inventory.Items.Count(i => i.Classification == ClassificationType.HealthPotion));
         var missingManaPotions = Math.Max(0, manaRoom - client.Game.Inventory.Items.Count(i => i.Classification == ClassificationType.ManaPotion));
         var missingRevPotions = Math.Max(6 - client.Game.Inventory.Items.Count(i => i.Classification == ClassificationType.RejuvenationPotion), 0);
@@ -1043,8 +1212,8 @@ public abstract class MultiClientBotBase : IBotInstance
             // A potion the belt cannot take needs a cell; walking to one there is no room for is
             // waiting time and nothing else.
             var beltHasRoom = item.Classification == ClassificationType.HealthPotion
-                ? NPCHelpers.BeltRoom(client.Game, account.HealthSlots, account.HealthPotionTarget(client.Game.Belt.Height)) > 0
-                : item.Classification == ClassificationType.ManaPotion && NPCHelpers.BeltRoom(client.Game, account.ManaSlots, account.ManaPotionTarget(client.Game.Belt.Height)) > 0;
+                ? InventoryHelpers.BeltRoom(client.Game, account, PotionKind.Healing) > 0
+                : item.Classification == ClassificationType.ManaPotion && InventoryHelpers.BeltRoom(client.Game, account, PotionKind.Mana) > 0;
             if (!beltHasRoom && client.Game.Inventory.FindFreeSpace(item) == null)
             {
                 ReturnItemToPickitList(client, item);
@@ -1074,7 +1243,16 @@ public abstract class MultiClientBotBase : IBotInstance
                     }, TimeSpan.FromSeconds(0.2));
                 }, TimeSpan.FromSeconds(3)))
                 {
-                    PutRejuvenationOnPickitList(client, item);
+                    PutRejuvenationOnPickitList(client, item, target);
+                }
+                else
+                {
+                    // Taken: off the item list too. A rejuvenation the nip also matches sits on both
+                    // lists, and the item pickup walked back to one already in the belt.
+                    _pickedUp[item.Id] = true;
+                    _pickedUp[target.Id] = true;
+                    _pickitItemsOnGround.TryRemove(item.Id, out _);
+                    _pickitItemsOnGround.TryRemove(target.Id, out _);
                 }
             }
         }
@@ -1109,7 +1287,7 @@ public abstract class MultiClientBotBase : IBotInstance
     /// </summary>
     protected virtual int MaxPickupRounds => DefaultPickupRounds;
 
-    private async Task PickupItemsFromPickupList(Client client, double distance, Point anchor = null)
+    private async Task PickupItemsFromPickupList(Client client, double distance, Point anchor = null, Func<bool> stop = null)
     {
         var picks = 0;
         var pickedBefore = 0;
@@ -1123,6 +1301,11 @@ public abstract class MultiClientBotBase : IBotInstance
             pickitList = GetPickitList(client, distance, anchor);
             foreach (var item in pickitList)
             {
+                if (stop?.Invoke() == true)
+                {
+                    return;
+                }
+
                 // The same item can come off the list twice in one take, under its old id and the
                 // one it got coming back into sight; the second went for an item already in the
                 // inventory and waited three seconds for it.

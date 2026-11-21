@@ -1,8 +1,7 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
 using D2NG.Core.D2GS.Players;
 using Serilog;
-using System.IO;
-using System.Text;
+using Serilog.Events;
 
 namespace D2NG.Core.D2GS.Packet.Incoming;
 
@@ -16,7 +15,7 @@ internal class SetActiveSkillPacket : D2gsPacket
 
     public SetActiveSkillPacket(D2gsPacket packet) : base(packet.Raw)
     {
-        var reader = new BinaryReader(new MemoryStream(packet.Raw), Encoding.ASCII);
+        var reader = new PacketReader(packet.Raw);
         var id = reader.ReadByte();
         if ((InComingPacket)id != InComingPacket.SetSkill)
         {
@@ -28,11 +27,14 @@ internal class SetActiveSkillPacket : D2gsPacket
         Skill = (Skill)reader.ReadUInt16();
         ItemGid = reader.ReadUInt32();
 
-        Log.Verbose($"(0x{packet.Raw[0],2:X2}) Set Skill:\n" +
-            $"\tUnit Type: {UnitType}\n" +
-            $"\tUnit GID: {UnitGid}\n" +
-            $"\tHand: {Hand}\n" +
-            $"\tSkill: {Skill}\n" +
-            $"\tItemGid: {ItemGid}");
+        if (Log.IsEnabled(LogEventLevel.Verbose))
+        {
+            Log.Verbose($"(0x{packet.Raw[0],2:X2}) Set Skill:\n" +
+                $"\tUnit Type: {UnitType}\n" +
+                $"\tUnit GID: {UnitGid}\n" +
+                $"\tHand: {Hand}\n" +
+                $"\tSkill: {Skill}\n" +
+                $"\tItemGid: {ItemGid}");
+        }
     }
 }

@@ -19,6 +19,9 @@ internal sealed class Program
     public static BncsConnection bncsConnection = new();
 
     public static McpConnection mcpConnection = new();
+
+    private static SnifferTrace trace;
+
     private static void Main(string[] args)
     {
         bncsConnection._stream = new SnifferNetworkStream([]);
@@ -135,9 +138,68 @@ internal sealed class Program
         };
         selectedDevice.Open(deviceConfiguration);
         selectedDevice.Filter = CaptureOptions.Current.BuildPcapFilter();
+        if (CaptureOptions.Current.TraceDirectory is { } traceDirectory)
+        {
+            trace = new SnifferTrace(traceDirectory, CaptureOptions.Current);
+            Console.CancelKeyPress += (_, _) => StopTracing();
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => StopTracing();
+            Log.Information($"Writing traces under {Path.GetFullPath(traceDirectory)}");
+            Log.Information("tracedir should be a folder of the sniffer's own, not a bot's trace root: a bot sniffed there writes its game twice into one game folder, and the trace tools then read the sniffer's copy only as a second view of the bot's client");
+        }
+
         Log.Information($"Capturing on {selectedDevice.Description ?? selectedDevice.Name} with filter '{selectedDevice.Filter}'");
         selectedDevice.Capture();
         selectedDevice.Close();
+        StopTracing();
+    }
+
+    private static readonly object traceGate = new();
+
+    private static void StopTracing()
+    {
+        lock (traceGate)
+        {
+            try
+            {
+                trace?.Dispose();
+            }
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+                Log.Warning("Trace: closing the trace files failed: {Error}", e.Message);
+            }
+
+            trace = null;
+        }
+    }
+
+    private static int traceFailures;
+
+    /// <summary>
+    /// A file that cannot be written fails on its own inside the trace, and a segment that cannot be traced is
+    /// counted there; nothing thrown here may reach the capture callback, so whatever still escapes is logged
+    /// and the next packet is traced as usual.
+    /// </summary>
+    private static void Trace(RawCapture rawPacket, PacketDotNet.Packet packet, PacketDotNet.TcpPacket tcpPacket)
+    {
+        lock (traceGate)
+        {
+            try
+            {
+                if (trace == null || packet.Extract<PacketDotNet.IPPacket>() is not { } ip)
+                {
+                    return;
+                }
+
+                trace.Accept(ip, tcpPacket, rawPacket.Timeval.Date);
+            }
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+                if (++traceFailures <= 5)
+                {
+                    Log.Warning("Trace: a packet could not be traced: {Error}", e.Message);
+                }
+            }
+        }
     }
 
     // Callback function invoked by Pcap.Net for every incoming packet
@@ -146,6 +208,11 @@ internal sealed class Program
         var rawPacket = packetCapture.GetPacket();
         var packet = PacketDotNet.Packet.ParsePacket(rawPacket.LinkLayerType, rawPacket.Data);
         var tcpPacket = packet.Extract<PacketDotNet.TcpPacket>();
+        if (tcpPacket != null)
+        {
+            Trace(rawPacket, packet, tcpPacket);
+        }
+
         if (tcpPacket != null && tcpPacket.PayloadData.Length > 0)
         {
             var bytes = tcpPacket.PayloadData;

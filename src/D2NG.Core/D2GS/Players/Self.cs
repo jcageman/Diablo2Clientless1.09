@@ -46,9 +46,13 @@ public class Self : Player
         return (double)Life / MaxLife;
     }
 
+    /// <summary>Every character has these from level 1; the server never lists them as learned.</summary>
+    private static readonly HashSet<Skill> InnateSkills = [Skill.Attack, Skill.Kick, Skill.ThrowStuff, Skill.Unsummon, Skill.LeftHandThrow, Skill.LeftHandSwing];
+
     public bool HasSkill(Skill skill)
     {
-        return (Skills.TryGetValue(skill, out var value) && value > 0)
+        return InnateSkills.Contains(skill)
+            || (Skills.TryGetValue(skill, out var value) && value > 0)
             || (ItemSkills.TryGetValue(skill, out var itemValue) && itemValue > 0);
     }
 

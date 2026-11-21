@@ -57,7 +57,7 @@ public static class MuleClientSteps
 
         try
         {
-            var snapshot = MuleCharacterSnapshot.Take(game, i => D2NG.Pickit.Pickit.CanTouchInventoryItem(game, i));
+            var snapshot = MuleCharacterSnapshot.Take(game, i => D2NG.Pickit.Pickit.CanTouchMuleItem(game, i));
             await repository.UpdateCharacter(accountName, characterName, snapshot);
             logger.LogInformation("Recorded {Account}-{Character}: {Items} items, {FreeCells} free cells, widest fit per height {Profile}",
                 accountName, characterName, snapshot.Items.Count, snapshot.FreeCells, string.Join("/", snapshot.FitProfile.Skip(1)));

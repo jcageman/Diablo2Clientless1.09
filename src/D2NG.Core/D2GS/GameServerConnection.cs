@@ -64,15 +64,12 @@ internal class GameServerConnection : Connection
 
     internal override byte[] ReadPacket()
     {
-        var readBytes = new List<byte> { };
         var size = _stream.ReadByte();
-        readBytes.Add((byte)size);
         if (size == -1) return null;
 
         if (size >= 0xF0)
         {
             var secondByte = _stream.ReadByte();
-            readBytes.Add((byte)secondByte);
             size = (((size & 0xF) << 8) + secondByte - 2);
         }
         else
@@ -88,31 +85,14 @@ internal class GameServerConnection : Connection
             Log.Information($"Empty buffer length received with size {size}");
             return null;
         }
-        readBytes.AddRange(buffer);
 
-        if(Log.IsEnabled(Serilog.Events.LogEventLevel.Verbose))
-        {
-            var fullString = readBytes.ToArray().ByteArrayToString();
-            Log.Verbose($"Instance {InstanceId} Full packet received: {fullString}");
-        }
-        
         Huffman.Decompress(buffer, out var output);
-
-        if (Log.IsEnabled(Serilog.Events.LogEventLevel.Verbose))
-        {
-            var fullPacketString = output.ToPrintString();
-            Log.Verbose($"Instance {InstanceId} Full decompressed packet received: {fullPacketString}");
-        }
 
         var index = 0;
         do
         {
-            var packetType = output[index];
-            var packetTypeHex = "0x" + BitConverter.ToString([packetType]);
-
             var packetSize = GetPacketSize(new ArraySegment<byte>(output, index, output.Length - index));
             var packet = new ArraySegment<byte>(output, index, packetSize).ToArray();
-            string printableString = packet.ToPrintString();
             PacketReceived?.Invoke(this, new D2gsPacket(packet));
 
             index += packetSize;
@@ -177,7 +157,7 @@ internal class GameServerConnection : Connection
     }
 
     // This was taken from Redvex according to qqbot source
-    private static int GetPacketSize(ArraySegment<byte> input)
+    internal static int GetPacketSize(ArraySegment<byte> input)
     {
         byte identifier = input[0];
 

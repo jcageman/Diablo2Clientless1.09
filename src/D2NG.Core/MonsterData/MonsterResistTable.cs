@@ -32,6 +32,8 @@ public sealed class MonsterResistTable
 
     public int Count => _byClassId.Count;
 
+    public IEnumerable<MonsterResistEntry> Entries => _byClassId.Values;
+
     public static MonsterResistTable FromEntries(IEnumerable<MonsterResistEntry> entries, MonsterResistSource source)
     {
         var byClassId = new Dictionary<int, MonsterResistEntry>();

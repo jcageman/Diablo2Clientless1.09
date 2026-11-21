@@ -1,6 +1,7 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
 using D2NG.Core.D2GS.Players;
 using Serilog;
+using Serilog.Events;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
@@ -27,10 +28,13 @@ internal class BaseSkillLevelsPacket : D2gsPacket
         }
         reader.Close();
 
-        Log.Verbose($"(0x{packet.Raw[0],2:X2}) Base Skill Levels:\n" +
-            string.Join("\n", Skills
-                        .OrderBy(s => s.Key.ToString())
-                        .Select(s => $"\t{s.Key} : {s.Value}")));
+        if (Log.IsEnabled(LogEventLevel.Verbose))
+        {
+            Log.Verbose($"(0x{packet.Raw[0],2:X2}) Base Skill Levels:\n" +
+                string.Join("\n", Skills
+                            .OrderBy(s => s.Key.ToString())
+                            .Select(s => $"\t{s.Key} : {s.Value}")));
+        }
     }
 
     public ConcurrentDictionary<Skill, int> Skills { get; } = new ConcurrentDictionary<Skill, int>();

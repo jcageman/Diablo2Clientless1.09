@@ -1,4 +1,4 @@
-using ConsoleBot.Attack;
+﻿using ConsoleBot.Attack;
 using ConsoleBot.Bots;
 using ConsoleBot.Bots.Types;
 using ConsoleBot.Clients.ExternalMessagingClient;
@@ -119,7 +119,7 @@ if (!string.IsNullOrEmpty(logLevelName) && !Enum.TryParse(logLevelName, ignoreCa
     throw new InvalidProgramException("Invalid logLevel parameter in bot config");
 }
 
-Log.Logger = new LoggerConfiguration()
+var logConfiguration = new LoggerConfiguration()
     .MinimumLevel.Is(minimumLevel)
     .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
     // Debug and below only ever reach the file: the console cannot keep up with that volume and
@@ -127,8 +127,14 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
     // One file per run, never rolled or capped: startup deletes it anyway, and a rolled log split a
     // run over several files that every script then had to know about.
-    .WriteTo.File(logfileName, fileSizeLimitBytes: null)
-    .CreateLogger();
+    .WriteTo.File(logfileName, fileSizeLimitBytes: null);
+if (TraceSetup.IsEnabled(config.GetSection("bot")))
+{
+    logConfiguration.WriteTo.Sink(new D2NG.Core.Tracing.TraceLogSink());
+}
+
+Log.Logger = logConfiguration.CreateLogger();
+TraceSetup.Start(config.GetSection("bot"), logfileName);
 
 // Optional second log holding one line per item the pickit judged, so the main log stays readable.
 var pickitLogFile = config.GetSection("bot")["pickitLogFile"];
@@ -185,6 +191,8 @@ else
 }
 
 hostBuilder.Services.AddSingleton(monsterResists);
+MonsterMotionSetup.Apply(config.GetSection("bot"));
+TracedSettings.Apply(config.GetSection("bot"));
 
 // Shrine objects by class id, so a bot can pick health and mana shrines out of the map api's preset
 // objects and recognise shrine world objects when they come into view.
@@ -282,9 +290,10 @@ while (true)
     catch (Exception e)
     {
         var botConfiguration = host.Services.GetRequiredService<IOptions<BotConfiguration>>();
-        if (botConfiguration.Value.BotType.Equals("rush", StringComparison.OrdinalIgnoreCase))
+        if (botConfiguration.Value.BotType.Equals("rush", StringComparison.OrdinalIgnoreCase)
+            || botConfiguration.Value.BotType.Equals("leveling", StringComparison.OrdinalIgnoreCase))
         {
-            await StopWithFatalError(host, $"Rush failed: {e.Message}", e);
+            await StopWithFatalError(host, $"{botConfiguration.Value.BotType} failed: {e.Message}", e);
             return 1;
         }
 
