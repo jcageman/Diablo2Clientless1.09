@@ -16,8 +16,9 @@ Run a **tight** loop: one step, one change, one log read.
 1. **Shrink the run.** Set `reuseExistingCharacter: true`, `character: "<name>"`, and trim `steps` to
    `["login","create","<step>"]`. Reuse prefers the configured character. This turns an 8-minute full
    pass into ~60s. Pick a character already in the right act.
-2. **Run it** with `logLevel: "Debug"` — packet lines are the whole point.
-3. **Read the packet log before touching code.** See `DEBUGGING.md`.
+2. **Run it.** Every game is recorded as a packet trace; `logLevel: "Debug"` adds the Debug lines.
+3. **Read the trace before touching code**: `Trace incidents`, then the failing window (`d2-trace`
+   skill). `DEBUGGING.md` covers what the packets mean.
 4. **Change one thing**, and say out loud which packet you expect to appear or change.
 5. **Repeat until the step passes twice**, on two different characters.
 
@@ -108,7 +109,9 @@ bytes are not in a capture, go find a capture — `DEBUGGING.md` covers where th
 
 ## Reference
 
-- **`DEBUGGING.md`** — reading packet logs, the grep recipes, decoding quest words, finding and
+- **`d2-trace` skill** - the recorded games: finding the failing game and moment, the client's state
+  and packets there, and where a step's time went. Load it first whenever a run went wrong.
+- **`DEBUGGING.md`** — reading the packets, counting what was sent, decoding quest words, finding and
   searching captures. Read it whenever a step fails.
 - **`PACKETS.md`** — the packet and quest facts already established: what each opcode carries, the
   quest bit meanings, and the traps in existing helpers. Read it before adding an outgoing packet or

@@ -26,11 +26,90 @@ public class Client
     private Character _character;
     private string _userName;
     private string _mcpRealm;
+    private Tracing.TraceChannel _realmTrace;
+    private readonly object _realmTraceGate = new();
 
     public Client()
     {
         Chat = new Chat(Bncs);
         Game = new Game(D2gs);
+        D2gs.DigestSource = () => Tracing.TraceDigest.Capture(Game);
+        D2gs.OnReceivedPacketEvent(InComingPacket.ReceiveChat, packet => HearAdministrator(new D2GS.Packet.Incoming.ChatPacket(packet)));
+    }
+
+    /// <summary>The game this client joined last.</summary>
+    private string _gameName;
+
+    private int _leavingForRestart;
+
+    /// <summary>An administrator's restart countdown: the time is kept, and the client leaves the game just before it.</summary>
+    private void HearAdministrator(D2GS.Packet.Incoming.ChatPacket chat)
+    {
+        if (GameServerRestart.Announced(chat.CharacterName, chat.Message) is not { } until)
+        {
+            return;
+        }
+
+        var at = GameServerRestart.Heard(until, DateTime.UtcNow);
+        if (System.Threading.Interlocked.Exchange(ref _leavingForRestart, 1) == 0)
+        {
+            Log.Information("{Account} heard that the game server restarts at {At:HH:mm:ss}; it leaves {Game} {Seconds:0}s before", LoggedInUserName(),
+                at.ToLocalTime(), _gameName, GameServerRestart.LeaveBefore.TotalSeconds);
+            var game = _gameName;
+            _ = Task.Run(() => LeaveBeforeRestart(game));
+        }
+    }
+
+    private async Task LeaveBeforeRestart(string game)
+    {
+        try
+        {
+            while (Game.IsInGame() && _gameName == game && GameServerRestart.RestartAt is { } at)
+            {
+                var wait = at - GameServerRestart.LeaveBefore - DateTime.UtcNow;
+                if (wait <= TimeSpan.Zero)
+                {
+                    Log.Information("{Account} leaves {Game} before the game server restarts at {At:HH:mm:ss}", LoggedInUserName(), game, at.ToLocalTime());
+                    await Game.LeaveGame();
+                    return;
+                }
+
+                await Task.Delay(wait < TimeSpan.FromSeconds(1) ? wait : TimeSpan.FromSeconds(1));
+            }
+        }
+        catch (Exception exception)
+        {
+            Log.Warning("{Account} could not leave {Game} before the restart: {Reason}", LoggedInUserName(), game, exception.Message);
+        }
+    }
+
+    internal Tracing.TraceChannel RealmTrace => _realmTrace;
+
+    /// <summary>Opened on connecting and closed on <see cref="Disconnect"/>; a reconnect after that writes a new realm file.</summary>
+    internal void TraceRealm(Tracing.TraceRecorder recorder)
+    {
+        lock (_realmTraceGate)
+        {
+            if (_realmTrace != null || recorder == null)
+            {
+                return;
+            }
+
+            _realmTrace = recorder.OpenRealm($"instance{D2gs.InstanceId}");
+            Bncs.TraceTo(_realmTrace);
+            Mcp.TraceTo(_realmTrace);
+        }
+    }
+
+    private void EndRealmTrace()
+    {
+        lock (_realmTraceGate)
+        {
+            Bncs.TraceTo(null);
+            Mcp.TraceTo(null);
+            _realmTrace?.Close();
+            _realmTrace = null;
+        }
     }
 
     public void OnReceivedPacketEvent(Sid sid, Action<BncsPacket> action)
@@ -52,7 +131,10 @@ public class Client
     /// Connect to a Battle.net Realm
     /// </summary>
     public bool Connect(string realm, string keyOwner, string gamefolder)
-        => Bncs.ConnectTo(realm, keyOwner, gamefolder);
+    {
+        TraceRealm(Tracing.TraceRecorder.Current);
+        return Bncs.ConnectTo(realm, keyOwner, gamefolder);
+    }
 
     /// <summary>
     /// Login to Battle.Net with credentials and receive the list of available characters to select.
@@ -180,6 +262,19 @@ public class Client
         Game.SelectCharacter(character);
     }
 
+    /// <summary>A game created or joined while the server restarts would be dropped with it, or not be there at all.</summary>
+    private async Task WaitForRestart()
+    {
+        var restart = GameServerRestart.RestartAt;
+        var wait = GameServerRestart.WaitFor(restart, DateTime.UtcNow);
+        if (wait > TimeSpan.Zero)
+        {
+            Log.Information("{Account} waits {Seconds:0}s for the game server restart announced for {At:HH:mm:ss}", LoggedInUserName(), wait.TotalSeconds,
+                restart.Value.ToLocalTime());
+            await Task.Delay(wait);
+        }
+    }
+
     /// <summary>
     /// Create a new game 
     /// </summary>
@@ -188,6 +283,7 @@ public class Client
     /// <param name="password">Password used to protect the game</param>
     public async Task<bool> CreateGame(Difficulty difficulty, string name, string password, string description)
     {
+        await WaitForRestart();
         Log.Information($"Creating {difficulty} game: {name}");
         if (!await Mcp.CreateGame(difficulty, name, password, description))
         {
@@ -205,6 +301,7 @@ public class Client
     /// <param name="password">Password used to protect the game</param>
     public async Task<bool> JoinGame(string name, string password)
     {
+        await WaitForRestart();
         Log.Information($"Joining game: {name} with {LoggedInUserName()} as {_character?.Name}");
         var packet = await Mcp.JoinGame(name, password);
         if (packet == null)
@@ -221,6 +318,9 @@ public class Client
         Mcp.Disconnect();
         await GameServerConnectionGate.WaitForSlot(LoggedInUserName(), packet.D2gsIp);
         Log.Debug($"Connecting to D2GS Server {packet.D2gsIp}");
+        D2gs.TraceGame(name, _character?.Name, $"{packet.D2gsIp}#{packet.GameToken}");
+        _gameName = name;
+        _leavingForRestart = 0;
         try
         {
             D2gs.Connect(packet.D2gsIp);
@@ -228,6 +328,7 @@ public class Client
         catch (Exception e)
         {
             Log.Warning("Connecting {Account} to the game server failed: {Error}", LoggedInUserName(), e.Message);
+            D2gs.EndTrace();
             if (D2gs.IsConnected())
             {
                 D2gs.Disconnect();
@@ -336,6 +437,8 @@ public class Client
         {
             D2gs.Disconnect();
         }
+
+        EndRealmTrace();
     }
 
     public string LoggedInUserName()

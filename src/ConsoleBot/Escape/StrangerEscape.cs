@@ -4,6 +4,7 @@ using D2NG.Core.BNCS.Packet;
 using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Packet;
 using D2NG.Core.D2GS.Packet.Incoming;
+using D2NG.Core.Tracing;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -101,6 +102,7 @@ public static class StrangerEscape
         }
 
         RequestStop(
+            client,
             $"{client.LoggedInUserName()} was whispered by {packet.Username}: \"{packet.Text}\"",
             FleeOnWhisper ? "Left the game, stopping the bot." : "Finishing the run, then stopping the bot without muling.",
             flee: FleeOnWhisper);
@@ -114,12 +116,13 @@ public static class StrangerEscape
         }
 
         RequestStop(
+            client,
             $"{packet.CharacterName}*{packet.AccountName} joined the game of {client.LoggedInUserName()} ({client.Game.Me?.Name})",
             "Left the game, stopping the bot.",
             flee: true);
     }
 
-    private static void RequestStop(string what, string action, bool flee)
+    private static void RequestStop(Client client, string what, string action, bool flee)
     {
         var first = Interlocked.Exchange(ref _stopRequested, 1) == 0;
         var firstFlee = flee && Interlocked.Exchange(ref _fleeRequested, 1) == 0;
@@ -159,6 +162,8 @@ public static class StrangerEscape
         {
             _response = Task.WhenAll(_response, response);
         }
+
+        TraceEvents.Decision(client.Game, "stranger", ("what", what), ("flee", flee));
     }
 
     private static async Task LeaveAllGames()

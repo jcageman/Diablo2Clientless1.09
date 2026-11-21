@@ -38,6 +38,9 @@ public sealed class SkillEntry
 
     public int RequiredLevel { get; set; }
 
+    /// <summary>Skill ids that need a point before this one can take its first.</summary>
+    public int[] Prerequisites { get; set; } = [];
+
     public int[] Params { get; set; } = new int[6];
 
     /// <summary>Attack rating percent at level 1, and per level after.</summary>

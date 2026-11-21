@@ -28,6 +28,9 @@ public sealed class ItemAffixTable
     public List<BaseItemEntry> BaseItems { get; set; } = [];
     public List<AffixEntry> Affixes { get; set; } = [];
     public List<CubeRecipeEntry> CubeRecipes { get; set; } = [];
+    public List<UniqueItemEntry> UniqueItems { get; set; } = [];
+    public List<SetItemEntry> SetItems { get; set; } = [];
+    public List<SetEntry> Sets { get; set; } = [];
 
     public static ItemAffixTable Load(string path)
         => JsonSerializer.Deserialize<ItemAffixTable>(File.ReadAllText(path), SerializerOptions);

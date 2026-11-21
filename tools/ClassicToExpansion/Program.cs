@@ -8,6 +8,7 @@ using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.MCP;
 using D2NG.Mule;
+using D2NG.Mule.Models;
 using D2NG.Pickit;
 using D2NG.Pickit.Nip;
 using Marten;
@@ -33,21 +34,23 @@ using System.Threading.Tasks;
 //
 //   ClassicToExpansion --config <bot config> --muleconfig <classic mule config>
 //       --expansion-muleconfig <expansion mule config> --pickitconfig <expansion pickit config>
-//       [--nip <file>] [--exclude-characters <name>[,<name>...]]
+//       [--exclude-characters <name>[,<name>...]]
 //
 // The sources, the characters that stay and the temporary character are the toExpansion block of the
 // classic mule config:
 //
 //   "toExpansion": {
-//     "accounts": [ "<account>", ... ],
+//     "accounts": [ { "account": "<account>", "nip": "<file>" }, ... ],
 //     "excludedCharacters": [ "<character that stays classic>", ... ],
 //     "temp": { "account": "<account>", "password": "<password>", "character": "<name>", "class": "Sorceress" }
 //   }
 //
-// Every character on those accounts is a source except the excluded ones and --exclude-characters. An
-// item leaves a source only when an expansion mule account's nip takes it, and, with --nip, when that
-// file matches it too. Stash, inventory and cube contents move; equipped and belt items, unidentified
-// items and the cube itself stay.
+// Every character on those accounts is a source except the excluded ones and --exclude-characters, and
+// except a character the mule database has seen holding nothing that may move. An item leaves a source
+// only when its account's nip matches it and an expansion mule account's nip takes it; the nip is
+// required, so an account holding Stones of Jordan beside its skulls never sends them along by mistake.
+// A relative nip path is read from the expansion mule config's nip directory. Stash, inventory and cube
+// contents move; equipped and belt items, unidentified items and the cube itself stay.
 //
 // The temporary character is deleted, so it has to be one the tool owns: it is created when missing,
 // and an existing one above level 1 is refused. Keep it on an account no mule config visits. An
@@ -69,7 +72,7 @@ static async Task<int> Run(string[] args)
         || !options.TryGetValue("expansion-muleconfig", out var expansionMuleConfigPath) || !options.TryGetValue("pickitconfig", out var pickitConfigPath))
     {
         Console.Error.WriteLine("usage: ClassicToExpansion --config <bot config> --muleconfig <classic mule config> --expansion-muleconfig <expansion mule config> "
-            + "--pickitconfig <expansion pickit config> [--nip <file>] [--exclude-characters <name>[,...]]");
+            + "--pickitconfig <expansion pickit config> [--exclude-characters <name>[,...]]");
         return 2;
     }
 
@@ -101,7 +104,7 @@ static async Task<int> Run(string[] args)
     var passwords = classicMuleConfig.Accounts
         .GroupBy(a => a.Username, StringComparer.OrdinalIgnoreCase)
         .ToDictionary(g => g.Key, g => g.First().Password, StringComparer.OrdinalIgnoreCase);
-    var missing = toExpansion.Accounts.Where(a => !passwords.ContainsKey(a)).ToList();
+    var missing = toExpansion.Accounts.Where(a => a.Account == null || !passwords.ContainsKey(a.Account)).Select(a => a.Account ?? "(no account)").ToList();
     if (missing.Count > 0)
     {
         Console.Error.WriteLine($"not in the classic mule config: {string.Join(", ", missing)}");
@@ -114,16 +117,24 @@ static async Task<int> Run(string[] args)
         staying.Add(name);
     }
 
-    IReadOnlyList<NipRule> filter = null;
-    if (options.TryGetValue("nip", out var nipPath))
+    var accounts = new List<SourceAccount>();
+    foreach (var account in toExpansion.Accounts)
     {
-        var path = File.Exists(nipPath) ? nipPath : Path.Combine(expansionMuleConfig.NipDirectory ?? "", nipPath);
-        filter = NipParser.ParseFile(path);
-        if (filter.Count == 0)
+        if (string.IsNullOrEmpty(account.Nip))
         {
-            Console.Error.WriteLine($"{path} holds no rules");
+            Console.Error.WriteLine($"{account.Account} has no nip in the toExpansion block; name the file of what may leave it");
             return 2;
         }
+
+        var path = Path.IsPathRooted(account.Nip) ? account.Nip : Path.Combine(expansionMuleConfig.NipDirectory ?? "", account.Nip);
+        var filter = File.Exists(path) ? NipParser.ParseFile(path) : [];
+        if (filter.Count == 0)
+        {
+            Console.Error.WriteLine($"{path} is missing or holds no rules");
+            return 2;
+        }
+
+        accounts.Add(new SourceAccount(account.Account, passwords[account.Account], filter));
     }
 
     var repository = string.IsNullOrEmpty(expansionMuleConfig.ConnectionString)
@@ -133,8 +144,8 @@ static async Task<int> Run(string[] args)
         loggerFactory.CreateLogger<MuleService>(), repository);
 
     var temp = new Role(toExpansion.Temp.Account, toExpansion.Temp.Password, toExpansion.Temp.Character);
-    var mover = new Mover(botConfig, logger, muleService, new MuleItemRules(expansionMuleConfig), expansionMuleConfig, filter, tempClass, repository);
-    var sources = await mover.Sources(toExpansion.Accounts.Select(a => (a, passwords[a])), staying, temp);
+    var mover = new Mover(botConfig, logger, muleService, new MuleItemRules(expansionMuleConfig), expansionMuleConfig, tempClass, repository);
+    var sources = await mover.Sources(accounts, staying, temp);
     if (sources == null)
     {
         return 1;
@@ -149,7 +160,7 @@ static T Section<T>(string path, string section) =>
 
 internal sealed class ToExpansionConfiguration
 {
-    public List<string> Accounts { get; set; } = [];
+    public List<SourceAccountConfiguration> Accounts { get; set; } = [];
 
     public List<string> ExcludedCharacters { get; set; } = [];
 
@@ -167,9 +178,23 @@ internal sealed class TempCharacterConfiguration
     public string Class { get; set; }
 }
 
+internal sealed class SourceAccountConfiguration
+{
+    public string Account { get; set; }
+
+    public string Nip { get; set; }
+}
+
+internal sealed record SourceAccount(string Account, string Password, IReadOnlyList<NipRule> Filter);
+
 internal sealed record Role(string Account, string Password, string Character)
 {
     public override string ToString() => $"{Account}-{Character}";
+}
+
+internal sealed record Source(Role Role, IReadOnlyList<NipRule> Filter)
+{
+    public override string ToString() => Role.ToString();
 }
 
 internal sealed class LogOnlyMessagingClient(Microsoft.Extensions.Logging.ILogger logger) : IExternalMessagingClient
@@ -191,7 +216,6 @@ internal sealed class Mover(
     MuleService muleService,
     MuleItemRules expansionRules,
     MuleConfiguration expansionMuleConfig,
-    IReadOnlyList<NipRule> filter,
     CharacterClass tempClass,
     IMuleRepository repository)
 {
@@ -205,26 +229,34 @@ internal sealed class Mover(
     private int _gameCount;
 
     /// <summary>
-    /// Every classic character on the source accounts except the ones that stay. Null when an account
-    /// cannot be read.
+    /// Every classic character on the source accounts except the ones that stay and the ones the mule
+    /// database has seen holding nothing their account may send. Null when an account cannot be read.
     /// </summary>
-    public async Task<List<Role>> Sources(IEnumerable<(string Account, string Password)> accounts, HashSet<string> staying, Role temp)
+    public async Task<List<Source>> Sources(IEnumerable<SourceAccount> accounts, HashSet<string> staying, Role temp)
     {
-        var sources = new List<Role>();
-        foreach (var (account, password) in accounts)
+        var muled = repository == null ? [] : await repository.GetAllItems(null, null, [], null);
+        var sources = new List<Source>();
+        foreach (var account in accounts)
         {
             var client = new Client();
             try
             {
-                var characters = await Logon(client, new Role(account, password, null));
+                var characters = await Logon(client, new Role(account.Account, account.Password, null));
                 if (characters == null)
                 {
                     return null;
                 }
 
-                sources.AddRange(characters
-                    .Where(c => !c.IsExpansion && !staying.Contains(c.Name) && !c.Name.Equals(temp.Character, StringComparison.OrdinalIgnoreCase))
-                    .Select(c => new Role(account, password, c.Name)));
+                foreach (var character in characters.Where(c => !c.IsExpansion && !staying.Contains(c.Name) && !c.Name.Equals(temp.Character, StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (await HoldsNothingToSend(muled, account, character.Name))
+                    {
+                        logger.LogInformation("{Account}-{Character}: the mule database shows nothing to send, skipped", account.Account, character.Name);
+                        continue;
+                    }
+
+                    sources.Add(new Source(new Role(account.Account, account.Password, character.Name), account.Filter));
+                }
             }
             finally
             {
@@ -235,7 +267,25 @@ internal sealed class Mover(
         return sources;
     }
 
-    public async Task<int> Run(List<Role> sources, Role temp)
+    /// <summary>
+    /// True only for a character the mule database has a record of; one it never saw is visited.
+    /// </summary>
+    private async Task<bool> HoldsNothingToSend(List<MuleItemDb> muled, SourceAccount account, string character)
+    {
+        if (repository == null || await repository.GetCharacter(account.Account, character) == null)
+        {
+            return false;
+        }
+
+        var items = muled
+            .Where(i => !i.Untouchable
+                && MuleNames.Normalize(i.AccountName) == MuleNames.Normalize(account.Account)
+                && string.Equals(i.CharacterName, character, StringComparison.OrdinalIgnoreCase))
+            .Select(MuledItemStock.ToItem);
+        return Offered(items, account.Filter).Count == 0;
+    }
+
+    public async Task<int> Run(List<Source> sources, Role temp)
     {
         var remaining = sources.ToList();
         for (var round = 1; ; round++)
@@ -341,7 +391,7 @@ internal sealed class Mover(
     /// done leave <paramref name="remaining"/>. Returns how many items the temporary character holds, or
     /// null on a failure.
     /// </summary>
-    private async Task<int?> Fill(List<Role> remaining, Role temp)
+    private async Task<int?> Fill(List<Source> remaining, Role temp)
     {
         var receiver = new Client();
         try
@@ -358,13 +408,13 @@ internal sealed class Mover(
                 {
                     // A character joining right after another one of its account left is refused with
                     // FFFFFFFF for a few seconds; the account is still in the game for the server.
-                    var joined = await Join(giver, source, gameName, password);
+                    var joined = await Join(giver, source.Role, gameName, password);
                     for (var attempt = 1; !joined && attempt <= JoinRetries; attempt++)
                     {
                         giver.Disconnect();
                         await Task.Delay(JoinRetryDelay * attempt);
                         giver = new Client();
-                        joined = await Join(giver, source, gameName, password);
+                        joined = await Join(giver, source.Role, gameName, password);
                     }
 
                     if (!joined)
@@ -379,7 +429,7 @@ internal sealed class Mover(
                     }
 
                     // The source is a mule too: what it has left is what the planners must see.
-                    await MuleClientSteps.RecordCharacter(repository, source.Account, source.Character, giver.Game, logger);
+                    await MuleClientSteps.RecordCharacter(repository, source.Role.Account, source.Role.Character, giver.Game, logger);
 
                     if (ending == TransferEnding.GiverEmpty)
                     {
@@ -417,11 +467,11 @@ internal sealed class Mover(
     /// <summary>
     /// One source's hand-over, cube contents included as far as its inventory lets them out.
     /// </summary>
-    private async Task<TransferEnding> Give(Client giver, Client receiver, Role source, Role temp)
+    private async Task<TransferEnding> Give(Client giver, Client receiver, Source source, Role temp)
     {
         while (true)
         {
-            var result = await _transfer.Run(giver, receiver, () => Offered(giver.Game, giver.Game.Stash.Items.Concat(giver.Game.Inventory.Items)));
+            var result = await _transfer.Run(giver, receiver, () => Offered(giver.Game.Stash.Items.Concat(giver.Game.Inventory.Items), source.Filter));
             logger.LogInformation("{Source} -> {Temp}: {Ending} after {Rounds} rounds, {Items} items / {Cells} cells",
                 source, temp, result.Ending, result.Rounds, result.ItemsMoved, result.CellsMoved);
             if (result.Ending != TransferEnding.GiverEmpty)
@@ -429,7 +479,7 @@ internal sealed class Mover(
                 return result.Ending;
             }
 
-            var inCube = Offered(giver.Game, giver.Game.Cube.Items);
+            var inCube = Offered(giver.Game.Cube.Items, source.Filter);
             if (inCube.Count == 0)
             {
                 return TransferEnding.GiverEmpty;
@@ -524,16 +574,16 @@ internal sealed class Mover(
     }
 
     /// <summary>
-    /// What may leave a classic source: identified, not the cube, wanted by an expansion mule account and
-    /// matched by the --nip filter when there is one. Unidentified items are left out because the expansion
-    /// mule pass would not take them off the temporary character.
+    /// What may leave a classic source: identified, not the cube, matched by its account's nip and wanted
+    /// by an expansion mule account. Unidentified items are left out because the expansion mule pass would
+    /// not take them off the temporary character.
     /// </summary>
-    private List<Item> Offered(Game game, IEnumerable<Item> items)
+    private List<Item> Offered(IEnumerable<Item> items, IReadOnlyList<NipRule> filter)
     {
         return items
             .Where(i => i.Name != ItemName.HoradricCube && i.IsIdentified)
             .Where(i => !expansionRules.NeverMule(i) && expansionMuleConfig.Accounts.Any(a => expansionRules.Accepts(a, i)))
-            .Where(i => filter == null || filter.Any(rule => rule.MatchesExpression(new NipEvaluationContext(i)
+            .Where(i => filter.Any(rule => rule.MatchesExpression(new NipEvaluationContext(i)
             {
                 KeepRuleSources = () => Pickit.KeepRuleSources(i)
             })))

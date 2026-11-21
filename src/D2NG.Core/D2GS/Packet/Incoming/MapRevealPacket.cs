@@ -1,7 +1,5 @@
 ﻿using D2NG.Core.D2GS.Act;
 using D2NG.Core.D2GS.Exceptions;
-using System.IO;
-using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming;
 
@@ -9,7 +7,7 @@ internal class MapRevealPacket : D2gsPacket
 {
     public MapRevealPacket(D2gsPacket packet) : base(packet.Raw)
     {
-        var reader = new BinaryReader(new MemoryStream(packet.Raw), Encoding.ASCII);
+        var reader = new PacketReader(packet.Raw);
         var id = reader.ReadByte();
         if ((InComingPacket)id != InComingPacket.MapReveal)
         {
@@ -18,7 +16,6 @@ internal class MapRevealPacket : D2gsPacket
         X = reader.ReadUInt16();
         Y = reader.ReadUInt16();
         Area = (Area)reader.ReadByte();
-        reader.Close();
     }
 
     public ushort X { get; }

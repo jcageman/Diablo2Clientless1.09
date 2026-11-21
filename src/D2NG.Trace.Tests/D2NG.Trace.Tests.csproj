@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\D2NG.Core.Tests\data\item_data.txt" Link="data\item_data.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\D2NG.Core.Tests\data\item_properties.txt" Link="data\item_properties.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\D2NG.Core.Tests\data\item-prices.json" Link="data\item-prices.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\D2NG.Core\D2NG.Core.csproj" />
+    <ProjectReference Include="..\D2NG.Trace\D2NG.Trace.csproj" />
+  </ItemGroup>
+
+</Project>

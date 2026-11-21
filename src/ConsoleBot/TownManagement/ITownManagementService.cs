@@ -21,6 +21,14 @@ public interface ITownManagementService
     /// </summary>
     Task<bool> IdentifyAtCainAndSell(Client client);
     Task<TownTaskResult> PerformTownTasks(Client client, TownManagementOptions options);
+
+    /// <summary>
+    /// The town tasks' gamble on its own, for a character whose town tasks left it out with
+    /// <see cref="TownManagementOptions.GambleLater"/>. Does nothing unless <see cref="TownManagementService.GambleDue"/>, nor
+    /// while another client of this process is gambling; false only when the gamble merchant could not be reached.
+    /// <paramref name="until"/> ends the gamble between listings.
+    /// </summary>
+    Task<bool> GambleIfDue(Client client, System.Func<bool> until = null);
     Task<bool> SwitchAct(Client client, Act act);
     Task<bool> TakeTownPortalToArea(Client client, Player player, Area area);
     Task<bool> TakeTownPortalToTown(Client client);

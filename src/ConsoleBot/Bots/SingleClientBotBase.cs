@@ -6,6 +6,7 @@ using ConsoleBot.Exceptions;
 using ConsoleBot.Helpers;
 using ConsoleBot.Mule;
 using D2NG.Core;
+using D2NG.Core.Tracing;
 using Serilog;
 using System;
 using System.Linq;
@@ -140,7 +141,11 @@ public abstract class SingleClientBotBase
                             await Task.Delay(10);
                         }
 
-                        if (!await RunSingleGame(client))
+                        var runStarted = DateTime.UtcNow;
+                        TraceEvents.Step(client.Game, "run", StepPhase.Start);
+                        var ran = await RunSingleGame(client);
+                        TraceEvents.Step(client.Game, "run", StepPhase.End, outcome: ran ? StepOutcome.Ok : StepOutcome.Failed, duration: DateTime.UtcNow - runStarted);
+                        if (!ran)
                         {
                             successiveFailures += 1;
                         }
@@ -157,6 +162,7 @@ public abstract class SingleClientBotBase
 
                     if (client.Game.IsInGame())
                     {
+                        TraceEvents.Decision(client.Game, "leave", ("reason", "run over"));
                         await client.Game.LeaveGame();
                     }
 
@@ -195,6 +201,7 @@ public abstract class SingleClientBotBase
                     }
 
                     successiveFailures += 1;
+                    TraceEvents.Decision(client.Game, "exception", ("where", "game loop"), ("error", e.Message));
                     Log.Warning($"Disconnecting client due to exception {e}, reconnecting to realm, game description is now: {_config.GameDescriptions?.ElementAtOrDefault(gameDescriptionIndex)}");
                     bool reconnectResult = await RealmConnectHelpers.ConnectToRealmWithRetry(client, _config, _accountConfig, 10);
                     if (!reconnectResult)

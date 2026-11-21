@@ -1,6 +1,4 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
-using System.IO;
-using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming;
 
@@ -8,7 +6,7 @@ public class UpdateItemStatsPacket : D2gsPacket
 {
     public UpdateItemStatsPacket(D2gsPacket packet) : base(packet.Raw)
     {
-        var reader = new BinaryReader(new MemoryStream(packet.Raw), Encoding.ASCII);
+        var reader = new PacketReader(packet.Raw);
         var id = reader.ReadByte();
         if (InComingPacket.UpdateItemStats != (InComingPacket)id)
         {
@@ -20,7 +18,6 @@ public class UpdateItemStatsPacket : D2gsPacket
         UpdateType = reader.ReadByte();
         Amount = reader.ReadUInt16();
         reader.ReadUInt16();
-        reader.Close();
     }
     public uint ItemId { get; }
 

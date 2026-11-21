@@ -1,6 +1,7 @@
 using D2NG.Core.ItemData;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 
 namespace D2NG.Core.SkillData;
@@ -46,6 +47,7 @@ public static class SkillReader
                 Name = ItemAffixReader.ReadString(raw, start + 4, 16, file, i),
                 Class = ItemAffixReader.ClassReference(raw[start + 20]),
                 RequiredLevel = Int(152),
+                Prerequisites = new[] { Int(160), Int(164) }.Where(id => id >= 0).ToArray(),
                 Page = raw[start + 212],
                 Row = raw[start + 213],
                 Column = raw[start + 214],

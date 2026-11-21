@@ -352,51 +352,58 @@ public class MuleService : IMuleService
     private static readonly Dictionary<string, DateTimeOffset> LastFullAlert = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// After a mule pass, items still here that an account's rules want mean every character of
-    /// that account is full. Says so once per twelve hours per account, so a new account can be
-    /// created and added to the mule config.
+    /// After a mule pass, items still here that a nip's accounts want mean every character of those
+    /// accounts is full. Accounts sharing a nip are one pool - the gem mules are several accounts of
+    /// gems.nip - so the pool is reported, once per twelve hours, with what stays by item; whether the
+    /// answer is another account or a cube run depends on what that is.
     /// </summary>
     private async Task AlertWhenMulesAreFull(MulePass pass, Func<Item, bool> only)
     {
         var client = pass.Client;
-        foreach (var account in _muleConfig.Accounts)
+        foreach (var pool in _muleConfig.Accounts.GroupBy(a => a.Nip, StringComparer.OrdinalIgnoreCase))
         {
-            var leftItems = GetMuleItems(client, account, only);
+            var accounts = string.Join(", ", pool.Select(a => a.Username).Distinct(StringComparer.OrdinalIgnoreCase));
+            var leftItems = GetMuleItems(client, pool.First(), only);
             var left = leftItems.Count;
             if (left == 0)
             {
                 continue;
             }
 
-            // Another process logged on to the account mid-pass, so its characters were never visited.
-            if (pass.UnjoinedAccounts.Contains(account.Username))
+            // Another process logged on to an account mid-pass, so its characters were never visited.
+            var unjoined = pool.Where(a => pass.UnjoinedAccounts.Contains(a.Username)).Select(a => a.Username).Distinct().ToList();
+            if (unjoined.Count > 0)
             {
-                _logger.LogWarning("{Count} items for {Account} stay on {Farmer}: the account could not be joined this pass",
-                    left, account.Username, client.Game.Me.Name);
+                _logger.LogWarning("{Count} items for {Nip} stay on {Farmer}: {Accounts} could not be joined this pass",
+                    left, pool.Key, client.Game.Me.Name, string.Join(", ", unjoined));
                 continue;
             }
 
             // A trade takes stash items through the farmer's inventory. With that full nothing can be
-            // offered, and blaming the mules sent "create the next account" for accounts with room.
+            // offered, and blaming the mules reported accounts with room as full.
             if (!CanHandOverAny(client.Game, leftItems))
             {
-                _logger.LogWarning("{Count} items for {Account} stay on {Farmer}: her inventory has no room to hand them over",
-                    left, account.Username, client.Game.Me.Name);
+                _logger.LogWarning("{Count} items for {Nip} stay on {Farmer}: her inventory has no room to hand them over",
+                    left, pool.Key, client.Game.Me.Name);
                 continue;
             }
 
             lock (LastFullAlert)
             {
-                if (LastFullAlert.TryGetValue(account.Username, out var last) && DateTimeOffset.UtcNow - last < FullAlertEvery)
+                if (LastFullAlert.TryGetValue(pool.Key, out var last) && DateTimeOffset.UtcNow - last < FullAlertEvery)
                 {
                     continue;
                 }
 
-                LastFullAlert[account.Username] = DateTimeOffset.UtcNow;
+                LastFullAlert[pool.Key] = DateTimeOffset.UtcNow;
             }
 
-            _logger.LogWarning("{Account} is full: {Count} items for it stay on {Farmer}", account.Username, left, client.Game.Me.Name);
-            await _externalMessagingClient.SendMessage($"Mule account {account.Username} is full: {left} items for it stay on {client.Game.Me.Name}. Create the next account and add it to the mule config.");
+            var what = string.Join(", ", leftItems
+                .GroupBy(i => i.Quality is QualityType.Normal or QualityType.Superior ? i.Name.ToString() : $"{i.Quality} {i.Name}")
+                .OrderByDescending(g => g.Count())
+                .Select(g => $"{g.Count()}x {g.Key}"));
+            _logger.LogWarning("{Nip} mules ({Accounts}) are full: {Count} items stay on {Farmer}: {What}", pool.Key, accounts, left, client.Game.Me.Name, what);
+            await _externalMessagingClient.SendMessage($"{pool.Key} mules ({accounts}) are full: {left} items stay on {client.Game.Me.Name}: {what}");
         }
     }
 

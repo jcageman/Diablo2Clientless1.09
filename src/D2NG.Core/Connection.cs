@@ -23,6 +23,8 @@ internal abstract class Connection : System.IDisposable
 
     private State _state = State.NotConnected;
 
+    internal Tracing.TraceChannel Trace { get; set; }
+
     internal abstract byte[] ReadPacket();
 
     public void WritePacket(Packet.Packet packet) => WritePacket(packet.Raw);

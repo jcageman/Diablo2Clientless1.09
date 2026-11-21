@@ -8,13 +8,13 @@ description: Game rules of Diablo 2 1.09 as this realm's server applies them - a
 The realm runs 1.09. Wikis describe 1.10+ and D2R, and D2MOO is a decompilation of 1.10-1.13 DLLs, so
 every rule from them is a **lead** until the realm confirms it. Each fact below carries its provenance:
 
-- **measured** - seen on the realm in packet logs or batch results; trust it.
+- **measured** - seen on the realm in packet traces, logs or batch results; trust it.
 - **D2MOO** - read from the decompiled server; true for 1.10+, plausible for 1.09, verify before
   building on a fine detail.
 - **told** - the user's knowledge of 1.09, not yet measured.
 
 When a lead and the realm disagree, the realm wins: record the measurement here and mark the lead.
-Measure from Debug packet logs (`d2-bot` skill, `DEBUGGING.md`) rather than from bot behaviour.
+Measure from the packet traces (`d2-trace` skill) rather than from bot behaviour.
 
 ## Connection and casting
 
@@ -87,6 +87,32 @@ Measure from Debug packet logs (`d2-bot` skill, `DEBUGGING.md`) rather than from
   `MonsterUnique.cpp`): radius difficulty + 4 (6 in Hell), physical and fire damage. Minions do not.
 - **The Chaos Sanctuary spawns Diablo ~15.6 s after the last seal boss dies** (measured, 134 games).
 - **Server item and monster tables can differ from the client's MPQs** - see `AGENTS.md`, Game data.
+
+## Monster movement
+
+Measured over two four-client Normal act 3 games and 13 Hell Mephisto runs; `src/D2NG.Core/D2GS/Motion`
+implements it and `Trace accuracy` re-scores it on any recorded game.
+
+- **`0x67` NPCMove carries the destination, not the position** (measured, D2MOO): 1,665 of 1,785 walks
+  that ended in a `0x6D` stopped exactly on its x,y. It has no start: the walk begins wherever the
+  monster was. 15 bytes: x,y at 6, path type at 12, run bonus `v` at 13.
+- **Every other movement packet carries the current position** (measured): `0x68` NPCMoveToTarget (20
+  bytes, x,y at 6, chased unit type at 10 and id at 11, `v` at 18) is re-sent about every 0.5 s of a
+  chase and is the main fresh position in a fight; `0x6B` and `0x6C` at 12; `0x6D` exact; `0x69`
+  get-hit at 6, dead the corpse, dying mostly 0,0. A `0x15` naming a monster is a blink or jump.
+- **Walk speed** (measured; D2MOO for the 75 %): subtiles/s = Velocity x 0.75 x (1 + v/100) x 25/16,
+  with Velocity and Run the int32s at +412 and +416 of each 864-byte `monstats.bin` record and `v` 0
+  when walking. Walks measure 0.95-1.00 of it for 15 of 17 classes; A* walkers 0.91-0.95, their path
+  being longer than the line. The realm walks Council Member 346 at the txt's Velocity 8, not the
+  bin's 10. Whether `v` multiplies (75 x (1 + v/100)) or adds (75 + v) is unsettled.
+- **A teleport does not re-send units already in view** (measured, 341 teleports): only units entering
+  view are assigned, and `0x0A` removes those leaving it. A unit out of view keeps its last position
+  until it is seen again.
+- **The life byte of a dying or dead monster's `0x69` is its direction** (measured, D2MOO): 0-63 in all
+  3,787 traced. Only get-hit carries the `0x80` type flag.
+- **Unmeasured**: Extra Fast (75 + 50 fits one Council Member pack of ~27 walks; D2MOO's +100 does
+  not), champions (D2MOO: +20), Chill, Holy Freeze, Decrepify and Slow Missiles (Chill arrives as state
+  11 in `0x13`, not in `v`), Council Member 347 (no clean walk), and any effect of the player count.
 
 ## Baal's throne
 

@@ -42,6 +42,7 @@ internal class BncsConnection : Connection
         } while (buffer[1] == 0x00);
 
         var packet = new BncsPacket(buffer.ToArray());
+        Trace?.Write(Tracing.TraceRecordKind.BncsReceived, packet.Raw);
         PacketReceived?.Invoke(this, packet);
         return buffer.ToArray();
     }
@@ -62,6 +63,7 @@ internal class BncsConnection : Connection
     internal override void WritePacket(byte[] packet)
     {
         _stream.Write(packet, 0, packet.Length);
+        Trace?.Write(Tracing.TraceRecordKind.BncsSent, packet);
         PacketSent?.Invoke(this, new BncsPacket(packet));
     }
 

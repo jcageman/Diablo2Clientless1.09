@@ -11,11 +11,16 @@
     <Project Path="tools/MpqData/MpqData.csproj" />
     <Project Path="tools/MuleConsolidate/MuleConsolidate.csproj" />
     <Project Path="tools/MpqDump/MpqDump.csproj" />
+    <Project Path="tools/LevelingPlans/LevelingPlans.csproj" />
+    <Project Path="tools/Trace/Trace.csproj" />
+    <Project Path="tools/TargetingReplay/TargetingReplay.csproj" />
   </Folder>
   <Project Path="src/ConsoleBot.Tests/ConsoleBot.Tests.csproj" />
   <Project Path="src/ConsoleBot/ConsoleBot.csproj" />
   <Project Path="src/D2NG.Core.Tests/D2NG.Core.Tests.csproj" />
   <Project Path="src/D2NG.Core/D2NG.Core.csproj" />
+  <Project Path="src/D2NG.Leveling.Tests/D2NG.Leveling.Tests.csproj" />
+  <Project Path="src/D2NG.Leveling/D2NG.Leveling.csproj" />
   <Project Path="src/D2NG.MuleManager.UI/D2NG.MuleManager.UI.csproj" />
   <Project Path="src/D2NG.Mule.Tests/D2NG.Mule.Tests.csproj" />
   <Project Path="src/D2NG.Mule/D2NG.Mule.csproj" />
@@ -23,6 +28,8 @@
   <Project Path="src/D2NG.Navigation/D2NG.Navigation.csproj" />
   <Project Path="src/D2NG.Pickit.Tests/D2NG.Pickit.Tests.csproj" />
   <Project Path="src/D2NG.Pickit/D2NG.Pickit.csproj" />
+  <Project Path="src/D2NG.Trace.Tests/D2NG.Trace.Tests.csproj" />
+  <Project Path="src/D2NG.Trace/D2NG.Trace.csproj" />
   <Project Path="src/MpqLib/MpqLib.csproj" />
   <Project Path="src/PacketSniffer/PacketSniffer.csproj" />
 </Solution>

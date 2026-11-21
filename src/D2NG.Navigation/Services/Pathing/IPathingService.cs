@@ -19,6 +19,13 @@ public interface IPathingService
     Task<List<Point>> GetPathToLocation(uint mapId, Difficulty difficulty, Area area, Point fromLocation,
         Point toLocation, MovementMode movementMode);
 
+    /// <summary>
+    /// A walking path that keeps off <paramref name="blocked"/>: objects the map does not know about - the
+    /// random baskets of a sewer hall - close passages the map shows open.
+    /// </summary>
+    Task<List<Point>> GetWalkingPathAround(uint mapId, Difficulty difficulty, Area area, Point fromLocation,
+        Point toLocation, IReadOnlyCollection<Point> blocked);
+
     Task<List<Point>> GetPathToArea(uint mapId, Difficulty difficulty, Area area, Point fromLocation,
         Area toArea, MovementMode movementMode);
 

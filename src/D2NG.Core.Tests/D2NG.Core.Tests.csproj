@@ -23,6 +23,17 @@
     <None Update="data\item_properties.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <!-- Sales captured on the realm and the price table rows their items use, for ItemPriceTests. -->
+    <None Update="data\item-prices.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="data\item-sales.jsonl">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <!-- Game server packets from recorded games, none that carries a name, for PacketParserDifferentialTests. -->
+    <None Update="data\packet-corpus.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

@@ -51,6 +51,8 @@ public sealed class RealmServer : IDisposable
         _listener.Start();
     }
 
+    internal void TraceTo(Tracing.TraceChannel channel) => Connection.Trace = channel;
+
     public bool IsConnected()
     {
         return Connection.Connected;

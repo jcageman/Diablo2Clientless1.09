@@ -36,6 +36,7 @@ namespace ConsoleBot.Bots.Types.Rush;
 public sealed partial class RushBot : IBotInstance
 {
     private const int AreaHopAttempts = 3;
+    private readonly AreaTraveler _traveler;
     private const double TeleportNoOpRange = 10;
     private const double PortalInteractRange = 5;
     private const double OrbEffectiveRange = 20;
@@ -214,6 +215,7 @@ public sealed partial class RushBot : IBotInstance
         _townManagementService = townManagementService;
         _attackService = attackService;
         _monsterResists = monsterResists;
+        _traveler = new AreaTraveler(pathingService, mapApiService);
     }
 
     /// <summary>A rush is finished when it is finished; the host loop must not start another.</summary>
@@ -1838,147 +1840,13 @@ public sealed partial class RushBot : IBotInstance
         return picked;
     }
 
-    private static bool Holds(Client client, ItemName itemName)
-    {
-        return client.Game.Inventory.FindItemByName(itemName) != null
-            || client.Game.Cube.FindItemByName(itemName) != null
-            || client.Game.Me.Equipment.Values.Any(item => item.Name == itemName)
-            || client.Game.CursorItem?.Name == itemName;
-    }
+    private static bool Holds(Client client, ItemName itemName) => QuestItems.Holds(client, itemName);
 
-    private static bool UnequipIntoInventory(Client client, ItemName itemName)
-    {
-        var slot = client.Game.Me.Equipment.FirstOrDefault(entry => entry.Value.Name == itemName);
-        var worn = slot.Value;
-        if (worn == null)
-        {
-            return true;
-        }
+    private static bool UnequipIntoInventory(Client client, ItemName itemName) => QuestItems.UnequipIntoInventory(client, itemName);
 
-        var space = client.Game.Inventory.FindFreeSpace(worn);
-        if (space == null)
-        {
-            Log.Error("No inventory space to remove {Item}", itemName);
-            return false;
-        }
+    private static bool TransmuteStaff(Client client) => QuestItems.TransmuteStaff(client);
 
-        client.Game.RemoveBodyItem(slot.Key);
-        if (!GeneralHelpers.TryWithTimeout(
-            _ => client.Game.CursorItem?.Id == worn.Id,
-            TimeSpan.FromSeconds(5)))
-        {
-            Log.Error("Removing {Item} from {Slot} did not place it on the cursor", itemName, slot.Key);
-            return false;
-        }
-
-        client.Game.InsertItemIntoContainer(worn, space, ItemContainer.Inventory);
-        if (!GeneralHelpers.TryWithTimeout(
-            _ => client.Game.CursorItem == null && client.Game.Inventory.FindItemById(worn.Id) != null,
-            TimeSpan.FromSeconds(5)))
-        {
-            Log.Error("Moving {Item} into the inventory failed; restoring it to {Slot}", itemName, slot.Key);
-            client.Game.EquipItem(worn, slot.Key);
-            return false;
-        }
-
-        return true;
-    }
-
-    private static bool TransmuteStaff(Client client)
-    {
-        var game = client.Game;
-        if (!EnsureItemInInventory(client, ItemName.HoradricStaff))
-        {
-            return false;
-        }
-
-        if (game.Inventory.FindItemByName(ItemName.HoradricStaff) != null)
-        {
-            return true;
-        }
-
-        if (!UnequipIntoInventory(client, ItemName.TopoftheHoradricStaff)
-            || !UnequipIntoInventory(client, ItemName.ShaftoftheHoradricStaff))
-        {
-            return false;
-        }
-
-        Item shaft = game.Inventory.FindItemByName(ItemName.ShaftoftheHoradricStaff);
-        Item top = game.Inventory.FindItemByName(ItemName.TopoftheHoradricStaff);
-        if (shaft == null || top == null)
-        {
-            Log.Error(
-                "{Character} cannot transmute a staff without both pieces; shaft={Shaft}, top={Top}",
-                game.Me.Name,
-                shaft != null,
-                top != null);
-            return false;
-        }
-
-        Item[] pieces = [shaft, top];
-        foreach (var piece in pieces)
-        {
-            var space = game.Cube.FindFreeSpace(piece);
-            if (space == null
-                || InventoryHelpers.PutInventoryItemInCube(game, piece, space) != MoveItemResult.Succes)
-            {
-                Log.Error("Moving {Piece} into the Horadric Cube failed", piece.Name);
-                return false;
-            }
-        }
-
-        if (!InventoryHelpers.TransmuteItemsInCube(game, true))
-        {
-            Log.Error("Transmuting the Horadric Staff failed");
-            return false;
-        }
-
-        var staff = game.Cube.FindItemByName(ItemName.HoradricStaff);
-        if (staff == null
-            || InventoryHelpers.PutCubeItemInInventory(game, staff) != MoveItemResult.Succes)
-        {
-            Log.Error("The transmuted Horadric Staff could not be moved into inventory");
-            return false;
-        }
-
-        Log.Information("{Character} assembled the Horadric Staff", game.Me.Name);
-        return true;
-    }
-
-    private static bool EnsureItemInInventory(Client client, ItemName itemName)
-    {
-        var game = client.Game;
-        if (game.Inventory.FindItemByName(itemName) != null)
-        {
-            return true;
-        }
-
-        if (!UnequipIntoInventory(client, itemName))
-        {
-            return false;
-        }
-
-        if (game.Inventory.FindItemByName(itemName) != null)
-        {
-            return true;
-        }
-
-        var cubeItem = game.Cube.FindItemByName(itemName);
-        if (cubeItem != null
-            && InventoryHelpers.PutCubeItemInInventory(game, cubeItem) != MoveItemResult.Succes)
-        {
-            Log.Error("Moving {Item} from the Horadric Cube into inventory failed", itemName);
-            return false;
-        }
-
-        if (game.CursorItem?.Name == itemName)
-        {
-            game.CleanupCursorItem();
-        }
-
-        return game.Inventory.FindItemByName(itemName) != null
-            || !Holds(client, itemName);
-    }
+    private static bool EnsureItemInInventory(Client client, ItemName itemName) => QuestItems.EnsureItemInInventory(client, itemName);
 
     private async Task<bool> RushSevenTombs(Client rusher, List<ParticipantSession> rushees)
     {
@@ -5309,7 +5177,9 @@ public sealed partial class RushBot : IBotInstance
                 account.ManaPotionTarget(rusher.Game.Belt.Height),
                 rusher.Game.Belt.NumOfManaPotions(),
                 InventoryHelpers.GetTotalManaPotions(rusher.Game),
-                ManaReserve)
+                ManaReserve),
+            // The visit is also what refills the portal tome, so a single potion short still makes it.
+            HealthPotionsNotWorthAVisit = 0,
         };
 
         var result = await _townManagementService.PerformTownTasks(rusher, options);
@@ -6657,146 +6527,7 @@ public sealed partial class RushBot : IBotInstance
         }
     }
 
-    private async Task<bool> TraverseToCore(Client client, Area destination)
-    {
-        var route = await _pathingService.GetAreaRoute(
-            client.Game.MapId,
-            MapDifficulty,
-            client.Game.Area,
-            destination);
-        if (route.Count == 0)
-        {
-            Log.Error("No route from {From} to {Destination}", client.Game.Area, destination);
-            return false;
-        }
-
-        foreach (var target in route.Skip(1))
-        {
-            var entered = false;
-            for (var attempt = 0; attempt < AreaHopAttempts && !entered; attempt++)
-            {
-                var mode = GetMovementMode(client);
-                var from = client.Game.Area;
-
-                // Ask where we actually are first. Straight off a waypoint the cached location still
-                // holds the old one, and pathing snaps the destination but never the source: a stale
-                // position 37 units off the walkable grid made every exit look unreachable and ended
-                // the rush at "1 exits, 0 crossings, tried []".
-                client.Game.RequestUpdate(client.Game.Me.Id);
-                await Task.Delay(500);
-
-                // Wait for the position to be one the map agrees is walkable before pathing from it.
-                // Pathing from a stale position is what produced "no reachable exit or crossing" from a
-                // spot that was plainly fine. Pathing from the waypoint instead was worse: it returned a
-                // path starting 430 units away that nothing could follow.
-                if (!await SyncPosition(client, from))
-                {
-                    // A waypoint tile is flagged unwalkable in the map grid, so standing on one makes
-                    // every path come back empty: pathing snaps the destination but never the source.
-                    // Step off it the way a player does, without pathing, since pathing is what is broken.
-                    await NudgeOntoWalkableGround(client, from);
-                }
-
-                // The crossing search ranks candidates by distance from where you stand, so retrying from
-                // the same spot returns the same unreachable candidate every time. Move first.
-                if (attempt > 0)
-                {
-                    await StepAside(client, from);
-                }
-
-                List<Point> path;
-                try
-                {
-                    path = await _pathingService.GetPathToAdjacentArea(
-                        client.Game.MapId,
-                        MapDifficulty,
-                        from,
-                        client.Game.Me.Location,
-                        target,
-                        mode);
-                }
-                catch (InvalidOperationException exception)
-                {
-                    // One unreachable read is worth another attempt, not the end of the rush.
-                    Log.Warning(
-                        "No path from {From} into {Target} on attempt {Attempt} at {Location}: {Reason}",
-                        from,
-                        target,
-                        attempt + 1,
-                        client.Game.Me.Location,
-                        exception.Message);
-                    await Task.Delay(1000);
-                    continue;
-                }
-                Log.Information(
-                    "CROSSING {From}->{Target} attempt {Attempt} via {Source}: at {Location}, path {Count} "
-                    + "points {First}..{Last}",
-                    from,
-                    target,
-                    attempt + 1,
-                    "position",
-                    client.Game.Me.Location,
-                    path.Count,
-                    path.Count > 0 ? path[0].ToString() : "none",
-                    path.Count > 0 ? path[^1].ToString() : "none");
-
-                // Teleport tops out around 30 units and the planner strides right at that ceiling, so a
-                // hop that will not land leaves the rusher parked repeating the same failed path. The
-                // result was being discarded, which is why it looked like the level was impassable.
-                var moved = await MovementHelpers.TakePathOfLocations(client.Game, path, mode);
-                if (!moved && mode == MovementMode.Teleport)
-                {
-                    Log.Information(
-                        "Teleport path stalled at {Location} on the way to {Target}; walking it instead",
-                        client.Game.Me.Location,
-                        target);
-                    await MovementHelpers.TakePathOfLocations(client.Game, path, MovementMode.Walking);
-                }
-
-                client.Game.RequestUpdate(client.Game.Me.Id);
-                await Task.Delay(400);
-                var warp = client.Game.GetNearestWarp();
-                Log.Information(
-                    "CROSSING {From}->{Target} landed at {Location}, nearest warp {Warp} at {Distance:0.0}",
-                    from,
-                    target,
-                    client.Game.Me.Location,
-                    warp?.Location.ToString() ?? "none",
-                    warp == null ? -1 : warp.Location.Distance(client.Game.Me.Location));
-                if (warp == null || warp.Location.Distance(client.Game.Me.Location) >= 25)
-                {
-                    // The warp is streamed when the client comes into range, so a path that stopped
-                    // short leaves nothing to take. Worth another pass rather than calling the level
-                    // impassable - this is where the Durance 3 entrance is flaky.
-                    Log.Debug(
-                        "No warp within reach of {Location} for {Target} on attempt {Attempt}",
-                        client.Game.Me.Location,
-                        target,
-                        attempt + 1);
-                }
-                else
-                {
-                    await MovementHelpers.TakeWarp(
-                        client.Game,
-                        _pathingService,
-                        _mapApiService,
-                        mode,
-                        warp,
-                        target);
-                }
-
-                entered = await ConfirmInArea(client, target);
-            }
-
-            if (!entered)
-            {
-                Log.Error("Rusher stopped in {Area} while trying to enter {Target}", client.Game.Area, target);
-                return false;
-            }
-        }
-
-        return true;
-    }
+    private Task<bool> TraverseToCore(Client client, Area destination) => _traveler.TraverseTo(client, destination);
 
     /// <summary>
     /// Waits until the position the client believes it is at is one the map agrees is walkable, before
@@ -6927,132 +6658,22 @@ public sealed partial class RushBot : IBotInstance
             OrbStandoff);
     }
 
-    private async Task<bool> SyncPosition(Client client, Area area)
-    {
-        for (var attempt = 0; attempt < 10; attempt++)
-        {
-            if (await _pathingService.IsNavigatablePointInArea(
-                    client.Game.MapId, MapDifficulty, area, client.Game.Me.Location))
-            {
-                return true;
-            }
-
-            client.Game.RequestUpdate(client.Game.Me.Id);
-            await Task.Delay(250);
-        }
-
-        Log.Warning(
-            "{Name} is at {Location} in {Area}, which the map does not consider walkable",
-            client.Game.Me.Name,
-            client.Game.Me.Location,
-            area);
-        return false;
-    }
+    private Task<bool> SyncPosition(Client client, Area area) => _traveler.SyncPosition(client, area);
 
     /// <summary>
     /// Moves a few units to ground the map considers walkable, using direct movement rather than the
     /// pathing service, which cannot produce a path out of an unwalkable source in the first place.
     /// </summary>
-    private async Task<bool> NudgeOntoWalkableGround(Client client, Area area)
-    {
-        var from = client.Game.Me.Location;
-        foreach (var (dx, dy) in new[]
-                 {
-                     (0, 18), (18, 0), (0, -18), (-18, 0),
-                     (13, 13), (-13, 13), (13, -13), (-13, -13),
-                 })
-        {
-            var candidate = new Point((ushort)(from.X + dx), (ushort)(from.Y + dy));
-            if (!await _pathingService.IsNavigatablePointInArea(
-                    client.Game.MapId, MapDifficulty, area, candidate))
-            {
-                continue;
-            }
+    private Task<bool> NudgeOntoWalkableGround(Client client, Area area) => _traveler.NudgeOntoWalkableGround(client, area);
 
-            // Deliberately not MoveTo: that helper reports success without sending anything under its
-            // no-op range, which is the distance this step lives in.
-            await client.Game.MoveToAsync(candidate);
-            await Task.Delay(400);
-            client.Game.RequestUpdate(client.Game.Me.Id);
-            await Task.Delay(300);
-
-            if (await _pathingService.IsNavigatablePointInArea(
-                    client.Game.MapId, MapDifficulty, area, client.Game.Me.Location))
-            {
-                Log.Information(
-                    "Stepped off unwalkable ground at {From} onto {To}",
-                    from,
-                    client.Game.Me.Location);
-                return true;
-            }
-        }
-
-        Log.Warning("Could not step off unwalkable ground at {From} in {Area}", from, area);
-        return false;
-    }
-
-    private async Task StepAside(Client client, Area area)
-    {
-        var from = client.Game.Me.Location;
-        var mode = GetMovementMode(client);
-        foreach (var (dx, dy) in new[] { (0, -40), (40, 0), (0, 40), (-40, 0), (30, -30), (-30, 30) })
-        {
-            var candidate = new Point((ushort)(from.X + dx), (ushort)(from.Y + dy));
-            if (!await _pathingService.IsNavigatablePointInArea(
-                    client.Game.MapId, MapDifficulty, area, candidate))
-            {
-                continue;
-            }
-
-            var path = await _pathingService.GetPathToLocation(client.Game, candidate, mode);
-            if (path.Count > 0 && await MovementHelpers.TakePathOfLocations(client.Game, path, mode))
-            {
-                Log.Debug("Stepped aside from {From} to {To} before retrying", from, client.Game.Me.Location);
-                return;
-            }
-        }
-    }
+    private Task StepAside(Client client, Area area) => _traveler.StepAside(client, area);
 
     /// <param name="attempts">
     /// How many times to re-ask before giving up. Confirming arrival after an interact is worth eight
     /// tries; asking whether we are somewhere before setting off is worth one, and looping there spent
     /// four seconds of every single ferry proving a negative.
     /// </param>
-    private async Task<bool> ConfirmInArea(Client client, Area area, int attempts = 8)
-    {
-        // The server sends the new position by itself within a tenth of a second of a portal, warp or
-        // waypoint. Look at it before asking: every check used to start with a blocking update request
-        // and half a second of sleep, even when the character was plainly already there.
-        if (await GeneralHelpers.TryWithTimeout(async _ =>
-            {
-                if (await _pathingService.IsNavigatablePointInArea(client.Game.MapId, MapDifficulty, area, client.Game.Me.Location))
-                {
-                    return true;
-                }
-
-                await Task.Delay(50);
-                return false;
-            }, TimeSpan.FromMilliseconds(300)))
-        {
-            return true;
-        }
-
-        for (var attempt = 0; attempt < attempts; attempt++)
-        {
-            client.Game.RequestUpdate(client.Game.Me.Id);
-            await Task.Delay(500);
-            if (await _pathingService.IsNavigatablePointInArea(
-                    client.Game.MapId,
-                    MapDifficulty,
-                    area,
-                    client.Game.Me.Location))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    private Task<bool> ConfirmInArea(Client client, Area area, int attempts = 8) => _traveler.ConfirmInArea(client, area, attempts);
 
     /// <param name="area">
     /// The level to look in, when the caller knows it. Game.Area lags: arriving in the Inner Cloister it

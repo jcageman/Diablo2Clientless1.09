@@ -1,6 +1,4 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
-using System.IO;
-using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming;
 
@@ -12,7 +10,7 @@ public class NPCStopPacket : D2gsPacket
     public double LifePercentage { get; }
     public NPCStopPacket(D2gsPacket packet) : base(packet.Raw)
     {
-        var reader = new BinaryReader(new MemoryStream(packet.Raw), Encoding.ASCII);
+        var reader = new PacketReader(packet.Raw);
         var id = reader.ReadByte();
         if ((InComingPacket)id != InComingPacket.NPCStop)
         {

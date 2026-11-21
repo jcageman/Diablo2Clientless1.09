@@ -1,8 +1,7 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
 using D2NG.Core.D2GS.Players;
 using Serilog;
-using System.IO;
-using System.Text;
+using Serilog.Events;
 
 namespace D2NG.Core.D2GS.Packet.Incoming;
 
@@ -10,7 +9,7 @@ internal class SetItemSkillPacket : D2gsPacket
 {
     public SetItemSkillPacket(D2gsPacket packet) : base(packet.Raw)
     {
-        var reader = new BinaryReader(new MemoryStream(packet.Raw), Encoding.ASCII);
+        var reader = new PacketReader(packet.Raw);
         var id = reader.ReadByte();
         _ = reader.ReadUInt16();
         UnitId = reader.ReadUInt32();
@@ -19,6 +18,7 @@ internal class SetItemSkillPacket : D2gsPacket
         {
             case InComingPacket.UpdateItemOSkill:
                 BaseLevel = reader.ReadByte();
+                HasBaseLevel = true;
                 goto case InComingPacket.UpdateItemSkill;
             case InComingPacket.UpdateItemSkill:
                 Amount = reader.ReadByte();
@@ -26,16 +26,19 @@ internal class SetItemSkillPacket : D2gsPacket
             default:
                 throw new D2GSPacketException($"Invalid Packet Id {id}");
         }
-        reader.Close();
 
-        Log.Verbose($"(0x{packet.Raw[0],2:X2}) Set Item Skill:\n" +
-                    $"\tUnit ID: {UnitId}\n" +
-                    $"\tSkill: {Skill}\n" +
-                    $"\tAmount: {Amount}");
+        if (Log.IsEnabled(LogEventLevel.Verbose))
+        {
+            Log.Verbose($"(0x{packet.Raw[0],2:X2}) Set Item Skill:\n" +
+                        $"\tUnit ID: {UnitId}\n" +
+                        $"\tSkill: {Skill}\n" +
+                        $"\tAmount: {Amount}");
+        }
     }
 
     public uint UnitId { get; }
     public Skill Skill { get; }
     public int BaseLevel { get; }
+    public bool HasBaseLevel { get; }
     public int Amount { get; }
 }

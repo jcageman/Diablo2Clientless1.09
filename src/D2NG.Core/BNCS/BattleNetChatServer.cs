@@ -124,6 +124,8 @@ internal class BattleNetChatServer : IDisposable
         OnReceivedPacketEvent(Sid.REQUIREDWORK, _ => { });
     }
 
+    internal void TraceTo(Tracing.TraceChannel channel) => Connection.Trace = channel;
+
     public bool IsConnected()
     {
         return Connection.Connected;

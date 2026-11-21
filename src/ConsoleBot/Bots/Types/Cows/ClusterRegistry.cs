@@ -53,7 +53,7 @@ public sealed class ClusterRegistry
                 return covering[0];
             }
 
-            var cluster = new MonsterCluster { Id = _nextId++, Location = location, SweepIndex = SweepIndexOf(location) };
+            var cluster = new MonsterCluster { Id = _nextId++, Location = location, FirstSeen = location, SweepIndex = SweepIndexOf(location) };
             _grid.TryAdd(cluster.Id, location, cluster);
             _clusters.Add(cluster);
             created = true;
@@ -92,6 +92,39 @@ public sealed class ClusterRegistry
         }
     }
 
+    /// <summary>Moves every cluster to the centroid of its live members, or back to where it was first seen.</summary>
+    public void Follow(IEnumerable<(uint ClusterId, Point Location)> liveMembers)
+    {
+        var byCluster = new Dictionary<uint, List<Point>>();
+        foreach (var (clusterId, location) in liveMembers)
+        {
+            if (location == null)
+            {
+                continue;
+            }
+
+            if (!byCluster.TryGetValue(clusterId, out var members))
+            {
+                byCluster[clusterId] = members = [];
+            }
+
+            members.Add(location);
+        }
+
+        lock (_lock)
+        {
+            foreach (var cluster in _clusters)
+            {
+                var location = MonsterTracking.Centroid(byCluster.GetValueOrDefault(cluster.Id), cluster.FirstSeen);
+                if (location != cluster.Location)
+                {
+                    cluster.Location = location;
+                    _grid.TryUpdateLocation(cluster.Id, location);
+                }
+            }
+        }
+    }
+
     /// <summary>Whether every monster assigned to this cluster is dead.</summary>
     public bool IsCleared(MonsterCluster cluster)
     {
@@ -112,7 +145,7 @@ public sealed class ClusterRegistry
             _sweep = sweep ?? [];
             foreach (var cluster in _clusters)
             {
-                cluster.SweepIndex = SweepIndexOf(cluster.Location);
+                cluster.SweepIndex = SweepIndexOf(cluster.FirstSeen);
             }
         }
     }

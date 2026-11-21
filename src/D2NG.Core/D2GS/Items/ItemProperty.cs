@@ -7,6 +7,9 @@ public class ItemProperty
 {
     public StatType Type { get; set; }
 
+    /// <summary>The row in itemstatcost the packet named; paired stats carry the second row's value in MaximumValue.</summary>
+    public int StatId { get; set; }
+
     public int Value { get; set; }
 
     public int MonsterReanimate { get; set; }
@@ -30,4 +33,7 @@ public class ItemProperty
     public int MinimumValue { get; set; }
 
     public int MaximumValue { get; set; }
+
+    /// <summary>Frames a cold or poison hit lasts: the third stat of those packed damage stats.</summary>
+    public int Length { get; set; }
 }

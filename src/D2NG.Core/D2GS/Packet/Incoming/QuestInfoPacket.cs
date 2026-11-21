@@ -1,8 +1,7 @@
 ﻿using D2NG.Core.D2GS.Exceptions;
 using Serilog;
-using System.IO;
+using Serilog.Events;
 using System.Linq;
-using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming;
 
@@ -10,7 +9,7 @@ internal class QuestInfoPacket : D2gsPacket
 {
     public QuestInfoPacket(D2gsPacket packet) : base(packet.Raw)
     {
-        var reader = new BinaryReader(new MemoryStream(Raw), Encoding.ASCII);
+        var reader = new PacketReader(Raw);
         var id = reader.ReadByte();
         if ((InComingPacket)id != InComingPacket.QuestInfo)
         {
@@ -24,11 +23,14 @@ internal class QuestInfoPacket : D2gsPacket
             Quests[i] = reader.ReadByte();
         }
 
-        Log.Verbose($"(0x{id,2:X2}) Player Quest Info:\n" +
-            $"\tUpdate Type: {UpdateType}\n" +
-            $"\tUnit Gid: {UnitGid}\n" +
-            $"\tTimer: {Timer}\n" +
-            $"\tQuests: {Quests.Aggregate("", (s, i) => s + "," + $"{i,2:X2}")}");
+        if (Log.IsEnabled(LogEventLevel.Verbose))
+        {
+            Log.Verbose($"(0x{id,2:X2}) Player Quest Info:\n" +
+                $"\tUpdate Type: {UpdateType}\n" +
+                $"\tUnit Gid: {UnitGid}\n" +
+                $"\tTimer: {Timer}\n" +
+                $"\tQuests: {Quests.Aggregate("", (s, i) => s + "," + $"{i,2:X2}")}");
+        }
     }
 
     public byte UpdateType { get; }

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>TargetingReplay</RootNamespace>
+    <TieredPGO>false</TieredPGO>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ConsoleBot\ConsoleBot.csproj" />
+    <ProjectReference Include="..\..\src\D2NG.Core\D2NG.Core.csproj" />
+    <ProjectReference Include="..\..\src\D2NG.Trace\D2NG.Trace.csproj" />
+  </ItemGroup>
+
+</Project>

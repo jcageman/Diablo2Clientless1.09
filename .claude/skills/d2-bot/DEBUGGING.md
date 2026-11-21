@@ -1,76 +1,46 @@
 # Debugging a bot run
 
-The packet log is **ground truth**. What the code intended, what the log line says, and what went on
-the wire are three different things, and only the third decides what the server did. Read the wire
-before forming a theory.
+The packet trace is **ground truth**. What the code intended, what the log line says, and what went
+on the wire are three different things, and only the third decides what the server did. Read the wire
+before forming a theory. Every game is recorded; the `d2-trace` skill finds the game and the window.
 
 ## Read the wire first
 
-Set `logLevel: "Debug"`. Logs run to hundreds of thousands of lines — grep, never read whole.
-
-Start with what the bot **sent**, not what it logged:
+Start with what the bot **sent**, not what it logged, over the failing window of one client:
 
 ```bash
-grep -n "send D2GS packet of type" run.log | grep -vE "Ping|Run |UpdatePlayerLocation" | tail -40
+Trace packets <game> --client <client> --from <t> --to <t> --sent --limit 0
 ```
 
-Then count them over the failing window — the shape of the counts identifies the bug on sight:
+Then count them - the shape of the counts identifies the bug on sight:
 
 ```bash
-python -c "
-import io,collections,sys
-c=collections.Counter()
-for i,l in enumerate(io.open(sys.argv[1],encoding='utf-8',errors='replace'),1):
-    if int(sys.argv[2])<=i<=int(sys.argv[3]) and 'send D2GS packet of type: ' in l:
-        c[l.split('send D2GS packet of type: ')[1].split(' with')[0]]+=1
-for k,v in c.most_common(): print(v,k)
-" run.log 5219 5556
+Trace packets <game> --client <client> --from <t> --to <t> --sent --limit 0 | awk '{print $3}' | sort | uniq -c | sort -rn
 ```
 
 - **Only pings** — the bot never even tried. A movement or pathing call bailed and returned false
   without sending. Suspect an unpathable streamed object.
 - **Movement plus many interacts, no result** — it arrived nowhere near the target and clicked from
-  out of range. Suspect a stale `Me.Location`; find the last `UpdatePlayerLocation` it sent and
-  compare that against the target's coordinates by hand.
+  out of range. Suspect a stale `Me.Location`; `Trace timeline` shows each walk verify and server
+  reassign against what the client thought.
 - **A flood of `RemoveObject`** — objects dropping out of range as the character walks. This looks
   like an area unload but is not; confirm with coordinates, since each act sits in its own range.
 
 ## Interleaved clients
 
-One log carries every client. Lines are tagged `Instance N`, and two clients' quest or position
-packets interleave into what looks like one value flipping back and forth. Filter by instance before
-concluding anything about a value that appears to oscillate.
-
-Map instance to character from the join lines:
-
-```bash
-grep -E "Joining game .* with .* as " run.log | head
-```
+The text log carries every client, tagged `Instance N`, and two clients' quest or position lines
+interleave into what looks like one value flipping back and forth. The trace keeps one file per
+client: pass `--client` and the question does not arise.
 
 ## Decoding quest state
 
 `QuestInfo` (`0x28`) is a 7-byte header — id, update type, `UnitGid` (4), timer — then 96 bytes of
 quest words. Quest `i` sits at raw offset `7 + 2*i`, little endian. `TheSevenTombs` is quest 14, so
-offset 35.
+offset 35. `Trace` decodes them: `packets ... --type 0x28` prints each `QuestInfo` as `i=word` pairs,
+and `state ... --select quests` names every quest's word at one instant.
 
-```bash
-python -c "
-import io,re,sys
-qi=re.compile(r'type: QuestInfo with data (.+)')
-prev=None
-for i,l in enumerate(io.open(sys.argv[1],encoding='utf-8',errors='replace'),1):
-    m=qi.search(l)
-    if not m: continue
-    b=[int(x,16) for x in m.group(1).replace('0x','').split(',')]
-    if len(b)<40: continue
-    w=b[35]|(b[36]<<8)
-    if w!=prev: print(i,'0x%04X'%w); prev=w
-" run.log
-```
-
-Collecting the **distinct values** is often faster than tracking transitions, because it survives the
-interleaving: swap the print for a `Counter`. A value that appears once, or one carrying bit 0 when
-the others do not, is the moment worth reading around.
+A value that appears once, or one carrying bit 0 when the others do not, is the moment worth reading
+around.
 
 A quest word that does not move after a step is weak evidence. Several chains only settle at the very
 end — a message can look inert and still be a required link. Judge a chain by whether it completes,

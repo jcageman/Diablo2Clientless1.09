@@ -99,6 +99,9 @@ public class Item
 
     public Dictionary<StatType, ItemProperty> Properties { get; set; }
 
+    /// <summary>The packet this item was parsed from, so a logged item can be parsed again later.</summary>
+    public byte[] Packet { get; set; }
+
     /// <summary>
     /// Gems in this item's sockets. Their stats are not in the item's own property list, and a
     /// perfect ruby in a helm or body armor is 38 life the maximum would otherwise miss.

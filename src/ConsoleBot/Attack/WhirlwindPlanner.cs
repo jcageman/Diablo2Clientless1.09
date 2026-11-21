@@ -13,7 +13,12 @@ public static class WhirlwindPlanner
 
     public const double MinimumSpin = 8.0;
 
-    public static (Point Target, int Covered) Aim(Point from, IReadOnlyList<Point> monsters)
+    /// <summary>A clipped whirl still covers a monster standing this far past its end, half in the wall.</summary>
+    public const double ClippedReach = 2.0;
+
+    /// <param name="clip">When given, cuts each whirl's end back to where the ground stops, and sixteen compass directions are tried besides those toward the monsters.</param>
+    /// <param name="minimumLength">Clipped whirls shorter than this are dropped: a whirl that starts within arrival distance of its end is never cast.</param>
+    public static (Point Target, int Covered) Aim(Point from, IReadOnlyList<Point> monsters, Func<Point, Point> clip = null, double minimumLength = 0)
     {
         if (monsters == null || monsters.Count == 0)
         {
@@ -24,7 +29,8 @@ public static class WhirlwindPlanner
         var bestScore = 0;
         var bestLength = double.MaxValue;
 
-        foreach (var direction in Directions(from, monsters))
+        var directions = clip == null ? Directions(from, monsters) : Directions(from, monsters).Concat(Compass);
+        foreach (var direction in directions)
         {
             var swept = monsters.Where(m => DistanceToRay(from, direction, m) <= SweepRadius).ToList();
             if (swept.Count == 0)
@@ -33,11 +39,29 @@ public static class WhirlwindPlanner
             }
 
             var length = Math.Max(MinimumSpin, swept.Min(m => Along(from, direction, m)) + Overshoot);
-            var covered = swept.Count(m => Along(from, direction, m) <= length);
+            var end = Travel(from, direction, length);
+            var reach = length;
+            if (clip != null)
+            {
+                end = clip(end);
+                length = from.Distance(end);
+                if (length < minimumLength)
+                {
+                    continue;
+                }
+
+                reach = length + ClippedReach;
+            }
+
+            var covered = swept.Count(m => Along(from, direction, m) <= reach);
+            if (covered == 0)
+            {
+                continue;
+            }
 
             if (covered > bestScore || (covered == bestScore && length < bestLength))
             {
-                best = Travel(from, direction, length);
+                best = end;
                 bestScore = covered;
                 bestLength = length;
             }
@@ -45,6 +69,14 @@ public static class WhirlwindPlanner
 
         return (best, bestScore);
     }
+
+    /// <summary>
+    /// A monster beside him with a wall at its back clips every whirl aimed at it; a whirl hits what it
+    /// passes, so one out along open ground sweeps it all the same.
+    /// </summary>
+    private static readonly (double X, double Y)[] Compass = Enumerable.Range(0, 16)
+        .Select(i => (Math.Cos(i * Math.PI / 8), Math.Sin(i * Math.PI / 8)))
+        .ToArray();
 
     private static IEnumerable<(double X, double Y)> Directions(Point from, IReadOnlyList<Point> monsters)
     {

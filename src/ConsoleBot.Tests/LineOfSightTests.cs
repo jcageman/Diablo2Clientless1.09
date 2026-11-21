@@ -16,6 +16,27 @@ public sealed class LineOfSightTests
         Assert.Equal((20, 15), (points[^1].X, points[^1].Y));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(16)]
+    [InlineData(17)]
+    public void MissilesCrossFloorWaterAndTheChaosStar(int cell)
+    {
+        Assert.False(AttackService.BlocksSight(cell));
+    }
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(7)]
+    [InlineData(23)]
+    [InlineData(37)]
+    public void WallsAndEdgesStillBlock(int cell)
+    {
+        Assert.True(AttackService.BlocksSight(cell));
+    }
+
     [Fact]
     public void LineTowardsSmallerYStepsDown()
     {

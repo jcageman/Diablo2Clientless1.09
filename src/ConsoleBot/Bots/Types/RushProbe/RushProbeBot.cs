@@ -1260,7 +1260,8 @@ public class RushProbeBot : IBotInstance
             // A count of zero skips the vendor entirely, so ask for whatever is missing from the belt
             // plus a margin, the same way the assist bot sizes its shopping.
             HealthPotionsToBuy = Math.Max(0, game.Belt.Height * account.HealthSlots.Count + 10 - InventoryHelpers.GetTotalHealthPotions(game)),
-            ManaPotionsToBuy = Math.Max(0, game.Belt.Height * account.ManaSlots.Count + 10 - InventoryHelpers.GetTotalManaPotions(game))
+            ManaPotionsToBuy = Math.Max(0, game.Belt.Height * account.ManaSlots.Count + 10 - InventoryHelpers.GetTotalManaPotions(game)),
+            HealthPotionsNotWorthAVisit = 0,
         };
 
         Log.Information("Restocking the rusher in {Act}: {Health} health and {Mana} mana potions",

@@ -19,7 +19,11 @@ namespace ConsoleBot.Mule;
 
 public sealed record TradeOffer(Item Item, Cell TradeCell);
 
-public sealed record TradeOutcome(MoveItemResult Result, int ItemsTraded, int Rejections);
+public sealed record TradeOutcome(MoveItemResult Result, int ItemsTraded, int Rejections)
+{
+    /// <summary>The offered items that reached the trade grid and went over, in offer order; empty on any other outcome.</summary>
+    public IReadOnlyList<TradeOffer> Placed { get; init; } = [];
+}
 
 public enum TradeInitiator
 {
@@ -113,7 +117,7 @@ public class TradeExecutor
         // The window-open acknowledgement arrives within 40 ms; a short pause keeps the first item move behind it.
         await Task.Delay(150);
 
-        var placed = 0;
+        var placedItems = new List<TradeOffer>();
         foreach (var entry in offer)
         {
             var moved = await PlaceOnTradeGrid(giver, entry);
@@ -124,9 +128,11 @@ public class TradeExecutor
             }
             if (moved == MoveItemResult.Succes)
             {
-                placed++;
+                placedItems.Add(entry);
             }
         }
+
+        var placed = placedItems.Count;
 
         if (placed == 0)
         {
@@ -143,7 +149,7 @@ public class TradeExecutor
         if (Traded(giverSignals, receiverSignals))
         {
             _lastTradeCompleted = DateTime.UtcNow;
-            return new TradeOutcome(MoveItemResult.Succes, placed, 0);
+            return new TradeOutcome(MoveItemResult.Succes, placed, 0) { Placed = placedItems };
         }
 
         if (Refused(giverSignals, receiverSignals))

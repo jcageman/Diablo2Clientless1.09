@@ -1,8 +1,8 @@
+using D2NG.Core.D2GS.Motion;
 using D2NG.Core.D2GS.Objects;
 using D2NG.Core.D2GS.Packet.Incoming;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace D2NG.Core.D2GS.Act;
 
@@ -15,30 +15,69 @@ internal class ActData
     private readonly ConcurrentDictionary<Act, List<Tile>> _tiles = new();
     private readonly ConcurrentDictionary<Act, ConcurrentDictionary<(uint, EntityType), WorldObject>> _worldObjects
         = new();
-    private readonly ConcurrentDictionary<Act, ConcurrentDictionary<EntityCode, ConcurrentBag<WorldObject>>> _worldObjectsByEntityCode
+    private readonly ConcurrentDictionary<Act, ConcurrentDictionary<EntityCode, CodeObjects>> _worldObjectsByEntityCode
         = new();
 
     private readonly ConcurrentDictionary<Act, ConcurrentDictionary<uint, List<WarpData>>> _warps = new();
 
-    public List<Tile> Tiles { get => _tiles.GetOrAdd(Act, []); }
+    public List<Tile> Tiles { get => _tiles.GetOrAdd(Act, static _ => []); }
 
-    public ConcurrentDictionary<(uint, EntityType), WorldObject> WorldObjects { get => _worldObjects.GetOrAdd(Act, new ConcurrentDictionary<(uint, EntityType), WorldObject>()); }
+    /// <summary>What Tile.Equals compares of every tile in <see cref="Tiles"/>, which only a reveal adds to; touched by the receive thread only.</summary>
+    private readonly ConcurrentDictionary<Act, HashSet<(ushort X, ushort Y, Area Area)>> _tileKeys = new();
 
-    public ConcurrentDictionary<EntityCode, ConcurrentBag<WorldObject>> WorldObjectsByEntityCode { get => _worldObjectsByEntityCode.GetOrAdd(Act, new ConcurrentDictionary<EntityCode, ConcurrentBag<WorldObject>>()); }
+    private HashSet<(ushort X, ushort Y, Area Area)> TileKeys => _tileKeys.GetOrAdd(Act, static _ => []);
 
-    public ConcurrentDictionary<uint, List<WarpData>> Warps { get => _warps.GetOrAdd(Act, new ConcurrentDictionary<uint, List<WarpData>>()); }
+    public ConcurrentDictionary<(uint, EntityType), WorldObject> WorldObjects { get => _worldObjects.GetOrAdd(Act, static _ => new ConcurrentDictionary<(uint, EntityType), WorldObject>()); }
+
+    public ConcurrentDictionary<EntityCode, CodeObjects> WorldObjectsByEntityCode { get => _worldObjectsByEntityCode.GetOrAdd(Act, static _ => new ConcurrentDictionary<EntityCode, CodeObjects>()); }
+
+    public ConcurrentDictionary<uint, List<WarpData>> Warps { get => _warps.GetOrAdd(Act, static _ => new ConcurrentDictionary<uint, List<WarpData>>()); }
+
+    internal AreaResolver Resolver { get; init; } = new();
+
+    private bool _lifeFromStopsAndAssigns = true;
+    private bool _lifeZeroForDyingAndDead = true;
+
+    internal ClientRules Rules
+    {
+        init
+        {
+            _lifeFromStopsAndAssigns = value.MonsterLifeFromStopsAndAssigns;
+            _lifeZeroForDyingAndDead = value.LifeZeroForDyingAndDead;
+        }
+    }
 
     internal void LoadActData(ActDataPacket packet)
     {
         Act = packet.Act;
         Area = packet.Area;
         MapId = packet.MapId;
+        Resolver.ActLoaded(packet.Act, packet.Area);
     }
 
     internal void UpdateNPCLocation(uint entityId, Point location)
     {
         var npc = WorldObjects[(entityId, EntityType.NPC)];
         npc?.Location = location;
+    }
+
+    /// <summary>
+    /// A stop's position, and its life for a unit still alive. A stop stating 0 states no life: town folk and other
+    /// units that take no damage stop with 0 while alive, and a death comes as an NPCState.
+    /// </summary>
+    internal void UpdateNPCStop(NPCStopPacket packet)
+    {
+        var npc = WorldObjects[(packet.EntityId, EntityType.NPC)];
+        if (npc == null)
+        {
+            return;
+        }
+
+        npc.Location = packet.Location;
+        if (_lifeFromStopsAndAssigns && packet.LifePercentage > 0 && npc.State is not (EntityState.Dead or EntityState.Dieing))
+        {
+            npc.LifePercentage = packet.LifePercentage;
+        }
     }
 
     internal void UpdateObjectState(ObjectStatePacket packet)
@@ -56,7 +95,9 @@ internal class ActData
             npc.Location = packet.Location;
         }
 
-        npc.LifePercentage = packet.LifePercentage;
+        npc.LifePercentage = _lifeZeroForDyingAndDead || packet.EntityState is not (EntityState.Dieing or EntityState.Dead)
+            ? packet.LifePercentage
+            : packet.Direction / 1.28;
     }
 
     internal void UpdateNPCOnHit(NpcHitPacket packet)
@@ -75,7 +116,34 @@ internal class ActData
             IsChampion = packet.IsChampion,
             IsBossMinion = packet.IsBossMinion
         };
+        if (_lifeFromStopsAndAssigns && packet.LifePercentage > 0)
+        {
+            npc.LifePercentage = packet.LifePercentage;
+        }
+
+        if (Motion != null)
+        {
+            try
+            {
+                npc.AttachMotion(Motion, MotionUpdate.From(packet));
+            }
+            catch (System.Exception e)
+            {
+                MotionFailures.Report(e);
+            }
+        }
+
         AddWorldObject(npc);
+    }
+
+    internal MotionContext Motion { get; init; }
+
+    internal void ApplyMotion(in MotionUpdate update)
+    {
+        if (update.Kind != MotionUpdateKind.None && WorldObjects.TryGetValue((update.EntityId, EntityType.NPC), out var npc))
+        {
+            npc.ApplyMotion(update);
+        }
     }
 
     internal void UpdateTownPortal(TownPortalStatePacket packet)
@@ -95,17 +163,14 @@ internal class ActData
         WorldObjects.Remove((entityId, entityType), out var value);
         if (value != null)
         {
-            WorldObjectsByEntityCode.AddOrUpdate(
-value.Code,
-(newCode => []),
-(existingCode, existingObjects) => [.. existingObjects.Where(o => o.Id != value.Id || o.Type != value.Type)]);
+            WorldObjectsByEntityCode.GetOrAdd(value.Code, static _ => new CodeObjects()).Remove(value.Id, value.Type);
         }
     }
 
     internal void AddWorldObject(WorldObject obj)
     {
         WorldObjects[(obj.Id, obj.Type)] = obj;
-        WorldObjectsByEntityCode.AddOrUpdate(obj.Code, (newCode => [obj]), (existingCode, existingObjects) => { existingObjects.Add(obj); return existingObjects; });
+        WorldObjectsByEntityCode.GetOrAdd(obj.Code, static _ => new CodeObjects()).Add(obj);
     }
 
     internal void AddWarp(AssignLevelWarpPacket packet)
@@ -167,6 +232,18 @@ value.Code,
     /// </param>
     internal void HandleMapRevealPacket(MapRevealPacket p, Point position = null)
     {
+        var keys = TileKeys;
+        if (keys.Contains((p.X, p.Y, p.Area)))
+        {
+            if (position == null || Tile.Contains(p.X, p.Y, p.Area, position))
+            {
+                Area = p.Area;
+                _lastResolvedArea = Area.None;
+            }
+
+            return;
+        }
+
         var tile = new Tile(p.X, p.Y, p.Area);
         if (position == null || tile.Contains(position))
         {
@@ -174,7 +251,7 @@ value.Code,
             _lastResolvedArea = Area.None;
         }
 
-        if (!Tiles.Any(item => item.Equals(tile)))
+        if (keys.Add((tile.X, tile.Y, tile.Area)))
         {
             lock (Tiles)
             {
@@ -203,6 +280,8 @@ value.Code,
                     }
                 }
             }
+
+            Resolver.TileRevealed(Act, tile);
         }
     }
 }

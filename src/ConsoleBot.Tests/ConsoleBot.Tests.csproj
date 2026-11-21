@@ -24,6 +24,11 @@
     <None Include="..\D2NG.Core.Tests\data\item_properties.txt" Link="data\item_properties.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Recorded moments exported by Trace export, game-free; see MomentFixture. -->
+  <ItemGroup>
+    <None Include="data\fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\ConsoleBot\ConsoleBot.csproj" />
     <ProjectReference Include="..\D2NG.Core\D2NG.Core.csproj" />

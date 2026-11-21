@@ -3,6 +3,7 @@ using ConsoleBot.Bots.Types;
 using ConsoleBot.Exceptions;
 using D2NG.Core;
 using D2NG.Core.D2GS;
+using D2NG.Core.Tracing;
 using Serilog;
 using System;
 using System.Diagnostics;
@@ -124,13 +125,16 @@ public static class RealmConnectHelpers
                 await RejoinRealm(client, botConfiguration, account);
             }
 
+            var gameName = $"{botConfiguration.GameNamePrefix}{newGameCount}";
             try
             {
-                createGame = await client.CreateGame(botConfiguration.Difficulty, $"{botConfiguration.GameNamePrefix}{newGameCount}", botConfiguration.GamePassword, botConfiguration.GameDescriptions[0]);
+                createGame = await client.CreateGame(botConfiguration.Difficulty, gameName, botConfiguration.GamePassword, botConfiguration.GameDescriptions[0]);
             }
             catch
             {
             }
+
+            TraceEvents.Step(client.SelectedCharacter()?.Name ?? account.Character, gameName, "create-game", StepPhase.End, retryCount + 1, createGame ? StepOutcome.Ok : StepOutcome.Failed);
 
             if (!createGame)
             {
@@ -171,6 +175,8 @@ public static class RealmConnectHelpers
             {
                 Log.Warning("Joining game threw for {Account}: {Error}", client.LoggedInUserName(), e.Message);
             }
+
+            TraceEvents.Step(client.SelectedCharacter()?.Name ?? cowAccount.Character, $"{botConfiguration.GameNamePrefix}{gameCount}", "join-game", StepPhase.End, retryCount + 1, joinGame ? StepOutcome.Ok : StepOutcome.Failed);
 
             if (!joinGame)
             {

@@ -56,7 +56,8 @@ public sealed class ChickenConfiguration
     /// <summary>
     /// Shortest gap between two drinks. Needed because the bot reacts to a life value arriving over
     /// the network: without a gap a single damage spike would empty the belt before the updated life
-    /// value ever arrived.
+    /// value ever arrived. Healing and mana potions keep at least <see cref="PotionRules.HealingPotionFloor"/>
+    /// apart whatever this says, since one drunk while another still works is wasted.
     /// </summary>
     public int MinPotionIntervalMs { get; set; } = 700;
 

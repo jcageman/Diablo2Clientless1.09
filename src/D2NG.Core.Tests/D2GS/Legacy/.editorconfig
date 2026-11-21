@@ -1,0 +1,6 @@
+# The parsers as they were before the span reader rewrite, kept unchanged as the reference the
+# differential tests compare against.
+[*.cs]
+dotnet_analyzer_diagnostic.severity = none
+
+dotnet_diagnostic.CA1852.severity = none

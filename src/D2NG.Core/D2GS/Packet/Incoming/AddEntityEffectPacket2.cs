@@ -1,8 +1,6 @@
 ﻿using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Exceptions;
 using D2NG.Core.D2GS.Objects;
-using System.IO;
-using System.Text;
 
 namespace D2NG.Core.D2GS.Packet.Incoming;
 
@@ -10,7 +8,7 @@ public class AddEntityEffectPacket2 : D2gsPacket
 {
     public AddEntityEffectPacket2(D2gsPacket packet) : base(packet.Raw)
     {
-        var reader = new BinaryReader(new MemoryStream(packet.Raw), Encoding.ASCII);
+        var reader = new PacketReader(packet.Raw);
         if ((InComingPacket)reader.ReadByte() != InComingPacket.AddEntityEffect2)
         {
             throw new D2GSPacketException("Expected Packet Type Not Found");
