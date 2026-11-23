@@ -13,6 +13,9 @@ public class MuleCharacterDb
     public string CharacterName { get; set; }
     public DateTimeOffset SeenAt { get; set; }
 
+    /// <summary>The game mode the character reported at login; null on records written before it was kept.</summary>
+    public bool? Expansion { get; set; }
+
     /// <summary>
     /// Free cells across stash and inventory after the visit. Zero means nothing else fits.
     /// </summary>

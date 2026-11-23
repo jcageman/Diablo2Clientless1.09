@@ -67,8 +67,29 @@ public static class ItemAffixReader
         table.Affixes.AddRange(DecodeAffixes(Load("automagic.bin", AffixSize), "automagic.bin", AffixKind.AutoMagic, properties, typeCodes));
 
         table.CubeRecipes = DecodeCubeRecipes(Load("cubemain.bin", CubeRecipeSize), "cubemain.bin", properties);
-        table.UniqueItems = UniqueItemReader.DecodeUniqueItems(Load("uniqueitems.bin", UniqueItemReader.UniqueItemSize), "uniqueitems.bin");
+        table.UniqueItems = UniqueItemReader.DecodeUniqueItems(Load("uniqueitems.bin", UniqueItemReader.UniqueItemSize), "uniqueitems.bin", properties);
         (table.SetItems, table.Sets) = UniqueItemReader.DecodeSetItems(Load("setitems.bin", UniqueItemReader.SetSize), "setitems.bin", properties);
+
+        var strings = StringTableReader.Read(gameDirectory, notes);
+        foreach (var item in table.BaseItems)
+        {
+            item.DisplayName = strings.GetValueOrDefault(item.Code);
+        }
+
+        foreach (var item in table.UniqueItems)
+        {
+            item.DisplayName = strings.GetValueOrDefault(item.Pre ? item.Name[4..] : item.Name);
+        }
+
+        foreach (var item in table.SetItems)
+        {
+            item.DisplayName = strings.GetValueOrDefault(item.Name);
+        }
+
+        foreach (var set in table.Sets)
+        {
+            set.DisplayName = strings.GetValueOrDefault(set.Name);
+        }
 
         return (table, notes);
     }

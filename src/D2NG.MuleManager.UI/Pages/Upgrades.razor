@@ -1,0 +1,642 @@
+@page "/"
+@implements IDisposable
+@inject ApiClient Api
+@inject UiState State
+@inject NavigationManager Navigation
+
+<PageTitle>Upgrades · MuleManager</PageTitle>
+
+<div class="work">
+    <aside class="side">
+        <h2 class="h2">Character</h2>
+        @if (_characters?.Characters is { Count: > 0 })
+        {
+            <label class="field">
+                <span>Played character</span>
+                <select class="select" value="@Key(_character)" @onchange="e => PickCharacter((string)e.Value)">
+                    @foreach (var c in Visible)
+                    {
+                        <option value="@Key(c)">@c.Character · @c.Class @c.Level</option>
+                    }
+                </select>
+            </label>
+            <label class="field field-row">
+                <span>Hide up to level</span>
+                <input class="input level-input" type="number" min="0" max="98" step="1" value="@_hideUpTo" @onchange="e => HideUpTo(e.Value?.ToString())" />
+            </label>
+            @if (Hidden > 0)
+            {
+                <p class="dim small">@Hidden lower character@(Hidden == 1 ? "" : "s") hidden</p>
+            }
+            @if (_character != null)
+            {
+                var stale = Format.IsStale(_character.SeenAt, 2);
+                <div class="meta">@_character.Class, level @_character.Level · account @_character.Account</div>
+                <div class="fresh @(stale ? "stale" : null)">
+                    <span>Gear read @Format.Ago(_character.SeenAt)</span>
+                    <button class="btn" disabled="@(State.Running != null)" @onclick="RefreshGear" title="Log on and read what @_character.Character wears now">
+                        <Icon Name="refresh" /> Refresh
+                    </button>
+                </div>
+
+                <h2 class="h2">Slot</h2>
+                <div class="slots" role="group" aria-label="Slot">
+                    @foreach (var slot in Format.Slots.Concat(_character.Expansion ? ["charms"] : []))
+                    {
+                        var worn = _character.Equipped.GetValueOrDefault(slot);
+                        var held = slot == "left hand" && _character.TwoHanded;
+                        <button class="slot" aria-pressed="@(slot == _slot ? "true" : "false")" disabled="@held" @onclick="() => PickSlot(slot)"
+                                title="@(held ? "The right hand's weapon takes both hands" : null)">
+                            <span class="k">@Format.Title(slot)</span>
+                            <span class="v @(worn == null ? "dim" : "q-" + worn.Quality)">@(slot == "charms" ? $"{_character.Charms} carried" : held ? "two-handed" : worn?.Name ?? "empty")</span>
+                        </button>
+                    }
+                </div>
+
+                <h2 class="h2">In @(_difficulty) now</h2>
+                var now = _result?.Before ?? _character.Hell;
+                <dl class="summary">
+                    <dt>Life</dt><dd>@Format.Number(now.Life)</dd>
+                    <dt>Mana</dt><dd>@Format.Number(now.Mana)</dd>
+                    @foreach (var r in now.Resists)
+                    {
+                        <dt>@r.Element resist</dt>
+                        <dd class="@(r.Effective < r.Cap && Guarded(r.Element) ? "loss" : null)">@Format.Whole(r.Effective)@(r.OverCap > 0 ? $" (+{r.OverCap})" : "")</dd>
+                    }
+                    <dt>Cast frames</dt><dd>@now.CastFrames</dd>
+                    <dt>Hit recovery frames</dt><dd>@now.HitRecoveryFrames</dd>
+                    @if (now.AttackFrames is { } attack)
+                    {
+                        <dt>Attack frames</dt><dd>@attack</dd>
+                    }
+                    <dt>Block</dt><dd>@now.Block%</dd>
+                </dl>
+            }
+        }
+        else if (_characters != null)
+        {
+            <p class="dim">No played @Format.Mode(State.Mode) character has been read yet.</p>
+        }
+    </aside>
+
+    <main class="main">
+        @if (_error != null)
+        {
+            <div class="notice error-notice" role="alert"><div class="notice-body"><p>@_error</p></div></div>
+        }
+
+        @if (_characters == null && _error == null)
+        {
+            <p class="loading">Reading the played characters…</p>
+        }
+        else if (_characters != null && _characters.Characters.Count == 0)
+        {
+            <div class="empty">
+                <h1 class="h1">No @Format.Mode(State.Mode) character to fit</h1>
+                <p>
+                    The bots record what a character wears each time they leave a game, and MuleManager can read every
+                    character on the @(_characters.GearAccounts.Count) bot accounts in its configuration now.
+                </p>
+                <button class="btn btn-primary" disabled="@(State.Running != null || _characters.GearAccounts.Count == 0)" @onclick="RefreshAllGear">
+                    <Icon Name="refresh" /> Read every played character
+                </button>
+            </div>
+        }
+        else if (_character != null)
+        {
+            <h1 class="h1">@Format.Title(_slot)</h1>
+            <p class="lede">
+                @if (_slot == "charms")
+                {
+                    <span>@_character.Charms charms carried · each candidate swaps one of the same size or fills a free spot</span>
+                }
+                else if (_result?.Current is { } current)
+                {
+                    <span>Replacing </span><span class="item-name q-@current.Quality">@current.Name</span>
+                }
+                else
+                {
+                    <span>Nothing worn here</span>
+                }
+                @if (_result != null)
+                {
+                    <span> · @Format.Number(_result.Considered) candidates on @Format.Mode(State.Mode) mules</span>
+                }
+            </p>
+
+            @if (_result is { TablesLoaded: false })
+            {
+                <div class="notice warn-notice"><div class="notice-body">
+                    <p>The game tables (item-affixes.json) were not found, so requirements and roll ranges are not checked.</p>
+                    <p>Run tools/MpqData and point dataDirectory in the MuleManager configuration at its output.</p>
+                </div></div>
+            }
+
+            <div class="controls">
+                <label class="field">
+                    <span>Build</span>
+                    <select class="select" value="@_presetId" @onchange="e => PickPreset((string)e.Value)">
+                        @foreach (var preset in State.Meta?.Presets ?? [])
+                        {
+                            <option value="@preset.Id">@preset.Name</option>
+                        }
+                    </select>
+                </label>
+                <div class="field">
+                    <span>Resists</span>
+                    <div class="segmented" role="group" aria-label="Resist profile">
+                        <button aria-pressed="@(_resistMode == "PvP" ? "true" : "false")" @onclick='() => PickResistMode("PvP")' title="Fire, cold and lightning stay where they are; cold over the cap counts; poison does not">PvP</button>
+                        <button aria-pressed="@(_resistMode == "PvM" ? "true" : "false")" @onclick='() => PickResistMode("PvM")' title="The build's resists count up to the cap, nothing over it">PvM</button>
+                    </div>
+                </div>
+                <div class="field">
+                    <span>Difficulty</span>
+                    <div class="segmented" role="group" aria-label="Difficulty">
+                        @foreach (var difficulty in new[] { "Normal", "Nightmare", "Hell" })
+                        {
+                            <button aria-pressed="@(_difficulty == difficulty ? "true" : "false")" @onclick="() => PickDifficulty(difficulty)">@difficulty</button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <details class="weights">
+                <summary>@Preset?.Description <b>Weights: @WeightSummary()</b></summary>
+                <div class="weight-rows">
+                    <span class="head">Stat</span><span class="head">Per point</span><span class="head">Counts up to</span><span class="head">Only in</span><span></span>
+                    @foreach (var weight in _weights)
+                    {
+                        <select class="select" value="@weight.Stat" @onchange="e => UpdateWeight(weight, w => w with { Stat = (string)e.Value })" aria-label="Stat">
+                            @foreach (var stat in WeightStats(weight.Stat))
+                            {
+                                <option value="@stat">@Label(stat)</option>
+                            }
+                        </select>
+                        <input class="input" type="number" step="0.1" value="@weight.Weight" aria-label="Score per point"
+                               @onchange="e => UpdateWeight(weight, w => w with { Weight = ParseDouble(e.Value) ?? 0 })" />
+                        <input class="input" type="number" step="1" value="@weight.Cap" placeholder="no cap" aria-label="Counts up to"
+                               @onchange="e => UpdateWeight(weight, w => w with { Cap = ParseDouble(e.Value) })" />
+                        <select class="select" value="@(weight.Slot ?? "")" @onchange="e => UpdateWeight(weight, w => w with { Slot = string.IsNullOrEmpty((string)e.Value) ? null : (string)e.Value })" aria-label="Only in slot">
+                            <option value="">every slot</option>
+                            @foreach (var slot in Format.Slots)
+                            {
+                                <option value="@slot">@slot</option>
+                            }
+                        </select>
+                        <button class="icon-btn" @onclick="() => RemoveWeight(weight)" aria-label="Remove @Label(weight.Stat)"><Icon Name="close" /></button>
+                    }
+                    <span class="weight-actions">
+                        <button class="btn btn-quiet" @onclick="AddWeight"><Icon Name="plus" /> Add a stat</button>
+                        <button class="btn btn-quiet" @onclick="() => PickPreset(_presetId)">Back to the build's weights</button>
+                    </span>
+                </div>
+            </details>
+
+            @if (_loading && _result == null)
+            {
+                <p class="loading">Ranking the mule stock…</p>
+            }
+            else if (_result != null && _result.Candidates.Count == 0)
+            {
+                <div class="empty">
+                    <h1 class="h1">Nothing on the @Format.Mode(State.Mode) mules fits</h1>
+                    <p>No @Format.Mode(State.Mode) mule holds an item with properties for the @_slot. Items the character's class cannot use are left out.</p>
+                </div>
+            }
+            else if (_result != null)
+            {
+                var top = _result.Candidates.Where(c => c.Standing != "Blocked" && c.Score > 0).Take(3).ToList();
+
+                <div class="cards" aria-label="Best swaps">
+                    @if (_result.Current != null)
+                    {
+                        <ItemCard Item="_result.Current" Worn="true" SetBonus="SetOf(_result.Current, _result.Before)" />
+                    }
+                    @if (top.Count == 0)
+                    {
+                        <div class="card-none">
+                            <p>Nothing on the @Format.Mode(State.Mode) mules beats @(_result.Current?.Name ?? "an empty slot") for this build.</p>
+                            <p class="dim">The table below still lists what comes closest.</p>
+                        </div>
+                    }
+                    @foreach (var candidate in top)
+                    {
+                        <ItemCard Item="candidate.Item" Note="@(_slot != "charms" ? null : candidate.Replaces == null ? "fills a free spot" : "swaps the carried " + Format.Brief(candidate.Replaces))" Score="candidate.Score" Selected="candidate == _selected" Lost="Lost(candidate)" SetBonus="SetOf(candidate.Item, candidate.After)"
+                                  Blocked='candidate.Standing == "Blocked"' Reason="@candidate.Reason" Deltas="Deltas(candidate)"
+                                  OnSelect="() => Select(candidate)" />
+                    }
+                    @if (_selected != null && !top.Contains(_selected))
+                    {
+                        var rank = _result.Candidates.IndexOf(_selected) + 1;
+                        <ItemCard Item="_selected.Item" Note="@($"Row {rank}")" Score="_selected.Score" Selected="true" Lost="Lost(_selected)" SetBonus="SetOf(_selected.Item, _selected.After)"
+                                  Blocked='_selected.Standing == "Blocked"' Reason="@_selected.Reason" Deltas="Deltas(_selected)" />
+                    }
+                </div>
+
+                @if (_selected != null)
+                {
+                    <p class="dim swap-line">
+                        <span>
+                            Life @Format.Number(_selected.After.Life) @Move(_selected.After.Life - _result.Before.Life)
+                            · Mana @Format.Number(_selected.After.Mana) @Move(_selected.After.Mana - _result.Before.Mana)
+                            · @_selected.Item.Name lies with @Format.Where(_selected.Item)
+                        </span>
+                        <button class="btn btn-primary push-right" @onclick="() => ShowOnMule(_selected.Item)"><Icon Name="locate" /> Show on mule</button>
+                    </p>
+                    <div class="resists" aria-label="After the swap">
+                        @foreach (var after in _selected.After.Resists)
+                        {
+                            var before = _result.Before.Resists.First(r => r.Element == after.Element);
+                            var guarded = Guarded(after.Element);
+                            var move = after.Effective - before.Effective;
+                            var over = after.OverCap - before.OverCap;
+                            <div class="resist @(guarded && after.Effective < after.Cap ? "under" : null)">
+                                <span class="k">@after.Element@(guarded ? "" : " · not weighed")</span>
+                                <b>
+                                    @Format.Whole(after.Effective) / @after.Cap
+                                    @if (move != 0) { <span class="move @Format.DeltaClass(move)">@Format.Signed(move)</span> }
+                                    else if (over != 0) { <span class="move @Format.DeltaClass(over)">@Format.Signed(over) over</span> }
+                                </b>
+                                <span class="meter"><i style="width: @(Math.Clamp(after.Effective * 100 / Math.Max(1, after.Cap), 0, 100))%"></i></span>
+                            </div>
+                        }
+                        <div class="resist">
+                            <span class="k">Cast frames</span>
+                            <b>@_selected.After.CastFrames @Was(_result.Before.CastFrames, _selected.After.CastFrames)</b>
+                        </div>
+                        <div class="resist">
+                            <span class="k">Hit recovery</span>
+                            <b>@_selected.After.HitRecoveryFrames @Was(_result.Before.HitRecoveryFrames, _selected.After.HitRecoveryFrames)</b>
+                        </div>
+                        @if (_selected.After.AttackFrames is { } attackAfter)
+                        {
+                            <div class="resist">
+                                <span class="k">Attack frames</span>
+                                <b>@attackAfter @Was(_result.Before.AttackFrames ?? attackAfter, attackAfter)</b>
+                            </div>
+                        }
+                    </div>                }
+
+                <table class="table" aria-label="Every candidate, best first">
+                    <thead>
+                        <tr>
+                            <th class="num">#</th>
+                            <th>Item</th>
+                            <th>Held by</th>
+                            <th class="num">Score</th>
+                            @foreach (var column in Columns)
+                            {
+                                <th class="num">@Label(column)</th>
+                            }
+                            <th class="num">Resists</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (candidate, index) in _result.Candidates.Select((c, i) => (c, i)))
+                        {
+                            <tr aria-selected="@(candidate == _selected ? "true" : "false")" class="@(candidate.Standing == "Blocked" ? "blocked" : null)" @onclick="() => Select(candidate)">
+                                <td class="num dim">@(index + 1)</td>
+                                <td>
+                                    <span class="item-name q-@candidate.Item.Quality">@candidate.Item.Name</span>
+                                    @if (candidate.Copies > 1) { <span class="copies">×@candidate.Copies</span> }
+                                    @if (candidate.Item.Name != candidate.Item.BaseName || Format.IsPre(candidate.Item))
+                                    {
+                                        <span class="sub">@(candidate.Item.Name != candidate.Item.BaseName ? candidate.Item.BaseName : null)@(Format.IsPre(candidate.Item) ? (candidate.Item.Name != candidate.Item.BaseName ? " · " : null) + "no level requirement" : null)</span>
+                                    }
+                                    @if (candidate.Reason != null) { <span class="reason @(candidate.Standing == "Blocked" ? null : "warn")">@candidate.Reason</span> }
+                                </td>
+                                <td class="dim">@Format.Where(candidate.Item)</td>
+                                <td class="num"><b>@Format.Signed(candidate.Score)</b></td>
+                                @foreach (var column in Columns)
+                                {
+                                    var change = candidate.Changes.FirstOrDefault(c => c.Stat == column);
+                                    var lower = column.EndsWith("Frames");
+                                    <td class="num @(change == null ? "same" : Format.DeltaClass(change.Delta, lower))">@(change == null ? "·" : Format.Signed(change.Delta))</td>
+                                }
+                                @{ var resists = ResistMove(candidate); }
+                                <td class="num @Format.DeltaClass(resists)">@Format.Signed(resists)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </main>
+</div>
+
+@code {
+    private CharactersResponse _characters;
+    private GearCharacterDto _character;
+    private string _slot = "left ring";
+    private string _presetId;
+    private string _resistMode = "PvP";
+    private string _difficulty = "Hell";
+    private List<StatWeightDto> _weights = [];
+    private UpgradeResponse _result;
+    private CandidateDto _selected;
+    private int _hideUpTo = 20;
+
+    private IEnumerable<GearCharacterDto> Visible => _characters?.Characters.Where(c => c.Level > _hideUpTo || c == _character) ?? [];
+
+    private int Hidden => _characters?.Characters.Count(c => c.Level <= _hideUpTo && c != _character) ?? 0;
+
+    private async Task HideUpTo(string value)
+    {
+        if (!int.TryParse(value, out var level))
+        {
+            return;
+        }
+
+        _hideUpTo = Math.Clamp(level, 0, 98);
+        await State.Save("hide-up-to", _hideUpTo.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (_character != null && _character.Level <= _hideUpTo && Visible.FirstOrDefault(c => c != _character) is { } next)
+        {
+            await PickCharacter(Key(next));
+        }
+    }
+    private string _error;
+    private bool _loading;
+    private int _requestVersion;
+
+    private static readonly string[] CommonStats =
+    [
+        "Life", "Mana", "Strength", "Dexterity", "Vitality", "Energy", "Cast Frames", "Hit Recovery Frames", "Block %",
+        "AllSkills", "ClassSkills", "FasterCastRate", "FasterHitRecovery", "FasterRunWalk", "IncreasedAttackSpeed",
+        "MinimumLifeStolenPerHit", "MinimumManaStolenPerHit", "AttackRating", "ToHitPercent", "EnhancedMaximumDamage",
+        "MinimumDamage", "MaximumDamage", "ExtraGold", "BetterChanceOfGettingMagicItem", "Defense", "EnhancedDefense",
+        "DamageReduction", "MagicalDamageReduction", "ReplenishLife", "IncreasedBlocking", "FasterBlockRate",
+        "CannotBeFrozen", "EnhancedLife", "EnhancedMana",
+    ];
+
+    private PresetDto Preset => State.Meta?.Presets.FirstOrDefault(p => p.Id == _presetId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.Changed += OnStateChanged;
+        State.RefreshFinished += OnRefreshFinished;
+        await LoadCharacters();
+    }
+
+    private GameMode _loadedMode;
+
+    private void OnStateChanged()
+    {
+        if (_characters != null && _loadedMode != State.Mode)
+        {
+            InvokeAsync(LoadCharacters);
+        }
+        else
+        {
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnRefreshFinished() => InvokeAsync(LoadCharacters);
+
+    private async Task LoadCharacters()
+    {
+        _loadedMode = State.Mode;
+        try
+        {
+            _characters = await Api.Characters(State.Mode);
+            _error = null;
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+            StateHasChanged();
+            return;
+        }
+
+        if (int.TryParse(await State.Load("hide-up-to"), out var hide))
+        {
+            _hideUpTo = hide;
+        }
+
+        var remembered = await State.Load("character." + State.Mode);
+        var shown = _characters.Characters.Where(c => c.Level > _hideUpTo).ToList();
+        var character = shown.FirstOrDefault(c => Key(c) == remembered) ?? shown.FirstOrDefault() ?? _characters.Characters.FirstOrDefault();
+        _result = null;
+        _selected = null;
+        if (character != null)
+        {
+            await UseCharacter(character);
+        }
+        else
+        {
+            _character = null;
+            StateHasChanged();
+        }
+    }
+
+    private static string Key(GearCharacterDto c) => c == null ? "" : $"{c.Account}/{c.Character}";
+
+    private async Task PickCharacter(string key)
+    {
+        var character = _characters.Characters.FirstOrDefault(c => Key(c) == key);
+        if (character != null)
+        {
+            await State.Save("character." + State.Mode, key);
+            await UseCharacter(character);
+        }
+    }
+
+    private async Task UseCharacter(GearCharacterDto character)
+    {
+        _character = character;
+        var presetId = await State.Load("preset." + Key(character));
+        var presets = State.Meta?.Presets ?? [];
+        _presetId = presets.Any(p => p.Id == presetId) ? presetId : character.DefaultPreset ?? presets.FirstOrDefault()?.Id;
+        var mode = await State.Load("resists." + Key(character));
+        _resistMode = mode is "PvP" or "PvM" ? mode : Preset?.Mode ?? "PvP";
+        _slot = await State.Load("slot." + Key(character)) is { } slot && (Format.Slots.Contains(slot) || slot == "charms" && character.Expansion) ? slot : _slot;
+        if (_slot == "charms" && !character.Expansion)
+        {
+            _slot = "left ring";
+        }
+        if (_slot == "left hand" && character.TwoHanded)
+        {
+            _slot = "right hand";
+        }
+        _weights = [.. Preset?.Weights ?? []];
+        await Rank();
+    }
+
+    private async Task PickSlot(string slot)
+    {
+        _slot = slot;
+        await State.Save("slot." + Key(_character), slot);
+        await Rank();
+    }
+
+    private async Task PickPreset(string id)
+    {
+        _presetId = id;
+        await State.Save("preset." + Key(_character), id);
+        _weights = [.. Preset?.Weights ?? []];
+        await Rank();
+    }
+
+    private async Task PickResistMode(string mode)
+    {
+        _resistMode = mode;
+        await State.Save("resists." + Key(_character), mode);
+        await Rank();
+    }
+
+    private async Task PickDifficulty(string difficulty)
+    {
+        _difficulty = difficulty;
+        await Rank();
+    }
+
+    private async Task UpdateWeight(StatWeightDto weight, Func<StatWeightDto, StatWeightDto> change)
+    {
+        var index = _weights.IndexOf(weight);
+        if (index >= 0)
+        {
+            _weights[index] = change(weight);
+            await Rank();
+        }
+    }
+
+    private async Task RemoveWeight(StatWeightDto weight)
+    {
+        _weights.Remove(weight);
+        await Rank();
+    }
+
+    private Task AddWeight()
+    {
+        var unused = CommonStats.FirstOrDefault(s => _weights.All(w => w.Stat != s)) ?? "Life";
+        _weights.Add(new StatWeightDto(unused, 1, null, null));
+        return Rank();
+    }
+
+    private async Task Rank()
+    {
+        if (_character == null)
+        {
+            return;
+        }
+
+        var version = ++_requestVersion;
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var result = await Api.Upgrades(new UpgradeRequest(_character.Account, _character.Character, _slot, _presetId, _resistMode, _difficulty, _weights));
+            if (version != _requestVersion)
+            {
+                return;
+            }
+
+            _result = result;
+            _selected = result.Candidates.FirstOrDefault(c => c.Standing != "Blocked" && c.Score > 0);
+            _error = null;
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        StateHasChanged();
+    }
+
+    private void Select(CandidateDto candidate) => _selected = candidate;
+
+    private bool Guarded(string element)
+        => _resistMode == "PvP" ? element != "Poison" : (Preset?.ResistWeights.GetValueOrDefault(element) ?? 0) >= 1;
+
+    private int ResistMove(CandidateDto candidate)
+        => candidate.After.Resists.Where(r => Guarded(r.Element))
+            .Sum(r => r.Effective - _result.Before.Resists.First(b => b.Element == r.Element).Effective);
+
+    /// <summary>The weighed columns at least one candidate moves; a column of dots says nothing.</summary>
+    private IEnumerable<string> Columns => _result.Columns.Where(c => _result.Candidates.Any(x => x.Changes.Any(ch => ch.Stat == c)));
+
+    private static SetBonusDto SetOf(ItemDto item, EvaluationDto evaluation)
+        => item?.Set == null ? null : evaluation.Sets?.FirstOrDefault(s => s.Name == item.Set);
+
+    private List<StatLineDto> Lost(CandidateDto candidate)
+        => [.. ((candidate.Replaces ?? _result.Current)?.Stats ?? []).Where(worn => candidate.Item.Stats.All(s => s.Stat != worn.Stat))];
+
+    private Dictionary<string, double> Deltas(CandidateDto candidate)
+    {
+        var current = (candidate.Replaces ?? _result.Current)?.Stats.GroupBy(s => s.Stat).ToDictionary(g => g.Key, g => g.Sum(s => s.Value)) ?? [];
+        return candidate.Item.Stats.GroupBy(s => s.Stat).ToDictionary(g => g.Key, g => g.Sum(s => s.Value) - current.GetValueOrDefault(g.Key));
+    }
+
+    /// <summary>A frame count that changed: "was 11" in red when it went up, bright when it went down.</summary>
+    private static RenderFragment Was(double before, double after) => builder =>
+    {
+        if (before == after)
+        {
+            return;
+        }
+
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", "move " + Format.DeltaClass(after - before, true));
+        builder.AddContent(2, $"was {Format.Number(before)}");
+        builder.CloseElement();
+    };
+
+    private static RenderFragment Move(double delta, bool lowerIsBetter = false) => builder =>
+    {
+        if (delta == 0)
+        {
+            return;
+        }
+
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", "move " + Format.DeltaClass(delta, lowerIsBetter));
+        builder.AddContent(2, Format.Signed(lowerIsBetter ? -delta : delta));
+        builder.CloseElement();
+    };
+
+    private string Label(string stat) => stat == "ClassSkills" && _character != null ? $"{_character.Class} skills" : D2NG.Mule.Upgrades.StatText.Short(stat);
+
+    private IEnumerable<string> WeightStats(string current) => CommonStats.Contains(current) ? CommonStats : CommonStats.Prepend(current);
+
+    private string WeightSummary() => _weights.Count == 0 ? "none" : string.Join(", ", _weights.Take(6).Select(w => $"{Label(w.Stat)} ×{Format.Number(w.Weight)}{(w.Slot != null ? $" ({w.Slot})" : "")}")) + (_weights.Count > 6 ? ", …" : "");
+
+    private static double? ParseDouble(object value)
+        => double.TryParse(value?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+
+    private async Task RefreshGear()
+    {
+        try
+        {
+            await State.StartRefresh(new RefreshRequest("gear", _character.Account, _character.Character, false));
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+    }
+
+    private async Task RefreshAllGear()
+    {
+        try
+        {
+            await State.StartRefresh(new RefreshRequest("gear", null, null, false));
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+    }
+
+    private void ShowOnMule(ItemDto item)
+        => Navigation.NavigateTo($"mules?account={Uri.EscapeDataString(item.Account)}&character={Uri.EscapeDataString(item.Character)}");
+
+    public void Dispose()
+    {
+        State.Changed -= OnStateChanged;
+        State.RefreshFinished -= OnRefreshFinished;
+    }
+}

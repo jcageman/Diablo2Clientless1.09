@@ -12,8 +12,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\D2NG.Core\D2NG.Core.csproj" />
+		<Compile Include="..\D2NG.MuleManager\Contracts\ApiContracts.cs" Link="Contracts\ApiContracts.cs" />
+		<Compile Include="..\D2NG.Mule\Upgrades\StatText.cs" Link="Contracts\StatText.cs" />
 	</ItemGroup>
-	
-	
+
 </Project>

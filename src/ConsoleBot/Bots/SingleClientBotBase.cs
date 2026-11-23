@@ -163,6 +163,7 @@ public abstract class SingleClientBotBase
                     if (client.Game.IsInGame())
                     {
                         TraceEvents.Decision(client.Game, "leave", ("reason", "run over"));
+                        await _muleService.RecordGear(client);
                         await client.Game.LeaveGame();
                     }
 

@@ -45,6 +45,32 @@ public static class MuleClientSteps
     }
 
     /// <summary>
+    /// Stores what a played character wears, so the mule manager can judge mule items against it.
+    /// Does nothing without a mule database.
+    /// </summary>
+    public static async Task RecordGear(IMuleRepository repository, string accountName, string characterName, Game game, ILogger logger)
+    {
+        if (repository == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var gear = GearSnapshot.Take(game, accountName, characterName);
+            if (gear != null)
+            {
+                await repository.UpdateGear(gear);
+                logger.LogInformation("Recorded the gear of {Account}-{Character}: {Items} worn, {Charms} charms", accountName, characterName, gear.Equipped.Count, gear.Charms.Count);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Mule database unavailable, not recording the gear of {Account}-{Character}", accountName, characterName);
+        }
+    }
+
+    /// <summary>
     /// Stores what a mule character holds after a visit, so the mule run and the cube bot can plan
     /// without logging on. Does nothing without a mule database.
     /// </summary>

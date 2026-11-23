@@ -1,0 +1,116 @@
+<div class="card @(Blocked ? "blocked" : null) @(Worn ? "worn" : null)" role="@(Worn ? null : "button")" tabindex="@(Worn ? null : "0")" aria-pressed="@(Worn ? null : Selected ? "true" : "false")"
+     @onclick="() => OnSelect.InvokeAsync()" @onkeydown="Key">
+    <div class="card-name q-@Item.Quality">@Item.Name</div>
+    <div class="card-base">
+        @(Worn ? "Worn · " : null)@(Note != null ? Note + " · " : null)@(Item.Name != Item.BaseName ? Item.BaseName + " · " : null)@Format.Where(Item)
+        @if (Item.Ethereal) { <span class="tag">Ethereal</span> }
+        @if (Item.Sockets > 0) { <span class="tag">@Format.Socket(Item.Sockets)</span> }
+    </div>
+    <div class="card-lines">
+        @foreach (var line in Item.Stats)
+        {
+            var at = Format.RangePosition(line);
+            var delta = Deltas?.GetValueOrDefault(line.Stat);
+            var lower = LowerIsBetter.Contains(line.Stat);
+            <div class="line @(Deltas == null ? "no-delta" : null)" title="@RangeTitle(line)">
+                <span>@line.Text</span>
+                @if (at == null)
+                {
+                    <span class="range none"></span>
+                }
+                else
+                {
+                    <span class="range @(line.Value > line.Max ? "over" : null)"><i style="--at: @at"></i></span>
+                }
+                @if (Deltas != null)
+                {
+                    <span class="delta @(delta == null ? "same" : Format.DeltaClass(delta.Value, lower))">@(delta == null ? "" : Format.Signed(lower ? -delta.Value : delta.Value))</span>
+                }
+            </div>
+        }
+        @if (Lost is { Count: > 0 })
+        {
+            <div class="card-lost" title="The worn item has these and the swap does not">
+                <span class="k">Gives up</span>
+                @foreach (var line in Lost)
+                {
+                    <span>@line.Text</span>
+                }
+            </div>
+        }
+        @if (SetBonus != null)
+        {
+            <div class="card-set">
+                <span>@SetBonus.Name · @SetBonus.Worn of @SetBonus.Total worn@(Worn ? "" : " after the swap")</span>
+                @foreach (var bonus in SetBonus.Lines)
+                {
+                    <span class="q-Set">@bonus</span>
+                }
+                @if (SetBonus.Lines.Count == 0)
+                {
+                    <span class="dim">No set bonus with @SetBonus.Worn worn</span>
+                }
+            </div>
+        }
+        @if (Item.Stats.Count == 0)
+        {
+            <div class="line no-delta dim"><span>No magic properties</span><span></span></div>
+        }
+    </div>
+    @if (Format.IsPre(Item))
+    {
+        <div class="card-req dim">No level requirement</div>
+    }
+    else if (Item.RequiredLevel > 0)
+    {
+        <div class="card-req dim">Required level: @Item.RequiredLevel</div>
+    }
+    @if (Reason != null)
+    {
+        <div class="card-req @(Blocked ? "loss" : "warn")">@Reason</div>
+    }
+    @if (Score != null)
+    {
+        <div class="card-foot"><span class="dim">Score</span><b>@Format.Signed(Score.Value)</b></div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ItemDto Item { get; set; }
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public bool Blocked { get; set; }
+    /// <summary>A few words on where the card comes from, set in the base line.</summary>
+    [Parameter] public string Note { get; set; }
+
+    /// <summary>Stats where a smaller number is the better one.</summary>
+    private static readonly HashSet<string> LowerIsBetter = ["ReducedRequirements"];
+
+    /// <summary>The set the item belongs to as worn with it: pieces and the bonus lines they bring.</summary>
+    [Parameter] public SetBonusDto SetBonus { get; set; }
+
+    /// <summary>Lines of the worn item the swap gives up.</summary>
+    [Parameter] public List<StatLineDto> Lost { get; set; }
+
+    /// <summary>The item the swap replaces: shown for comparison, not picked.</summary>
+    [Parameter] public bool Worn { get; set; }
+    [Parameter] public string Reason { get; set; }
+    [Parameter] public double? Score { get; set; }
+
+    /// <summary>The change each stat makes to the character, keyed by stat name; null hides the column.</summary>
+    [Parameter] public Dictionary<string, double> Deltas { get; set; }
+
+    [Parameter] public EventCallback OnSelect { get; set; }
+
+    private async Task Key(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or " ")
+        {
+            await OnSelect.InvokeAsync();
+        }
+    }
+
+    private static string RangeTitle(StatLineDto line)
+        => line.Min == null ? "No range known for this roll" : line.Value > line.Max
+            ? $"{Format.Number(line.Value)}: above the {line.Min}-{line.Max} one affix rolls, so two affixes stacked"
+            : $"{Format.Number(line.Value)} of {line.Min}-{line.Max}";
+}

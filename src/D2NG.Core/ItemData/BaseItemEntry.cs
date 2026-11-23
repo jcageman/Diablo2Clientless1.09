@@ -13,6 +13,10 @@ public sealed class BaseItemEntry
     public BaseItemKind Kind { get; set; }
     public string Code { get; set; }
     public string Name { get; set; }
+
+    /// <summary>The name the game shows, from the string tables; null when they have none for the code.</summary>
+    public string DisplayName { get; set; }
+
     public string Type { get; set; }
     public string Type2 { get; set; }
 

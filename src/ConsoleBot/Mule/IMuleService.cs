@@ -17,4 +17,10 @@ public interface IMuleService
     /// muled nor sold, and only the farming game is sure to have Cain in town.
     /// </summary>
     Task PrepareForMule(Client client);
+
+    /// <summary>
+    /// Stores what the client's character wears for the mule manager's upgrade finder, at most once
+    /// every few minutes per character. Does nothing without a mule database.
+    /// </summary>
+    Task RecordGear(Client client);
 }

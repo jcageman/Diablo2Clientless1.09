@@ -23,6 +23,8 @@ namespace ConsoleBot.Mule;
 public class MuleService : IMuleService
 {
     private static int GameCount;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTimeOffset> GearRecordedAt = new();
+    private static readonly TimeSpan GearRecordEvery = TimeSpan.FromMinutes(10);
 
     private readonly BotConfiguration _botConfig;
     private readonly MuleConfiguration _muleConfig;
@@ -43,6 +45,26 @@ public class MuleService : IMuleService
         _townManagementService = townManagementService;
         _transfer = new MuleTransfer(logger);
         _rules = new MuleItemRules(_muleConfig);
+    }
+
+    public async Task RecordGear(Client client)
+    {
+        if (_muleRepository == null || client?.Game?.Me == null)
+        {
+            return;
+        }
+
+        var account = client.LoggedInUserName();
+        var character = client.Game.Me.Name;
+        var now = DateTimeOffset.UtcNow;
+        var key = $"{account}/{character}";
+        if (GearRecordedAt.TryGetValue(key, out var last) && now - last < GearRecordEvery)
+        {
+            return;
+        }
+
+        GearRecordedAt[key] = now;
+        await MuleClientSteps.RecordGear(_muleRepository, account, character, client.Game, _logger);
     }
 
     public async Task PrepareForMule(Client client)

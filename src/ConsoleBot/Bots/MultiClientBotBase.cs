@@ -780,6 +780,7 @@ public abstract class MultiClientBotBase : IBotInstance
         {
             Log.Information($"Leaving game with {client.LoggedInUserName()}");
             TraceEvents.Decision(client.Game, "leave", ("reason", "next game"));
+            await _muleService.RecordGear(client);
             await client.Game.LeaveGame();
         }
 

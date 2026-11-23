@@ -1,0 +1,608 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-22T18:37:48.562Z",
+  "title": "Design System: MuleManager",
+  "extensions": {
+    "colorMeta": {
+      "page": {
+        "role": "neutral",
+        "displayName": "Near-Black Page",
+        "canonical": "#0a0a0a",
+        "tonalRamp": [
+          "#262626",
+          "#424242",
+          "#5e5e5e",
+          "#7a7a7a",
+          "#969696",
+          "#b3b3b3",
+          "#d1d1d1",
+          "#f2f2f2"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Side Panel",
+        "canonical": "#0f0d0c",
+        "tonalRamp": [
+          "#292524",
+          "#48403d",
+          "#675b56",
+          "#87766e",
+          "#a2938b",
+          "#bab0ab",
+          "#d5d0cd",
+          "#f3f2f1"
+        ]
+      },
+      "raised": {
+        "role": "neutral",
+        "displayName": "Raised Hover",
+        "canonical": "#141010",
+        "tonalRamp": [
+          "#292424",
+          "#483d3d",
+          "#675656",
+          "#876e6e",
+          "#a28b8b",
+          "#baabab",
+          "#d5cdcd",
+          "#f3f1f1"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Card Ground",
+        "canonical": "#0e0e0e",
+        "tonalRamp": [
+          "#262626",
+          "#424242",
+          "#5e5e5e",
+          "#7a7a7a",
+          "#969696",
+          "#b3b3b3",
+          "#d1d1d1",
+          "#f2f2f2"
+        ]
+      },
+      "track": {
+        "role": "neutral",
+        "displayName": "Range Track",
+        "canonical": "#262020",
+        "tonalRamp": [
+          "#282424",
+          "#463e3e",
+          "#655858",
+          "#847171",
+          "#9f8e8e",
+          "#b8adad",
+          "#d4cece",
+          "#f3f2f2"
+        ]
+      },
+      "oxblood": {
+        "role": "secondary",
+        "displayName": "Oxblood",
+        "canonical": "#3a1a12",
+        "tonalRamp": [
+          "#331f19",
+          "#5c3329",
+          "#884535",
+          "#b7563e",
+          "#cb7761",
+          "#d59e90",
+          "#e3c6bf",
+          "#f7f0ee"
+        ]
+      },
+      "oxblood-deep": {
+        "role": "secondary",
+        "displayName": "Deep Oxblood",
+        "canonical": "#24110c",
+        "tonalRamp": [
+          "#321f1a",
+          "#5b342a",
+          "#864737",
+          "#b45941",
+          "#c97964",
+          "#d49f91",
+          "#e2c7c0",
+          "#f6f0ee"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Hairline Rule",
+        "canonical": "#2c2523",
+        "tonalRamp": [
+          "#292523",
+          "#483f3d",
+          "#675955",
+          "#87736d",
+          "#a2908b",
+          "#baaeab",
+          "#d5cfcd",
+          "#f3f2f1"
+        ]
+      },
+      "rule-strong": {
+        "role": "neutral",
+        "displayName": "Strong Rule",
+        "canonical": "#4a2a20",
+        "tonalRamp": [
+          "#30211d",
+          "#56382f",
+          "#7e4e3f",
+          "#a8634d",
+          "#be826f",
+          "#cda598",
+          "#dfcac3",
+          "#f5f1ef"
+        ]
+      },
+      "gold": {
+        "role": "primary",
+        "displayName": "Carved Gold",
+        "canonical": "#c7b377",
+        "tonalRamp": [
+          "#302b1c",
+          "#574d2e",
+          "#7f6f3d",
+          "#aa924b",
+          "#c0ab6c",
+          "#cec097",
+          "#e0d8c3",
+          "#f6f4ef"
+        ]
+      },
+      "gold-bright": {
+        "role": "primary",
+        "displayName": "Bright Gold",
+        "canonical": "#e2cf94",
+        "tonalRamp": [
+          "#342d18",
+          "#5e5126",
+          "#8c7631",
+          "#bc9c39",
+          "#d0b45d",
+          "#d8c68d",
+          "#e5dbbd",
+          "#f7f5ee"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#d8d2c4",
+        "tonalRamp": [
+          "#2b2821",
+          "#4c4638",
+          "#6e654e",
+          "#928463",
+          "#ab9f82",
+          "#c0b8a5",
+          "#d8d4ca",
+          "#f4f3f1"
+        ]
+      },
+      "dim": {
+        "role": "neutral",
+        "displayName": "Dim",
+        "canonical": "#8d857a",
+        "tonalRamp": [
+          "#282724",
+          "#46433f",
+          "#645f58",
+          "#837c72",
+          "#9e988f",
+          "#b8b3ad",
+          "#d4d2ce",
+          "#f3f2f2"
+        ]
+      },
+      "faint": {
+        "role": "neutral",
+        "displayName": "Faint",
+        "canonical": "#5f5852",
+        "tonalRamp": [
+          "#282624",
+          "#46423f",
+          "#645e59",
+          "#837a72",
+          "#9e968f",
+          "#b7b2ae",
+          "#d4d1cf",
+          "#f3f2f2"
+        ]
+      },
+      "quality-inferior": {
+        "role": "tertiary",
+        "displayName": "Inferior Grey",
+        "canonical": "#8d857a",
+        "tonalRamp": [
+          "#282724",
+          "#46433f",
+          "#645f58",
+          "#837c72",
+          "#9e988f",
+          "#b8b3ad",
+          "#d4d2ce",
+          "#f3f2f2"
+        ]
+      },
+      "quality-magic": {
+        "role": "tertiary",
+        "displayName": "Magic Blue",
+        "canonical": "#6969ff",
+        "tonalRamp": [
+          "#0e0e3f",
+          "#111173",
+          "#0f0fad",
+          "#0808ed",
+          "#3232fb",
+          "#7070f5",
+          "#aeaef4",
+          "#eaeafa"
+        ]
+      },
+      "quality-rare": {
+        "role": "tertiary",
+        "displayName": "Rare Yellow",
+        "canonical": "#ffff64",
+        "tonalRamp": [
+          "#3f3f0e",
+          "#737311",
+          "#adad0f",
+          "#eded08",
+          "#fbfb32",
+          "#f5f570",
+          "#f4f4ae",
+          "#fafaea"
+        ]
+      },
+      "quality-unique": {
+        "role": "tertiary",
+        "displayName": "Unique Gold",
+        "canonical": "#c7b377",
+        "tonalRamp": [
+          "#302b1c",
+          "#574d2e",
+          "#7f6f3d",
+          "#aa924b",
+          "#c0ab6c",
+          "#cec097",
+          "#e0d8c3",
+          "#f6f4ef"
+        ]
+      },
+      "quality-set": {
+        "role": "tertiary",
+        "displayName": "Set Green",
+        "canonical": "#00d000",
+        "tonalRamp": [
+          "#0e3f0e",
+          "#117311",
+          "#0fad0f",
+          "#08ed08",
+          "#32fb32",
+          "#70f570",
+          "#aef4ae",
+          "#eafaea"
+        ]
+      },
+      "quality-crafted": {
+        "role": "tertiary",
+        "displayName": "Crafted Orange",
+        "canonical": "#ffa800",
+        "tonalRamp": [
+          "#3f2e0e",
+          "#735211",
+          "#ad770f",
+          "#ed9f08",
+          "#fbb632",
+          "#f5c870",
+          "#f4dcae",
+          "#faf5ea"
+        ]
+      },
+      "stat-blue": {
+        "role": "tertiary",
+        "displayName": "Stat Line Blue",
+        "canonical": "#6969ff",
+        "tonalRamp": [
+          "#0e0e3f",
+          "#111173",
+          "#0f0fad",
+          "#0808ed",
+          "#3232fb",
+          "#7070f5",
+          "#aeaef4",
+          "#eaeafa"
+        ]
+      },
+      "gain": {
+        "role": "semantic",
+        "displayName": "Gain White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#262626",
+          "#424242",
+          "#5e5e5e",
+          "#7a7a7a",
+          "#969696",
+          "#b3b3b3",
+          "#d1d1d1",
+          "#f2f2f2"
+        ]
+      },
+      "loss": {
+        "role": "semantic",
+        "displayName": "Loss Red",
+        "canonical": "#ef4b37",
+        "tonalRamp": [
+          "#3b1611",
+          "#6c2219",
+          "#a22a1b",
+          "#dc2e19",
+          "#ec5341",
+          "#eb867a",
+          "#efbab4",
+          "#f9edeb"
+        ]
+      },
+      "warn": {
+        "role": "semantic",
+        "displayName": "Warning Amber",
+        "canonical": "#e0a030",
+        "tonalRamp": [
+          "#382b14",
+          "#674c1e",
+          "#996e24",
+          "#cf9226",
+          "#e1ab4c",
+          "#e3c082",
+          "#ebd8b7",
+          "#f8f4ec"
+        ]
+      },
+      "warn-edge": {
+        "role": "semantic",
+        "displayName": "Warning Edge",
+        "canonical": "#5a4210",
+        "tonalRamp": [
+          "#372c15",
+          "#654e20",
+          "#967227",
+          "#ca972a",
+          "#ddaf50",
+          "#e1c384",
+          "#e9dab9",
+          "#f8f4ed"
+        ]
+      },
+      "warn-wash": {
+        "role": "semantic",
+        "displayName": "Warning Wash",
+        "canonical": "#1a1208",
+        "tonalRamp": [
+          "#332819",
+          "#5c4528",
+          "#886334",
+          "#b7813e",
+          "#cc9c61",
+          "#d6b68f",
+          "#e3d3bf",
+          "#f7f3ee"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page and slot titles (h1) in gold; 20px in empty states."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section heads (h2), gold over an oxblood hairline."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Item names on cards, in quality colour; 16px account heads."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "All data, with tabular figures."
+      },
+      "body-small": {
+        "displayName": "Body small",
+        "purpose": "Stat lines, slot list, sub-lines, copy counts, chips; 11px for base and requirement lines."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Table heads, field labels; buttons at 12px."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Every transition: colour and border 160ms, row hover 120ms, meter width 400ms."
+      },
+      {
+        "name": "tick",
+        "value": "520ms ease-out, from left 0 at 0.4 opacity",
+        "purpose": "The range tick slides to the roll on render."
+      },
+      {
+        "name": "pulse",
+        "value": "1.4s ease-in-out infinite, opacity 0.3 at midpoint",
+        "purpose": "Running-refresh dot in the top bar."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "1ms durations, one iteration",
+        "purpose": "prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "desktop",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Gold-outlined Cinzel button that fills gold on hover; the default action.",
+      "html": "<button class=\"ds-btn\">Refresh</button>",
+      "css": ".ds-btn{padding:7px 14px;font:700 12px var(--display, \"Cinzel\", \"Trajan Pro\", serif);letter-spacing:.08em;color:var(--gold, #c7b377);background:transparent;border:1px solid var(--gold, #c7b377);border-radius:0;cursor:pointer;transition:background 160ms cubic-bezier(.16,1,.3,1),color 160ms cubic-bezier(.16,1,.3,1)}.ds-btn:hover{background:var(--gold, #c7b377);color:var(--page, #0a0a0a)}.ds-btn:focus-visible{outline:1px solid var(--gold, #c7b377);outline-offset:2px}"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Gold-filled button for the one main action of a view.",
+      "html": "<button class=\"ds-btn-primary\">Show on mule</button>",
+      "css": ".ds-btn-primary{padding:7px 14px;font:700 12px var(--display, \"Cinzel\", \"Trajan Pro\", serif);letter-spacing:.08em;color:var(--page, #0a0a0a);background:var(--gold, #c7b377);border:1px solid var(--gold, #c7b377);border-radius:0;cursor:pointer;transition:background 160ms cubic-bezier(.16,1,.3,1)}.ds-btn-primary:hover{background:var(--gold-bright, #e2cf94)}.ds-btn-primary:focus-visible{outline:1px solid var(--gold, #c7b377);outline-offset:2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Square page-filled input with a gold Cinzel label above.",
+      "html": "<label class=\"ds-field\"><span>Item name</span><input class=\"ds-input\" placeholder=\"Any name\"></label>",
+      "css": ".ds-field{display:grid;gap:4px;font:13px var(--data, Verdana, Tahoma, sans-serif)}.ds-field>span{font:700 11px var(--display, \"Cinzel\", \"Trajan Pro\", serif);letter-spacing:.1em;color:var(--gold, #c7b377)}.ds-input{padding:7px 9px;background:var(--page, #0a0a0a);color:var(--ink, #d8d2c4);border:1px solid var(--rule-strong, #4a2a20);border-radius:0;font:13px var(--data, Verdana, Tahoma, sans-serif)}.ds-input::placeholder{color:var(--faint, #5f5852)}.ds-input:hover{border-color:var(--frame, #3a1a12)}.ds-input:focus-visible{outline:1px solid var(--gold, #c7b377);outline-offset:2px}"
+    },
+    {
+      "name": "Top Bar",
+      "kind": "nav",
+      "refersTo": "top-bar",
+      "description": "Oxblood bar with a gold rule: mark, tabs and the Classic/Expansion switch.",
+      "html": "<header class=\"ds-bar\"><span class=\"ds-mark\">MuleManager</span><nav class=\"ds-nav\"><a href=\"#\">Stock</a><a href=\"#\" class=\"on\">Upgrades</a><a href=\"#\">Mules</a></nav><div class=\"ds-realm\"><button>Classic</button><button aria-pressed=\"true\">Expansion</button></div></header>",
+      "css": ".ds-bar{display:flex;align-items:center;gap:32px;height:60px;padding:0 24px;background:linear-gradient(var(--frame, #3a1a12),var(--frame-deep, #24110c));border-bottom:2px solid var(--gold, #c7b377)}.ds-mark{font:700 24px var(--display, \"Cinzel\", \"Trajan Pro\", serif);color:var(--gold, #c7b377);letter-spacing:.06em}.ds-nav{display:flex;gap:4px}.ds-nav a{padding:8px 16px;font:500 14px var(--display, \"Cinzel\", \"Trajan Pro\", serif);letter-spacing:.08em;color:var(--dim, #8d857a);text-decoration:none;border:1px solid transparent;transition:color 160ms}.ds-nav a:hover{color:var(--gold-bright, #e2cf94)}.ds-nav a.on{color:var(--gold, #c7b377);border-color:var(--gold, #c7b377);background:var(--page, #0a0a0a)}.ds-nav a:focus-visible{outline:1px solid var(--gold, #c7b377);outline-offset:2px}.ds-realm{margin-left:auto;display:inline-flex;border:1px solid var(--gold, #c7b377)}.ds-realm button{padding:6px 14px;background:transparent;border:0;font:500 12px var(--display, \"Cinzel\", \"Trajan Pro\", serif);letter-spacing:.08em;color:var(--dim, #8d857a);cursor:pointer}.ds-realm button:hover{color:var(--gold-bright, #e2cf94)}.ds-realm button[aria-pressed=\"true\"]{background:var(--gold, #c7b377);color:var(--page, #0a0a0a)}"
+    },
+    {
+      "name": "Item Card",
+      "kind": "card",
+      "refersTo": "item-card",
+      "description": "The tooltip as reference data: quality-coloured name, a base line that says what it replaces, blue stat lines with a range tick and delta each, gives-up block, requirement and score.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-name\">Grand Charm</div><div class=\"ds-base\">swaps the carried grand charm (+30 to Attack Rating) · stash</div><div class=\"ds-line\"><span>Fire Resist +15%</span><span class=\"ds-range\"><i style=\"left:50%\"></i></span><span class=\"ds-gain\">+15</span></div><div class=\"ds-line\"><span>+44 to Life</span><span class=\"ds-range\"><i style=\"left:85%\"></i></span><span class=\"ds-gain\">+44</span></div><div class=\"ds-lost\"><span class=\"k\">Gives up</span><span>+30 to Attack Rating</span></div><div class=\"ds-req\">No level requirement</div><div class=\"ds-foot\"><span>Score</span><b>+86</b></div></div>",
+      "css": ".ds-card{width:240px;padding:12px 16px 16px;text-align:center;background:#0e0e0e;border:1px solid var(--frame, #3a1a12);font:13px var(--data, Verdana, Tahoma, sans-serif);cursor:pointer;transition:border-color 160ms}.ds-card:hover{border-color:var(--rule-strong, #4a2a20)}.ds-card:focus-visible{outline:1px solid var(--gold, #c7b377);outline-offset:2px}.ds-name{font:700 15px var(--display, \"Cinzel\", \"Trajan Pro\", serif);letter-spacing:.03em;color:var(--q-rare, #ffff64)}.ds-base{color:var(--dim, #8d857a);font-size:11px;margin-bottom:8px}.ds-line{display:grid;grid-template-columns:1fr 38px;grid-template-areas:\"t d\" \"r d\";column-gap:8px;row-gap:2px;align-items:center;font-size:12px;color:var(--stat, #6969ff);text-align:left;margin-top:3px}.ds-line>span:first-child{grid-area:t}.ds-range{grid-area:r;position:relative;height:3px;background:#262020}.ds-range i{position:absolute;top:-3px;width:2px;height:11px;background:var(--gold, #c7b377);transform:translateX(-1px)}.ds-gain,.ds-loss{grid-area:d;text-align:right;font-weight:700}.ds-gain{color:#fff}.ds-loss{color:var(--loss, #ef4b37)}.ds-lost{display:flex;flex-wrap:wrap;gap:2px 8px;margin-top:8px;font-size:11px;color:var(--dim, #8d857a);text-align:left}.ds-lost .k{width:100%;color:var(--loss, #ef4b37)}.ds-lost span:not(.k){text-decoration:line-through;text-decoration-color:var(--loss, #ef4b37)}.ds-req{margin-top:8px;font-size:11px;color:var(--dim, #8d857a);text-align:left}.ds-foot{display:flex;justify-content:space-between;margin-top:12px;padding-top:8px;border-top:1px solid var(--rule, #2c2523);font-size:12px;color:var(--dim, #8d857a)}.ds-foot b{color:var(--gold, #c7b377)}"
+    },
+    {
+      "name": "Worn Item Card",
+      "kind": "card",
+      "refersTo": "item-card-worn",
+      "description": "The item being replaced: dashed, unfilled, not clickable, \"Worn ·\" leads the base line; set bonus block in set green.",
+      "html": "<div class=\"ds-worn\"><div class=\"ds-name\">Sigon's Visor</div><div class=\"ds-base\">Worn · Great Helm</div><div class=\"ds-l\">+30 to Mana</div><div class=\"ds-set\"><span>Sigon's Complete Steel · 2 of 6 worn</span><span class=\"g\">+100 Defense</span></div></div>",
+      "css": ".ds-worn{width:240px;padding:12px 16px 16px;text-align:center;background:transparent;border:1px dashed var(--frame, #3a1a12);font:13px var(--data, Verdana, Tahoma, sans-serif)}.ds-worn .ds-name{font:700 15px var(--display, \"Cinzel\", \"Trajan Pro\", serif);color:var(--q-set, #00d000)}.ds-worn .ds-base{color:var(--dim, #8d857a);font-size:11px;margin-bottom:8px}.ds-l{font-size:12px;color:var(--stat, #6969ff);text-align:left}.ds-set{display:grid;gap:2px;margin-top:8px;padding-top:8px;border-top:1px solid var(--rule, #2c2523);font-size:12px;text-align:left}.ds-set>span:first-child{color:var(--dim, #8d857a);font-size:11px}.ds-set .g{color:var(--q-set, #00d000)}"
+    },
+    {
+      "name": "Empty Card",
+      "kind": "card",
+      "refersTo": "item-card-empty",
+      "description": "Holds the candidates' place when nothing beats the worn item; points to the table.",
+      "html": "<div class=\"ds-none\"><p>Nothing on the expansion mules beats the worn bow for this build.</p><p class=\"d\">The table below still lists what comes closest.</p></div>",
+      "css": ".ds-none{display:grid;align-content:center;gap:8px;width:240px;min-height:200px;padding:16px;border:1px solid var(--rule, #2c2523);color:var(--ink, #d8d2c4);font:13px/1.5 var(--data, Verdana, Tahoma, sans-serif)}.ds-none p{margin:0}.ds-none .d{color:var(--dim, #8d857a)}"
+    },
+    {
+      "name": "Reference Table",
+      "kind": "custom",
+      "refersTo": "table-head",
+      "description": "Gold Cinzel heads over hairline-ruled Verdana rows; names in quality colour with a dim ×N for copies, sub-lines dim, change columns coloured better/worse with frames showing the raw change.",
+      "html": "<table class=\"ds-table\"><thead><tr><th>Item</th><th class=\"n\">Score</th><th class=\"n\">Attack frames</th></tr></thead><tbody><tr><td><b class=\"u\">Goldstrike Arch</b><span class=\"x\">×2</span><span class=\"s\">Gothic Bow · no level requirement</span></td><td class=\"n\"><b>−594.5</b></td><td class=\"n ds-gain\">−1</td></tr><tr aria-selected=\"true\"><td><b class=\"m\">Gothic Bow</b></td><td class=\"n\"><b>−1,358.5</b></td><td class=\"n ds-loss\">+1</td></tr><tr><td><b class=\"r\">Diamond Bow</b></td><td class=\"n\"><b>−869.3</b></td><td class=\"n f\">·</td></tr></tbody></table>",
+      "css": ".ds-table{width:100%;border-collapse:collapse;font:13px/1.5 var(--data, Verdana, Tahoma, sans-serif);font-variant-numeric:tabular-nums;color:var(--ink, #d8d2c4)}.ds-table th{padding:8px;text-align:left;font:700 11px var(--display, \"Cinzel\", \"Trajan Pro\", serif);letter-spacing:.08em;color:var(--gold, #c7b377);background:var(--page, #0a0a0a);border-bottom:1px solid var(--gold, #c7b377)}.ds-table td{padding:7px 8px;border-bottom:1px solid var(--rule, #2c2523);vertical-align:top}.ds-table .n{text-align:right}.ds-table tbody tr{cursor:pointer;transition:background 120ms}.ds-table tbody tr:hover{background:var(--raised, #141010)}.ds-table tbody tr[aria-selected=\"true\"]{background:var(--frame-deep, #24110c)}.ds-table .u{color:var(--gold, #c7b377)}.ds-table .m{color:var(--stat, #6969ff)}.ds-table .s{display:block;color:var(--dim, #8d857a);font-size:12px}.ds-table .r{color:var(--q-rare, #ffff64)}.ds-table .x{margin-left:6px;color:var(--dim, #8d857a);font-size:12px}.ds-table .f{color:var(--faint, #5f5852)}.ds-table .ds-gain{color:#fff;font-weight:700}.ds-table .ds-loss{color:var(--loss, #ef4b37);font-weight:700}"
+    },
+    {
+      "name": "Resist Strip",
+      "kind": "custom",
+      "refersTo": "resist-cell",
+      "description": "Resist cells (Cinzel figure over cap, signed move, meter; red under cap) and frame boxes (count after the swap, \"was N\" white when it fell, red when it rose).",
+      "html": "<div class=\"ds-strip\"><div class=\"ds-resist under\"><span class=\"k\">Cold</span><b>58 / 75<span class=\"mv ds-loss\">−17</span></b><span class=\"meter\"><i style=\"width:77%\"></i></span></div><div class=\"ds-resist\"><span class=\"k\">Lightning</span><b>85 / 85<span class=\"mv ds-gain\">+15</span></b><span class=\"meter\"><i style=\"width:100%\"></i></span></div><div class=\"ds-resist\"><span class=\"k\">Attack frames</span><b>9<span class=\"mv ds-gain\">was 10</span></b></div></div>",
+      "css": ".ds-strip{display:grid;grid-template-columns:repeat(2,140px);grid-auto-flow:column;grid-auto-columns:100px;gap:12px}.ds-resist{padding:8px 12px;border:1px solid var(--rule, #2c2523);font:13px var(--data, Verdana, Tahoma, sans-serif)}.ds-resist .k{font-size:11px;color:var(--dim, #8d857a)}.ds-resist b{display:block;font:700 18px var(--display, \"Cinzel\", \"Trajan Pro\", serif);color:var(--ink, #d8d2c4)}.ds-resist.under b{color:var(--loss, #ef4b37)}.ds-resist .mv{font:700 11px var(--data, Verdana, Tahoma, sans-serif);margin-left:4px}.ds-gain{color:#fff}.ds-loss{color:var(--loss, #ef4b37)}.ds-resist .meter{display:block;position:relative;height:4px;margin-top:4px;background:#262020}.ds-resist .meter i{position:absolute;inset:0 auto 0 0;background:var(--ink, #d8d2c4);transition:width 400ms cubic-bezier(.16,1,.3,1)}.ds-resist.under .meter i{background:var(--loss, #ef4b37)}"
+    },
+    {
+      "name": "Sort Bar",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Stock multi-sort: one grouped select (\"then by…\"), numbered removable key chips heading their columns, a quiet \"Back to quality\".",
+      "html": "<div class=\"ds-sort\"><span class=\"k\">Sort by</span><select class=\"ds-sel\"><option>then by…</option></select><button class=\"ds-quiet\">Back to quality</button></div><div class=\"ds-keys\"><span class=\"ds-chip\">1. Fire res<button aria-label=\"Stop sorting by Fire res\"><svg viewBox=\"0 0 16 16\" width=\"10\" height=\"10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"square\"><path d=\"M4 4l8 8M12 4l-8 8\"/></svg></button></span><span class=\"ds-chip\">2. Life<button aria-label=\"Stop sorting by Life\"><svg viewBox=\"0 0 16 16\" width=\"10\" height=\"10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"square\"><path d=\"M4 4l8 8M12 4l-8 8\"/></svg></button></span></div>",
+      "css": ".ds-sort{display:flex;align-items:center;gap:8px;font:12px var(--data, Verdana, Tahoma, sans-serif);color:var(--ink, #d8d2c4)}.ds-sort .k{color:var(--dim, #8d857a)}.ds-sel{min-width:220px;padding:7px 9px;background:var(--page, #0a0a0a);color:var(--ink, #d8d2c4);border:1px solid var(--rule-strong, #4a2a20);border-radius:0;font:13px var(--data, Verdana, Tahoma, sans-serif)}.ds-sel:hover{border-color:var(--frame, #3a1a12)}.ds-sel:focus-visible,.ds-quiet:focus-visible,.ds-chip button:focus-visible{outline:1px solid var(--gold, #c7b377);outline-offset:2px}.ds-quiet{padding:7px 14px;font:700 12px var(--display, \"Cinzel\", \"Trajan Pro\", serif);letter-spacing:.08em;color:var(--ink, #d8d2c4);background:transparent;border:1px solid var(--rule-strong, #4a2a20);border-radius:0;cursor:pointer;transition:background 160ms cubic-bezier(.16,1,.3,1),color 160ms cubic-bezier(.16,1,.3,1)}.ds-quiet:hover{background:var(--gold, #c7b377);color:var(--page, #0a0a0a)}.ds-keys{display:flex;gap:4px;margin-top:8px}.ds-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 4px 2px 8px;border:1px solid var(--rule-strong, #4a2a20);background:var(--raised, #141010);color:var(--ink, #d8d2c4);font:12px var(--data, Verdana, Tahoma, sans-serif)}.ds-chip button{display:inline-flex;padding:2px;background:none;border:0;color:var(--dim, #8d857a);cursor:pointer}.ds-chip button:hover{color:var(--loss, #ef4b37)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Item Reference of 2000",
+    "overview": "MuleManager reads like the fan-made item reference pages players learned Diablo II from around 2000: a near-black page, an oxblood bar with a gold rule across the top, carved gold capitals for heads, and dense Verdana tables beneath them. Every item name keeps the game's quality colour and every stat line is the game's magic blue. The one thing those pages never had is the system's signature: each roll drawn as a gold tick on the range one affix can roll, best always to the right, so the reader sees at a glance whether a roll is poor, good or perfect.\n\nIt is a data tool for a desktop browser, dense by intent. Hierarchy comes from typeface (Cinzel heads against Verdana data), quality colour and hairline rules, never from cards, shadows or fills. The system refuses the admin dashboard in a dark skin: no grey cards, no chip rows as decoration, no accent-blue chrome, no rounded corners. It also refuses imitation of the game itself: no game art, no Exocet face, no copied game frames.\n\nChange is the subject of most screens, so the colours that say \"better\" and \"worse\" are reserved: a worse change is red, a better one is bright white, and the quality colours never double as change colours. An upgrade is always shown against what it replaces: the worn item beside the candidates, the stats a swap gives up, the frame count it was.",
+    "keyCharacteristics": [
+      "Near-black page, oxblood top bar with a 2px gold rule, square corners everywhere.",
+      "Cinzel (self-hosted, 500-700) for heads, tabs, labels and buttons; Verdana 13px with tabular figures for all data.",
+      "Item names in quality colour, stat lines in magic blue, numbers right-aligned.",
+      "Each roll shown as a tick on its affix range, best at the right.",
+      "Every change set against the worn item: deltas, \"Gives up\", \"was N\".",
+      "Depth by tone and hairline rules only; no shadows.",
+      "One game mode per screen: classic and expansion never mix."
+    ],
+    "rules": [
+      {
+        "name": "The Colour Tells Rule",
+        "body": "Bold white is better and bold red is worse on every change, whatever its sign. The sign gives the change's direction: frame counts show the raw change, so one frame fewer reads \"−1\" in white, and a frame box shows \"was 11\" beside the new count. Reduced requirements on cards are the one inverted stat: a larger reduction reads \"+\" in white. Minus is always U+2212, on deltas and on negative values such as a resist below zero. Score is a ranking, not a change: signed, never coloured as gain or loss.",
+        "section": "colors"
+      },
+      {
+        "name": "The Green Means Set Rule",
+        "body": "Green only ever means a set item: set names and set-bonus lines. It never marks a gain, a success or a healthy state.",
+        "section": "colors"
+      },
+      {
+        "name": "The Item Colours Are the Game's Rule",
+        "body": "Quality colours keep exactly the game's meanings and are applied to item names (and blue to stat lines); no other UI element borrows them except gold, which is both the unique colour and the chrome accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Faces Rule",
+        "body": "Cinzel for anything that names or commands, Verdana for anything that is data. Numbers are never set in Cinzel, except the 18px figures in resist cells and frame boxes; their moves (\"+15\", \"was 11\") drop back to Verdana 11px. A chip that names a sort key inside a table head is data and stays Verdana.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Realm Rule",
+        "body": "Classic and expansion never mix on one screen. The game mode is a hard switch in the top bar and every list, card and summary below it belongs to that mode. Expansion-only parts (the Charms slot, \"Gems and runes\") appear only in expansion.",
+        "section": "layout"
+      },
+      {
+        "name": "The Hairline Rule",
+        "body": "Structure is drawn with 1px rules, never with boxes or shadows. A second weight (2px) exists only for the gold rule under the top bar.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Best-Right Rule",
+        "body": "The right end of a range is always the best roll. A range wholly at or below zero (reduced requirements) puts its most negative value at the right.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do set every item name in its quality colour and every stat line in magic blue (#6969ff).",
+      "Do show a roll against its affix range wherever the range is known, best at the right.",
+      "Do colour every change bold white when better and bold red when worse; show frame changes raw (\"−1\", \"was 11\") and invert only reduced requirements.",
+      "Do show an upgrade as a change against the worn item: the worn card dashed with \"Worn ·\", the swap's deltas, what it gives up as a struck-through block, and frames as \"was N\".",
+      "Do say in the base line what a charm candidate replaces (\"swaps the carried …\", \"fills a free spot\").",
+      "Do label a unique or set from before level requirements \"no level requirement\" rather than \"Required level: 0\".",
+      "Do put set bonuses in a block under the item's lines, in set green.",
+      "Do keep classic and expansion on separate screens behind the top-bar switch.",
+      "Do design for 1280px and up, and let the side column stack below that.",
+      "Do use Cinzel for heads, labels and buttons and Verdana 13px with tabular figures for data.",
+      "Do refer to characters and accounts by role in anything committed: docs, screenshots, fixtures."
+    ],
+    "donts": [
+      "Don't use green for a gain, a success or anything but a set item.",
+      "Don't colour the score as a gain or loss; it ranks, it does not compare.",
+      "Don't add eyebrows or kicker labels above titles or cards.",
+      "Don't add shadows, rounded corners, grey cards or accent-blue chrome.",
+      "Don't use game art, the Exocet face, or copied game frames and panels.",
+      "Don't mix classic and expansion items, characters or counts on one screen.",
+      "Don't put account or character names in committed docs or screenshots."
+    ]
+  }
+}

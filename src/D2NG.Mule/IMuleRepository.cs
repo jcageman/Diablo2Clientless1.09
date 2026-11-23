@@ -14,4 +14,12 @@ public interface IMuleRepository
     Task<List<MuleItemDb>> GetAllItemsOfCharacter(string accountName, string characterName);
 
     Task<List<MuleItemDb>> GetAllItems(QualityType? qualityType, ItemName? itemName, StatType[] statTypes, ClassificationType? classificationType);
+
+    Task<List<MuleCharacterDb>> GetAllCharacters();
+
+    Task UpdateGear(GearCharacterDb gear);
+
+    Task<GearCharacterDb> GetGear(string accountName, string characterName);
+
+    Task<List<GearCharacterDb>> GetAllGear();
 }

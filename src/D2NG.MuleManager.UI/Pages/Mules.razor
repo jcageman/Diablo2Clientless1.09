@@ -1,0 +1,227 @@
+@page "/mules"
+@implements IDisposable
+@inject ApiClient Api
+@inject UiState State
+
+<PageTitle>Mules · MuleManager</PageTitle>
+
+<div class="work">
+    <aside class="side">
+        <h2 class="h2">Refresh</h2>
+        <p class="dim flush-top">
+            A refresh logs on to each account and enters a game with every character. The realm limits how fast
+            games can be joined, so a full pass takes a while; bots that are running share that limit.
+        </p>
+        <div class="stack-grid">
+            <button class="btn btn-primary" disabled="@(State.Running != null)" @onclick='() => Start(new RefreshRequest("mules", null, null, false))'>
+                <Icon Name="refresh" /> Refresh every mule
+            </button>
+            <button class="btn btn-quiet" disabled="@(State.Running != null)" @onclick='() => Start(new RefreshRequest("everything", null, null, true))' title="Also mules that were full, and what every played character wears">
+                Read every account
+            </button>
+        </div>
+
+        @if (State.Running is { } job)
+        {
+            <h2 class="h2">@job.Description</h2>
+            <div class="progress" aria-live="polite">
+                @foreach (var account in job.Accounts.Where(a => a.State != "Queued"))
+                {
+                    <div class="row">
+                        <span>@if (account.State == "Running") { <span class="running-dot"></span> }@account.Account@(account.Current != null ? $" · {account.Current}" : "")</span>
+                        <span class="@(account.State == "Failed" ? "failed" : "dim")">
+                            @(account.State == "Failed" ? account.Problem : $"{account.Recorded}/{account.Characters}")
+                        </span>
+                    </div>
+                }
+                <div class="row dim"><span>@job.Accounts.Count(a => a.State == "Queued") accounts waiting</span><span></span></div>
+            </div>
+        }
+        else if (State.LastFinished is { } last)
+        {
+            <h2 class="h2">Last refresh</h2>
+            <p class="dim flush">
+                @last.Description, finished @Format.Ago(last.FinishedAt): @last.Accounts.Sum(a => a.Recorded) characters read
+                @if (last.Accounts.Sum(a => a.Skipped) > 0) { <span>, @last.Accounts.Sum(a => a.Skipped) full ones skipped</span> }
+            </p>
+            @foreach (var failed in last.Accounts.Where(a => a.State == "Failed" || a.Failed > 0))
+            {
+                <p class="loss problem">@failed.Account: @failed.Problem</p>
+            }
+        }
+    </aside>
+
+    <main class="main">
+        @if (_error != null)
+        {
+            <div class="notice error-notice" role="alert"><div class="notice-body"><p>@_error</p></div></div>
+        }
+
+        <h1 class="h1">Mules</h1>
+        @if (_mules == null && _error == null)
+        {
+            <p class="loading">Reading the mules…</p>
+        }
+        else if (_mules != null)
+        {
+            var characters = _mules.Accounts.SelectMany(a => a.Characters).ToList();
+            var capacity = State.Mode == GameMode.Expansion ? 88 : 64;
+            <p class="lede">
+                @characters.Count @Format.Mode(State.Mode) mules on @_mules.Accounts.Count accounts ·
+                @Format.Number(characters.Sum(c => c.FreeCells)) free cells · @characters.Count(c => c.FreeCells == 0) full
+            </p>
+
+            @if (_mules.UnknownMode.Count > 0)
+            {
+                <div class="notice warn-notice"><div class="notice-body">
+                    <p>@_mules.UnknownMode.Count characters have not reported whether they are classic or expansion yet, so they show on neither side.</p>
+                    <p>
+                        @string.Join(", ", _mules.UnknownMode.Select(u => u.Split('/')[0]).Distinct().Take(12))@(_mules.UnknownMode.Select(u => u.Split('/')[0]).Distinct().Count() > 12 ? ", …" : "").
+                        Accounts missing from the MuleManager configuration cannot be refreshed until they are added there.
+                    </p>
+                </div></div>
+            }
+
+            @if (_mules.Accounts.Count == 0)
+            {
+                <div class="empty">
+                    <h1 class="h1">No @Format.Mode(State.Mode) mule yet</h1>
+                    <p>Read every account once and MuleManager records each character's game mode, stock and room.</p>
+                    <button class="btn btn-primary" disabled="@(State.Running != null)" @onclick='() => Start(new RefreshRequest("everything", null, null, true))'>Read every account</button>
+                </div>
+            }
+
+            @foreach (var account in _mules.Accounts)
+            {
+                var configured = _mules.ConfiguredAccounts.Contains(account.Account, StringComparer.OrdinalIgnoreCase);
+                var oldest = account.Characters.Min(c => c.SeenAt);
+                <section class="account" id="account-@account.Account">
+                    <div class="account-head">
+                        <span class="name">@account.Account</span>
+                        <span class="dim">@account.Characters.Count characters · @Format.Number(account.Characters.Sum(c => c.FreeCells)) free cells · oldest read @Format.Ago(oldest)</span>
+                        @if (configured)
+                        {
+                            <button class="btn btn-quiet" disabled="@(State.Running != null)" @onclick='() => Start(new RefreshRequest("mules", account.Account, null, true))'>
+                                <Icon Name="refresh" /> Refresh
+                            </button>
+                        }
+                        else
+                        {
+                            <span class="warn aside-note">not in the configuration</span>
+                        }
+                    </div>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Character</th>
+                                <th class="num">Items</th>
+                                <th class="num">@(State.Mode == GameMode.Classic ? "Gems" : "Gems and runes")</th>
+                                <th>Room</th>
+                                <th class="num">Read</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in account.Characters)
+                            {
+                                var highlight = string.Equals(_highlightAccount, account.Account, StringComparison.OrdinalIgnoreCase)
+                                                && string.Equals(_highlightCharacter, c.Character, StringComparison.OrdinalIgnoreCase);
+                                <tr class="static @(highlight ? "highlight" : null)" id="@(highlight ? "highlighted" : null)">
+                                    <td>@c.Character</td>
+                                    <td class="num">@Format.Number(c.Items)</td>
+                                    <td class="num">@Format.Number(c.Stacked)</td>
+                                    <td>
+                                        <span class="room @(c.FreeCells == 0 ? "full" : null)">
+                                            <span class="meter"><i style="width: @(Math.Clamp(100 - c.FreeCells * 100 / capacity, 0, 100))%"></i></span>
+                                            <span class="plain @(c.FreeCells == 0 ? "loss" : "dim")">@(c.FreeCells == 0 ? "full" : $"{c.FreeCells} free")</span>
+                                        </span>
+                                    </td>
+                                    <td class="num @(Format.IsStale(c.SeenAt, 30) ? "warn" : "dim")">@Format.Ago(c.SeenAt)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </section>
+            }
+        }
+    </main>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "account")] public string HighlightAccount { get; set; }
+    [SupplyParameterFromQuery(Name = "character")] public string HighlightCharacter { get; set; }
+
+    [Inject] private IJSRuntime Js { get; set; }
+
+    private MulesResponse _mules;
+    private string _error;
+    private string _highlightAccount;
+    private string _highlightCharacter;
+    private bool _scrolled;
+    private GameMode _loadedMode;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _highlightAccount = HighlightAccount;
+        _highlightCharacter = HighlightCharacter;
+        State.Changed += OnStateChanged;
+        State.RefreshFinished += OnRefreshFinished;
+        await Load();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrolled && _mules != null && _highlightCharacter != null)
+        {
+            _scrolled = true;
+            await Js.InvokeVoidAsync("muleManager.scrollIntoView", "highlighted");
+        }
+    }
+
+    private void OnStateChanged()
+    {
+        if (_loadedMode != State.Mode)
+        {
+            InvokeAsync(Load);
+        }
+        else
+        {
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnRefreshFinished() => InvokeAsync(Load);
+
+    private async Task Load()
+    {
+        _loadedMode = State.Mode;
+        try
+        {
+            _mules = await Api.Mules(State.Mode);
+            _error = null;
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task Start(RefreshRequest request)
+    {
+        try
+        {
+            await State.StartRefresh(request);
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+    }
+
+    public void Dispose()
+    {
+        State.Changed -= OnStateChanged;
+        State.RefreshFinished -= OnRefreshFinished;
+    }
+}
