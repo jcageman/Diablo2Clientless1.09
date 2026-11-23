@@ -36,7 +36,7 @@ Only recipes with a use on this realm: something we farm, keep or cube today.
 | Rare reroll | any rare item + 6 Perfect Skulls | rare item, same base | #60 | |
 | Socket a magic | magic without sockets + 3 Perfect Skulls + Stone of Jordan | the same item, 2 sockets | #125 | expansion |
 | Socket a rare | rare without sockets + 3 Perfect Skulls + Stone of Jordan | the same item, 1 socket | #62 | |
-| Socket a unique | unique without sockets + Standard of Heroes | the same item, 1 socket | #238 | Diablo drops it in classic too; both trees' `Common.nip` keep it (the classic one only since 22 Nov 2026). The leveling party's use: a unique such as Twitchthroe, then a perfect gem |
+| Socket a unique | unique without sockets + Standard of Heroes | the same item, 1 socket | #238 | Diablo drops it, classic too; both trees' `Common.nip` keep it |
 | Crafted item | see Crafting | crafted, same base | | |
 
 The realm adds reagents to the item tables: Rare Ruby, Rare Amethyst, Rare Emerald, Rare Saphire,
