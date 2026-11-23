@@ -53,7 +53,7 @@ public sealed partial class LevelingGear
     private const int CasterShieldLevel = 30;
 
     /// <param name="later">With the stats the member's plan gives it later, for a weapon it cannot wield yet.</param>
-    public double WeaponScore(PartyMember member, Item item, bool later = false, bool alone = false)
+    public double WeaponScore(PartyMember member, Item item, bool later = false, Judged judged = Judged.Outfit)
     {
         if (item == null || !member.Plan.Weapons.Contains(item.Classification) || !CanWear(member, item, later: later))
         {
@@ -79,30 +79,78 @@ public sealed partial class LevelingGear
         // rate alone kept the sorceress on a wand with 20% cast rate and nothing else.
         if (IsCaster(member))
         {
-            return StatScore(member, item, alone: alone) * preference;
+            return StatScore(member, item, judged: judged) * preference;
         }
 
         var damage = AverageDamage(item) * MasteryFactor(member, item);
-        return (damage * (1 + WeaponLeech(member, item, alone)) + ElementalDamage(item) + AttackRatingValue(item)
-            + SpeedAndBlock(member, item, alone: alone) + SkillValue(member, item) * 5) * preference;
+        return (damage * (1 + WeaponLeech(member, item, judged)) + ElementalDamage(item) + AttackRatingValue(member, item)
+            + SpeedAndBlock(member, item, judged: judged) + SkillValue(member, item) * 5) * preference;
     }
 
     /// <summary>
     /// Leech on a weapon as a share of the damage it heals with, up to what the member wants in all: a flat four points a
     /// percent let a Long Bow doing 9 with 7% life and 8% mana leech beat a rare Edge Bow doing 36, and every bow after it.
     /// </summary>
-    private double WeaponLeech(PartyMember member, Item item, bool alone = false)
-        => (UpToTarget(member, item, StatType.MinimumLifeStolenPerHit, LifeLeechTargetFor(member), alone: alone)
-            + UpToTarget(member, item, StatType.MinimumManaStolenPerHit, ManaLeechTarget, alone: alone)) * 0.03;
+    private double WeaponLeech(PartyMember member, Item item, Judged judged = Judged.Outfit)
+        => (UpToTarget(member, item, StatType.MinimumLifeStolenPerHit, LifeLeechTargetFor(member), judged: judged)
+            + UpToTarget(member, item, StatType.MinimumManaStolenPerHit, ManaLeechTarget, judged: judged)) * 0.03;
 
     /// <summary>
     /// Cast rate for a caster, attack speed for the rest, hit recovery for everyone and extra block for a member with a
     /// shield, wherever they sit: on a weapon, a shield, armor or jewellery alike.
     /// </summary>
-    private double SpeedAndBlock(PartyMember member, Item item, DirectoryType? slot = null, bool alone = false)
-        => (IsCaster(member) ? CastRate(member, item, slot, alone) : Stat(item, StatType.IncreasedAttackSpeed))
+    private double SpeedAndBlock(PartyMember member, Item item, DirectoryType? slot = null, Judged judged = Judged.Outfit)
+        => (IsCaster(member) ? CastRate(member, item, slot, judged) : AttackSpeed(member, item, slot, judged))
             + Stat(item, StatType.FasterHitRecovery) * 0.5
             + (member.Plan.Shield ? Stat(item, StatType.IncreasedBlocking) * BlockWeight : 0);
+
+    /// <summary>
+    /// A percent more damage is worth what a percent more hammers is: <see cref="CastFrameValue"/> for a frame, some 7%.
+    /// </summary>
+    private const double AttackRatePercentValue = 7;
+
+    /// <summary>
+    /// The amazon's damage rests on her attack speed, and Dodge, Avoid, Evade and her range keep her from being hit where
+    /// defense would have to (the user's weighting, 22 Nov 2026): a percent more shots counts twice what a percent more
+    /// damage does for the others, a point of defense a tenth. With defense at half a point, a Full Plate Mail's 380 kept
+    /// Twitchthroe off her for good.
+    /// </summary>
+    private static (double Defense, double AttackRatePercent) ClassWeights(PartyMember member) => member.Plan.Class switch
+    {
+        CharacterClass.Amazon => (0.05, AttackRatePercentValue * 2),
+        _ => (0.5, AttackRatePercentValue)
+    };
+
+    /// <summary>
+    /// Increased attack speed on the archer's armor and jewellery, by how much faster she shoots on top of what the rest
+    /// of her outfit gives (<see cref="GearRules.AttackRateGain"/>). Counted a point a percent, 30% was worth four points of
+    /// fire resistance, and she stood at level 82 with none at all. Nothing for a whirling barbarian: on classic Whirlwind
+    /// does not go faster with it (the user's rule). On a weapon it stays beside the weapon's damage, and for the other
+    /// physical builds as it was.
+    /// </summary>
+    private double AttackSpeed(PartyMember member, Item item, DirectoryType? slot, Judged judged)
+    {
+        var add = Stat(item, StatType.IncreasedAttackSpeed);
+        if (add <= 0)
+        {
+            return add;
+        }
+
+        if (member.Stage.Attack == Skill.Whirlwind)
+        {
+            return 0;
+        }
+
+        if (!IsArcher(member) || WeaponKinds.Contains(item.Classification))
+        {
+            return add;
+        }
+
+        return GearRules.AttackRateGain(Have(member, item, StatType.IncreasedAttackSpeed, slot, judged), add) * ClassWeights(member).AttackRatePercent;
+    }
+
+    /// <summary>The bow amazon: Multiple Shot and Guided Arrow are her attack and both shoot at her attack speed.</summary>
+    public static bool IsArcher(PartyMember member) => member.Plan.Name.Contains("bow", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The faster cast rate at which a cast takes one frame less, in 1.09: paladin 15 frames at none, sorceress 13.</summary>
     private static readonly int[] PaladinCastBreakpoints = [9, 18, 30, 48, 75, 125];
@@ -117,7 +165,7 @@ public sealed partial class LevelingGear
     /// 423 s at none while the party's only 20% sat on the orb sorceress, whose Frozen Orb waits out its own one-second delay
     /// whatever her cast rate: for her it is worth only her Static Field and Teleport.
     /// </summary>
-    private double CastRate(PartyMember member, Item item, DirectoryType? slot, bool alone)
+    private double CastRate(PartyMember member, Item item, DirectoryType? slot, Judged judged)
     {
         var add = Stat(item, StatType.FasterCastRate);
         if (add <= 0)
@@ -141,7 +189,7 @@ public sealed partial class LevelingGear
             return add;
         }
 
-        var have = Have(member, item, StatType.FasterCastRate, slot, alone);
+        var have = Have(member, item, StatType.FasterCastRate, slot, judged);
         return breakpoints.Count(point => have < point && have + add >= point) * CastFrameValue;
     }
 
@@ -151,9 +199,13 @@ public sealed partial class LevelingGear
             + Stat(item, StatType.MinimumLightningDamage) + Stat(item, StatType.MaximumLightningDamage)
             + Stat(item, StatType.MinimumColdDamage) + Stat(item, StatType.MaximumColdDamage)) / 2.0;
 
-    /// <summary>Attack rating decides how many of the arrows and swings land at all.</summary>
-    private static double AttackRatingValue(Item item)
-        => Stat(item, StatType.AttackRating) * 0.02 + Stat(item, StatType.ToHitPercent) * 0.2;
+    /// <summary>Attack rating decides how many of the arrows and swings land at all; in the weapon score's points of damage.</summary>
+    private static double AttackRatingValue(PartyMember member, Item item)
+        => AttackRating(member, item) * 0.02 + Stat(item, StatType.ToHitPercent) * 0.2;
+
+    /// <summary>Flat attack rating, with what a per level property gives at the member's level: the packet sends it in halves.</summary>
+    private static int AttackRating(PartyMember member, Item item)
+        => Stat(item, StatType.AttackRating) + (item.Properties?.GetValueOrDefault(StatType.AttackRatingPerLevel)?.PerLevel ?? 0) * member.Level / 2;
 
     /// <summary>
     /// A weapon mastery only works for its own weapon kind: six points of Mace Mastery did nothing for a
@@ -177,7 +229,7 @@ public sealed partial class LevelingGear
 
     private const int BlockWeight = 3;
 
-    public double ShieldScore(PartyMember member, Item item, bool later = false, bool alone = false)
+    public double ShieldScore(PartyMember member, Item item, bool later = false, Judged judged = Judged.Outfit)
     {
         if (item == null || !member.Plan.Shield || !CanWear(member, item, later: later)
             || (item.Classification == ClassificationType.PaladinShield && member.Plan.Class != CharacterClass.Paladin)
@@ -191,8 +243,8 @@ public sealed partial class LevelingGear
         // Extra block, speed and hit recovery come in through SpeedAndBlock, as on every other item.
         // Resistances as on any other piece: counted one a point, the sorceress's shields were chosen on block alone.
         var block = requirements.BaseOf(item)?.Block ?? 0;
-        return 1 + item.Defense + block * BlockWeight + SpeedAndBlock(member, item, alone: alone) + SkillValue(member, item) * SkillWeight(item, 10) + SetBonus(member, item)
-            + ResistScore(member, item, alone: alone) + Stat(item, StatType.Life);
+        return 1 + item.Defense + block * BlockWeight + SpeedAndBlock(member, item, judged: judged) + SkillValue(member, item) * SkillWeight(item, 10) + SetBonus(member, item, later: later, judged: judged)
+            + ResistScore(member, item, judged: judged) + Stat(item, StatType.Life);
     }
 
     /// <summary>
@@ -264,20 +316,14 @@ public sealed partial class LevelingGear
     }
 
     /// <summary>
-    /// What diamonds set in a shield add: the server sends a socketed gem as an item of its own, never in the stats of the
-    /// shield, so the party's resist shield scored as a plain Large Shield against a magic Bone Shield with 20 to all.
+    /// What the gems set in an item add: the server sends a socketed gem as an item of its own, never in the stats of the
+    /// item, so the party's resist shield scored as a plain Large Shield against a magic Bone Shield with 20 to all.
     /// </summary>
     public static int SocketedStat(Item item, StatType type)
-        => item.SocketedItems is { Count: > 0 } socketed && item.Classification is ClassificationType.Shield or ClassificationType.PaladinShield
-            && type is StatType.FireResistance or StatType.ColdResistance or StatType.LightningResistance or StatType.PoisonResistance
-            ? socketed.Values.Sum(gem => DiamondInShield.GetValueOrDefault(gem.Name))
+        => item.SocketedItems is { Count: > 0 } socketed && GearRules.SocketKindOf(item.Classification) is { } kind
+            ? socketed.Values.Sum(gem => GearRules.GemProperties(gem.Name, kind)
+                .Where(property => PropertyStats.GetValueOrDefault(property.Property)?.Contains(type) == true).Sum(property => property.Max))
             : 0;
-
-    /// <summary>Every resistance a diamond gives in a shield, by grade (the game's gem table, shield column).</summary>
-    private static readonly Dictionary<ItemName, int> DiamondInShield = new()
-    {
-        [ItemName.ChippedDiamond] = 6, [ItemName.FlawedDiamond] = 8, [ItemName.Diamond] = 11, [ItemName.FlawlessDiamond] = 14, [ItemName.PerfectDiamond] = 19,
-    };
 
     private double Gain(PartyMember member, Item item, bool later = false)
     {

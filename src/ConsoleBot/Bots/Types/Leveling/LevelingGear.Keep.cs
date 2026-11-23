@@ -22,11 +22,16 @@ public sealed partial class LevelingGear
     private string _stashWeighedFor;
 
     /// <summary>
-    /// What the item is worth to the member once its plan's stats let it wear it, judged on its own rather than against the
-    /// resistances and leech the rest of its outfit gives; -1 when it never will be.
+    /// The views an item is kept for later in. With the rest of the outfit, for an item it cannot wear yet that would be an
+    /// upgrade now. Alone, for what its resistances and leech give an outfit short of them. Covered, for what it gives once
+    /// the resistances come from elsewhere: judged alone only, a resist item always won, and a high damage weapon or
+    /// Twitchthroe's attack speed went to the merchant while resist gear held the slot.
     /// </summary>
-    private double KeepScore(PartyMember member, Item item)
-        => item.IsIdentified || item.Quality < QualityType.Magical ? PieceScore(member, item, later: true, alone: true) : -1;
+    private static readonly Judged[] KeepViews = [Judged.Outfit, Judged.Alone, Judged.Covered];
+
+    /// <summary>What the item is worth to the member once its plan's stats let it wear it, in one view; -1 when it never will be.</summary>
+    private double KeepScore(PartyMember member, Item item, Judged judged)
+        => item.IsIdentified || item.Quality < QualityType.Magical ? PieceScore(member, item, later: true, judged: judged) : -1;
 
     /// <summary>One kind per body place: rings are one kind, a weapon and a shield two.</summary>
     private static DirectoryType SlotKind(Item item)
@@ -34,17 +39,17 @@ public sealed partial class LevelingGear
             : IsWeaponOrShield(item) ? DirectoryType.LeftHand
             : Slots.TryGetValue(item.Classification, out var slots) ? slots[0] : DirectoryType.NotApplicable;
 
-    /// <summary>What the member wears in that place, judged on its own; the weaker ring for rings, nothing worn being 0.</summary>
-    private double WornAlone(PartyMember member, DirectoryType kind)
+    /// <summary>What the member wears in that place, in one view; the weaker ring for rings, nothing worn being 0.</summary>
+    private double WornScore(PartyMember member, DirectoryType kind, Judged judged)
     {
         var places = kind == DirectoryType.RightHandRing ? [DirectoryType.RightHandRing, DirectoryType.LeftHandRing] : new[] { kind };
-        return places.Select(place => member.Game.Me.Equipment.GetValueOrDefault(place) is { } worn ? Math.Max(0, PieceScore(member, worn, alone: true)) : 0).Min();
+        return places.Select(place => member.Game.Me.Equipment.GetValueOrDefault(place) is { } worn ? Math.Max(0, PieceScore(member, worn, judged: judged)) : 0).Min();
     }
 
     /// <summary>
-    /// Whether the member keeps this item for later rather than selling it: not an upgrade now, but better on its own than
-    /// what it wears there - it needs more strength or level than the member has yet, or the resistances the rest of the
-    /// outfit gives hold it back for now - and the best of its kind among what the member already holds.
+    /// Whether the member keeps this item for later rather than selling it: not an upgrade now, but in one of the views better
+    /// than what it wears there - it needs more strength or level than the member has yet, or the resistances the rest of the
+    /// outfit gives hold it back for now - and the best of its kind in that view among what the member already holds.
     /// </summary>
     public bool KeepsForLater(PartyMember member, Item item)
     {
@@ -54,15 +59,25 @@ public sealed partial class LevelingGear
         }
 
         var kind = SlotKind(item);
-        var keep = KeepScore(member, item);
-        if (kind == DirectoryType.NotApplicable || keep < 0 || keep <= WornAlone(member, kind) * UpgradeMargin || SlotGain(member, item, out _) > 0)
+        if (kind == DirectoryType.NotApplicable || SlotGain(member, item, out _) > 0)
+        {
+            return false;
+        }
+
+        return KeepViews.Any(judged => BestKeptIn(member, item, kind, judged));
+    }
+
+    private bool BestKeptIn(PartyMember member, Item item, DirectoryType kind, Judged judged)
+    {
+        var keep = KeepScore(member, item, judged);
+        if (keep < 0 || keep <= WornScore(member, kind, judged) * UpgradeMargin)
         {
             return false;
         }
 
         return !member.Game.Stash.Items.Concat(member.Game.Inventory.Items)
             .Where(other => other.Id != item.Id && SlotKind(other) == kind)
-            .Select(other => (other.Id, Score: KeepScore(member, other)))
+            .Select(other => (other.Id, Score: KeepScore(member, other, judged)))
             .Any(other => other.Score > keep || (other.Score == keep && other.Id < item.Id));
     }
 
@@ -77,10 +92,10 @@ public sealed partial class LevelingGear
             return false;
         }
 
-        var keep = KeepScore(member, item);
+        var keep = KeepScore(member, item, Judged.Alone);
         return keep > 0 && !member.Game.Stash.Items.Concat(member.Game.Inventory.Items)
             .Where(other => other.Id != item.Id && WeaponKinds.Contains(other.Classification) && !IsTwoHanded(other))
-            .Select(other => (other.Id, Score: KeepScore(member, other)))
+            .Select(other => (other.Id, Score: KeepScore(member, other, Judged.Alone)))
             .Any(other => other.Score > keep || (other.Score == keep && other.Id < item.Id));
     }
 
