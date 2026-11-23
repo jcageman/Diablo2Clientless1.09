@@ -16,7 +16,11 @@ public static class UniqueItemReader
     private const int SetItemSize = 60;
     private const int ItemsPerSet = 6;
 
-    internal static List<UniqueItemEntry> DecodeUniqueItems(byte[] raw, string file)
+    /// <summary>A unique's ten properties start at +68, four ints each, as for set items; Lidless Wall's 80-130 enhanced defense sits there.</summary>
+    private const int UniquePropertyStart = 68;
+    private const int UniquePropertyCount = 10;
+
+    internal static List<UniqueItemEntry> DecodeUniqueItems(byte[] raw, string file, IReadOnlyList<string> properties = null)
     {
         var count = ItemAffixReader.RecordCount(raw, file, UniqueItemSize);
         var items = new List<UniqueItemEntry>();
@@ -31,7 +35,8 @@ public static class UniqueItemReader
                 Level = BitConverter.ToInt32(raw, start + 44),
                 LevelRequirement = BitConverter.ToInt32(raw, start + 48),
                 CostMultiply = BitConverter.ToInt32(raw, start + 52),
-                CostAdd = BitConverter.ToInt32(raw, start + 56)
+                CostAdd = BitConverter.ToInt32(raw, start + 56),
+                Properties = properties == null ? [] : Properties(raw, start + UniquePropertyStart, UniquePropertyCount, properties, file, i)
             });
         }
 
@@ -89,7 +94,8 @@ public static class UniqueItemReader
                     CostMultiply = BitConverter.ToInt32(raw, item + 16),
                     CostAdd = BitConverter.ToInt32(raw, item + 20),
                     Properties = Properties(raw, start + ItemPropertyStart + slot * ItemPropertyBlock, 2, properties, file, set),
-                    SetProperties = Properties(raw, start + ItemPropertyStart + slot * ItemPropertyBlock + 2 * PropertySize, 5, properties, file, set)
+                    SetProperties = Properties(raw, start + ItemPropertyStart + slot * ItemPropertyBlock + 2 * PropertySize, 5, properties, file, set, out var worn),
+                    SetPropertiesWorn = worn
                 });
                 entry.ItemCount++;
             }
@@ -99,7 +105,12 @@ public static class UniqueItemReader
     }
 
     private static List<PropertyRange> Properties(byte[] raw, int at, int count, IReadOnlyList<string> properties, string file, int record)
+        => Properties(raw, at, count, properties, file, record, out _);
+
+    /// <summary><paramref name="worn"/> holds, per property kept, the set items that must be worn for it: two for the first slot, then one more per slot.</summary>
+    private static List<PropertyRange> Properties(byte[] raw, int at, int count, IReadOnlyList<string> properties, string file, int record, out List<int> worn)
     {
+        worn = [];
         var ranges = new List<PropertyRange>();
         for (var i = 0; i < count; i++)
         {
@@ -114,6 +125,7 @@ public static class UniqueItemReader
             }
 
             ranges.Add(new PropertyRange { Property = properties[property], Param = param, Min = min, Max = max });
+            worn.Add(i + 2);
         }
 
         return ranges;

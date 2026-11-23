@@ -1,4 +1,5 @@
 using ConsoleBot.Helpers;
+using D2NG.Core.D2GS.Enums;
 using D2NG.Core.D2GS.Items;
 using D2NG.Core.ItemData;
 using Serilog;
@@ -44,7 +45,7 @@ public sealed partial class LevelingGear(ItemRequirements requirements)
     /// <param name="later">Judged with the stats the member's plan gives it later and some from gear (<see cref="LaterGearStats"/>).</param>
     public bool CanWear(PartyMember member, Item item, DirectoryType? slot = null, bool later = false)
     {
-        if (QuestItemsNeverWorn.Contains(item.Name) || item.Classification == ClassificationType.QuestItem)
+        if (QuestItemsNeverWorn.Contains(item.Name) || item.Classification == ClassificationType.QuestItem || ReservedForAnotherClass(member, item))
         {
             return false;
         }
@@ -67,6 +68,19 @@ public sealed partial class LevelingGear(ItemRequirements requirements)
         // Unknown for magic and rare items until the realm's affix numbering is known; the server says no if it is too high.
         return later || (requirements.RequiredLevel(item) ?? 0) <= member.Level;
     }
+
+    /// <summary>
+    /// Sets that belong to one class whatever the score says (the user's rule, 22 Nov 2026). Death's Disguise is the amazon's:
+    /// its 30% attack speed is her damage, while the whirling barbarian scored its 8% life leech higher and would have
+    /// collected it for a speed Whirlwind does not use on classic.
+    /// </summary>
+    private static readonly Dictionary<string, CharacterClass> ClassSets = new(StringComparer.Ordinal)
+    {
+        ["Death's Disguise"] = CharacterClass.Amazon,
+    };
+
+    private bool ReservedForAnotherClass(PartyMember member, Item item)
+        => requirements.SetItem(item) is { } setItem && ClassSets.TryGetValue(setItem.SetName, out var owner) && owner != member.Plan.Class;
 
     /// <summary>
     /// Whether everything else the member wears still meets its strength and dexterity with <paramref name="item"/> on in
@@ -281,8 +295,7 @@ public sealed partial class LevelingGear(ItemRequirements requirements)
         }
     }
 
-    public static bool WantsBow(PartyMember member)
-        => member.Plan.Name.Contains("bow", StringComparison.OrdinalIgnoreCase) && !HoldsBow(member);
+    public static bool WantsBow(PartyMember member) => IsArcher(member) && !HoldsBow(member);
 
     public static bool HasArrows(PartyMember member)
         => member.Game.Me.Equipment.Values.Any(item => item.Classification == ClassificationType.Arrows)

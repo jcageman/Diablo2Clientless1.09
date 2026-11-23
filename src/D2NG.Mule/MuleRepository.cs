@@ -61,6 +61,31 @@ public class MuleRepository : IMuleRepository
             .ToListAsync()).ToList();
     }
 
+    public async Task<List<MuleCharacterDb>> GetAllCharacters()
+    {
+        await using var session = _store.QuerySession();
+        return [.. await session.Query<MuleCharacterDb>().ToListAsync()];
+    }
+
+    public async Task UpdateGear(GearCharacterDb gear)
+    {
+        await using var session = _store.LightweightSession();
+        session.Store(gear);
+        await session.SaveChangesAsync();
+    }
+
+    public async Task<GearCharacterDb> GetGear(string accountName, string characterName)
+    {
+        await using var session = _store.QuerySession();
+        return await session.LoadAsync<GearCharacterDb>(MuleCharacterDb.MakeId(accountName, characterName));
+    }
+
+    public async Task<List<GearCharacterDb>> GetAllGear()
+    {
+        await using var session = _store.QuerySession();
+        return [.. await session.Query<GearCharacterDb>().ToListAsync()];
+    }
+
     public async Task UpdateCharacter(string accountName, string characterName, MuleCharacterSnapshot snapshot)
     {
         await using var session = _store.LightweightSession();
@@ -77,6 +102,7 @@ public class MuleRepository : IMuleRepository
             AccountName = MuleNames.Normalize(accountName),
             CharacterName = MuleNames.Normalize(characterName),
             SeenAt = DateTimeOffset.UtcNow,
+            Expansion = snapshot.Expansion,
             FreeCells = snapshot.FreeCells,
             FitProfile = snapshot.FitProfile
         });

@@ -1,0 +1,23 @@
+<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true">
+    @switch (Name)
+    {
+        case "refresh":
+            <path d="M13.5 6.5A5.5 5.5 0 0 0 3.2 4.6M2.5 9.5a5.5 5.5 0 0 0 10.3 1.9" />
+            <path d="M3 1.8v3h3M13 14.2v-3h-3" />
+            break;
+        case "close":
+            <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />
+            break;
+        case "locate":
+            <path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3" />
+            <rect x="5" y="5" width="6" height="6" />
+            break;
+        case "plus":
+            <path d="M8 3v10M3 8h10" />
+            break;
+    }
+</svg>
+
+@code {
+    [Parameter] public string Name { get; set; }
+}

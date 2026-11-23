@@ -1,0 +1,367 @@
+@page "/stock"
+@implements IDisposable
+@inject ApiClient Api
+@inject UiState State
+
+<PageTitle>Stock · MuleManager</PageTitle>
+
+<div class="work">
+    <aside class="side">
+        <h2 class="h2">Search</h2>
+        <label class="field">
+            <span>Name, stat or holder</span>
+            <input class="input" type="search" placeholder="Jordan, cast rate, a mule…" value="@_query"
+                   @oninput="e => Search((string)e.Value)" />
+        </label>
+
+        @if (_stock != null)
+        {
+            <h2 class="h2">Quality</h2>
+            <div class="checks">
+                @foreach (var facet in _stock.Qualities)
+                {
+                    <label class="check">
+                        <input type="checkbox" checked="@_qualities.Contains(facet.Value)" @onchange="() => Toggle(_qualities, facet.Value)" />
+                        <span class="q-@facet.Value">@Format.Quality(facet.Value)</span>
+                        <span class="count">@Format.Number(facet.Count)</span>
+                    </label>
+                }
+            </div>
+
+            <h2 class="h2">Type</h2>
+            <div class="checks">
+                @foreach (var facet in _stock.Types.Take(_allTypes ? 100 : 12))
+                {
+                    <label class="check">
+                        <input type="checkbox" checked="@_types.Contains(facet.Value)" @onchange="() => Toggle(_types, facet.Value)" />
+                        <span>@D2NG.Mule.Upgrades.StatText.Humanize(facet.Value)</span>
+                        <span class="count">@Format.Number(facet.Count)</span>
+                    </label>
+                }
+            </div>
+            @if (_stock.Types.Count > 12)
+            {
+                <button class="btn btn-quiet gap-top" @onclick="() => _allTypes = !_allTypes">@(_allTypes ? "Fewer types" : $"All {_stock.Types.Count} types")</button>
+            }
+
+            <h2 class="h2">Must have</h2>
+            <MudAutocomplete T="string" Placeholder="Add a stat" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                             SearchFunc="SearchStats" ToStringFunc="@(s => s == null ? null : D2NG.Mule.Upgrades.StatText.Short(s))"
+                             ValueChanged="AddStat" ResetValueOnEmptyText="true" CoerceText="false" Clearable="false" />
+            <div class="chips gap-top">
+                @foreach (var stat in _stats)
+                {
+                    <span class="chip">@D2NG.Mule.Upgrades.StatText.Short(stat)<button @onclick="() => Toggle(_stats, stat)" aria-label="Remove @stat"><Icon Name="close" /></button></span>
+                }
+            </div>
+        }
+    </aside>
+
+    <main class="main">
+        @if (_error != null)
+        {
+            <div class="notice error-notice" role="alert"><div class="notice-body"><p>@_error</p></div></div>
+        }
+
+        <h1 class="h1">Stock</h1>
+        @if (_stock == null && _error == null)
+        {
+            <p class="loading">Reading the mules…</p>
+        }
+        else if (_stock != null)
+        {
+            <p class="lede">
+                @Format.Number(_stock.Total) items with properties
+                and @Format.Number(_stock.Stacks.Sum(s => s.Count)) @StackWord.ToLowerInvariant()
+                on the @Format.Mode(State.Mode) mules
+            </p>
+            @if (State.Meta?.UnknownModeCharacters > 0)
+            {
+                <div class="notice warn-notice"><div class="notice-body">
+                    <p>@State.Meta.UnknownModeCharacters mule characters have not reported whether they are classic or expansion, so their items show on neither side.</p>
+                    <p>Refreshing their accounts on the Mules screen records it.</p>
+                </div></div>
+            }
+
+            <div class="tabs" role="group" aria-label="What to list">
+                <button aria-pressed="@(!_showStacks ? "true" : "false")" @onclick="() => _showStacks = false">Items · @Format.Number(_stock.Total)</button>
+                <button aria-pressed="@(_showStacks ? "true" : "false")" @onclick="() => _showStacks = true">@StackWord · @Format.Number(_stock.Stacks.Count) kinds</button>
+            </div>
+
+            @if (_showStacks)
+            {
+                @if (_stock.Stacks.Count == 0)
+                {
+                    <div class="empty"><h1 class="h1">None found</h1><p>No @StackWord.ToLowerInvariant() match the search.</p></div>
+                }
+                else
+                {
+                    <div class="stacks">
+                        @foreach (var stack in _stock.Stacks)
+                        {
+                            <div class="stack" title="@string.Join(", ", stack.TopHolders.Select(h => $"{h.Character} {h.Count}"))">
+                                <span>@stack.Name<span class="sub"> · on @stack.Holders @(stack.Holders == 1 ? "mule" : "mules")</span></span>
+                                <span class="count">@Format.Number(stack.Count)</span>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            else if (_stock.Items.Count == 0)
+            {
+                <div class="empty">
+                    <h1 class="h1">No item matches</h1>
+                    <p>Nothing on the @Format.Mode(State.Mode) mules has every filter you set. Clear a quality, type or stat to see more.</p>
+                    <button class="btn" @onclick="Clear">Clear the filters</button>
+                </div>
+            }
+            else
+            {
+                <div class="sort-bar">
+                    <span class="k">Sort by</span>
+                    <select @key="_sorts.Count" class="select" value="" @onchange="e => AddSort((string)e.Value)" aria-label="Add a stat to sort by">
+                        <option value="">@(_sorts.Count == 0 ? "quality · add a stat…" : "then by…")</option>
+                        @foreach (var (group, stats) in Format.GroupStats(_stock.Stats.Except(_sorts)))
+                        {
+                            <optgroup label="@group">
+                                @foreach (var stat in stats)
+                                {
+                                    <option value="@stat">@D2NG.Mule.Upgrades.StatText.Short(stat)</option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                    @if (_sorts.Count > 0)
+                    {
+                        <button class="btn btn-quiet" @onclick="ClearSorts">Back to quality</button>
+                    }
+                </div>
+                <table class="table" aria-label="Items">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Properties</th>
+                            <th>Held by</th>
+                            @if (_sorts.Count == 0)
+                            {
+                                <th class="num">Quality</th>
+                            }
+                            @foreach (var (stat, rank) in _sorts.Select((s, i) => (s, i + 1)))
+                            {
+                                <th class="num">
+                                    <span class="chip sort-chip">@rank. @D2NG.Mule.Upgrades.StatText.Short(stat)<button @onclick="() => RemoveSort(stat)" aria-label="Stop sorting by @D2NG.Mule.Upgrades.StatText.Short(stat)"><Icon Name="close" /></button></span>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _stock.Items)
+                        {
+                            var open = _open == item.Id;
+                            <tr aria-selected="@(open ? "true" : "false")" @onclick="() => _open = open ? null : item.Id">
+                                <td>
+                                    <span class="item-name q-@item.Quality">@item.Name</span>
+                                    @if (item.Ethereal) { <span class="tag">Ethereal</span> }
+                                    @if (item.Sockets > 0) { <span class="tag">@Format.Socket(item.Sockets)</span> }
+                                    <span class="sub">@(item.Name != item.BaseName ? item.BaseName + " · " : "")level @item.ItemLevel@(Format.IsPre(item) ? " · no level requirement" : "")</span>
+                                </td>
+                                <td class="stock-stats">
+                                    @foreach (var line in item.Stats.Take(open ? 0 : 4))
+                                    {
+                                        var at = Format.RangePosition(line);
+                                        <span title="@(line.Min == null ? null : $"{Format.Number(line.Value)} of {line.Min}-{line.Max}")">@line.Text@if (at != null) { <i class="mini-range"><b style="--at: @at"></b></i> }</span>
+                                    }
+                                    @if (item.Stats.Count > 4 && !open) { <span class="dim">…</span> }
+                                </td>
+                                <td class="dim">@Format.Where(item)</td>
+                                @if (_sorts.Count == 0)
+                                {
+                                    <td class="num">@Format.Quality(item.Quality)</td>
+                                }
+                                @foreach (var stat in _sorts)
+                                {
+                                    <td class="num">@SortValue(item, stat)</td>
+                                }
+                            </tr>
+                            @if (open)
+                            {
+                                <tr aria-hidden="false">
+                                    <td colspan="@(3 + Math.Max(1, _sorts.Count))" class="expanded">
+                                        <div class="expanded-card"><ItemCard Item="item" Selected="true" /></div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+                <div class="pager">
+                    <span>@(_stock.Page * _stock.PageSize + 1)–@(_stock.Page * _stock.PageSize + _stock.Items.Count) of @Format.Number(_stock.Total)</span>
+                    <span class="pager-links">
+                        <button class="btn btn-quiet" disabled="@(_stock.Page == 0)" @onclick="() => Page(-1)">Previous 100</button>
+                        <button class="btn btn-quiet" disabled="@((_stock.Page + 1) * _stock.PageSize >= _stock.Total)" @onclick="() => Page(1)">Next 100</button>
+                    </span>
+                </div>
+            }
+        }
+    </main>
+</div>
+
+@code {
+    private string StackWord => State.Mode == GameMode.Classic ? "Gems" : "Gems and runes";
+
+    private StockResponse _stock;
+    private string _error;
+    private string _query = "";
+    private readonly List<string> _sorts = [];
+    private int _page;
+    private bool _showStacks;
+    private bool _allTypes;
+    private string _open;
+    private readonly HashSet<string> _qualities = [];
+    private readonly HashSet<string> _types = [];
+    private readonly List<string> _stats = [];
+    private int _version;
+    private GameMode _loadedMode;
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.Changed += OnStateChanged;
+        State.RefreshFinished += OnRefreshFinished;
+        await Load();
+    }
+
+    private void OnStateChanged()
+    {
+        if (_loadedMode != State.Mode)
+        {
+            _page = 0;
+            InvokeAsync(Load);
+        }
+        else
+        {
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnRefreshFinished() => InvokeAsync(Load);
+
+    private async Task Load()
+    {
+        var version = ++_version;
+        _loadedMode = State.Mode;
+        try
+        {
+            var stock = await Api.Stock(State.Mode, _query, _qualities, _types, _stats, _sorts, _page);
+            if (version == _version)
+            {
+                _stock = stock;
+                _error = null;
+            }
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task Search(string query)
+    {
+        _query = query;
+        _page = 0;
+        await Task.Delay(250);
+        if (_query == query)
+        {
+            await Load();
+        }
+    }
+
+    private Task Toggle(HashSet<string> set, string value)
+    {
+        if (!set.Remove(value))
+        {
+            set.Add(value);
+        }
+
+        _page = 0;
+        return Load();
+    }
+
+    private Task Toggle(List<string> list, string value)
+    {
+        if (!list.Remove(value))
+        {
+            list.Add(value);
+        }
+
+        _page = 0;
+        return Load();
+    }
+
+    private Task AddStat(string stat)
+        => string.IsNullOrEmpty(stat) || _stats.Contains(stat) ? Task.CompletedTask : Toggle(_stats, stat);
+
+    private Task<IEnumerable<string>> SearchStats(string text, CancellationToken token)
+    {
+        var all = _stock?.Stats ?? [];
+        return Task.FromResult(string.IsNullOrWhiteSpace(text)
+            ? all.Take(40)
+            : all.Where(s => D2NG.Mule.Upgrades.StatText.Short(s).Contains(text, StringComparison.OrdinalIgnoreCase) || s.Contains(text, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private Task AddSort(string stat)
+    {
+        if (string.IsNullOrEmpty(stat) || _sorts.Contains(stat))
+        {
+            return Task.CompletedTask;
+        }
+
+        _sorts.Add(stat);
+        _page = 0;
+        return Load();
+    }
+
+    private Task RemoveSort(string stat)
+    {
+        _sorts.Remove(stat);
+        _page = 0;
+        return Load();
+    }
+
+    private Task ClearSorts()
+    {
+        _sorts.Clear();
+        _page = 0;
+        return Load();
+    }
+
+    private Task Page(int step)
+    {
+        _page = Math.Max(0, _page + step);
+        _open = null;
+        return Load();
+    }
+
+    private Task Clear()
+    {
+        _qualities.Clear();
+        _types.Clear();
+        _stats.Clear();
+        _query = "";
+        _page = 0;
+        return Load();
+    }
+
+    private static string SortValue(ItemDto item, string stat)
+    {
+        var value = item.Stats.Where(s => s.Stat == stat).Sum(s => s.Value);
+        return value == 0 ? "·" : Format.Number(value);
+    }
+
+    public void Dispose()
+    {
+        State.Changed -= OnStateChanged;
+        State.RefreshFinished -= OnRefreshFinished;
+    }
+}

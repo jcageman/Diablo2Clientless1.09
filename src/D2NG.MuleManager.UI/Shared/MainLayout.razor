@@ -1,14 +1,73 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject UiState State
 
-@* Required *@
-<MudThemeProvider />
+<MudThemeProvider Theme="Theme" IsDarkMode="true" />
 <MudPopoverProvider />
 
-<MudLayout>
-    <MudAppBar Elevation="1">
-        <MudText Typo="Typo.h5" Class="ml-3">MuleManager</MudText>
-    </MudAppBar>
-    <MudMainContent>
-        @Body
-    </MudMainContent>
-</MudLayout>
+<div class="shell">
+    <header class="bar">
+        <a class="bar-mark" href="">MuleManager</a>
+        <nav class="bar-nav" aria-label="Screens">
+            <NavLink href="stock">Stock</NavLink>
+            <NavLink href="" Match="NavLinkMatch.All">Upgrades</NavLink>
+            <NavLink href="mules">Mules</NavLink>
+        </nav>
+        <div class="bar-end">
+            <div class="realm" role="group" aria-label="Game mode">
+                <button aria-pressed="@(State.Mode == GameMode.Classic ? "true" : "false")" @onclick="() => State.SetMode(GameMode.Classic)">Classic</button>
+                <button aria-pressed="@(State.Mode == GameMode.Expansion ? "true" : "false")" @onclick="() => State.SetMode(GameMode.Expansion)">Expansion</button>
+            </div>
+            <div class="bar-status" aria-live="polite">
+                @if (State.Running is { } job)
+                {
+                    var finished = job.Accounts.Count(a => a.State is "Done" or "Failed");
+                    <span><span class="running-dot"></span><strong>@job.Description</strong></span><br />
+                    <span>@finished of @job.Accounts.Count accounts · @job.Accounts.Sum(a => a.Recorded) characters read</span>
+                }
+                else if (State.Meta is { } meta)
+                {
+                    var counts = State.Mode == GameMode.Expansion ? meta.Expansion : meta.Classic;
+                    <strong>@Format.Number(counts.Characters) mules · @Format.Number(counts.Items + counts.Stacked) items</strong><br />
+                    <span>stock read @Format.Ago(meta.LastRead)</span>
+                }
+            </div>
+        </div>
+    </header>
+    @Body
+</div>
+
+@code {
+    private static readonly MudTheme Theme = new()
+    {
+        PaletteDark = new PaletteDark
+        {
+            Background = "#0a0a0a",
+            Surface = "#0f0d0c",
+            Primary = "#c7b377",
+            Secondary = "#3a1a12",
+            TextPrimary = "#d8d2c4",
+            TextSecondary = "#8d857a",
+            LinesDefault = "#2c2523",
+            LinesInputs = "#4a2a20",
+            ActionDefault = "#c7b377",
+            Error = "#ef4b37",
+            Warning = "#e0a030",
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography { FontFamily = ["Verdana", "Tahoma", "DejaVu Sans", "sans-serif"], FontSize = "13px" },
+        },
+        LayoutProperties = new LayoutProperties { DefaultBorderRadius = "0px" },
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.Changed += Update;
+        await State.Initialize();
+    }
+
+    private void Update() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => State.Changed -= Update;
+}

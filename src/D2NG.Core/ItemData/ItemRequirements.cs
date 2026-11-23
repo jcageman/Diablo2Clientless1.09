@@ -29,6 +29,10 @@ public sealed class ItemRequirements
 
     public SetEntry Set(int index) => _sets.GetValueOrDefault(index);
 
+    /// <summary>The unique item a unique quality item is, by its unique id; null for one without a row of its own.</summary>
+    public UniqueItemEntry Unique(Item item)
+        => item.Quality == QualityType.Unique && item.UniqueCode != NoUnique && _uniques.TryGetValue((int)item.UniqueCode, out var unique) ? unique : null;
+
     /// <summary>
     /// The character level an item needs, or null when it depends on magic affixes. The realm rolls
     /// prefixes and suffixes from its own tables, whose ids do not line up with the client's

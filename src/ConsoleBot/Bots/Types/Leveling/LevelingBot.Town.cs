@@ -95,11 +95,14 @@ public sealed partial class LevelingBot
         // A shield bought just now gets its diamonds before the party leaves.
         await LevelingGems.Work(present, party.Members);
         await LevelingGems.CubeFlawlessGems(present);
+        await _gear.SocketGear(party, present);
         foreach (var member in present.Where(member => member.InGame))
         {
             await _gear.WearUpgrades(member);
         }
 
+        // What the purchases and upgrades just took off goes to whoever it improves now, not a town visit later.
+        await _gear.ShareGear(party);
         await _gear.StashKeepers(party, present);
     }
 

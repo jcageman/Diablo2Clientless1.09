@@ -36,7 +36,7 @@ Only recipes with a use on this realm: something we farm, keep or cube today.
 | Rare reroll | any rare item + 6 Perfect Skulls | rare item, same base | #60 | |
 | Socket a magic | magic without sockets + 3 Perfect Skulls + Stone of Jordan | the same item, 2 sockets | #125 | expansion |
 | Socket a rare | rare without sockets + 3 Perfect Skulls + Stone of Jordan | the same item, 1 socket | #62 | |
-| Socket a unique | unique without sockets + Standard of Heroes | the same item, 1 socket | #238 | Standards of Heroes drop and get kept |
+| Socket a unique | unique without sockets + Standard of Heroes | the same item, 1 socket | #238 | Diablo drops it, classic too; both trees' `Common.nip` keep it |
 | Crafted item | see Crafting | crafted, same base | | |
 
 The realm adds reagents to the item tables: Rare Ruby, Rare Amethyst, Rare Emerald, Rare Saphire,
@@ -102,5 +102,7 @@ Power: Perfect Sapphire); `uses <base>` finds a base's row and rune when one bec
   the bot's `ItemName` uses Sapphire and ColossusSword. Match on codes or on the bot's names, never
   on a mix.
 - A tier word alone (Amethyst, Topaz) is the standard tier, between Flawed and Flawless.
+- Two items are called **Standard of Heroes**: `soh` (classification `Token`), the one that drops and that #238 takes,
+  and `std` (`Quest Item`). Match on the code or the classification.
 - `upg` on an input accepts the exceptional and elite versions too, which is why the craft table
   names all three tiers.

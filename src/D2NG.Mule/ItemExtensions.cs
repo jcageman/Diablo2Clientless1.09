@@ -17,12 +17,18 @@ public static class ItemExtensions
             AccountName = accountName,
             CharacterName = characterName,
             ItemName = item.Name.ToString(),
+            BaseCode = item.Type,
+            UniqueCode = item.Quality == QualityType.Unique ? item.UniqueCode : 0,
+            SetCode = item.Quality == QualityType.Set ? item.SetCode : 0,
+            Container = item.Container.ToString(),
+            X = item.Location?.X ?? 0,
+            Y = item.Location?.Y ?? 0,
             QualityType = item.Quality.ToString(),
             ClassificationType = item.Classification.ToString(),
             Ethereal = item.Ethereal,
             Level = item.Level,
             Sockets = item.Sockets,
-            Stats = item.Properties.Select(k => new StatDb { Type = k.MapToStatKey(), Value = k.Value.Value }).ToList(),
+            Stats = item.Properties.Select(k => new StatDb { Type = k.MapToStatKey(), Value = k.Value.Value, PerLevel = k.Value.PerLevel }).ToList(),
             StatTypes = item.Properties.Select(k => k.MapToStatKey()).ToList()
         };
     }

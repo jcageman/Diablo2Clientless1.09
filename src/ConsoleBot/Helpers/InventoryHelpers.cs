@@ -349,6 +349,14 @@ public static class InventoryHelpers
     }
 
     public static bool TransmuteItemsInCube(Game game, bool newItemsSpawn)
+        => TransmuteItemsInCube(game, oldItems =>
+        {
+            var newItems = game.Cube.Items.Select(i => i.Id).ToHashSet();
+            return !newItems.Intersect(oldItems).Any() && (!newItemsSpawn || newItems.Count > 0);
+        });
+
+    /// <param name="done">Given the ids the cube held before, whether the transmute has happened.</param>
+    public static bool TransmuteItemsInCube(Game game, Func<HashSet<uint>, bool> done)
     {
         var cube = game.Inventory.FindItemByName(ItemName.HoradricCube);
         if (cube != null)
@@ -360,11 +368,7 @@ public static class InventoryHelpers
             var oldItems = game.Cube.Items.Select(i => i.Id).ToHashSet();
             game.ClickButton(ClickType.TransmuteItems);
 
-            var transmuteResult = GeneralHelpers.TryWithTimeout((retryCount) =>
-            {
-                var newItems = game.Cube.Items.Select(i => i.Id).ToHashSet();
-                return !newItems.Intersect(oldItems).Any() && (!newItemsSpawn || newItems.Count > 0);
-            }, MoveItemTimeout);
+            var transmuteResult = GeneralHelpers.TryWithTimeout(_ => done(oldItems), MoveItemTimeout);
 
             if (!transmuteResult)
             {

@@ -18,6 +18,9 @@ public class MuleCharacterSnapshot
     public List<Item> Items { get; init; }
     public int FreeCells { get; init; }
 
+    /// <summary>The game mode the character reported at login, null when the client did not log it in itself.</summary>
+    public bool? Expansion { get; init; }
+
     /// <summary>
     /// Per item height, the widest item that still has a spot. See <see cref="Packing.FitProfile"/>.
     /// </summary>
@@ -38,6 +41,7 @@ public class MuleCharacterSnapshot
         {
             Items = items.Where(i => i.Classification != ClassificationType.Scroll).ToList(),
             FreeCells = game.Stash.FreeCellCount() + game.Inventory.FreeCellCount(),
+            Expansion = game.ClientCharacter?.IsExpansion,
             FitProfile = Packing.FitProfile.Of(MuleGrids.Stash(game), MuleGrids.Inventory(game)),
             UntouchableIds = [.. items.Where(i => !canTouch(i)).Select(i => i.Id)]
         };
@@ -49,6 +53,7 @@ public class MuleCharacterSnapshot
         {
             var muleItem = i.MapToMuleItem(accountName, characterName);
             muleItem.Untouchable = UntouchableIds.Contains(i.Id);
+            muleItem.Expansion = Expansion;
             return muleItem;
         }).ToList();
     }
